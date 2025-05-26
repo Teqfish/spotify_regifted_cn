@@ -76,5 +76,9 @@ df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','
 # drop nulls
 df_mega = df_mega[~df_mega[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
 
+df_tracks = df_mega.groupby(['track_name', 'artist_name', 'spotify_track_uri'],as_index=False)['ms_played'].sum()
+
+
 name = input('What are your initials?\n').upper()
 df_mega.to_csv(f'{destination_path}/{name}_df_mega.csv', index=False)
+df_tracks.to_csv(f'{destination_path}/{name}_df_tracks.csv', index=False)

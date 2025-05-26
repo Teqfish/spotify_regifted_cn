@@ -39,9 +39,8 @@ if dfs:
 else:
     print("No matching JSON files found.")
 
-name = input('What are your initials?\n')
-# Cheeky CSV export
-df_mega.to_csv(f'{destination_path}/{name}_df_mega.csv', index=False)
+
+
 
 # CLEANING
 

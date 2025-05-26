@@ -7,10 +7,9 @@ import string
 import pprint as pp
 
 
-source_path = '/Users/beng/code/spotify/BG data_unzipped' # THIS WILL BE THE PATH OF THE UPLOAD BOX
+source_path = '/Users/beng/code/spotify/datasets holding' # THIS WILL BE THE PATH OF THE UPLOAD BOX
 destination_path = '/Users/beng/code/spotify/cleaned_user_data' # THIS WILL BE THE PATH OF THE PROCESSED DATA
 ext_json = '.json'
-ext_zip = '.zip'
 files = []
 
 
@@ -73,7 +72,7 @@ def categorise(row):
 df_mega['category'] = df_mega.apply(categorise, axis=1)
 
 # drop unecessary columns
-df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','endTime','audiobookName','chapterName','authorName','msPlayed', "platform", "ip_addr"], errors='ignore')
+df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','endTime','audiobookName','chapterName','msPlayed', "platform", "ip_addr"], errors='ignore')
 # drop nulls
 df_mega = df_mega[~df_mega[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
 

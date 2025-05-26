@@ -5,11 +5,12 @@ import numpy as np
 import time
 import string
 import pprint as pp
+import zipfile as zf
 
-
-path = '/Users/beng/code/spotify/datasets holding'
-extension = '.json'
-name = 'beng'  # input('What is your name?\n')
+source_path = '/Users/beng/code/spotify/datasets holding' # THIS WILL BE THE PATH OF THE UPLOAD BOX
+destination_path = '/Users/beng/code/spotify/cleaned_user_data' # THIS WILL BE THE PATH OF THE PROCESSED DATA
+ext_json = '.json'
+ext_zip = '.zip'
 files = []
 for file in os.listdir(path):
     if file.endswith(extension) and 'Audio' in file or file.endswith(extension) and 'audiobook' in file:
@@ -68,6 +69,9 @@ df_mega['category'] = df_mega.apply(categorise, axis=1)
 
 # drop unecessary columns
 df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','endTime','audiobookName','chapterName',
-                                'authorName','msPlayed','ip_address'])
+                                'authorName','msPlayed', "platform", "ip_addr"])
 # drop nulls
 df_mega = df_mega[~df_mega[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
+
+name = input('What are your initials?\n').upper()
+df_mega.to_csv(f'{destination_path}/{name}_df_mega.csv', index=False)

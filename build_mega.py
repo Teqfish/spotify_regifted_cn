@@ -5,15 +5,26 @@ import numpy as np
 import time
 import string
 import pprint as pp
+import zipfile as zf
 
-
-path = '/Users/beng/code/spotify/datasets holding'
-extension = '.json'
+path = '/Users/beng/code/spotify/datasets holding' # THIS WILL BE THE PATH OF THE UPLOAD BOX
+ext_json = '.json'
+ext_zip = '.zip'
 name = 'beng'  # input('What is your name?\n')
 files = []
+
+# check for zipped files
 for file in os.listdir(path):
-    if file.endswith(extension) and 'Audio' in file or file.endswith(extension) and 'audiobook' in file:
+    if file.endswith(ext_zip):
+        file.extractall(path)
+    else:
+        pass
+
+for file in os.listdir(path):
+    if file.endswith(ext_json) and 'Audio' in file or file.endswith(ext_json) and 'audiobook' in file:
         files.append(file)
+    else:
+        pass
 
 
 df_list = []
@@ -24,7 +35,7 @@ for file in files:
 total = 0
 for data in df_list:
     total = total + len(data)
-print(f'Merged dataset should have {total} rows')
+# print(f'Merged dataset should have {total} rows')
 
 df_mega = pd.concat(df_list, ignore_index=True)
 
@@ -68,6 +79,6 @@ df_mega['category'] = df_mega.apply(categorise, axis=1)
 
 # drop unecessary columns
 df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','endTime','audiobookName','chapterName',
-                                'authorName','msPlayed','ip_address'])
+                                'authorName','msPlayed', "platform", "ip_addr"])
 # drop nulls
 df_mega = df_mega[~df_mega[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]

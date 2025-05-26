@@ -84,4 +84,4 @@ df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','
 df_mega = df_mega[~df_mega[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
 
 name = input('What are your initials?\n').upper()
-df_mega.to_csv(f'/Users/beng/code/spotify/cleaned_user_data/{name}_df_mega.csv', index=False)
+df_mega.to_csv(f'{destination_path}/{name}_df_mega.csv', index=False)

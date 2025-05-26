@@ -12,20 +12,30 @@ destination_path = '/Users/beng/code/spotify/cleaned_user_data' # THIS WILL BE T
 ext_json = '.json'
 ext_zip = '.zip'
 files = []
-for file in os.listdir(path):
-    if file.endswith(extension) and 'Audio' in file or file.endswith(extension) and 'audiobook' in file:
+
+# check for zipped files
+for file in os.listdir(source_path):
+    if file.endswith(ext_zip):
+        file.extractall(source_path)
+    else:
+        pass
+
+for file in os.listdir(source_path):
+    if file.endswith(ext_json) and 'Audio' in file or file.endswith(ext_json) and 'audiobook' in file:
         files.append(file)
+    else:
+        pass
 
 
 df_list = []
 for file in files:
-    df = pd.read_json(os.path.join(path, file))
+    df = pd.read_json(os.path.join(source_path, file))
     df_list.append(df)
 
 total = 0
 for data in df_list:
     total = total + len(data)
-print(f'Merged dataset should have {total} rows')
+# print(f'Merged dataset should have {total} rows')
 
 df_mega = pd.concat(df_list, ignore_index=True)
 

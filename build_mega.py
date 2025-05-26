@@ -5,41 +5,43 @@ import numpy as np
 import time
 import string
 import pprint as pp
-import zipfile as zf
+import zipfile
 
-source_path = '/Users/beng/code/spotify/datasets holding' # THIS WILL BE THE PATH OF THE UPLOAD BOX
-destination_path = '/Users/beng/code/spotify/cleaned_user_data' # THIS WILL BE THE PATH OF THE PROCESSED DATA
-ext_json = '.json'
-ext_zip = '.zip'
-files = []
+zipped_dir = '/Users/beng/code/spotify/BG data/my_spotify_data (4).zip'
+unzipped_dir = "/Users/beng/code/spotify/BG data"
+destination_path = '/Users/beng/code/spotify/cleaned_user_data'
 
-# check for zipped files
-for file in os.listdir(source_path):
-    if file.endswith(ext_zip):
-        file.extractall(source_path)
-    else:
-        pass
+# Unzipping the file
+zf = zipfile.ZipFile(zipped_dir)
+zf.extractall(unzipped_dir)
 
-for file in os.listdir(source_path):
-    if file.endswith(ext_json) and 'Audio' in file or file.endswith(ext_json) and 'audiobook' in file:
-        files.append(file)
-    else:
-        pass
+# Empty list of json dfs
+dfs = []
 
+#Search unzipped folder for jsons containing "audio"
+for root, dirs, files in os.walk(unzipped_dir):
+    for file in files:
+        if file.lower().endswith('.json') and 'audio' in file.lower():
+            file_path = os.path.join(root, file)
+            print(f"Reading: {file_path}")
+            
+            # Convert to DataFrame
+            try:              
+                df = pd.read_json(file_path)
+                dfs.append(df)
+            except Exception as e:
+                print(f"Failed to read {file_path}: {e}")
 
-df_list = []
-for file in files:
-    df = pd.read_json(os.path.join(source_path, file))
-    df_list.append(df)
+# BIRTH OF THE MEGAFRAME <<<<<<<<<<<<<<<<<<<
+if dfs:
+    df_mega = pd.concat(dfs, ignore_index=True)
+    print(f"Combined DataFrame shape: {df_mega.shape}")
+else:
+    print("No matching JSON files found.")
 
-total = 0
-for data in df_list:
-    total = total + len(data)
-# print(f'Merged dataset should have {total} rows')
-
-df_mega = pd.concat(df_list, ignore_index=True)
-
-
+name = input('What are your initials?\n')
+# Cheeky CSV export
+df_mega.to_csv(f'{destination_path}/{name}_df_mega.csv', index=False)
 
 # CLEANING
 
@@ -78,8 +80,7 @@ def categorise(row):
 df_mega['category'] = df_mega.apply(categorise, axis=1)
 
 # drop unecessary columns
-df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','endTime','audiobookName','chapterName',
-                                'authorName','msPlayed', "platform", "ip_addr"])
+df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','endTime','audiobookName','chapterName','authorName','msPlayed', "platform", "ip_addr"], errors='ignore')
 # drop nulls
 df_mega = df_mega[~df_mega[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
 

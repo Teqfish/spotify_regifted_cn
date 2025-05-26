@@ -5,40 +5,34 @@ import numpy as np
 import time
 import string
 import pprint as pp
-import zipfile
 
-zipped_dir = '/Users/beng/code/spotify/BG data/my_spotify_data (4).zip'
-unzipped_dir = "/Users/beng/code/spotify/BG data"
-destination_path = '/Users/beng/code/spotify/cleaned_user_data'
 
-# Unzipping the file
-zf = zipfile.ZipFile(zipped_dir)
-zf.extractall(unzipped_dir)
+source_path = '/Users/beng/code/spotify/BG data_unzipped' # THIS WILL BE THE PATH OF THE UPLOAD BOX
+destination_path = '/Users/beng/code/spotify/cleaned_user_data' # THIS WILL BE THE PATH OF THE PROCESSED DATA
+ext_json = '.json'
+ext_zip = '.zip'
+files = []
 
-# Empty list of json dfs
-dfs = []
 
-#Search unzipped folder for jsons containing "audio"
-for root, dirs, files in os.walk(unzipped_dir):
-    for file in files:
-        if file.lower().endswith('.json') and 'audio' in file.lower():
-            file_path = os.path.join(root, file)
-            print(f"Reading: {file_path}")
-            
-            # Convert to DataFrame
-            try:              
-                df = pd.read_json(file_path)
-                dfs.append(df)
-            except Exception as e:
-                print(f"Failed to read {file_path}: {e}")
+for file in os.listdir(source_path):
+    if file.endswith(ext_json) and 'audio' in file.lower():
+        files.append(file)
+        print(f'Found file: {file}')
+    else:
+        pass
 
-# BIRTH OF THE MEGAFRAME <<<<<<<<<<<<<<<<<<<
-if dfs:
-    df_mega = pd.concat(dfs, ignore_index=True)
-    print(f"Combined DataFrame shape: {df_mega.shape}")
-else:
-    print("No matching JSON files found.")
 
+df_list = []
+for file in files:
+    df = pd.read_json(os.path.join(source_path, file))
+    df_list.append(df)
+
+total = 0
+for data in df_list:
+    total = total + len(data)
+# print(f'Merged dataset should have {total} rows')
+
+df_mega = pd.concat(df_list, ignore_index=True)
 
 
 

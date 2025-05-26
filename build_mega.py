@@ -7,20 +7,20 @@ import string
 import pprint as pp
 import zipfile as zf
 
-path = '/Users/beng/code/spotify/datasets holding' # THIS WILL BE THE PATH OF THE UPLOAD BOX
+source_path = '/Users/beng/code/spotify/datasets holding' # THIS WILL BE THE PATH OF THE UPLOAD BOX
+destination_path = '/Users/beng/code/spotify/cleaned_user_data' # THIS WILL BE THE PATH OF THE PROCESSED DATA
 ext_json = '.json'
 ext_zip = '.zip'
-name = 'beng'  # input('What is your name?\n')
 files = []
 
 # check for zipped files
-for file in os.listdir(path):
+for file in os.listdir(source_path):
     if file.endswith(ext_zip):
-        file.extractall(path)
+        file.extractall(source_path)
     else:
         pass
 
-for file in os.listdir(path):
+for file in os.listdir(source_path):
     if file.endswith(ext_json) and 'Audio' in file or file.endswith(ext_json) and 'audiobook' in file:
         files.append(file)
     else:
@@ -29,7 +29,7 @@ for file in os.listdir(path):
 
 df_list = []
 for file in files:
-    df = pd.read_json(os.path.join(path, file))
+    df = pd.read_json(os.path.join(source_path, file))
     df_list.append(df)
 
 total = 0
@@ -82,3 +82,6 @@ df_mega = df_mega.drop(columns=['offline','offline_timestamp','incognito_mode','
                                 'authorName','msPlayed', "platform", "ip_addr"])
 # drop nulls
 df_mega = df_mega[~df_mega[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
+
+name = input('What are your initials?\n').upper()
+df_mega.to_csv(f'/Users/beng/code/spotify/cleaned_user_data/{name}_df_mega.csv', index=False)

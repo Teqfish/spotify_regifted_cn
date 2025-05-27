@@ -9,7 +9,7 @@ import plotly.express as px
 
 ##loading the csv##
 df_mega_ben = pd.read_csv('BG_df_mega.csv')
-df_mega_ben.head()
+
 
 ## Variables##
 users = ({"Ben" : 'df_mega_ben', "Jana": 'df_mega_jana', "Charlie": 'df_mega_charlie', "Tom": 'df_mega_tom'})

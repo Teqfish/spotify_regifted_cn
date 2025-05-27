@@ -52,7 +52,7 @@ if page == "Per Year":
     selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
 
    ##filtering the data##
-    df_filtered = df_mega_ben[df_mega['year'] == selected_year]
+    df_filtered = df_mega_ben[df_mega_ben['year'] == selected_year]
     df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
     df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
    

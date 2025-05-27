@@ -66,7 +66,7 @@ if page == "Per Artist":
 if page == "AbOuT uS":
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)     
     st.title("About Us")
-    st.markdown("This project is created by Ben and his team to analyze Spotify data in a fun way.")
+    st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
     st.write("Feel free to reach out for any questions or collaborations.")
 
 

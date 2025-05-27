@@ -4,29 +4,37 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-# Set the page configuration
+from google.cloud import bigquery
+import pandas_gbq
+import os
+
+##Connecting to the Google Cloud BigQuery##
 
 
-##loading the csv##
+
+##loading the dataset##
 df_mega_ben = pd.read_csv('BG_df_mega.csv')
+df_mega_tom = pd.read_csv('TW_df_mega.csv')
+df_mega_jana = pd.read_csv('JH_df_mega.csv')
+df_mega_charlie = pd.read_csv('CN_df_mega.csv')
+df_mega_howard = pd.read_csv('HW_df_mega.csv')
+df_mega_Josh = pd.read_csv('JQ_df_mega.csv')
 
 
 ## Variables##
-users = ({"Ben" : 'df_mega_ben', "Jana": 'df_mega_jana', "Charlie": 'df_mega_charlie', "Tom": 'df_mega_tom'})
+users = ({"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, "Tom": df_mega_tom, "Howard": df_mega_howard, "Josh": df_mega_Josh })
 
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:")
 st.sidebar.title("Spotify Regifted")
-page = st.sidebar.radio("Go to", ["Home", "Overall Reveiw", "Per Year", "Per Artist", "AbOuT uS"])
-
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "AbOuT uS"])
 ##Home Page##
 if page == "Home":
   st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-  st.header("Some other Headers? need to learnhow to move them around")
-  st.subheader("Please select a user to analyze their Spotify data, then use the naviagtion bar on the left to explore different sections of the analysis.")
-  User_selected = st.selectbox(
+  st.header("Your life on Spotify, in review:")
+  user_selected = st.selectbox(
      'User:', options=["All"] + list(users.keys()), index=0)
-
+  st.header(f"{user_selected} has listened to Spotify for {users[user_selected]['minutes_played'].sum() / 60:.2f} hours in total.")
 ## Overall Review Page##
 
 if page == "Overall Reveiw":

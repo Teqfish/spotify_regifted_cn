@@ -42,7 +42,7 @@ if page == "Home":
 
 ## Overall Review Page##
 
-if page == "Overall Reveiw":
+if page == "Overall Review":
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
     st.title("Overall Review of Spotify Data")
     st.markdown("This section provides an overview of the Spotify data analysis.")
@@ -50,9 +50,9 @@ if page == "Overall Reveiw":
     user_selected = st.selectbox(
      'User:', options=list(users.keys()), index=0)
     
-    # Example plot
-    fig1 = px.histogram(df_mega_ben, x='ms_played', title='Distribution of Listening Time')
-    st.plotly_chart(fig1, use_container_width=True)
+    ## Graphs here please###
+
+    
     ## overall stats##
     st.header(f"You have listened to {users[user_selected]['artist_name'].nunique()} unique artists and {users[user_selected]['track_name'].nunique()} unique tracks.")
     

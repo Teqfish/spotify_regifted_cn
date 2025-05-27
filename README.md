@@ -1,14 +1,34 @@
 # spotify_regifted
 A deeper dive into your Spotify data!
 
+# DESCRIPTION
+Spotify's yearly wrapped doesn't feel satisfying enough, so we've extracted, loaded, transformed, cleaned our (and our friends') data to find out what we can find out about our listening habits!
+
+# FEATURES
+Concatenating of .jsons from Spotify to a DataFrame
+Enriching of data using Discogs API and Spotify API calls
+Comparison of listening to UK top 50s
+
 # FILE MANAGEMENT
-- upload directory?
+- upload directory has to be changed when locally running build_mega
 - GBQ i/o
 
-# CLEANING
-- which columns did we drop?
-- what did we name the remaining ones?
-- are we running in ms or secs?
+# Renamed Columns:
+conn_country --> country
+master_metadata_track_name --> track_name
+master_metadata_album_artist_name --> artist_name
+master_metadata_album_album_name --> album_name
+
+# Dropped Columns:
+offline
+offline_timestamp
+incognito_mode
+endTime
+audiobookName
+chapterName
+msPlayed
+platform
+ip_addr
 
 # ENRICHMENT
 

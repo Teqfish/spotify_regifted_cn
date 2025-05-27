@@ -55,7 +55,7 @@ if page == "Overall Review":
     
     ## overall stats##
     st.header(f"You have listened to {users[user_selected]['artist_name'].nunique()} unique artists and {users[user_selected]['track_name'].nunique()} unique tracks.")
-    
+
 
 
 ##Per Year Page##
@@ -63,6 +63,7 @@ if page == "Per Year":
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)  
     st.title("Spotify Data Analysis by Year")
     st.markdown("This section allows you to analyze Spotify data by year.")
+
 
     ##user selection##
     user_selected = st.selectbox(
@@ -75,12 +76,15 @@ if page == "Per Year":
 
    ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
+
     df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
     df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
    
    ##per year graph##
+
     st.subheader(f"{user_selected}'s Spotify Data Analysis")
     fig4 = px.bar(df_grouped.head(20), x="artist_name", y="ms_played", title=f"{user_selected}'s most listened to artists in {selected_year}", color_discrete_sequence=["#32CD32"])
+
     st.plotly_chart(fig4, use_container_width=True)
 
 

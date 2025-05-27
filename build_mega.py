@@ -11,7 +11,7 @@ source_path = '/Users/beng/code/spotify/datasets holding' # THIS WILL BE THE PAT
 destination_path = '/Users/beng/code/spotify/cleaned_user_data' # THIS WILL BE THE PATH OF THE PROCESSED DATA
 ext_json = '.json'
 files = []
-
+name = input('What are your initials?\n').upper()
 
 for file in os.listdir(source_path):
     if file.endswith(ext_json) and 'audio' in file.lower():
@@ -32,6 +32,8 @@ for data in df_list:
 # print(f'Merged dataset should have {total} rows')
 
 df_mega = pd.concat(df_list, ignore_index=True)
+df_mega.to_csv(f'{destination_path}/{name}_df_choirboy.csv', index=False)
+print(f'Merged raw dataset saved as {name}_df_choirboy.csv')
 
 
 
@@ -51,8 +53,8 @@ df_mega = df_mega.rename(columns={'master_metadata_album_artist_name': 'artist_n
 df_mega = df_mega.rename(columns={'master_metadata_album_album_name': 'album_name'})
 # cast datetime to datetime
 df_mega['datetime'] = pd.to_datetime(df_mega['datetime'])
-
-
+# create name column
+df_mega['username'] = name
 
 # add categories for music, audio and audiobook
 
@@ -79,6 +81,8 @@ df_mega = df_mega[~df_mega[['track_name', 'episode_name', 'audiobook_title']].is
 df_tracks = df_mega.groupby(['track_name', 'artist_name', 'spotify_track_uri'],as_index=False)['ms_played'].sum()
 
 
-name = input('What are your initials?\n').upper()
+
 df_mega.to_csv(f'{destination_path}/{name}_df_mega.csv', index=False)
+print(f'Merged cleaned dataset saved as {name}_df_mega.csv')
 df_tracks.to_csv(f'{destination_path}/{name}_df_tracks.csv', index=False)
+print(f'Tracks dataset saved as {name}_df_tracks.csv')

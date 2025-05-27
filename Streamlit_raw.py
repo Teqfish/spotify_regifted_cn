@@ -8,8 +8,11 @@ import plotly.express as px
 
 
 ##loading the csv##
-df_mega = pd.read_csv('BG_df_mega.csv')
-df_mega.head()
+df_mega_ben = pd.read_csv('BG_df_mega.csv')
+df_mega_ben.head()
+
+## Variables##
+users = ({"Ben" : 'df_mega_ben', "Jana": 'df_mega_jana', "Charlie": 'df_mega_charlie', "Tom": 'df_mega_tom'})
 
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:")
@@ -20,7 +23,9 @@ page = st.sidebar.radio("Go to", ["Home", "Overall Reveiw", "Per Year", "Per Art
 if page == "Home":
   st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
   st.header("Some other Headers? need to learnhow to move them around")
-  st.subheader("sub headers?")
+  st.subheader("Please select a user to analyze their Spotify data, then use the naviagtion bar on the left to explore different sections of the analysis.")
+  User_selected = st.selectbox(
+     'User:', options=["All"] + list(users.keys()), index=0)
 
 ## Overall Review Page##
 
@@ -30,7 +35,7 @@ if page == "Overall Reveiw":
     st.markdown("This section provides an overview of the Spotify data analysis.")
     
     # Example plot
-    fig1 = px.histogram(df_mega, x='ms_played', title='Distribution of Listening Time')
+    fig1 = px.histogram(df_mega_ben, x='ms_played', title='Distribution of Listening Time')
     st.plotly_chart(fig1, use_container_width=True)
     
 
@@ -42,12 +47,12 @@ if page == "Per Year":
     st.markdown("This section allows you to analyze Spotify data by year.")
 
     ## making the sliders##   
-    df_mega['year'] = pd.to_datetime(df_mega['datetime']).dt.year
-    min_year, max_year = df_mega['year'].min(), df_mega['year'].max()
+    df_mega_ben['year'] = pd.to_datetime(df_mega_ben['datetime']).dt.year
+    min_year, max_year = df_mega_ben['year'].min(), df_mega_ben['year'].max()
     selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
 
    ##filtering the data##
-    df_filtered = df_mega[df_mega['year'] == selected_year]
+    df_filtered = df_mega_ben[df_mega['year'] == selected_year]
     df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
     df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
    

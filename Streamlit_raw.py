@@ -17,16 +17,14 @@ users = ({"Ben" : 'df_mega_ben', "Jana": 'df_mega_jana', "Charlie": 'df_mega_cha
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:")
 st.sidebar.title("Spotify Regifted")
-page = st.sidebar.radio("Go to", ["Home", "Overall Reveiw", "Per Year", "Per Artist", "AbOuT uS"])
-
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "AbOuT uS"])
 ##Home Page##
 if page == "Home":
   st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-  st.header("Some other Headers? need to learnhow to move them around")
-  st.subheader("Please select a user to analyze their Spotify data, then use the naviagtion bar on the left to explore different sections of the analysis.")
+  st.header("Your life on Spotify, in review:")
   User_selected = st.selectbox(
      'User:', options=["All"] + list(users.keys()), index=0)
-
+  st.header(f"{User_selected} has listened to Spotify for {df_mega_ben['minutes_played'].sum() / 60:.2f} hours in total.")
 ## Overall Review Page##
 
 if page == "Overall Reveiw":

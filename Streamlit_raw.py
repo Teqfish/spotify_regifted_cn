@@ -4,6 +4,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
+from google.cloud import bigquery
+import pandas_gbq
+import os
+
 # Set the page configuration
 
 

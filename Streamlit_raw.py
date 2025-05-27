@@ -8,15 +8,21 @@ from google.cloud import bigquery
 import pandas_gbq
 import os
 
-# Set the page configuration
+##Connecting to the Google Cloud BigQuery##
 
 
-##loading the csv##
+
+##loading the dataset##
 df_mega_ben = pd.read_csv('BG_df_mega.csv')
+df_mega_tom = pd.read_csv('TW_df_mega.csv')
+df_mega_jana = pd.read_csv('JH_df_mega.csv')
+df_mega_charlie = pd.read_csv('CN_df_mega.csv')
+df_mega_howard = pd.read_csv('HW_df_mega.csv')
+df_mega_Josh = pd.read_csv('JQ_df_mega.csv')
 
 
 ## Variables##
-users = ({"Ben" : 'df_mega_ben', "Jana": 'df_mega_jana', "Charlie": 'df_mega_charlie', "Tom": 'df_mega_tom'})
+users = ({"Ben" : 'df_mega_ben', "Jana": 'df_mega_jana', "Charlie": 'df_mega_charlie', "Tom": 'df_mega_tom', "Howard": 'df_mega_howard',"Josh": 'JQ_mega_howard' })
 
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:")

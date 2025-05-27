@@ -11,33 +11,63 @@ import plotly.express as px
 df_mega = pd.read_csv('BG_df_mega.csv')
 df_mega.head()
 
-##page titles##
+##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:")
-st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-st.header("Some other Headers? need to learnhow to move them around")
-st.subheader("sub headers?")
+st.sidebar.title("Spotify Regifted")
+page = st.sidebar.radio("Go to", ["Home", "Overall Reveiw", "Per Year", "Per Artist", "AbOuT uS"])
 
-## making the sliders##
-df_mega['year'] = pd.to_datetime(df_mega['datetime']).dt.year
-min_year, max_year = df_mega['year'].min(), df_mega['year'].max()
-selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
+##Home Page##
+if page == "Home":
+  st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+  st.header("Some other Headers? need to learnhow to move them around")
+  st.subheader("sub headers?")
 
-##filtering the data##
-df_filtered = df_mega[df_mega['year'] == selected_year]
-df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
-df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
+## Overall Review Page##
 
-st.subheader('Ben\'s Spotify Data Analysis')
-fig4 = px.bar(df_grouped.head(20), x="artist_name", y="ms_played", title=f"Ben's most listened to artists in {selected_year}", color_discrete_sequence=["#32CD32"])
-st.plotly_chart(fig4, use_container_width=True)
+if page == "Overall Reveiw":
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    st.title("Overall Review of Spotify Data")
+    st.markdown("This section provides an overview of the Spotify data analysis.")
+    
+    # Example plot
+    fig1 = px.histogram(df_mega, x='ms_played', title='Distribution of Listening Time')
+    st.plotly_chart(fig1, use_container_width=True)
+    
 
-st.header('Miserble git makes DF_mega')
-st.subheader('his kids were trying to feed him soming they made')
-st.markdown('He was _Not Pleased_')
-st.caption('TBF it looked a bit gross')
 
-code_example = """
- def greet(name):
-   print('Hello', name)"""
+##Per Year Page##
+if page == "Per Year":
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)  
+    st.title("Spotify Data Analysis by Year")
+    st.markdown("This section allows you to analyze Spotify data by year.")
 
-st.code(code_example, language="python")
+    ## making the sliders##   
+    df_mega['year'] = pd.to_datetime(df_mega['datetime']).dt.year
+    min_year, max_year = df_mega['year'].min(), df_mega['year'].max()
+    selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
+
+   ##filtering the data##
+    df_filtered = df_mega[df_mega['year'] == selected_year]
+    df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
+    df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
+   
+   ##per year graph##
+    st.subheader('Ben\'s Spotify Data Analysis')
+    fig4 = px.bar(df_grouped.head(20), x="artist_name", y="ms_played", title=f"Ben's most listened to artists in {selected_year}", color_discrete_sequence=["#32CD32"])
+    st.plotly_chart(fig4, use_container_width=True)
+
+
+
+##Per Artist Page##
+if page == "Per Artist":
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+
+##About Us Page##
+if page == "AbOuT uS":
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)     
+    st.title("About Us")
+    st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
+    st.write("Feel free to reach out for any questions or collaborations.")
+
+
+

@@ -27,7 +27,8 @@ users = ({"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie,
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:")
 st.sidebar.title("Spotify Regifted")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "AbOuT uS"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Basic-O-Meter", "AbOuT uS"])
+
 ##Home Page##
 if page == "Home":
   st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
@@ -51,7 +52,90 @@ if page == "Overall Review":
      'User:', options=list(users.keys()), index=0)
     
     ## Graphs here please###
+    minutes_by_type = users[user_selected].groupby("category")["minutes_played"].sum().reset_index()
+    fig = px.pie(
+     minutes_by_type,
+     values="minutes_played",
+     names="category",
+     title="Total Minutes Listened by Category",
+     color_discrete_sequence=px.colors.qualitative.Set3
+   )
+    st.plotly_chart(fig, use_container_width=True)
 
+    ##Ben's Big ol Graph##
+    users[user_selected]['datetime'] = pd.to_datetime(users[user_selected]['datetime'])
+    users[user_selected]['year'] = users[user_selected]['datetime'].dt.year
+
+    grouped = users[user_selected].groupby(['year', 'category'])['minutes_played'].sum().reset_index()
+
+    # Convert minutes to hours
+    grouped['hours_played'] = grouped['minutes_played'] / 60
+
+    # Line chart using Plotly
+    fig = px.line(
+    grouped,
+    x='year',
+    y='hours_played',
+    color='category',
+    markers=True,
+    title='Total Listening Hours per Year by Category'
+   )
+
+    # Streamlit display
+    st.plotly_chart(fig)
+
+   # Load user-specific data
+    df = users[user_selected]
+
+   # Convert datetime and extract year
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['year'] = df['datetime'].dt.year
+
+  # Category selection
+    categories = df['category'].dropna().unique().tolist()
+    selected_category = st.selectbox("Choose a category to explore:", categories)
+
+  # Map category to correct "title" field
+    if selected_category == "music":
+      title_field = "artist_name"
+    elif selected_category == "podcast":
+     title_field = "episode_show_name"
+    elif selected_category == "audiobook":
+     title_field = "audiobook_title"
+    else:
+     st.error("Unsupported category selected.")
+     st.stop()
+
+  # Filter data
+    df_filtered = df[df['category'] == selected_category][['year', title_field, 'minutes_played']].dropna()
+
+  # Get top 10 titles
+    top_titles = (
+      df_filtered.groupby(title_field)['minutes_played']
+      .sum()
+      .nlargest(10)
+      .index
+    )
+
+  # Filter again for just top titles
+    df_top10 = df_filtered[df_filtered[title_field].isin(top_titles)]
+
+  # Group for chart
+    sunburst_data = df_top10.groupby(['year', title_field])['minutes_played'].sum().reset_index()
+    sunburst_data['hours_played'] = sunburst_data['minutes_played'] / 60
+
+  # Sunburst chart: Year → Title
+    fig = px.sunburst(
+    sunburst_data,
+    path=['year', title_field],
+    values='hours_played',
+    title=f'Top 10 in "{selected_category}" by Listening Hours (Year → {title_field.replace("_", " ").title()})',
+    color='year',
+    color_continuous_scale='Viridis'
+)
+
+  # Show chart
+    st.plotly_chart(fig)
     
     ## overall stats##
     st.header(f"You have listened to {users[user_selected]['artist_name'].nunique()} unique artists and {users[user_selected]['track_name'].nunique()} unique tracks.")
@@ -92,6 +176,11 @@ if page == "Per Year":
 ##Per Artist Page##
 if page == "Per Artist":
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+
+## Basic-O-Meter Page##
+if page == "Basic-O-Meter":
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+
 
 ##About Us Page##
 if page == "AbOuT uS":

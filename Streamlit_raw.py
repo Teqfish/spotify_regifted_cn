@@ -244,19 +244,27 @@ elif page == "Per Artist":
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
     # Your artist analysis code here...
 
-# ------------------------- Basic-O-Meter Page ------------------------- #    
-    
+# ------------------------- Basic-O-Meter Page ------------------------- #
+
 elif page == "Basic-O-Meter":
     user_selected = get_current_user(users)
     st.info(f"📈 Basic-O-Meter for: **{user_selected}**")
+    st.subheader(f"{user_selected}'s stats 📊")
 
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
     st.title("The Basic-O-Meter")
     st.markdown("Let's find out how basic your music taste is!")
 
-# user selection
-    user_selected = st.selectbox(
-     'User:', options=list(users.keys()), index=0)
+    # user_index, user_selected = create_user_selector(users, label='User:')
+
+        # Get current user from session state (NO SELECTBOX)
+
+
+    # Show current user info
+
+# # user selection
+#     user_selected = st.selectbox(
+#      'User:', options=list(users.keys()), index=0)
     df = users[user_selected]
 
 # making the sliders
@@ -463,7 +471,7 @@ elif page == "Basic-O-Meter":
     # Show chart in Streamlit
     st.plotly_chart(fig, use_container_width=True)
 
-    
+
 
 # ------------------------- About Us Page ------------------------- #
 

@@ -380,6 +380,14 @@ elif page == "Per Artist":
           <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
       """
       st.markdown(htmlstr, unsafe_allow_html=True)
+      
+      ## artist image
+      info_artist = pd.read_csv('info_tables/info_artist.csv')
+      image_url = info_artist[info_artist.artist_name == artist_selected].artist_image.values[0]
+      st.image(image_url, output_format="auto")
+
+
+
 
     with col3:
       ### Artist Rank
@@ -416,6 +424,12 @@ elif page == "Per Artist":
       """
       st.markdown(htmlstr, unsafe_allow_html=True)
 
+      ## top album image
+      info_album = pd.read_csv('info_tables/info_artist.csv')
+      image_url = info_artist[info_artist.artist_name == artist_selected].artist_image.values[0]
+      st.image(image_url, output_format="auto")
+
+
     # top songs graph
     top_songs = df_music[df_music.artist_name == artist_selected].groupby("track_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
@@ -429,6 +443,8 @@ elif page == "Per Artist":
     fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Top albums by {artist_selected}", color_discrete_sequence=["#32CD32"])
     fig_top_albums.update_yaxes(categoryorder='total ascending')
     st.write(fig_top_albums)
+
+
 
 # ------------------------- Basic-O-Meter Page ------------------------- #
 elif page == "Basic-O-Meter":

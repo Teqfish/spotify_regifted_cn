@@ -10,6 +10,7 @@ import seaborn as sns
 import numpy as np
 import ast
 from PIL import Image
+from plotly_calplot import calplot
 
 
 ##Connecting to the Google Cloud BigQuery##
@@ -502,6 +503,11 @@ elif page == "Per Artist":
     fig = px.bar_polar(df_polar, r="minutes_played", theta="datetime", color="minutes_played",
                        color_continuous_scale=["#32CD32", "#006400"],  # Green theme
                         title="Listening Trends Over the Year")
+    
+    # calendar plot - maybe empty days need filling?
+    df_day = df_music[(df_music.artist_name == artist_selected) & (df_music.datetime.dt.year == year_selected)].groupby("date").minutes_played.sum().reset_index()
+    fig_cal = calplot(df_day, x = "date", y = "minutes_played")
+    st.plotly_chart(fig_cal, use_container_width=True)
 
     fig.update_layout(
         title_font_size=20,

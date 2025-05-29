@@ -255,16 +255,6 @@ elif page == "Basic-O-Meter":
     st.title("The Basic-O-Meter")
     st.markdown("Let's find out how basic your music taste is!")
 
-    # user_index, user_selected = create_user_selector(users, label='User:')
-
-        # Get current user from session state (NO SELECTBOX)
-
-
-    # Show current user info
-
-# # user selection
-#     user_selected = st.selectbox(
-#      'User:', options=list(users.keys()), index=0)
     df = users[user_selected]
 
 # making the sliders

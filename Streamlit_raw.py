@@ -242,10 +242,193 @@ elif page == "Per Year":
 
 # ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":
+    # project titel
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+
     # Get current user from session state 
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
-    # Your artist analysis code here...
+
+    # Load user-specific data
+    df = users[user_selected]# make music df
+    df_music = df[df["category"] == "music"]
+    df_music = df_music[["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]]
+    # shorten datetime column
+    df_music["datetime"] = pd.to_datetime(df_music.datetime).dt.tz_localize(None)
+    df_music["date"] = pd.to_datetime(df_music.datetime).dt.date
+
+    # list of artists ranked by play time
+    artist_list = list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"])
+
+    ##artist selection##
+    artist_selected = st.selectbox(
+     'Artist:', options=list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"]), index=0)
+    
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+      ## first listened to
+
+      # get first listening info
+      df_first = df_music.groupby("track_name").first().reset_index()
+
+      ## box stolen from the internet
+      st.markdown("<h4>First Listen:</h4>", unsafe_allow_html=True)
+      wch_colour_box = (64, 64, 64)
+      # wch_colour_box = (255, 255, 255)
+      wch_colour_font = (50, 205, 50)
+      fontsize = 38
+      valign = "left"
+      iconname = "fas fa-star"
+      i = df_first[df_first.artist_name == artist_selected].date.min().strftime('%d/%m/%Y')
+
+      htmlstr = f"""
+          <p style='background-color: rgb(
+              {wch_colour_box[0]}, 
+              {wch_colour_box[1]}, 
+              {wch_colour_box[2]}, 0.75
+          ); 
+          color: rgb(
+              {wch_colour_font[0]}, 
+              {wch_colour_font[1]}, 
+              {wch_colour_font[2]}, 0.75
+          ); 
+          font-size: {fontsize}px;    
+          border-radius: 7px; 
+          padding-top: 40px; 
+          padding-bottom: 40px; 
+          line-height:25px;
+          display: flex;
+          align-items: center;
+          justify-content: center;'>
+          <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+      """
+      st.markdown(htmlstr, unsafe_allow_html=True)
+
+      ## listening streak
+
+      # consecutive listening days
+      s = df_music.groupby('artist_name').datetime.diff().dt.days.ne(1).cumsum()
+      streaks = df_music.groupby(['artist_name', s]).size().reset_index(level=1, drop=True).reset_index().rename(columns ={0:"streak"})
+      streaks_max= streaks.groupby("artist_name").streak.max().sort_values(ascending=False).reset_index()
+
+
+      ## box stolen from the internet
+      st.markdown("<h4>Longest Streak:</h4>", unsafe_allow_html=True)
+      wch_colour_box = (64, 64, 64)
+      # wch_colour_box = (255, 255, 255)
+      wch_colour_font = (50, 205, 50)
+      fontsize = 38
+      valign = "left"
+      iconname = "fas fa-star"
+      i = int(streaks_max[streaks_max.artist_name == artist_selected]["streak"])
+
+      htmlstr = f"""
+          <p style='background-color: rgb(
+              {wch_colour_box[0]}, 
+              {wch_colour_box[1]}, 
+              {wch_colour_box[2]}, 0.75
+          ); 
+          color: rgb(
+              {wch_colour_font[0]}, 
+              {wch_colour_font[1]}, 
+              {wch_colour_font[2]}, 0.75
+          ); 
+          font-size: {fontsize}px;    
+          border-radius: 7px; 
+          padding-top: 40px; 
+          padding-bottom: 40px; 
+          line-height:25px;
+          display: flex;
+          align-items: center;
+          justify-content: center;'>
+          <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+      """
+      st.markdown(htmlstr, unsafe_allow_html=True)
+
+    with col2:
+      ### Total minutes listened
+      ## box stolen from the internet
+      st.markdown("<h4>Minutes Listened:</h4>", unsafe_allow_html=True)
+      wch_colour_box = (64, 64, 64)
+      # wch_colour_box = (255, 255, 255)
+      wch_colour_font = (50, 205, 50)
+      fontsize = 40
+      valign = "left"
+      iconname = "fas fa-star"
+      i = f"{int(df_music[df_music.artist_name == artist_selected].minutes_played.sum()):,}"
+
+      htmlstr = f"""
+          <p style='background-color: rgb(
+              {wch_colour_box[0]}, 
+              {wch_colour_box[1]}, 
+              {wch_colour_box[2]}, 0.75
+          ); 
+          color: rgb(
+              {wch_colour_font[0]}, 
+              {wch_colour_font[1]}, 
+              {wch_colour_font[2]}, 0.75
+          ); 
+          font-size: {fontsize}px;    
+          border-radius: 7px; 
+          padding-top: 40px; 
+          padding-bottom: 40px; 
+          line-height:25px;
+          display: flex;
+          align-items: center;
+          justify-content: center;'>
+          <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+      """
+      st.markdown(htmlstr, unsafe_allow_html=True)
+
+    with col3:
+      ### Artist Rank
+      ## box stolen from the internet
+      st.markdown("<h4>Overall Rank:</h4>", unsafe_allow_html=True)
+      wch_colour_box = (64, 64, 64)
+      # wch_colour_box = (255, 255, 255)
+      wch_colour_font = (50, 205, 50)
+      fontsize = 50
+      valign = "left"
+      iconname = "fas fa-star"
+      i = f"#{artist_list.index(artist_selected)+1}"
+
+      htmlstr = f"""
+          <p style='background-color: rgb(
+              {wch_colour_box[0]}, 
+              {wch_colour_box[1]}, 
+              {wch_colour_box[2]}, 0.75
+          ); 
+          color: rgb(
+              {wch_colour_font[0]}, 
+              {wch_colour_font[1]}, 
+              {wch_colour_font[2]}, 0.75
+          ); 
+          font-size: {fontsize}px;    
+          border-radius: 7px; 
+          padding-top: 40px; 
+          padding-bottom: 40px; 
+          line-height:25px;
+          display: flex;
+          align-items: center;
+          justify-content: center;'>
+          <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+      """
+      st.markdown(htmlstr, unsafe_allow_html=True)
+
+    # top songs graph
+    top_songs = df_music[df_music.artist_name == artist_selected].groupby("track_name").minutes_played.sum().sort_values(ascending = False).reset_index()
+
+    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", title=f"Top songs by {artist_selected}", color_discrete_sequence=["#32CD32"])
+    fig_top_songs.update_yaxes(categoryorder='total ascending')
+    st.write(fig_top_songs)
+
+    # top albums graph
+    top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
+
+    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Top albums by {artist_selected}", color_discrete_sequence=["#32CD32"])
+    fig_top_albums.update_yaxes(categoryorder='total ascending')
+    st.write(fig_top_albums)
 
 # ------------------------- Basic-O-Meter Page ------------------------- #
 elif page == "Basic-O-Meter":

@@ -489,6 +489,35 @@ elif page == "Per Artist":
     fig_top_albums.update_yaxes(categoryorder='total ascending')
     st.write(fig_top_albums)
 
+    # year selection
+    year_range = list(range(df_music.datetime.dt.year.min(), df_music.datetime.dt.year.max()+1))
+    year_selected = st.pills("Year", year_range, selection_mode="single", default=df_music.datetime.dt.year.max()-1)
+
+    # Create a polar bar chart
+    df_polar = df_music[(df_music.artist_name == artist_selected) & (df_music.datetime.dt.year == year_selected)].groupby(df_music.datetime.dt.month).minutes_played.sum().reset_index()
+    #define dict to name numbers as month
+    cal = {1:"Jan", 2: "Feb", 3:"Mar", 4:"Apr", 5:"May", 6:"Jun", 7:"Jul", 8:"Aug", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dec"}
+    df_polar["datetime"] = df_polar["datetime"].replace(cal)
+    # might need code to fill in missing months to keep the graph a full circle
+    fig = px.bar_polar(df_polar, r="minutes_played", theta="datetime", color="minutes_played",
+                       color_continuous_scale=["#32CD32", "#006400"],  # Green theme
+                        title="Listening Trends Over the Year")
+
+    fig.update_layout(
+        title_font_size=20,
+        polar=dict(radialaxis=dict(showticklabels=False))
+         )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    df_line = df_music[(df_music.artist_name == artist_selected)]
+    df_line["month"] = df_line.datetime.dt.month
+    df_line["year"] = df_line.datetime.dt.year
+    df_line = df_line.groupby(["year", "month"]).minutes_played.sum().reset_index()
+
+    fig_line = px.line(df_line, x = "month", y = "minutes_played", color = "year")
+    st.plotly_chart(fig_line,use_container_width=True)
+
 
 
 # ------------------------- Basic-O-Meter Page ------------------------- #

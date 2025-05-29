@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import ast
+from PIL import Image
 
 
 ##Connecting to the Google Cloud BigQuery##
@@ -66,14 +67,28 @@ def get_current_user(users):
 # ------------------------- Home Page ------------------------- #
 if page == "Home":
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-    st.header("Your life on Spotify, in review:")
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #32CD32; font-size: 32px; '>This app analyzes your Spotify data and provides insights into your listening habits. Select a user to get started.</h1>", unsafe_allow_html=True)
 
+    ## fundtion to create user selector ##
     user_index, user_selected = create_user_selector(users, label='User:')
-
-    st.header(f"{user_selected} has listened to Spotify for {users[user_selected]['minutes_played'].sum() / 60:.2f} hours in total.")
+    
+    ## some paragraphs of welcome fluff and dataset parameters ##
     users[user_selected]['datetime'] = pd.to_datetime(users[user_selected]['datetime'])
     users[user_selected]['date'] = users[user_selected]['datetime'].dt.date
-    st.header(f"You have data available from {users[user_selected]['date'].min()} to {users[user_selected]['date'].max()}.")
+    total_listened = (users[user_selected]['minutes_played'].sum() /60)
+    date_start = users[user_selected]['datetime'].min().date()
+    date_end = users[user_selected]['datetime'].max().date()
+    start_day = date_start.strftime("%d %B %Y")
+    end_day = date_end.strftime("%d %B %Y")
+
+
+
+    st.header(f"Welcome to Spotify Regifted {user_selected}!! This app is designed to analyze your Spotify data and provide insights into your listening habits. You can explore your overall listening patterns, year-by-year breakdowns, artist-specific analyses, and more. You have provided your listening history from {start_day} to {end_day} available for us to look at. That's {total_listened:.2f} hours of your listening for us to dive into! Please select a page from the sidebar to explore your Spotify data.")
+    st.markdown("<h1 style='text-align: center; color: #32CD32; font-size: 10px; '>(All data shared with Spotify Regifted™ is now property of the Spotify Regifted™ team to do with what they please)</h1>", unsafe_allow_html=True)
+
+  
+
 
 # --------------------------- Overall Review Page ------------------------- #
 elif page == "Overall Review":
@@ -209,7 +224,8 @@ elif page == "Per Year":
     users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
     min_year, max_year = users[user_selected]['year'].min(), users[user_selected]['year'].max()
     selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
-
+    
+    
     ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
 
@@ -227,6 +243,9 @@ elif page == "Per Year":
     )
     st.plotly_chart(fig4, use_container_width=True)
 
+    ## top 5 per year breakdowns ##
+    ##Split the dataset by category##
+    
 
     ##per year stats##
     # Fix: Get the track name properly

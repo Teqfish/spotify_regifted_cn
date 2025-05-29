@@ -2,6 +2,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from google.cloud import bigquery
+import pandas_gbq
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
 ##Connecting to the Google Cloud BigQuery##
 

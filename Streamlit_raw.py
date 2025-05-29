@@ -213,9 +213,8 @@ elif page == "Per Year":
 
     # Show current user info
     st.info(f"📅 Yearly analysis for: **{user_selected}** (change user on Home page)")
-    st.subheader(f"{user_selected}'s stats📊")
 
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #32CD32;font-size: 15px'>Spotify Regifted</h1>", unsafe_allow_html=True)
     st.title("Spotify Data Analysis by Year")
     st.markdown("This section allows you to analyze Spotify data by year.")
 
@@ -229,35 +228,60 @@ elif page == "Per Year":
     ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
 
-    df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
-    df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
+    df_grouped = df_filtered.groupby('artist_name', as_index=False)['minutes_played'].sum()
+    df_grouped = df_grouped.sort_values(by='minutes_played', ascending=False)
 
     ##per year graph##
-    st.subheader(f"{user_selected}'s Spotify Data Analysis")
-    fig4 = px.bar(
+    fig_artists = px.bar(
         df_grouped.head(20),
         x="artist_name",
-        y="ms_played",
+        y="minutes_played",
+        labels={"artist_name": "Artist", "minutes_played": "Minutes Played"},
         title=f"{user_selected}'s most listened to artists in {selected_year}",
         color_discrete_sequence=["#32CD32"]
     )
-    st.plotly_chart(fig4, use_container_width=True)
+    fig_artists.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
+    st.plotly_chart(fig_artists, use_container_width=True)
 
     ## top 5 per year breakdowns ##
     ##Split the dataset by category##
+    df_music = df_filtered[df_filtered['category'] == 'music']
+    df_podcast = df_filtered[df_filtered['category'] == 'podcast']
+    df_audiobook = df_filtered[df_filtered['category'] == 'audiobook']
+
+    ## Top 5 artists in music category in horizontal bar graph##
+    top_music_tracks = df_music.groupby(['track_name', 'artist_name'])['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
+    fig_music = px.bar(top_music_tracks.head(5) ,x="minutes_played", y ="track_name", title=f"Top 5 Tracks of {selected_year}", color_discrete_sequence=["#32CD32"], hover_data='artist_name', labels={'track_name': 'Track Name', 'artist_name': 'Artist Name', "minutes_played": "Minutes Played"})
+    fig_music.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
+    fig_music.update_yaxes(categoryorder='total ascending')
+    st.plotly_chart(fig_music, use_container_width=True)
+
+    ## Top 5 artists in podcast category in horizontal bar graph##
+    top_podcast_episodes = df_podcast.groupby(['episode_name', 'episode_show_name'])['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
+    fig_podcast = px.bar(top_podcast_episodes.head(5) ,x="minutes_played", y ="episode_name", title=f"Top 5 Podcast Episodes of {selected_year}", color_discrete_sequence=["#32CD32"], hover_data='episode_show_name', labels={'episode_name': 'Episode Name', 'episode_show_name': 'Podcast Show Name', "minutes_played": "Minutes Played"})
+    fig_podcast.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
+    fig_podcast.update_yaxes(categoryorder='total ascending')
+    st.plotly_chart(fig_podcast, use_container_width=True)
+
+    ## Top 5 artists in audiobook category in horizontal bar graph##
+    top_audiobooks = df_audiobook.groupby('audiobook_title')['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
+    fig_audiobook = px.bar(top_audiobooks.head(5) ,x="minutes_played", y ="audiobook_title", title=f"Top 5 Audiobooks of {selected_year}", color_discrete_sequence=["#32CD32"], labels={'audiobook_title': 'Audiobook Title', 'minutes_played': 'Minutes Played'})
+    fig_audiobook.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
+    fig_audiobook.update_yaxes(categoryorder='total ascending')
+    st.plotly_chart(fig_audiobook, use_container_width=True)
     
 
     ##per year stats##
     # Fix: Get the track name properly
-    top_track_idx = users[user_selected][users[user_selected]['year'] == selected_year]['ms_played'].idxmax()
-    top_track_name = users[user_selected].loc[top_track_idx, 'track_name']
+   # top_track_idx = users[user_selected][users[user_selected]['year'] == selected_year]['ms_played'].idxmax()
+    #top_track_name = users[user_selected].loc[top_track_idx, 'track_name']
 
-    fig5 = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=len(top_track_name),  # Just show length as example
-        title={"text": f"Top Track: {top_track_name}"}
-    ))
-    st.plotly_chart(fig5, use_container_width=True)
+   # fig5 = go.Figure(go.Indicator(
+   #     mode="gauge+number",
+   #     value=len(top_track_name),  # Just show length as example
+  #      title={"text": f"Top Track: {top_track_name}"}
+   # ))
+   # st.plotly_chart(fig5, use_container_width=True)
 
 # ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":

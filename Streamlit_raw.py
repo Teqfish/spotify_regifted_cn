@@ -425,9 +425,12 @@ elif page == "Per Artist":
       st.markdown(htmlstr, unsafe_allow_html=True)
 
       ## top album image
-      info_album = pd.read_csv('info_tables/info_artist.csv')
-      image_url = info_artist[info_artist.artist_name == artist_selected].artist_image.values[0]
-      st.image(image_url, output_format="auto")
+      info_album = pd.read_csv('info_tables/info_album.csv')
+      # placeholder - does not need recalculating once re-organised on page
+      top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
+
+      album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]   
+      st.image(album_image_url, output_format="auto")
 
 
     # top songs graph

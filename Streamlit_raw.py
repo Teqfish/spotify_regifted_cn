@@ -98,7 +98,6 @@ elif page == "Overall Review":
 
     # Show current user info
     st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
-    st.subheader(f"{user_selected}'s stats 📊")
 
     # Set page title and header
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
@@ -214,7 +213,7 @@ elif page == "Per Year":
     # Show current user info
     st.info(f"📅 Yearly analysis for: **{user_selected}** (change user on Home page)")
 
-    st.markdown("<h1 style='text-align: center; color: #32CD32;font-size: 15px'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
     st.title("Spotify Data Analysis by Year")
     st.markdown("This section allows you to analyze Spotify data by year.")
 
@@ -285,12 +284,12 @@ elif page == "Per Year":
 
 # ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":
-    # project titel
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
-
     # Get current user from session state 
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
+    # project titel
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+
 
     # Load user-specific data
     df = users[user_selected]# make music df
@@ -478,7 +477,6 @@ elif page == "Basic-O-Meter":
     # Get current user from session state 
     user_selected = get_current_user(users)
     st.info(f"📈 Basic-O-Meter for: **{user_selected}**")
-    st.subheader(f"{user_selected}'s stats 📊")
 
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
     st.title("The Basic-O-Meter")

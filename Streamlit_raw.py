@@ -30,7 +30,7 @@ st.sidebar.title("Spotify Regifted")
 page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Basic-O-Meter", "AbOuT uS"])
 
 
-
+# Function to create a user selector for the Home page#
 def create_user_selector(users, label='User:'):
     """Only for Home page - creates selectbox and updates session state"""
     if 'user_index' not in st.session_state:
@@ -45,7 +45,7 @@ def create_user_selector(users, label='User:'):
         key='user_index'
     )
 
-    # Update session state with selected user name
+# Update session state with selected user name ##
     st.session_state.user_selected = user_names[st.session_state.user_index]
 
     return user_index, user_names[user_index]
@@ -63,7 +63,7 @@ def get_current_user(users):
 
 
 
-
+# ------------------------- Home Page ------------------------- #
 if page == "Home":
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
     st.header("Your life on Spotify, in review:")
@@ -75,13 +75,8 @@ if page == "Home":
     users[user_selected]['date'] = users[user_selected]['datetime'].dt.date
     st.header(f"You have data available from {users[user_selected]['date'].min()} to {users[user_selected]['date'].max()}.")
 
-## Overall Review Page##
-
+# --------------------------- Overall Review Page ------------------------- #
 elif page == "Overall Review":
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-    st.title("Overall Review of Spotify Data")
-    st.markdown("This section provides an overview of the Spotify data analysis.")
-
 
     # Get current user from session state (NO SELECTBOX)
     user_selected = get_current_user(users)
@@ -89,6 +84,12 @@ elif page == "Overall Review":
     # Show current user info
     st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
     st.subheader(f"{user_selected}'s stats 📊")
+
+    # Set page title and header
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    st.title("Overall Review of Spotify Data")
+    st.markdown("This section provides an overview of the Spotify data analysis.")
+
 
     ## SCORECARDS###
     all_time_music = go.Figure(go.Indicator(
@@ -189,12 +190,8 @@ elif page == "Overall Review":
     st.header(f"You have listened to {users[user_selected]['artist_name'].nunique()} unique artists and {users[user_selected]['track_name'].nunique()} unique tracks.")
 
 
-##PER YEAR PAGE##
+# --------------------------- Per Year Page ------------------------- #
 elif page == "Per Year":
-
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-    st.title("Spotify Data Analysis by Year")
-    st.markdown("This section allows you to analyze Spotify data by year.")
 
     # Get current user from session state (NO SELECTBOX)
     user_selected = get_current_user(users)
@@ -202,6 +199,11 @@ elif page == "Per Year":
     # Show current user info
     st.info(f"📅 Yearly analysis for: **{user_selected}** (change user on Home page)")
     st.subheader(f"{user_selected}'s stats📊")
+
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    st.title("Spotify Data Analysis by Year")
+    st.markdown("This section allows you to analyze Spotify data by year.")
+
 
     ## making the sliders##
     users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
@@ -238,15 +240,16 @@ elif page == "Per Year":
     ))
     st.plotly_chart(fig5, use_container_width=True)
 
-# Add other pages as needed
+# ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":
+    # Get current user from session state 
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
     # Your artist analysis code here...
 
 # ------------------------- Basic-O-Meter Page ------------------------- #
-
 elif page == "Basic-O-Meter":
+    # Get current user from session state 
     user_selected = get_current_user(users)
     st.info(f"📈 Basic-O-Meter for: **{user_selected}**")
     st.subheader(f"{user_selected}'s stats 📊")
@@ -331,7 +334,6 @@ elif page == "Basic-O-Meter":
     st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------- Sunburst Chart Page ------------------------- #
-
   # Ensure datetime and extract year
     df['datetime'] = pd.to_datetime(df['datetime'])
     df['year'] = df['datetime'].dt.year
@@ -407,13 +409,11 @@ elif page == "Basic-O-Meter":
         font=dict(color='black')
     )
 
-    # --- STREAMLIT APP ---
-
     st.title("🎶 Spotify-Themed Listening Sunburst")
     st.plotly_chart(fig, use_container_width=True)
 
 
-# MOST LISTENED TO HOURS OF THE DAY
+    # MOST LISTENED TO HOURS OF THE DAY
 
     # Convert 'datetime' to datetime type if needed
     df['datetime'] = pd.to_datetime(df['datetime'])
@@ -464,7 +464,6 @@ elif page == "Basic-O-Meter":
 
 
 # ------------------------- About Us Page ------------------------- #
-
 elif page == "AbOuT uS":
     st.header("About Us")
 

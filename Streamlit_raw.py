@@ -38,7 +38,7 @@ users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, 
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Spotify Regifted")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "AbOuT uS"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Audio Book", "Podcasts", "Basic-O-Meter", "AbOuT uS"])
 
 
 # Function to create a user selector for the Home page#
@@ -699,6 +699,22 @@ elif page == "Per Album":
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
     # project titel
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+
+#------------------Audio Book Page------------------#
+elif page == "Audio Book":
+    # Get current user from session state
+    user_selected = get_current_user(users)
+    st.info(f"🎵 Artist analysis for: **{user_selected}**")
+    # project titel
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+
+# ------------------ Podcast Page ------------------ #
+elif page == "Podcasts":
+    # Get current user from session state
+    user_selected = get_current_user(users)
+    st.info(f"🎵 Artist analysis for: **{user_selected}**")
+    # project titel
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
 
 
 # ------------------------- Basic-O-Meter Page ------------------------- #

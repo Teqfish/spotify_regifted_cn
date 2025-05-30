@@ -314,6 +314,7 @@ elif page == "Per Artist":
 
       # get first listening info
       df_first = df_music.groupby("track_name").first().reset_index()
+      df_last = df_music.groupby("track_name").last().reset_index()
 
       ## box stolen from the internet
       st.markdown("<h4>First Listen:</h4>", unsafe_allow_html=True)
@@ -324,6 +325,39 @@ elif page == "Per Artist":
       valign = "left"
       iconname = "fas fa-star"
       i = df_first[df_first.artist_name == artist_selected].date.min().strftime('%d/%m/%Y')
+
+      htmlstr = f"""
+          <p style='background-color: rgb(
+              {wch_colour_box[0]}, 
+              {wch_colour_box[1]}, 
+              {wch_colour_box[2]}, 0.75
+          ); 
+          color: rgb(
+              {wch_colour_font[0]}, 
+              {wch_colour_font[1]}, 
+              {wch_colour_font[2]}, 0.75
+          ); 
+          font-size: {fontsize}px;    
+          border-radius: 7px; 
+          padding-top: 40px; 
+          padding-bottom: 40px; 
+          line-height:25px;
+          display: flex;
+          align-items: center;
+          justify-content: center;'>
+          <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+      """
+      st.markdown(htmlstr, unsafe_allow_html=True)
+
+            ## box stolen from the internet
+      st.markdown("<h4>Last Listen:</h4>", unsafe_allow_html=True)
+      wch_colour_box = (64, 64, 64)
+      # wch_colour_box = (255, 255, 255)
+      wch_colour_font = (50, 205, 50)
+      fontsize = 38
+      valign = "left"
+      iconname = "fas fa-star"
+      i = df_last[df_last.artist_name == artist_selected].date.max().strftime('%d/%m/%Y')
 
       htmlstr = f"""
           <p style='background-color: rgb(
@@ -492,7 +526,7 @@ elif page == "Per Artist":
 
     # year selection
     year_range = list(range(df_music[df_music.artist_name == artist_selected].datetime.dt.year.min(), df_music[df_music.artist_name == artist_selected].datetime.dt.year.max()+1))
-    year_selected = st.pills("Year", year_range, selection_mode="single", default=df_music.datetime.dt.year.max()-1)
+    year_selected = st.segmented_control("Year", year_range, selection_mode="single", default=df_music.datetime.dt.year.max()-1)
 
     # Create a polar bar chart
     df_polar = df_music[(df_music.artist_name == artist_selected) & (df_music.datetime.dt.year == year_selected)].groupby(df_music.datetime.dt.month).minutes_played.sum().reset_index()

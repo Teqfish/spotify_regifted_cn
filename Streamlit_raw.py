@@ -437,7 +437,6 @@ elif page == "Per Artist":
     col1, col2 = st.columns([2,1])
 
     with col1:
-      
         # get first listening info
         df_first = df_music.groupby("track_name").first().reset_index()
         df_last = df_music.groupby("track_name").last().reset_index()

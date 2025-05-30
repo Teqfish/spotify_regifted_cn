@@ -252,7 +252,7 @@ elif page == "Per Year":
     st.plotly_chart(fig_artists, use_container_width=True)
 
     ## plugging in the heatmap Ty Janna##
-
+    st.markdown("<h1 style='text-align: center; font-size: 26px;'>Listening Heatmap</h1>", unsafe_allow_html=True)
     df_day = df_filtered.groupby("date").minutes_played.sum().reset_index()
     fig_cal = calplot(df_day, x = "date", y = "minutes_played")
     st.plotly_chart(fig_cal, use_container_width=True)

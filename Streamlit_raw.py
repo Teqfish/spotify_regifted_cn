@@ -324,51 +324,56 @@ elif page == "Per Artist":
     ##artist selection##
     # list of artists ranked by play time
         artist_list = list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"])
-        # define selector
+        # define artist selector
         artist_selected = st.selectbox(
         'Artist:', options=list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"]), index=0)
 
-        on = st.checkbox("Summarise across all years")
+        # "year" or "all data" selection
+        mode = st.segmented_control("Summary displayed:", ["All Data", "Per Year"], selection_mode="single", default="All Data")
 
-        if on:
-            ## box stolen from the internet
-            st.markdown("<h4 style = 'font-size: 16px;' >Year Selection:</h4>", unsafe_allow_html=True)
-            wch_colour_box = (64, 64, 64)
-            # wch_colour_box = (255, 255, 255)
-            wch_colour_font = (50, 205, 50)
-            fontsize = 17
-            valign = "left"
-            iconname = "fas fa-star"
-            i = "Total Summary"
-
-            htmlstr = f"""
-                <p style='background-color: rgb(
-                    {wch_colour_box[0]},
-                    {wch_colour_box[1]},
-                    {wch_colour_box[2]}, 0.75
-                );
-                color: rgb(
-                    {wch_colour_font[0]},
-                    {wch_colour_font[1]},
-                    {wch_colour_font[2]}, 0.75
-                );
-                font-size: {fontsize}px;
-                border-radius: 7px;
-                padding-top: 10px;
-                padding-bottom: 10px;
-                line-height:25px;
-                display: flex;
-                align-items: center;
-                justify-content: center;'>
-                <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-            """
-            st.markdown(htmlstr, unsafe_allow_html=True)
+        # year selection and dataframe definition
+        if mode == "All Data":
+            y = st.segmented_control("Year:", ["All Data"], selection_mode="single", default="All Data")
+            df_music= df_music
         else:
-            # year selection
             year_range = list(range(df_music[df_music.artist_name == artist_selected].datetime.dt.year.min(), df_music[df_music.artist_name == artist_selected].datetime.dt.year.max()+1))
             year_selected = st.segmented_control("Year:", year_range, selection_mode="single", default=df_music.datetime.dt.year.max()-1)
+            df_music = df_music[df_music.datetime.dt.year == year_selected]
 
+        ### Artist Rank
+        year_rank = list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index().artist_name)
+        ## box stolen from the internet
+        st.markdown("<h4>Overall Rank:</h4>", unsafe_allow_html=True)
+        wch_colour_box = (64, 64, 64)
+        # wch_colour_box = (255, 255, 255)
+        wch_colour_font = (50, 205, 50)
+        fontsize = 50
+        valign = "left"
+        iconname = "fas fa-star"
+        i = f"#{year_rank.index(artist_selected)+1}"
 
+        htmlstr = f"""
+            <p style='background-color: rgb(
+                {wch_colour_box[0]},
+                {wch_colour_box[1]},
+                {wch_colour_box[2]}, 0.75
+            );
+            color: rgb(
+                {wch_colour_font[0]},
+                {wch_colour_font[1]},
+                {wch_colour_font[2]}, 0.75
+            );
+            font-size: {fontsize}px;
+            border-radius: 7px;
+            padding-top: 40px;
+            padding-bottom: 40px;
+            line-height:25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;'>
+            <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+        """
+        st.markdown(htmlstr, unsafe_allow_html=True)
 
 
     with col2:

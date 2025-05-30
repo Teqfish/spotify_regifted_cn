@@ -77,8 +77,8 @@ def get_current_user(users):
 # ------------------------- Home Page ------------------------- #
 if page == "Home":
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center; color: #32CD32; font-size: 32px; '>This app analyzes your Spotify data and provides insights into your listening habits. Select a user to get started.</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; '>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; font-size: 32px; '>This app analyzes your Spotify data and provides insights into your listening habits. Select a user to get started.</h1>", unsafe_allow_html=True)
 
     ## fundtion to create user selector ##
     user_index, user_selected = create_user_selector(users, label='User:')
@@ -332,36 +332,6 @@ elif page == "Per Year":
 
     # Extract year from datetime
     user_df['year'] = pd.to_datetime(user_df['datetime']).dt.year
-
-    # Group by year and artist, summing minutes
-    df = user_df.groupby(['year', 'artist_name'], as_index=False)['minutes_played'].sum()
-
-    # Sort to prepare for top-10 selection
-    df = df.sort_values(['year', 'minutes_played'], ascending=[True, False])
-
-    # Get top 10 per year
-    df = df.groupby('year').head(10).reset_index(drop=True)
-
-    # Optional: ensure artists are sorted in bars
-    df['artist_name'] = df['artist_name'].astype(str)  # Ensure clean labels
-
-    # Plot animated bar chart
-    fig = px.bar(
-        df,
-        x='artist_name',
-        y='minutes_played',
-        animation_frame='year',
-        color='artist_name',
-        title='Top 10 Artists by Listening Time Per Year',
-    )
-
-    # Display in Streamlit
-    st.plotly_chart(fig)
-
-
-
-
-
     
 
     # Show current user info
@@ -376,7 +346,7 @@ elif page == "Per Year":
     users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
 
     year_range = list(range(users[user_selected]['year'].min(), users[user_selected]['year'].max()+1))
-    selected_year = st.pills("Year", year_range, selection_mode="single", default=users[user_selected]['year'].max()-1)
+    selected_year = st.segmented_control("Year", year_range, selection_mode="single", default=users[user_selected]['year'].max()-1)
 
     ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]

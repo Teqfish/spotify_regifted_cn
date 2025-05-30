@@ -14,12 +14,20 @@ import ast
 ##Connecting to the Google Cloud BigQuery##
 
 ##loading the dataset##
-df_mega_ben = pd.read_csv('BG_df_mega.csv')
-df_mega_tom = pd.read_csv('TW_df_mega.csv')
-df_mega_jana = pd.read_csv('JH_df_mega.csv')
+
+# Music Info
+df_track = pd.read_csv('datasets/info_clean/info_track_clean.csv')
+df_album = pd.read_csv('datasets/info_clean/info_album_clean.csv')
+df_artist = pd.read_csv('datasets/info_clean/info_artist_genre.csv')
+
+# User Megas
+df_mega_ben = pd.read_csv('datasets/user_clean/BG_df_mega.csv')
+df_mega_tom = pd.read_csv('datasets/user_clean/TW_df_mega.csv')
+df_mega_jana = pd.read_csv('datasets/user_clean/JH_df_mega.csv')
 df_mega_charlie = pd.read_csv('datasets/CN_info.csv')
-df_mega_hugh = pd.read_csv('HW_df_mega.csv')
-df_mega_josh = pd.read_csv('JQ_df_mega.csv')
+df_mega_hugh = pd.read_csv('datasets/user_clean/HW_df_mega.csv')
+df_mega_josh = pd.read_csv('datasets/user_clean/JQ_df_mega.csv')
+
 
 ## Variables##
 users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, "Tom": df_mega_tom, "Hugh": df_mega_hugh, "Josh": df_mega_josh }
@@ -243,9 +251,9 @@ elif page == "Per Year":
 # ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":
     # project titel
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
 
-    # Get current user from session state 
+    # Get current user from session state
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
 
@@ -263,7 +271,7 @@ elif page == "Per Artist":
     ##artist selection##
     artist_selected = st.selectbox(
      'Artist:', options=list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"]), index=0)
-    
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -284,19 +292,19 @@ elif page == "Per Artist":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -325,19 +333,19 @@ elif page == "Per Artist":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -360,19 +368,19 @@ elif page == "Per Artist":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -395,19 +403,19 @@ elif page == "Per Artist":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -432,7 +440,7 @@ elif page == "Per Artist":
 
 # ------------------------- Basic-O-Meter Page ------------------------- #
 elif page == "Basic-O-Meter":
-    # Get current user from session state 
+    # Get current user from session state
     user_selected = get_current_user(users)
     st.info(f"📈 Basic-O-Meter for: **{user_selected}**")
     st.subheader(f"{user_selected}'s stats 📊")
@@ -564,6 +572,15 @@ elif page == "Basic-O-Meter":
         .head(5)
     )
 
+        # Top 5 tracks per (year, genre)
+    # top_tracks = (
+    #     df_filtered.groupby(['year', 'genre', 'artist_name', "track_name"], as_index=False)['ms_played']
+    #     .sum()
+    #     .sort_values(['year', 'genre', 'artist_name','ms_played'], ascending=[True, True, True, False])
+    #     .groupby(['year', 'genre', 'artist_name'])
+    #     .head(5)
+    # )
+
     # --- BUILD SUNBURST CHART ---
 
     fig = px.sunburst(
@@ -572,11 +589,17 @@ elif page == "Basic-O-Meter":
         values='ms_played',
         color='ms_played',
         color_continuous_scale=[
-            '#ffffff',  # black
+            # '#181E05',  # black
+            '#0F521A',
+            '#0c4d1f',
+            '#17823A',
             '#1DB954',  # Spotify green
-            # '#1ED999'   # neon green
+            # '#1ED999',   # neon green
+            # '#E1D856',
+            '#E6F5C7',
+
         ],
-        color_continuous_midpoint=np.mean(df['ms_played']),
+        # color_continuous_midpoint=np.mean(df['ms_played']),
 
         title='🎧 Listening History: Year → Genre → Artist (Spotify Style)'
     )

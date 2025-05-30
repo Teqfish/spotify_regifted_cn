@@ -10,3 +10,6 @@ primaryColor="#32CD32"
 backgroundColor="#212738"
 secondaryBackgroundColor="#036D19"
 textColor="##E3E3E3"
+
+[server]
+runOnSave = true

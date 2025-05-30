@@ -1,6 +1,12 @@
 [theme]
 primaryColor="#32CD32"
-backgroundColor="#201C1C"
-secondaryBackgroundColor="#212521"
-textColor="#32CD32"
+backgroundColor="#061826"
+secondaryBackgroundColor="#036D19"
+textColor="##E3E3E3"
 font="sans serif"
+
+[theme.sidebar]
+primaryColor="#32CD32"
+backgroundColor="#212738"
+secondaryBackgroundColor="#036D19"
+textColor="##E3E3E3"

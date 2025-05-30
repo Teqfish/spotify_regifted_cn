@@ -299,29 +299,88 @@ elif page == "Per Year":
 
 # ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":
-
+    
+    ## page set up
     # Get current user from session state
-
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
     # project titel
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
 
-
-    # Load user-specific data
-    df = users[user_selected]# make music df
+    ## start content
+    # Load user-specific music data, select relevant columns
+    df = users[user_selected]
     df_music = df[df["category"] == "music"]
     df_music = df_music[["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]]
     # shorten datetime column
     df_music["datetime"] = pd.to_datetime(df_music.datetime).dt.tz_localize(None)
     df_music["date"] = pd.to_datetime(df_music.datetime).dt.date
 
-    # list of artists ranked by play time
-    artist_list = list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"])
+    # artist and year selection
+    col1, col2 = st.columns(2)
+
+    with col1:
 
     ##artist selection##
-    artist_selected = st.selectbox(
-     'Artist:', options=list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"]), index=0)
+    # list of artists ranked by play time
+        artist_list = list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"])
+        # define selector
+        artist_selected = st.selectbox(
+        'Artist:', options=list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"]), index=0)
+
+        on = st.checkbox("Summarise across all years")
+
+        if on:
+            ## box stolen from the internet
+            st.markdown("<h4 style = 'font-size: 16px;' >Year Selection:</h4>", unsafe_allow_html=True)
+            wch_colour_box = (64, 64, 64)
+            # wch_colour_box = (255, 255, 255)
+            wch_colour_font = (50, 205, 50)
+            fontsize = 17
+            valign = "left"
+            iconname = "fas fa-star"
+            i = "Total Summary"
+
+            htmlstr = f"""
+                <p style='background-color: rgb(
+                    {wch_colour_box[0]},
+                    {wch_colour_box[1]},
+                    {wch_colour_box[2]}, 0.75
+                );
+                color: rgb(
+                    {wch_colour_font[0]},
+                    {wch_colour_font[1]},
+                    {wch_colour_font[2]}, 0.75
+                );
+                font-size: {fontsize}px;
+                border-radius: 7px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                line-height:25px;
+                display: flex;
+                align-items: center;
+                justify-content: center;'>
+                <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+            """
+            st.markdown(htmlstr, unsafe_allow_html=True)
+        else:
+            # year selection
+            year_range = list(range(df_music[df_music.artist_name == artist_selected].datetime.dt.year.min(), df_music[df_music.artist_name == artist_selected].datetime.dt.year.max()+1))
+            year_selected = st.segmented_control("Year:", year_range, selection_mode="single", default=df_music.datetime.dt.year.max()-1)
+
+
+
+
+    with col2:
+      ## artist image
+      info_artist = pd.read_csv('info_tables/info_artist.csv')
+      image_url = info_artist[info_artist.artist_name == artist_selected].artist_image.values[0]
+      st.image(image_url, output_format="auto")
+
+
+
+
+
 
     col1, col2, col3 = st.columns(3)
 

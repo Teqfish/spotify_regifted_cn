@@ -20,13 +20,14 @@ from plotly_calplot import calplot
 # Music Info
 df_track = pd.read_csv('datasets/info_clean/info_track_clean.csv')
 df_album = pd.read_csv('datasets/info_clean/info_album_clean.csv')
-df_artist = pd.read_csv('datasets/info_clean/info_artist_genre.csv')
+df_artist = pd.read_csv('datasets/info_clean/info_artist_genre_fix.csv')
+df_info = pd.read_csv('datasets/info_clean/trk_alb_art.csv')
 
 # User Megas
 df_mega_ben = pd.read_csv('datasets/user_clean/BG_df_mega.csv')
 df_mega_tom = pd.read_csv('datasets/user_clean/TW_df_mega.csv')
 df_mega_jana = pd.read_csv('datasets/user_clean/JH_df_mega.csv')
-df_mega_charlie = pd.read_csv('datasets/CN_info.csv')
+df_mega_charlie = pd.read_csv('datasets/user_clean/CN_df_mega.csv')
 df_mega_hugh = pd.read_csv('datasets/user_clean/HW_df_mega.csv')
 df_mega_josh = pd.read_csv('datasets/user_clean/JQ_df_mega.csv')
 
@@ -81,7 +82,7 @@ if page == "Home":
 
     ## fundtion to create user selector ##
     user_index, user_selected = create_user_selector(users, label='User:')
-    
+
     ## some paragraphs of welcome fluff and dataset parameters ##
     users[user_selected]['datetime'] = pd.to_datetime(users[user_selected]['datetime'])
     users[user_selected]['date'] = users[user_selected]['datetime'].dt.date
@@ -91,12 +92,10 @@ if page == "Home":
     start_day = date_start.strftime("%d %B %Y")
     end_day = date_end.strftime("%d %B %Y")
 
-
-
     st.header(f"Welcome to Spotify Regifted {user_selected}!! This app is designed to analyze your Spotify data and provide insights into your listening habits. You can explore your overall listening patterns, year-by-year breakdowns, artist-specific analyses, and more. You have provided your listening history from {start_day} to {end_day} available for us to look at. That's {total_listened:.2f} hours of your listening for us to dive into! Please select a page from the sidebar to explore your Spotify data.")
     st.markdown("<h1 style='text-align: center; color: #32CD32; font-size: 10px; '>(All data shared with Spotify Regifted™ is now property of the Spotify Regifted™ team to do with what they please)</h1>", unsafe_allow_html=True)
 
-  
+
 
 
 # --------------------------- Overall Review Page ------------------------- #
@@ -231,8 +230,8 @@ elif page == "Per Year":
     users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
     min_year, max_year = users[user_selected]['year'].min(), users[user_selected]['year'].max()
     selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
-    
-    
+
+
     ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
 
@@ -277,7 +276,7 @@ elif page == "Per Year":
     fig_audiobook.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
     fig_audiobook.update_yaxes(categoryorder='total ascending')
     st.plotly_chart(fig_audiobook, use_container_width=True)
-    
+
 
     ##per year stats##
     # Fix: Get the track name properly
@@ -299,7 +298,7 @@ elif page == "Per Artist":
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
     # project titel
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
 
 
     # Load user-specific data
@@ -433,7 +432,7 @@ elif page == "Per Artist":
           <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
       """
       st.markdown(htmlstr, unsafe_allow_html=True)
-      
+
       ## artist image
       info_artist = pd.read_csv('info_tables/info_artist.csv')
       image_url = info_artist[info_artist.artist_name == artist_selected].artist_image.values[0]
@@ -482,7 +481,7 @@ elif page == "Per Artist":
       # placeholder - does not need recalculating once re-organised on page
       top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
-      album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]   
+      album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]
       st.image(album_image_url, output_format="auto")
 
 
@@ -513,7 +512,7 @@ elif page == "Per Artist":
     fig = px.bar_polar(df_polar, r="minutes_played", theta="datetime", color="minutes_played",
                        color_continuous_scale=["#32CD32", "#006400"],  # Green theme
                         title="Listening Trends Over the Year")
-    
+
     # calendar plot - maybe empty days need filling?
     df_day = df_music[(df_music.artist_name == artist_selected) & (df_music.datetime.dt.year == year_selected)].groupby("date").minutes_played.sum().reset_index()
     fig_cal = calplot(df_day, x = "date", y = "minutes_played")
@@ -546,7 +545,11 @@ elif page == "Basic-O-Meter":
     st.title("The Basic-O-Meter")
     st.markdown("Let's find out how basic your music taste is!")
 
+# define df as working variable for current user
     df = users[user_selected]
+
+# join info to current user
+    df = pd.merge(df,df_info,left_on=["track_name","album_name","artist_name"],right_on=["track_name","album_name","artist_name"],how="left",suffixes=["","_remove"])
 
 # making the sliders
     df['year'] = pd.to_datetime(df['datetime']).dt.year
@@ -554,13 +557,14 @@ elif page == "Basic-O-Meter":
     selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
 
 # Prepare the data
-    df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
+    df_filtered = df[df['year'] == selected_year]
     df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
     df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
 
 # datetime to month
     df['datetime'] = pd.to_datetime(df['datetime'])
     df['year_month'] = df['datetime'].dt.to_period('M').dt.to_timestamp()
+
 # Aggregate
     month_art_pop = df.groupby('year_month')['artist_popularity'].mean().reset_index()
     month_trk_pop = df.groupby('year_month')['track_popularity'].mean().reset_index()
@@ -622,35 +626,23 @@ elif page == "Basic-O-Meter":
     st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------- Sunburst Chart Page ------------------------- #
-  # Ensure datetime and extract year
+
+    df = pd.merge(df, df_info, left_on=["track_name","album_name","artist_name"],
+                right_on=["track_name","album_name","artist_name"], how="left", suffixes=["","_remove"])
+
+    # Ensure datetime and extract year
     df['datetime'] = pd.to_datetime(df['datetime'])
     df['year'] = df['datetime'].dt.year
 
-    # --- CLEAN GENRE FIELD ---
-
-    def parse_genres(val):
-        if isinstance(val, list):
-            return val
-        if isinstance(val, str):
-            try:
-                parsed = ast.literal_eval(val)
-                if isinstance(parsed, list):
-                    return parsed
-            except Exception:
-                return [g.strip() for g in val.split(',')]
-        return [str(val)]
-
-    df['genre'] = df['genre'].apply(parse_genres)
-
     # Explode genres into separate rows
-    df_exploded = df.explode('genre').dropna(subset=['genre'])
-    df_exploded['genre'] = df_exploded['genre'].astype(str).str.strip()
+    df_exploded = df.explode('super_genre').dropna(subset=['super_genre'])
+    df_exploded['super_genre'] = df_exploded['super_genre'].astype(str).str.strip()
 
-    # --- FILTER: TOP GENRES & ARTISTS ---
+    # --- FILTER: TOP GENRES & ARTISTS & TRACKS ---
 
     # Top 5 genres per year
     top_genres = (
-        df_exploded.groupby(['year', 'genre'], as_index=False)['ms_played']
+        df_exploded.groupby(['year', 'super_genre'], as_index=False)['ms_played']
         .sum()
         .sort_values(['year', 'ms_played'], ascending=[True, False])
         .groupby('year')
@@ -658,65 +650,64 @@ elif page == "Basic-O-Meter":
     )
 
     # Filter to top genres only
-    df_filtered = df_exploded.merge(top_genres[['year', 'genre']], on=['year', 'genre'])
+    df_filtered = df_exploded.merge(top_genres[['year', 'super_genre']], on=['year', 'super_genre'])
 
     # Top 5 artists per (year, genre)
     top_artists = (
-        df_filtered.groupby(['year', 'genre', 'artist_name'], as_index=False)['ms_played']
+        df_filtered.groupby(['year', 'super_genre', 'artist_name'], as_index=False)['ms_played']
         .sum()
-        .sort_values(['year', 'genre', 'ms_played'], ascending=[True, True, False])
-        .groupby(['year', 'genre'])
+        .sort_values(['year', 'super_genre', 'ms_played'], ascending=[True, True, False])
+        .groupby(['year', 'super_genre'])
         .head(5)
     )
 
-        # Top 5 tracks per (year, genre)
-    # top_tracks = (
-    #     df_filtered.groupby(['year', 'genre', 'artist_name', "track_name"], as_index=False)['ms_played']
-    #     .sum()
-    #     .sort_values(['year', 'genre', 'artist_name','ms_played'], ascending=[True, True, True, False])
-    #     .groupby(['year', 'genre', 'artist_name'])
-    #     .head(5)
-    # )
+    # Filter to top artists only
+    df_filtered_artists = df_filtered.merge(
+        top_artists[['year', 'super_genre', 'artist_name']],
+        on=['year', 'super_genre', 'artist_name']
+    )
+
+    # Top 5 tracks per (year, genre, artist) - Fixed grouping and filtering
+    top_tracks = (
+        df_filtered_artists.groupby(['year', 'super_genre', 'artist_name', 'track_name'], as_index=False)['ms_played']
+        .sum()
+        .sort_values(['year', 'super_genre', 'artist_name', 'ms_played'], ascending=[True, True, True, False])
+        .groupby(['year', 'super_genre', 'artist_name'])  # Group by year, genre, AND artist
+        .head(5)
+    )
 
     # --- BUILD SUNBURST CHART ---
 
     fig = px.sunburst(
-        top_artists,
-        path=['year', 'genre', 'artist_name'],
+        top_tracks,  # Use top_tracks instead of top_artists
+        path=['year', 'super_genre', 'artist_name', 'track_name'],  # Add track_name to path
         values='ms_played',
         color='ms_played',
         color_continuous_scale=[
-            # '#181E05',  # black
             '#0F521A',
-            '#0c4d1f',
-            '#17823A',
-            '#1DB954',  # Spotify green
-            # '#1ED999',   # neon green
-            # '#E1D856',
             '#E6F5C7',
-
         ],
-        # color_continuous_midpoint=np.mean(df['ms_played']),
-
-        title='🎧 Listening History: Year → Genre → Artist (Spotify Style)'
+        title='🎧 Listening History: Year → Genre → Artist → Track (Spotify Style)'
     )
 
     # Make text more visible on dark background
-    fig.update_traces(insidetextfont=dict(color='black'), hovertemplate='<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>')
+    fig.update_traces(
+        insidetextfont=dict(color='black'),
+        hovertemplate='<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>'
+    )
 
     # Maximize layout size
     fig.update_layout(
         margin=dict(t=50, l=0, r=0, b=0),
         height=800,
-        # paper_bgcolor='black',
         font=dict(color='black')
     )
 
     st.title("🎶 Spotify-Themed Listening Sunburst")
     st.plotly_chart(fig, use_container_width=True)
 
-
     # MOST LISTENED TO HOURS OF THE DAY
+    # (Rest of your code remains the same)
 
     # Convert 'datetime' to datetime type if needed
     df['datetime'] = pd.to_datetime(df['datetime'])
@@ -764,7 +755,7 @@ elif page == "Basic-O-Meter":
     # Show chart in Streamlit
     st.plotly_chart(fig, use_container_width=True)
 
-
+    df = users[user_selected]
 
 # ------------------------- About Us Page ------------------------- #
 elif page == "AbOuT uS":

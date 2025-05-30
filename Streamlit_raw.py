@@ -349,11 +349,11 @@ elif page == "Per Artist":
       st.markdown(htmlstr, unsafe_allow_html=True)
 
       ## listening streak
-
       # consecutive listening days
-      s = df_music.groupby('artist_name').datetime.diff().dt.days.ne(1).cumsum()
-      streaks = df_music.groupby(['artist_name', s]).size().reset_index(level=1, drop=True).reset_index().rename(columns ={0:"streak"})
-      streaks_max= streaks.groupby("artist_name").streak.max().sort_values(ascending=False).reset_index()
+      band_streak = df_music[df_music.artist_name == artist_selected].sort_values("datetime")
+      band_streak = band_streak["datetime"].dt.date.drop_duplicates().sort_values().diff().dt.days.fillna(1)
+      streak_ids = (band_streak != 1).cumsum()
+      max_streak = streak_ids.value_counts().max()
 
 
       ## box stolen from the internet
@@ -364,7 +364,7 @@ elif page == "Per Artist":
       fontsize = 38
       valign = "left"
       iconname = "fas fa-star"
-      i = int(streaks_max[streaks_max.artist_name == artist_selected]["streak"])
+      i = f"{max_streak} Days"
 
       htmlstr = f"""
           <p style='background-color: rgb(

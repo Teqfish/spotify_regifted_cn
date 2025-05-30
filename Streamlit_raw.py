@@ -537,7 +537,7 @@ elif page == "Per Artist":
     st.plotly_chart(fig_line,use_container_width=True)
 
 # ------------------------- Per Album Page ------------------------- #
-elif page == "Per Artist":
+elif page == "Per Album":
     # Get current user from session state
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")

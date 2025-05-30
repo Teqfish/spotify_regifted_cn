@@ -103,35 +103,133 @@ elif page == "Overall Review":
 
     # Get current user from session state (NO SELECTBOX)
     user_selected = get_current_user(users)
-
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
     # Show current user info
     st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
 
     # Set page title and header
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-    st.title("Overall Review of Spotify Data")
-    st.markdown("This section provides an overview of the Spotify data analysis.")
+        ## overall stats##
 
 
-    ## SCORECARDS###
-    all_time_music = go.Figure(go.Indicator(
-        mode="number",
-        value=users[user_selected]['minutes_played'].sum(),
-        title={"text": "Total Minutes Played"}
-    ))
-    st.plotly_chart(all_time_music, use_container_width=True)
+    st.title("")
+    st.title("Your all-time stats:")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        ## box stolen from the internet
+        st.markdown("<h4>You listened for:", unsafe_allow_html=True)
+        wch_colour_box = (64, 64, 64)
+        # wch_colour_box = (255, 255, 255)
+        wch_colour_font = (50, 205, 50)
+        fontsize = 38
+        valign = "left"
+        iconname = "fas fa-star"
+        i = f'{round((users[user_selected]['minutes_played'].sum()) / 60 / 24,1)}  days'
+
+        htmlstr = f"""
+            <p style='background-color: rgb(
+                {wch_colour_box[0]},
+                {wch_colour_box[1]},
+                {wch_colour_box[2]}, 0.75
+            );
+            color: rgb(
+                {wch_colour_font[0]},
+                {wch_colour_font[1]},
+                {wch_colour_font[2]}, 0.75
+            );
+            font-size: {fontsize}px;
+            border-radius: 7px;
+            padding-top: 40px;
+            padding-bottom: 40px;
+            line-height:25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;'>
+            <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+        """
+        st.markdown(htmlstr, unsafe_allow_html=True)
 
 
-    ## Graphs here please###
-    minutes_by_type = users[user_selected].groupby("category")["minutes_played"].sum().reset_index()
-    fig = px.pie(
-        minutes_by_type,
-        values="minutes_played",
-        names="category",
-        title="Total Minutes Listened by Category",
-        color_discrete_sequence=px.colors.qualitative.Set3
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        st.markdown("<h4>You listened to:", unsafe_allow_html=True)
+        wch_colour_box = (64, 64, 64)
+        # wch_colour_box = (255, 255, 255)
+        wch_colour_font = (50, 205, 50)
+        fontsize = 38
+        valign = "left"
+        iconname = "fas fa-star"
+        i = f'{(users[user_selected]['track_name'].nunique())} tracks'
+
+        htmlstr = f"""
+            <p style='background-color: rgb(
+                {wch_colour_box[0]},
+                {wch_colour_box[1]},
+                {wch_colour_box[2]}, 0.75
+            );
+            color: rgb(
+                {wch_colour_font[0]},
+                {wch_colour_font[1]},
+                {wch_colour_font[2]}, 0.75
+            );
+            font-size: {fontsize}px;
+            border-radius: 7px;
+            padding-top: 40px;
+            padding-bottom: 40px;
+            line-height:25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;'>
+            <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+        """
+        st.markdown(htmlstr, unsafe_allow_html=True)
+
+
+        wch_colour_box = (64, 64, 64)
+        # wch_colour_box = (255, 255, 255)
+        wch_colour_font = (50, 205, 50)
+        fontsize = 38
+        valign = "left"
+        iconname = "fas fa-star"
+        i = f'{(users[user_selected]['artist_name'].nunique())} artists'
+
+        htmlstr = f"""
+            <p style='background-color: rgb(
+                {wch_colour_box[0]},
+                {wch_colour_box[1]},
+                {wch_colour_box[2]}, 0.75
+            );
+            color: rgb(
+                {wch_colour_font[0]},
+                {wch_colour_font[1]},
+                {wch_colour_font[2]}, 0.75
+            );
+            font-size: {fontsize}px;
+            border-radius: 7px;
+            padding-top: 40px;
+            padding-bottom: 40px;
+            line-height:25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;'>
+            <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+        """
+        st.markdown(htmlstr, unsafe_allow_html=True)
+
+
+    with col2:
+
+        ## Graphs here please###
+        minutes_by_type = users[user_selected].groupby("category")["minutes_played"].sum().reset_index()
+        minutes_by_type['days_played'] = minutes_by_type['minutes_played'] / 60 / 24
+        fig = px.pie(
+            minutes_by_type,
+            values="days_played",
+            names="category",
+            title="Total Minutes Listened by Category",
+            color_discrete_sequence= ['#32CD32', '#CF5C36', '#3B429F', '#8D98A7', '#EDADC7'],  # Spotify chart theme
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     ##Ben's Big ol Graphs##
     users[user_selected]['datetime'] = pd.to_datetime(users[user_selected]['datetime'])
@@ -149,7 +247,8 @@ elif page == "Overall Review":
         y='hours_played',
         color='category',
         markers=True,
-        title='Total Listening Hours per Year by Category'
+        title='Total Listening Hours per Year by Category',
+        color_discrete_sequence= ['#32CD32', '#CF5C36', '#3B429F', '#8D98A7', '#EDADC7']
     )
 
     # Streamlit display
@@ -200,23 +299,70 @@ elif page == "Overall Review":
         sunburst_data,
         path=['year', title_field],
         values='hours_played',
-        title=f'Top 10 in "{selected_category}" by Listening Hours (Year → {title_field.replace("_", " ").title()})',
+        title=f'top 10 in {selected_category} by most listened to (Year → {title_field.replace("_", " ").title()})',
         color='year',
-        color_continuous_scale='Viridis'
+        color_continuous_scale=[
+            # '#181E05',  # black
+            #'#0F521A',
+            '#0c4d1f',
+            '#17823A',
+            '#1DB954',  # Spotify green
+             '#1ED999',   # neon green
+            # '#E1D856',
+            '#E6F5C7']
     )
-
+    fig.update_layout(
+        title_font_size=10,
+        title_x=0,  # Center the title
+        title_y=0,  # Adjust vertical position
+        margin=dict(t=50, l=50, r=50, b=0),  # Adjust margins
+    )
     # Show chart
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
     ## overall stats##
-    st.header(f"You have listened to {users[user_selected]['artist_name'].nunique()} unique artists and {users[user_selected]['track_name'].nunique()} unique tracks.")
 
 
 # --------------------------- Per Year Page ------------------------- #
 elif page == "Per Year":
-
     # Get current user from session state (NO SELECTBOX)
+    # Select user
     user_selected = get_current_user(users)
+    user_df = users[user_selected].copy()
+
+    # Extract year from datetime
+    user_df['year'] = pd.to_datetime(user_df['datetime']).dt.year
+
+    # Group by year and artist, summing minutes
+    df = user_df.groupby(['year', 'artist_name'], as_index=False)['minutes_played'].sum()
+
+    # Sort to prepare for top-10 selection
+    df = df.sort_values(['year', 'minutes_played'], ascending=[True, False])
+
+    # Get top 10 per year
+    df = df.groupby('year').head(10).reset_index(drop=True)
+
+    # Optional: ensure artists are sorted in bars
+    df['artist_name'] = df['artist_name'].astype(str)  # Ensure clean labels
+
+    # Plot animated bar chart
+    fig = px.bar(
+        df,
+        x='artist_name',
+        y='minutes_played',
+        animation_frame='year',
+        color='artist_name',
+        title='Top 10 Artists by Listening Time Per Year',
+    )
+
+    # Display in Streamlit
+    st.plotly_chart(fig)
+
+
+
+
+
+    
 
     # Show current user info
     st.info(f"📅 Yearly analysis for: **{user_selected}** (change user on Home page)")

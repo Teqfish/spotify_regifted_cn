@@ -345,8 +345,10 @@ elif page == "Per Year":
     ## making the buttons##
     users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
 
-    year_range = list(range(users[user_selected]['year'].min(), users[user_selected]['year'].max()+1))
-    selected_year = st.segmented_control("Year", year_range, selection_mode="single", default=users[user_selected]['year'].max()-1)
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col2:
+     year_range = list(range(users[user_selected]['year'].min(), users[user_selected]['year'].max()+1))
+     selected_year = st.segmented_control("Year", year_range, selection_mode="single", default=users[user_selected]['year'].max()-1)
 
     ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]

@@ -491,7 +491,7 @@ elif page == "Per Artist":
     st.write(fig_top_albums)
 
     # year selection
-    year_range = list(range(df_music.datetime.dt.year.min(), df_music.datetime.dt.year.max()+1))
+    year_range = list(range(df_music[df_music.artist_name == artist_selected].datetime.dt.year.min(), df_music[df_music.artist_name == artist_selected].datetime.dt.year.max()+1))
     year_selected = st.pills("Year", year_range, selection_mode="single", default=df_music.datetime.dt.year.max()-1)
 
     # Create a polar bar chart

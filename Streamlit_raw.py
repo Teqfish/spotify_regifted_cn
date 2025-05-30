@@ -1202,6 +1202,16 @@ elif page == "Basic-O-Meter":
 
     df = users[user_selected]
 
+# ---------------------FUN Page--------------------- #
+elif page == "FUN":
+    # Show current user info
+    user_selected = get_current_user(users)
+    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
+    # project title
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+
+
+
 # ------------------------- About Us Page ------------------------- #
 elif page == "AbOuT uS":
 

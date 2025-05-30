@@ -16,12 +16,20 @@ from plotly_calplot import calplot
 ##Connecting to the Google Cloud BigQuery##
 
 ##loading the dataset##
-df_mega_ben = pd.read_csv('BG_df_mega.csv')
-df_mega_tom = pd.read_csv('TW_df_mega.csv')
-df_mega_jana = pd.read_csv('JH_df_mega.csv')
+
+# Music Info
+df_track = pd.read_csv('datasets/info_clean/info_track_clean.csv')
+df_album = pd.read_csv('datasets/info_clean/info_album_clean.csv')
+df_artist = pd.read_csv('datasets/info_clean/info_artist_genre.csv')
+
+# User Megas
+df_mega_ben = pd.read_csv('datasets/user_clean/BG_df_mega.csv')
+df_mega_tom = pd.read_csv('datasets/user_clean/TW_df_mega.csv')
+df_mega_jana = pd.read_csv('datasets/user_clean/JH_df_mega.csv')
 df_mega_charlie = pd.read_csv('datasets/CN_info.csv')
-df_mega_hugh = pd.read_csv('HW_df_mega.csv')
-df_mega_josh = pd.read_csv('JQ_df_mega.csv')
+df_mega_hugh = pd.read_csv('datasets/user_clean/HW_df_mega.csv')
+df_mega_josh = pd.read_csv('datasets/user_clean/JQ_df_mega.csv')
+
 
 ## Variables##
 users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, "Tom": df_mega_tom, "Hugh": df_mega_hugh, "Josh": df_mega_josh }
@@ -29,7 +37,7 @@ users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, 
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Spotify Regifted")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Basic-O-Meter", "AbOuT uS"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "AbOuT uS"])
 
 
 # Function to create a user selector for the Home page#
@@ -86,7 +94,7 @@ if page == "Home":
 
 
     st.header(f"Welcome to Spotify Regifted {user_selected}!! This app is designed to analyze your Spotify data and provide insights into your listening habits. You can explore your overall listening patterns, year-by-year breakdowns, artist-specific analyses, and more. You have provided your listening history from {start_day} to {end_day} available for us to look at. That's {total_listened:.2f} hours of your listening for us to dive into! Please select a page from the sidebar to explore your Spotify data.")
-    st.markdown("<h1 style='text-align: center; color: #32CD32; font-size: 10px; '>(All data shared with Spotify Regifted™ is now property of the Spotify Regifted™ team to do with what they please)</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; font-size: 10px; '>(All data shared with Spotify Regifted™ is now property of the Spotify Regifted™ team to do with what they please)</h1>", unsafe_allow_html=True)
 
   
 
@@ -219,14 +227,14 @@ elif page == "Per Year":
     st.markdown("This section allows you to analyze Spotify data by year.")
 
 
-    ## making the sliders##
+    ## making the buttons##
     users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
-    min_year, max_year = users[user_selected]['year'].min(), users[user_selected]['year'].max()
-    selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
-    
-    
+    year_range = list(range(users[user_selected]['year'].min(), users[user_selected]['year'].max()+1))
+    selected_year = st.pills("Year", year_range, selection_mode="single", default=users[user_selected]['year'].max()-1)
+
     ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
+    df_filtered['date'] = pd.to_datetime(df_filtered['datetime']).dt.date
 
     df_grouped = df_filtered.groupby('artist_name', as_index=False)['minutes_played'].sum()
     df_grouped = df_grouped.sort_values(by='minutes_played', ascending=False)
@@ -242,6 +250,12 @@ elif page == "Per Year":
     )
     fig_artists.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
     st.plotly_chart(fig_artists, use_container_width=True)
+
+    ## plugging in the heatmap Ty Janna##
+
+    df_day = df_filtered.groupby("date").minutes_played.sum().reset_index()
+    fig_cal = calplot(df_day, x = "date", y = "minutes_played")
+    st.plotly_chart(fig_cal, use_container_width=True)
 
     ## top 5 per year breakdowns ##
     ##Split the dataset by category##
@@ -285,7 +299,9 @@ elif page == "Per Year":
 
 # ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":
-    # Get current user from session state 
+
+    # Get current user from session state
+
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
     # project titel
@@ -306,7 +322,7 @@ elif page == "Per Artist":
     ##artist selection##
     artist_selected = st.selectbox(
      'Artist:', options=list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"]), index=0)
-    
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -328,19 +344,19 @@ elif page == "Per Artist":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -402,19 +418,19 @@ elif page == "Per Artist":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -437,19 +453,19 @@ elif page == "Per Artist":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -480,19 +496,19 @@ elif page == "Per Artist":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -558,11 +574,18 @@ elif page == "Per Artist":
     fig_line = px.line(df_line, x = "month", y = "minutes_played", color = "year")
     st.plotly_chart(fig_line,use_container_width=True)
 
+# ------------------------- Per Album Page ------------------------- #
+elif page == "Per Album":
+    # Get current user from session state
+    user_selected = get_current_user(users)
+    st.info(f"🎵 Artist analysis for: **{user_selected}**")
+    # project titel
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
 
 
 # ------------------------- Basic-O-Meter Page ------------------------- #
 elif page == "Basic-O-Meter":
-    # Get current user from session state 
+    # Get current user from session state
     user_selected = get_current_user(users)
     st.info(f"📈 Basic-O-Meter for: **{user_selected}**")
 
@@ -693,6 +716,15 @@ elif page == "Basic-O-Meter":
         .head(5)
     )
 
+        # Top 5 tracks per (year, genre)
+    # top_tracks = (
+    #     df_filtered.groupby(['year', 'genre', 'artist_name', "track_name"], as_index=False)['ms_played']
+    #     .sum()
+    #     .sort_values(['year', 'genre', 'artist_name','ms_played'], ascending=[True, True, True, False])
+    #     .groupby(['year', 'genre', 'artist_name'])
+    #     .head(5)
+    # )
+
     # --- BUILD SUNBURST CHART ---
 
     fig = px.sunburst(
@@ -701,11 +733,17 @@ elif page == "Basic-O-Meter":
         values='ms_played',
         color='ms_played',
         color_continuous_scale=[
-            '#ffffff',  # black
+            # '#181E05',  # black
+            '#0F521A',
+            '#0c4d1f',
+            '#17823A',
             '#1DB954',  # Spotify green
-            # '#1ED999'   # neon green
+            # '#1ED999',   # neon green
+            # '#E1D856',
+            '#E6F5C7',
+
         ],
-        color_continuous_midpoint=np.mean(df['ms_played']),
+        # color_continuous_midpoint=np.mean(df['ms_played']),
 
         title='🎧 Listening History: Year → Genre → Artist (Spotify Style)'
     )
@@ -777,7 +815,6 @@ elif page == "Basic-O-Meter":
 
 # ------------------------- About Us Page ------------------------- #
 elif page == "AbOuT uS":
-    st.header("About Us")
 
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
     st.title("About Us")

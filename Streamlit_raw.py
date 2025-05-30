@@ -234,6 +234,7 @@ elif page == "Per Year":
 
     ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
+    df_filtered['date'] = pd.to_datetime(df_filtered['datetime']).dt.date
 
     df_grouped = df_filtered.groupby('artist_name', as_index=False)['minutes_played'].sum()
     df_grouped = df_grouped.sort_values(by='minutes_played', ascending=False)
@@ -252,6 +253,9 @@ elif page == "Per Year":
 
     ## plugging in the heatmap Ty Janna##
 
+    df_day = df_filtered.groupby("date").minutes_played.sum().reset_index()
+    fig_cal = calplot(df_day, x = "date", y = "minutes_played")
+    st.plotly_chart(fig_cal, use_container_width=True)
 
     ## top 5 per year breakdowns ##
     ##Split the dataset by category##
@@ -537,7 +541,7 @@ elif page == "Per Artist":
     st.plotly_chart(fig_line,use_container_width=True)
 
 # ------------------------- Per Album Page ------------------------- #
-elif page == "Per Artist":
+elif page == "Per Album":
     # Get current user from session state
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")

@@ -710,7 +710,7 @@ elif page == "Per Artist":
         top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
         album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]   
-        #st.image(album_image_url, output_format="auto")
+        st.image(album_image_url, output_format="auto")
 
 
 

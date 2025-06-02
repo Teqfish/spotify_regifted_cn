@@ -14,6 +14,14 @@ from plotly_calplot import calplot
 import country_converter as coco
 import random
 from streamlit_carousel import carousel
+import zipfile
+import tempfile
+import shutil
+import random
+import string
+from pathlib import Path
+import json
+from datetime import datetime
 
 
 ##Connecting to the Google Cloud BigQuery##
@@ -49,6 +57,9 @@ st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:",lay
 st.sidebar.title("Spotify Regifted")
 page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "FUN", "AbOuT uS"])
 
+def generate_timestamp():
+# Timestamp string to add to saved files
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # Function to create a user selector for the Home page#
 def create_user_selector(users, label='User:'):
@@ -81,7 +92,211 @@ def get_current_user(users):
 
     return st.session_state.user_selected
 
+def process_uploaded_zip(uploaded_file, user_filename):
+# Upload zip, extract & concat JSONs, send out to CLEAN and back again to save as CSV.
 
+    # Create a temporary directory to work with the uploaded file
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Save uploaded file to temp directory
+        temp_zip_path = os.path.join(temp_dir, uploaded_file.name)
+        with open(temp_zip_path, 'wb') as f:
+            f.write(uploaded_file.getbuffer())
+
+        # Create extraction directory
+        extract_dir = os.path.join(temp_dir, 'extracted')
+
+        # Extract zip file
+        try:
+            with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+            st.success(f"Successfully extracted {uploaded_file.name}")
+        except Exception as e:
+            st.error(f"Failed to extract zip file: {e}")
+            return None
+
+        # Find all JSON files
+        json_files = []
+        for root, dirs, files in os.walk(extract_dir):
+            for file in files:
+                if file.lower().endswith('.json'):
+                    json_files.append(os.path.join(root, file))
+
+        if not json_files:
+            st.warning("No JSON files found in the uploaded zip.")
+            return None
+
+        # Combine all JSON files into one
+        combined_data = []
+        for json_file in json_files:
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        combined_data.extend(data)
+                    else:
+                        combined_data.append(data)
+                st.info(f"Processed: {os.path.basename(json_file)}")
+            except Exception as e:
+                st.warning(f"Failed to read {json_file}: {e}")
+
+        # Create output directories
+        raw_dir = Path("datasets/user_raw")
+        clean_dir = Path("datasets/user_clean")
+        raw_dir.mkdir(exist_ok=True)
+        clean_dir.mkdir(exist_ok=True)
+
+        # Generate filename with timestamp
+        timestamp_suffix = generate_timestamp()
+        json_filename = f"{user_filename}_{timestamp_suffix}.json"
+        csv_filename = f"{user_filename}_{timestamp_suffix}.csv"
+
+        raw_json_path = raw_dir / json_filename
+        clean_csv_path = clean_dir / csv_filename
+
+        # Save combined JSON to user_raw
+        try:
+            with open(raw_json_path, 'w', encoding='utf-8') as f:
+                json.dump(combined_data, f, indent=2, ensure_ascii=False)
+            st.success(f"Saved raw JSON to: {raw_json_path}")
+        except Exception as e:
+            st.error(f"Failed to save raw JSON: {e}")
+            return None
+
+        # Convert to DataFrame for cleaning pipeline
+        try:
+            if isinstance(combined_data, list) and len(combined_data) > 0:
+                df = pd.json_normalize(combined_data)
+            else:
+                df = pd.DataFrame([combined_data]) if combined_data else pd.DataFrame()
+
+            st.info(f"Created DataFrame with {len(df)} rows and {len(df.columns)} columns")
+
+            # Run cleaning pipeline
+            cleaned_df = run_cleaning_pipeline(df, user_filename)
+
+            # Save cleaned data as CSV to user_clean
+            cleaned_df.to_csv(clean_csv_path, index=False)
+            st.success(f"Saved cleaned CSV to: {clean_csv_path}")
+
+            return str(clean_csv_path)
+
+        except Exception as e:
+            st.error(f"Failed to process data: {e}")
+            return None
+
+def run_cleaning_pipeline(df, dataset_name):
+# CLEANING PIPELINE
+
+    st.subheader("Running Data Cleaning Pipeline...")
+
+    cleaned_df = df.copy()
+
+    # Basic cleaning steps - customize these based on your needs
+    initial_rows = len(cleaned_df)
+
+    with st.expander("Cleaning Steps", expanded=True):
+        # Remove completely empty rows
+        cleaned_df = cleaned_df.dropna(how='all')
+        st.write(f"• Removed {initial_rows - len(cleaned_df)} completely empty rows")
+
+        # Remove duplicate rows
+        duplicates_removed = len(cleaned_df) - len(cleaned_df.drop_duplicates())
+        cleaned_df = cleaned_df.drop_duplicates()
+        st.write(f"• Removed {duplicates_removed} duplicate rows")
+
+# BUILD MEGA CLEANING CODE
+        # filter out rows with no listen time
+        cleaned_df = cleaned_df[cleaned_df['ms_played'] != 0]
+        # transform ms to seconds
+        cleaned_df['seconds_played'] = cleaned_df['ms_played'] / 1000
+        # transform seconds to minutes
+        cleaned_df['minutes_played'] = round(cleaned_df['seconds_played'] / 60, 2)
+        # rename columns
+        cleaned_df = cleaned_df.rename(columns={'ts': 'datetime'})
+        cleaned_df = cleaned_df.rename(columns={'conn_country': 'country'})
+        cleaned_df = cleaned_df.rename(columns={'master_metadata_track_name': 'track_name'})
+        cleaned_df = cleaned_df.rename(columns={'master_metadata_album_artist_name': 'artist_name'})
+        cleaned_df = cleaned_df.rename(columns={'master_metadata_album_album_name': 'album_name'})
+        # cast datetime to datetime
+        cleaned_df['datetime'] = pd.to_datetime(cleaned_df['datetime'])
+        # create name column
+        cleaned_df['username'] = user_filename
+
+        # add categories for music, audio and audiobook
+
+        def categorise(row):
+            if pd.isnull(row['track_name']):
+                if pd.isnull(row['episode_show_name']):
+                    return 'audiobook'
+                else:
+                    return 'podcast'
+            else:
+                if pd.isnull(row['episode_show_name']):
+                    return 'music'
+                else:
+                    return row['no category']
+
+
+        cleaned_df['category'] = cleaned_df.apply(categorise, axis=1)
+
+        # drop unecessary columns
+        cleaned_df = cleaned_df.drop(columns=['offline','offline_timestamp','incognito_mode','endTime','audiobookName','chapterName','msPlayed', "platform", "ip_addr"], errors='ignore')
+        # drop nulls
+        cleaned_df = cleaned_df[~cleaned_df[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
+
+# TODO  MAKE DF_TRACKS <<<<<<<<<< REMIND ME WHAT THIS IS FOR
+        df_tracks = cleaned_df.groupby(['track_name', 'artist_name', 'spotify_track_uri'],as_index=False)['ms_played'].sum()
+
+        st.write(f"• Final dataset: {len(cleaned_df)} rows, {len(cleaned_df.columns)} columns")
+
+    return cleaned_df
+
+def load_csv_dataframes(directory="datasets/user_clean"):
+    """Load all CSV files from directory as dataframes"""
+
+    csv_dict = {}
+    data_dir = Path(directory)
+
+    if not data_dir.exists():
+        return csv_dict
+
+    # Find all CSV files
+    csv_files = list(data_dir.glob("*.csv"))
+
+    if not csv_files:
+        return csv_dict
+
+    # Load each CSV file as a dataframe
+    for csv_file in csv_files:
+        try:
+            # Extract the base name (without extension and timestamp suffix)
+            filename = csv_file.stem
+            # Remove the timestamp suffix (format: _YYYYMMDD_HHMMSS)
+            if '_' in filename:
+                parts = filename.split('_')
+                # Check if last two parts look like timestamp (YYYYMMDD and HHMMSS)
+                if len(parts) >= 2 and len(parts[-1]) == 6 and len(parts[-2]) == 8:
+                    base_name = '_'.join(parts[:-2])
+                else:
+                    base_name = filename
+            else:
+                base_name = filename
+
+            # Load CSV as DataFrame
+            df = pd.read_csv(csv_file)
+            csv_dict[base_name] = df
+
+        except Exception as e:
+            st.error(f"Failed to load {csv_file.name}: {e}")
+
+    return csv_dict
+
+# Initialize session state
+if 'dataframes_dict' not in st.session_state:
+    st.session_state.dataframes_dict = {}
+
+# Load datasets at the beginning of each page load
+users = load_csv_dataframes()
 
 # ------------------------- Home Page ------------------------- #
 if page == "Home":
@@ -104,14 +319,63 @@ if page == "Home":
     st.header(f"Welcome to Spotify Regifted {user_selected}!! This app is designed to analyze your Spotify data and provide insights into your listening habits. You can explore your overall listening patterns, year-by-year breakdowns, artist-specific analyses, and more. You have provided your listening history from {start_day} to {end_day} available for us to look at. That's {total_listened:.2f} hours of your listening for us to dive into! Please select a page from the sidebar to explore your Spotify data.")
     st.markdown("<h1 style='text-align: center; font-size: 10px; '>(All data shared with Spotify Regifted™ is now property of the Spotify Regifted™ team to do with what they please)</h1>", unsafe_allow_html=True)
 
+# -------------------------------- CN UPLOADER --------------------------------- #
 
+    # Upload section
+    st.header("1. Upload Spotify Data")
+    uploaded_file = st.file_uploader(
+        "Upload your **Spotify Listening History** zip here!",
+        type=['zip'],
+        help="Upload a zip file containing your Spotify data export"
+    )
+
+    user_filename = st.text_input(
+        "Enter a name for your dataset:",
+        value="spotify_data",
+        help="This will be used as the base filename for saving your data"
+    )
+
+    if uploaded_file is not None and user_filename:
+        if st.button("Process Upload"):
+            with st.spinner("Processing uploaded file..."):
+                result = process_uploaded_zip(uploaded_file, user_filename)
+                if result:
+                    st.session_state.last_processed = result
+                    # Refresh the dataframes dictionary from cleaned CSV files
+                    st.session_state.dataframes_dict = load_csv_dataframes()
+                    st.success("Dataset processed successfully! It will now appear in the user selector.")
+                    st.rerun()  # Refresh the page to update the user selector
+
+    # Load existing data section
+    st.header("2. Refresh Data")
+    if st.button("Refresh Data List"):
+        st.session_state.dataframes_dict = load_csv_dataframes()
+        st.success("Data list refreshed!")
+        st.rerun()  # Refresh the page to update the user selector
+
+    # Display selected dataset (if a user is selected)
+    if user_selected and users:
+        st.header("3. View Selected Dataset")
+
+        df = users[user_selected]
+
+        # Display dataset info
+        st.subheader(f"{user_selected}... This is your _clean_ dataset!!!")
+        st.write(f"{df.shape[0]} listening events")
+
+        st.dataframe(df)
+
+    elif users:
+        st.info("Select a user dataset from the dropdown above to view the data.")
+    else:
+        st.info("No datasets loaded. Upload a zip file or check if there are existing CSV files in the 'user_clean' directory.")
 
 
 # --------------------------- Overall Review Page ------------------------- #
 elif page == "Overall Review":
     # show current user info#
     user_selected = get_current_user(users)
-    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")  
+    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
     # Get current user from session state (NO SELECTBOX)
 
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
@@ -167,10 +431,10 @@ elif page == "Overall Review":
 
 
 
-        
+
 
     with col2:
-        
+
         st.markdown("<h4>You listened to:", unsafe_allow_html=True)
         wch_colour_box = (64, 64, 64)
         # wch_colour_box = (255, 255, 255)
@@ -205,7 +469,7 @@ elif page == "Overall Review":
 
         df = users[user_selected]
 
-        
+
 
     with col3:
 
@@ -263,8 +527,8 @@ elif page == "Overall Review":
             mode = st.segmented_control('',["music", "podcast",'audiobook'], selection_mode="single", default='music')
         else:
             mode = st.segmented_control('',["music", "podcast"], selection_mode="single", default='music')
-        
-        
+
+
 
         ## Graphs here please###
         df['hours_played'] = round(df['minutes_played'] / 60, 2)
@@ -283,7 +547,7 @@ elif page == "Overall Review":
             #title="Total Minutes Listened by Category",
             color_discrete_sequence= ['#32CD32', '#CF5C36', '#3B429F', '#8D98A7', '#EDADC7'],  # Spotify chart theme
         )
-        fig.update_layout(margin=dict(t=50, l=0, r=0, b=0), height=525) 
+        fig.update_layout(margin=dict(t=50, l=0, r=0, b=0), height=525)
 
     with col2:
         ''
@@ -333,13 +597,13 @@ elif page == "Overall Review":
             info_audiobook = pd.read_csv('info_tables/info_audiobook.csv')
             df = df.merge(info_audiobook, on='audiobook_uri', how='left')
             st.dataframe(df)
-            
+
             for idx, audiobook in enumerate(df["audiobook_name"], start=1):
                 audiobook_image_list.append(dict(
                     text=f'',
                     title=f"",
                     df_filter = info_audiobook[info_audiobook.audiobook_name == audiobook],
-                    
+
                     img = info_audiobook[info_audiobook.audiobook_name == audiobook].audiobook_artwork.values[0]
                 ))
 
@@ -397,9 +661,9 @@ elif page == "Overall Review":
     fig.update_geos(
         visible=True,  # Hide the borders
         bgcolor="#0d100e",  # Set background color
-        showcoastlines=True,  
-        showland=True,  
-        showocean=True, 
+        showcoastlines=True,
+        showland=True,
+        showocean=True,
         showcountries=True,
         landcolor="#3D413D",  # Land color
     )
@@ -407,7 +671,7 @@ elif page == "Overall Review":
     st.plotly_chart(fig, use_container_width=True)
     with st.expander("See data"):
 
-        
+
 
         st.dataframe(df_country[df_country['country'] != 'not found'].dropna().sort_values(by='hours_played', ascending=False), use_container_width=True)
 
@@ -433,22 +697,22 @@ elif page == "Per Year":
     users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
 
 
-    
-    
-    
+
+
+
     year_list = users[user_selected]['year'].sort_values().unique().tolist()
 
-    
+
 
     # make buttons for category selection
     categories = ['music','podcast']
     if 'audiobook' in user_df['category'].unique():
         categories.append('audiobook')
-    
+
     c1,c2 = st.columns([3,1],vertical_alignment='center')
     with c1:
         selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=users[user_selected]['year'].max())
-    
+
     with c2:
         selected_category = st.segmented_control('Category', categories, selection_mode="single", default='music')
 
@@ -465,10 +729,10 @@ elif page == "Per Year":
     else:
         st.error("Unsupported category selected.")
         st.stop()
-    
+
     df_grouped = df_grouped.sort_values(by='minutes_played', ascending=False)
     df_grouped['hours_played'] = round(df_grouped['minutes_played'] / 60, 2)
-    df_grouped = df_grouped[df_grouped['hours_played'] > 1]  
+    df_grouped = df_grouped[df_grouped['hours_played'] > 1]
 
     # make top 10 based on hours played showing image, scorecard for comparison to last year ('first year lsitened to' if first year) and duration listened to
 
@@ -507,7 +771,7 @@ elif page == "Per Year":
         with col1:
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 52px; color: white;'>"
-                f"{i+1}.</div>", 
+                f"{i+1}.</div>",
                 unsafe_allow_html=True
             )
         with col2:
@@ -515,7 +779,7 @@ elif page == "Per Year":
         with col3:
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
-                f"{name}</div>", 
+                f"{name}</div>",
                 unsafe_allow_html=True
             )
 
@@ -526,15 +790,15 @@ elif page == "Per Year":
                 hours_played = df_top10.loc[df_top10['episode_show_name'] == name, 'hours_played'].values[0]
             elif selected_category == 'audiobook':
                 hours_played = df_top10.loc[df_top10['artist_name'] == name, 'hours_played'].values[0]
-            
+
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
                 f"<h3 style='margin: 0; color: white;'>{hours_played}</h3>"
-                f"</div>", 
+                f"</div>",
                 unsafe_allow_html=True
             )
         st.markdown("---")  # separator for visual spacing
-        
+
 
     with st.expander("See data"):
         if selected_category == 'music':
@@ -564,8 +828,8 @@ elif page == "Per Year":
             labels={"artist_name": "Artist", "minutes_played": "Minutes Played"},
             title=f"{user_selected}'s top 10 artists for {selected_year}:",
             color_discrete_sequence=["#32CD32"])
-        
-        
+
+
 
 
 
@@ -579,7 +843,7 @@ elif page == "Per Year":
 
     #  categories = ['music', 'podcast', 'audiobook']
     #  selected_category = st.segmented_control("Choose a category to explore", categories, selection_mode="single", default='music')
-    
+
     if selected_category == "music":
     ## Top 5 artists in music category in horizontal bar graph##
      top_music_tracks = df_music.groupby(['track_name', 'artist_name'])['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
@@ -685,7 +949,7 @@ elif page == "Per Year":
 
 # ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":
-    
+
     ## page set up
     # Get current user from session state
     user_selected = get_current_user(users)
@@ -716,7 +980,7 @@ elif page == "Per Artist":
     with col2:
         # "year" or "all data" selection
         mode = st.segmented_control("Summary displayed:", ["All Data", "Per Year"], selection_mode="single", default="All Data")
-        
+
     with col3:
         # year selection and dataframe definition
         if mode == "All Data":
@@ -729,7 +993,7 @@ elif page == "Per Artist":
 
     # pictures and summary cards 1
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         ### Artist Rank
         year_rank = list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index().artist_name)
@@ -814,7 +1078,7 @@ elif page == "Per Artist":
         # placeholder - does not need recalculating once re-organised on page
         top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
-        album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]   
+        album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]
         st.image(album_image_url, output_format="auto")
 
 
@@ -907,7 +1171,7 @@ elif page == "Per Artist":
     fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", title=f"Top songs by {artist_selected} of {year_selected}", color_discrete_sequence=["#32CD32"])
     fig_top_songs.update_yaxes(categoryorder='total ascending')
     fig_top_songs.update_layout(yaxis_title=None)
-    fig_top_songs.update_layout(xaxis_title="Total Minutes") 
+    fig_top_songs.update_layout(xaxis_title="Total Minutes")
     st.write(fig_top_songs)
 
     ## top albums graph
@@ -915,7 +1179,7 @@ elif page == "Per Artist":
     fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Top albums by {artist_selected} of {year_selected}", color_discrete_sequence=["#32CD32"])
     fig_top_albums.update_yaxes(categoryorder='total ascending')
     fig_top_albums.update_layout(yaxis_title=None)
-    fig_top_albums.update_layout(xaxis_title="Total Minutes") 
+    fig_top_albums.update_layout(xaxis_title="Total Minutes")
     st.write(fig_top_albums)
 
 
@@ -1020,19 +1284,19 @@ elif page == "Per Album":
 
       htmlstr = f"""
           <p style='background-color: rgb(
-              {wch_colour_box[0]}, 
-              {wch_colour_box[1]}, 
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
               {wch_colour_box[2]}, 0.75
-          ); 
+          );
           color: rgb(
-              {wch_colour_font[0]}, 
-              {wch_colour_font[1]}, 
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
               {wch_colour_font[2]}, 0.75
-          ); 
-          font-size: {fontsize}px;    
-          border-radius: 7px; 
-          padding-top: 40px; 
-          padding-bottom: 40px; 
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
           line-height:25px;
           display: flex;
           align-items: center;
@@ -1159,7 +1423,7 @@ elif page == "Per Album":
     fig = px.bar_polar(df_polar, r="minutes_played", theta="datetime", color="minutes_played",
                        color_continuous_scale=["#32CD32", "#006400"],  # Green theme
                         title=" ")
-    
+
     # calendar plot - maybe empty days need filling?
     df_day = df_music[(df_music.album_name == album_selected) & (df_music.datetime.dt.year == year_selected)].groupby("date").minutes_played.sum().reset_index()
     fig_cal = calplot(df_day, x = "date", y = "minutes_played")
@@ -1429,13 +1693,13 @@ elif page == "FUN":
       event_year = random_event.iloc[0]['Year']
       event_name = random_event.iloc[0]['Event']
       display_date = event_date.strftime('%d %B %Y')
-    
+
       # Display the selected event
       st.write(f"**On {display_date}, {event_name}, you listened to:**")
 
       # Match random event date to user's music listening history
       df_music_event = df[df['date'] == event_date]
-     
+
       # Display matched music history
       if  len(df_music_event) == 0 :
           st.write("No matching music history found for this date.")

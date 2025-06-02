@@ -380,16 +380,19 @@ elif page == "Per Year":
     
     year_list = users[user_selected]['year'].sort_values().unique().tolist()
 
-    selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=users[user_selected]['year'].max())
+    
 
     # make buttons for category selection
     categories = ['music','podcast']
     if 'audiobook' in user_df['category'].unique():
         categories.append('audiobook')
     
-    c1,c2,c3 = st.columns(3,vertical_alignment='center')
+    c1,c2 = st.columns([3,1],vertical_alignment='center')
+    with c1:
+        selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=users[user_selected]['year'].max())
+    
     with c2:
-        selected_category = st.segmented_control(None, categories, selection_mode="single", default='music')
+        selected_category = st.segmented_control('Category', categories, selection_mode="single", default='music')
 
     ##filtering the data##
     df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
@@ -410,39 +413,100 @@ elif page == "Per Year":
 
     # make top 10 based on hours played showing image, scorecard for comparison to last year ('first year lsitened to' if first year) and duration listened to
 
-    df_top10 = df_grouped.head(10)
+    df_top10 = df_grouped.head(10).reset_index()
 
+    def display_top_5(dataset, category):
+        st.markdown("<h2 style='text-align: center;'>Your Top Bands</h2>", unsafe_allow_html=True)
+        top5 = dataset.head(5).reset_index(drop=True)
 
-    
-    if selected_category == 'music':
+    col1, col2, col3, col4 = st.columns([1, 3, 4.7, 6])
+
+    with col1:
+        st.markdown("<h3 style='color: white;'>Rank</h3>", unsafe_allow_html=True)
+    with col2:
+        #st.markdown("<h3 style='color: white;'>Image</h3>", unsafe_allow_html=True)
+        pass
+    with col3:
+        st.markdown("<h3 style='color: white;'>Name</h3>", unsafe_allow_html=True)
+    with col4:
+        st.markdown("<h3 style='color: white;'>Hours Played</h3>", unsafe_allow_html=True)
+
+    for i, row in df_top10.iterrows():
+        col1, col2, col3, col4 = st.columns([1, 3, 4.7, 6], vertical_alignment='center')
+
+        # Determine display name depending on category
+        if selected_category == 'music':
+            name = row['artist_name']
+            image_url = df_artist[df_artist['artist_name'] == name]['artist_image'].values[0]
+        elif selected_category == 'podcast':
+            name = row['episode_show_name']
+            image_url = df_podcast[df_podcast['episode_show_name'] == name]['show_image'].values[0]
+        elif selected_category == 'audiobook':
+            name = row['audiobook_title']
+            image_url = df_audiobook[df_audiobook['audiobook_title'] == name]['book_cover'].values[0]
+
+        with col1:
+            st.markdown(
+                f"<div style='display: flex; align-items: center; font-size: 52px; color: white;'>"
+                f"{i+1}.</div>", 
+                unsafe_allow_html=True
+            )
+        with col2:
+            st.image(image_url, width=150)
+        with col3:
+            st.markdown(
+                f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
+                f"{name}</div>", 
+                unsafe_allow_html=True
+            )
+
+        with col4:
+            hours_played = df_top10.loc[df_top10['artist_name'] == name, 'hours_played'].values[0]
+            st.markdown(
+                f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
+                f"<h3 style='margin: 0; color: white;'>{hours_played}</h3>"
+                f"</div>", 
+                unsafe_allow_html=True
+            )
+        st.markdown("---")  # separator for visual spacing
+        
+
+    with st.expander("See data"):
+        st.dataframe(df_grouped[['artist_name','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
+        
+        
         fig_artists = px.bar(
-        df_grouped.head(20),
+        df_grouped.head(10),
         x="artist_name",
         y="minutes_played",
         labels={"artist_name": "Artist", "minutes_played": "Minutes Played"},
         title=f"{user_selected}'s top 10 artists for {selected_year}:",
         color_discrete_sequence=["#32CD32"])
-    elif selected_category == 'podcast':
-        fig_artists = px.bar(
-        df_grouped.head(20),
-        x="episode_show_name",
-        y="minutes_played",
-        labels={"episode_show_name": "Podcast", "minutes_played": "Minutes Played"},
-        title=f"{user_selected}'s top {len(list(df_grouped['episode_show_name'])) - 1} podcasts for {selected_year}:",
-        color_discrete_sequence=["#32CD32"])
-    elif selected_category == 'audiobook':
-        fig_artists = px.bar(
-        df_grouped.head(20),
-        x="audiobook_title",
-        y="minutes_played",
-        labels={"audiobook_title": "Book name", "minutes_played": "Minutes Played"},
-        title=f"{user_selected}'s top {len(df_grouped)} books for {selected_year}:",
-        color_discrete_sequence=["#32CD32"])
-    else:
-        st.error("Unsupported category selected.")
-        st.stop()
+    # elif selected_category == 'podcast':
+        
+        
+        
+        
+        
+    #     fig_artists = px.bar(
+    #     df_grouped.head(10),
+    #     x="episode_show_name",
+    #     y="minutes_played",
+    #     labels={"episode_show_name": "Podcast", "minutes_played": "Minutes Played"},
+    #     title=f"{user_selected}'s top {len(list(df_grouped['episode_show_name'])) - 1} podcasts for {selected_year}:",
+    #     color_discrete_sequence=["#32CD32"])
+    # elif selected_category == 'audiobook':
+    #     fig_artists = px.bar(
+    #     df_grouped.head(20),
+    #     x="audiobook_title",
+    #     y="minutes_played",
+    #     labels={"audiobook_title": "Book name", "minutes_played": "Minutes Played"},
+    #     title=f"{user_selected}'s top {len(df_grouped)} books for {selected_year}:",
+    #     color_discrete_sequence=["#32CD32"])
+    # else:
+    #     st.error("Unsupported category selected.")
+    #     st.stop()
 
-    col1, col2, col3 = st.columns([1, 1, 1])
 
         
 

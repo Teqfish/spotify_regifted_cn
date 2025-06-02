@@ -899,11 +899,12 @@ elif page == "Per Artist":
         # might need code to fill in missing months to keep the graph a full circle
         fig_polar = px.bar_polar(df_polar, r="minutes_played", theta="datetime", color="minutes_played",
                         color_continuous_scale=["#32CD32", "#006400"],  # Green theme
-                            title="Listening Trends Over the Year")
+                            title=f"Listening Trends {year_selected}")
         fig_polar.update_layout(
             title_font_size=20,
             polar=dict(radialaxis=dict(showticklabels=False))
             )
+        fig_polar.update_coloraxes(showscale=False)
         st.plotly_chart(fig_polar, use_container_width=True)
 
         ## calendar plot - maybe empty days need filling?

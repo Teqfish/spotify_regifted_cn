@@ -57,8 +57,9 @@ st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:",lay
 st.sidebar.title("Spotify Regifted")
 page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "FUN", "AbOuT uS"])
 
-def generate_timestamp():
 # Timestamp string to add to saved files
+def generate_timestamp():
+
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # Function to create a user selector for the Home page#
@@ -92,8 +93,10 @@ def get_current_user(users):
 
     return st.session_state.user_selected
 
+# Upload zip, extract & concat JSONs, send out to
+# run_cleaning_pipeline and back again to save as CSV.
 def process_uploaded_zip(uploaded_file, user_filename):
-# Upload zip, extract & concat JSONs, send out to CLEAN and back again to save as CSV.
+
 
     # Create a temporary directory to work with the uploaded file
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -184,8 +187,9 @@ def process_uploaded_zip(uploaded_file, user_filename):
             st.error(f"Failed to process data: {e}")
             return None
 
-def run_cleaning_pipeline(df, dataset_name):
 # CLEANING PIPELINE
+def run_cleaning_pipeline(df, dataset_name):
+
 
     st.subheader("Running Data Cleaning Pipeline...")
 
@@ -223,7 +227,6 @@ def run_cleaning_pipeline(df, dataset_name):
         cleaned_df['username'] = user_filename
 
         # add categories for music, audio and audiobook
-
         def categorise(row):
             if pd.isnull(row['track_name']):
                 if pd.isnull(row['episode_show_name']):
@@ -251,8 +254,10 @@ def run_cleaning_pipeline(df, dataset_name):
 
     return cleaned_df
 
+# Load all CSVs in directory as dataframes
+# >>>>>>>> No longer sure if this is doing anything although
+# >>>>>>>> new datasets are present in old dropdown...
 def load_csv_dataframes(directory="datasets/user_clean"):
-    """Load all CSV files from directory as dataframes"""
 
     csv_dict = {}
     data_dir = Path(directory)

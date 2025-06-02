@@ -323,30 +323,47 @@ elif page == "Overall Review":
                     img=info_podcast[info_podcast.podcast_name == podcast].podcast_artwork.values[0]
                 ))
 
+            if podcast_image_list:
+                carousel(items=podcast_image_list,container_height=550)
+            else:
+                st.warning("No audiobook images available.")
+
         elif mode == 'audiobook':
             audiobook_image_list = []
             df['hours_played'] = round(df['minutes_played'] / 60, 2)
-            df = df[df['category'] == 'audiobook'].groupby('audiobook_uri', as_index=False)['hours_played'].sum()
-            df = df.sort_values(by='hours_played', ascending=False).head(10).reset_index(drop=True)
-            df.rename(columns={'audiobook_uri': 'audiobook_name'}, inplace=True)
-            info_audiobook = pd.read_csv('info_tables/info_audiobook.csv')
-            df = df.merge(info_audiobook, on='audiobook_uri', how='left')
-            st.dataframe(df)
+
+            # Filter for audiobooks
+            df = df[df['category'] == 'audiobook']
+
+            # Aggregate hours played per audiobook
+            df_grouped = df.groupby(['audiobook_title', 'audiobook_uri'], as_index=False)['hours_played'].sum()
             
-            for idx, audiobook in enumerate(df["audiobook_name"], start=1):
+
+            # Sort and take top 10
+            df_grouped = df_grouped.sort_values(by='hours_played', ascending=False).head(10).reset_index(drop=True)
+            
+            # Load image info and merge
+            info_audiobook = pd.read_csv('info_tables/info_audiobook.csv')
+            merged_df = pd.merge(df_grouped, info_audiobook[['audiobook_uri', 'audiobook_artwork']], on='audiobook_uri', how='left')
+            #st.dataframe(df)
+            # Build image list
+            for idx, row in merged_df.iterrows():
                 audiobook_image_list.append(dict(
-                    text=f'',
-                    title=f"",
-                    df_filter = info_audiobook[info_audiobook.audiobook_name == audiobook],
-                    
-                    img = info_audiobook[info_audiobook.audiobook_name == audiobook].audiobook_artwork.values[0]
+                    text='',
+                    title='',
+                    img=row['audiobook_artwork']
                 ))
+            
 
             # Create a carousel of audiobook images
             if audiobook_image_list:
                 carousel(items=audiobook_image_list,container_height=550)
             else:
                 st.warning("No audiobook images available.")
+
+
+
+
     ##Ben's Big ol Graphs##
     users[user_selected]['datetime'] = pd.to_datetime(users[user_selected]['datetime'])
     users[user_selected]['year'] = users[user_selected]['datetime'].dt.year
@@ -446,7 +463,7 @@ elif page == "Per Year":
     elif selected_category == 'podcast':
         df_grouped = df_filtered.groupby('episode_show_name', as_index=False)['minutes_played'].sum()
     elif selected_category == 'audiobook':
-        df_grouped = df_filtered.groupby('audiobook_title', as_index=False)['minutes_played'].sum()
+        df_grouped = df_filtered.groupby(['audiobook_title','audiobook_uri'], as_index=False)['minutes_played'].sum()
     else:
         st.error("Unsupported category selected.")
         st.stop()
@@ -475,19 +492,30 @@ elif page == "Per Year":
     with col4:
         st.markdown("<h3 style='color: white;'>Hours Played</h3>", unsafe_allow_html=True)
 
+    if selected_category == 'audiobook':
+        
+        # Merge with audiobook info to get images
+        df_audiobook_uri = df_grouped.merge(df_audiobook, on='audiobook_uri', how='left')
+
+
     for i, row in df_top10.iterrows():
         col1, col2, col3, col4 = st.columns([1, 3, 4.7, 6], vertical_alignment='center')
 
         # Determine display name depending on category
         if selected_category == 'music':
             name = row['artist_name']
-            image_url = df_artist[df_artist['artist_name'] == name]['artist_image'].values[0]
+            try:
+                image_url = df_artist[df_artist['artist_name'] == name]['artist_image'].values[0]
+            except:
+                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
         elif selected_category == 'podcast':
             name = row['episode_show_name']
             image_url = df_podcast[df_podcast['podcast_name'] == name]['podcast_artwork'].values[0]
         elif selected_category == 'audiobook':
             name = row['audiobook_title']
-            image_url = df_audiobook[df_audiobook['audiobook_title'] == name]['book_cover'].values[0]
+            image_url = df_audiobook_uri[df_audiobook_uri['audiobook_title'] == name]['audiobook_artwork'].values[0]
+
+
 
         with col1:
             st.markdown(
@@ -501,6 +529,7 @@ elif page == "Per Year":
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
                 f"{name}</div>", 
+
                 unsafe_allow_html=True
             )
 
@@ -510,7 +539,7 @@ elif page == "Per Year":
             elif selected_category == 'podcast':
                 hours_played = df_top10.loc[df_top10['episode_show_name'] == name, 'hours_played'].values[0]
             elif selected_category == 'audiobook':
-                hours_played = df_top10.loc[df_top10['artist_name'] == name, 'hours_played'].values[0]
+                hours_played = df_top10.loc[df_top10['audiobook_title'] == name, 'hours_played'].values[0]
             
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
@@ -541,12 +570,12 @@ elif page == "Per Year":
             title=f"{user_selected}'s top 10 artists for {selected_year}:",
             color_discrete_sequence=["#32CD32"])
         elif selected_category == 'audiobook':
-            st.dataframe(df_grouped[['artist_name','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
+            st.dataframe(df_grouped[['audiobook_title','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
             fig_artists = px.bar(
             df_grouped.head(10),
-            x="artist_name",
+            x="audiobook_title",
             y="minutes_played",
-            labels={"artist_name": "Artist", "minutes_played": "Minutes Played"},
+            labels={"audiobook_name": "Book", "minutes_played": "Minutes Played"},
             title=f"{user_selected}'s top 10 artists for {selected_year}:",
             color_discrete_sequence=["#32CD32"])
         

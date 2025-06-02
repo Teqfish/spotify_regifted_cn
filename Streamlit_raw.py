@@ -1182,7 +1182,7 @@ elif page == "Per Artist":
     ## top songs graph
     top_songs = df_music[df_music.artist_name == artist_selected].groupby("track_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
-    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", title=f"Top songs by {artist_selected} of {year_selected}", color_discrete_sequence=["#32CD32"])
+    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", title=f"Top songs by {artist_selected} of {year_selected}", color_discrete_sequence=["#32CD32"], text_auto=True)
     fig_top_songs.update_yaxes(categoryorder='total ascending')
     fig_top_songs.update_layout(yaxis_title=None)
     fig_top_songs.update_layout(xaxis_title="Total Minutes")
@@ -1191,7 +1191,7 @@ elif page == "Per Artist":
 
     ## top albums graph
     top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
-    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Top albums by {artist_selected} of {year_selected}", color_discrete_sequence=["#32CD32"])
+    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Top albums by {artist_selected} of {year_selected}", color_discrete_sequence=["#32CD32"], text_auto=True)
     fig_top_albums.update_yaxes(categoryorder='total ascending')
     fig_top_albums.update_layout(yaxis_title=None)
     fig_top_albums.update_layout(xaxis_title="Total Minutes")
@@ -1414,7 +1414,7 @@ elif page == "Per Album":
     top_songs = df_music[df_music.album_name == album_selected].groupby("track_name").minutes_played.sum().sort_values(ascending = False).reset_index()
     # top songs title#
     st.markdown(f"<h2 style='text-align: center;'>{album_selected}</h2>", unsafe_allow_html=True)
-    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", color_discrete_sequence=["#32CD32"])
+    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", color_discrete_sequence=["#32CD32"], text_auto=True)
     fig_top_songs.update_yaxes(categoryorder='total ascending')
     fig_top_songs.update_layout(xaxis_title="Total Minutes", yaxis_title=None)
     st.write(fig_top_songs)
@@ -1423,7 +1423,7 @@ elif page == "Per Album":
     top_albums = df_music[df_music.album_name == album_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
     # top albums title#
     st.markdown(f"<h2 style='text-align: center;'>Top Albums of {album_selected}</h2>", unsafe_allow_html=True)
-    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", color_discrete_sequence=["#32CD32"])
+    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", color_discrete_sequence=["#32CD32"], text_auto=True)
     fig_top_albums.update_yaxes(categoryorder='total ascending')
     fig_top_albums.update_layout(xaxis_title="Total Minutes", yaxis_title=None)
     st.write(fig_top_albums)

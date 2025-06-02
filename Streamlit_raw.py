@@ -47,7 +47,7 @@ users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, 
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Spotify Regifted")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Audio Book", "Podcasts", "Basic-O-Meter", "FUN", "AbOuT uS"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "FUN", "AbOuT uS"])
 
 
 # Function to create a user selector for the Home page#
@@ -109,12 +109,13 @@ if page == "Home":
 
 # --------------------------- Overall Review Page ------------------------- #
 elif page == "Overall Review":
-
-    # Get current user from session state (NO SELECTBOX)
+    # show current user info#
     user_selected = get_current_user(users)
+    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")  
+    # Get current user from session state (NO SELECTBOX)
+
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-    # Show current user info
-    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
+
 
     # Set page title and header
         ## overall stats##
@@ -355,7 +356,8 @@ elif page == "Overall Review":
 
     # Convert minutes to hours
     grouped['hours_played'] = grouped['minutes_played'] / 60
-
+    # Heading for the line chart #
+    st.markdown("<h1 style='text-align: center;'>Listening Hours by Category</h1>", unsafe_allow_html=True)
     # Line chart using Plotly
     fig = px.line(
         grouped,
@@ -363,17 +365,22 @@ elif page == "Overall Review":
         y='hours_played',
         color='category',
         markers=True,
-        title='Total Listening Hours per Year by Category',
+        title='',
         color_discrete_sequence= ['#32CD32', '#CF5C36', '#3B429F', '#8D98A7', '#EDADC7']
     )
-    
+    fig.update_layout(
+        xaxis_title='Year',
+        yaxis_title='Hours Played',
+        legend_title='Category',
+        margin=dict(l=0, r=0, t=50, b=0)
+    )
     # Streamlit display
     st.plotly_chart(fig)
 
 
     ## overall stats##
-
-    st.title("Where you listened the most:")
+    # Map Title #
+    st.markdown("<h1 style='text-align: center;'>Where you listened the most:</h1>", unsafe_allow_html=True)
 
     df_country = users[user_selected].groupby("country")["minutes_played"].sum().reset_index()
     df_country['country'] = df_country['country'].apply(lambda x: coco.convert(x, to='name_short'))
@@ -384,11 +391,19 @@ elif page == "Overall Review":
                     color="hours_played", # lifeExp is a column of gapminder
                     hover_name="country", # column to add to hover information
                     range_color=[0, df_country['hours_played'].iloc[0] / df_country['hours_played'].iloc[1]],
-                    color_continuous_scale=px.colors.sequential.Agsunset,
-                    title="Total Listening Hours by Country",
+                    color_continuous_scale=px.colors.sequential.Inferno_r,  # Use a color scale
     )
-    fig.update_layout(geo_bgcolor = "#0d100e", margin=dict(t=50, l=0, r=0, b=0), height=800)  # Adjust margins)
-
+    fig.update_layout(geo_bgcolor = "#0d100e", margin=dict(t=50, l=0, r=0, b=0), height=800,)  # Adjust margins)
+    fig.update_geos(
+        visible=True,  # Hide the borders
+        bgcolor="#0d100e",  # Set background color
+        showcoastlines=True,  
+        showland=True,  
+        showocean=True, 
+        showcountries=True,
+        landcolor="#3D413D",  # Land color
+    )
+    fig.update_coloraxes(showscale=False)  # Hide the color scale
     st.plotly_chart(fig, use_container_width=True)
     with st.expander("See data"):
 
@@ -668,7 +683,6 @@ elif page == "Per Year":
     # Show chart
     st.plotly_chart(fig, use_container_width=True)
 
-
 # ------------------------- Per Artist Page ------------------------- #
 elif page == "Per Artist":
     
@@ -931,24 +945,6 @@ elif page == "Per Artist":
 # ------------------------- Per Album Page ------------------------- #
 elif page == "Per Album":
 
-
-    # Get current user from session state
-
-    user_selected = get_current_user(users)
-    st.info(f"🎵 Artist analysis for: **{user_selected}**")
-    # project titel
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
-
-#------------------Audio Book Page------------------#
-elif page == "Audio Book":
-    # Get current user from session state
-    user_selected = get_current_user(users)
-    st.info(f"🎵 Artist analysis for: **{user_selected}**")
-    # project titel
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True) 
-
-# ------------------ Podcast Page ------------------ #
-elif page == "Podcasts":
     # Get current user from session state
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
@@ -1132,17 +1128,22 @@ elif page == "Podcasts":
 
 
     # top songs graph
-    top_songs = df_music[df_music.album_name == album_selected].groupby("track_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
-    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", title=f"Top songs by {album_selected}", color_discrete_sequence=["#32CD32"])
+    top_songs = df_music[df_music.album_name == album_selected].groupby("track_name").minutes_played.sum().sort_values(ascending = False).reset_index()
+    # top songs title#
+    st.markdown(f"<h2 style='text-align: center;'>{album_selected}</h2>", unsafe_allow_html=True)
+    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", color_discrete_sequence=["#32CD32"])
     fig_top_songs.update_yaxes(categoryorder='total ascending')
+    fig_top_songs.update_layout(xaxis_title="Total Minutes", yaxis_title=None)
     st.write(fig_top_songs)
 
     # top albums graph
     top_albums = df_music[df_music.album_name == album_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
-
-    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Top albums by {album_selected}", color_discrete_sequence=["#32CD32"])
+    # top albums title#
+    st.markdown(f"<h2 style='text-align: center;'>Top Albums of {album_selected}</h2>", unsafe_allow_html=True)
+    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", color_discrete_sequence=["#32CD32"])
     fig_top_albums.update_yaxes(categoryorder='total ascending')
+    fig_top_albums.update_layout(xaxis_title="Total Minutes", yaxis_title=None)
     st.write(fig_top_albums)
 
     # year selection
@@ -1157,18 +1158,21 @@ elif page == "Podcasts":
     # might need code to fill in missing months to keep the graph a full circle
     fig = px.bar_polar(df_polar, r="minutes_played", theta="datetime", color="minutes_played",
                        color_continuous_scale=["#32CD32", "#006400"],  # Green theme
-                        title="Listening Trends Over the Year")
-
+                        title=" ")
+    
     # calendar plot - maybe empty days need filling?
     df_day = df_music[(df_music.album_name == album_selected) & (df_music.datetime.dt.year == year_selected)].groupby("date").minutes_played.sum().reset_index()
     fig_cal = calplot(df_day, x = "date", y = "minutes_played")
     st.plotly_chart(fig_cal, use_container_width=True)
 
+
+   # Polar bar chart title#
+    st.markdown(f"<h2 style='text-align: center;'>Listening Trends of {album_selected} Over the Year</h2>", unsafe_allow_html=True)
     fig.update_layout(
         title_font_size=20,
         polar=dict(radialaxis=dict(showticklabels=False))
          )
-
+    fig.update_coloraxes(showscale=False)
     st.plotly_chart(fig, use_container_width=True)
 
     df_line = df_music[(df_music.album_name == album_selected)]
@@ -1177,6 +1181,7 @@ elif page == "Podcasts":
     df_line = df_line.groupby(["year", "month"]).minutes_played.sum().reset_index()
 
     fig_line = px.line(df_line, x = "month", y = "minutes_played", color = "year")
+    fig_line.update_layout(xaxis_title="Month", yaxis_title="Minutes Played", legend_title_text="Year")
     st.plotly_chart(fig_line,use_container_width=True)
 
 # ------------------------- Basic-O-Meter Page ------------------------- #

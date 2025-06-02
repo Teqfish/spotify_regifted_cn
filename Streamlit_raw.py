@@ -775,8 +775,12 @@ elif page == "Per Artist":
         top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
         # get album image - adjusted for variations in album name like "special edition" or "new version"
-        album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]  
-        st.image(album_image_url, output_format="auto")
+        try:
+            album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]
+            st.image(album_image_url, output_format="auto")
+        except:
+            album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]  
+            st.image(album_image_url, output_format="auto")
 
 
 
@@ -887,6 +891,8 @@ elif page == "Per Artist":
     else:
         ## Create a polar bar chart
         df_polar = df_music[(df_music.artist_name == artist_selected) & (df_music.datetime.dt.year == year_selected)].groupby(df_music.datetime.dt.month).minutes_played.sum().reset_index()
+        # fill missing months
+        df_polar = pd.merge(pd.Series(range(1,13), name = "datetime"), df_polar, how="outer", on = "datetime").fillna(0)
         #define dict to name numbers as month
         cal = {1:"Jan", 2: "Feb", 3:"Mar", 4:"Apr", 5:"May", 6:"Jun", 7:"Jul", 8:"Aug", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dec"}
         df_polar["datetime"] = df_polar["datetime"].replace(cal)

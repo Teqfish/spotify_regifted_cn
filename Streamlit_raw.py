@@ -682,8 +682,9 @@ elif page == "Per Artist":
             year_selected = st.segmented_control("Year:", ["All Time"], selection_mode="single", default="All Time")
             df_music= df_music
         else:
-            year_range = list(range(df_music[df_music.artist_name == artist_selected].datetime.dt.year.min(), df_music[df_music.artist_name == artist_selected].datetime.dt.year.max()+1))
-            year_selected = st.segmented_control("Year:", year_range, selection_mode="single", default=df_music[df_music.artist_name == artist_selected].datetime.dt.year.max()-1)
+            # year_range = list(range(df_music[df_music.artist_name == artist_selected].datetime.dt.year.min(), df_music[df_music.artist_name == artist_selected].datetime.dt.year.max()+1))
+            year_list = df_music[df_music.artist_name == artist_selected].datetime.dt.year.sort_values().unique().tolist()
+            year_selected = st.segmented_control("Year:", year_list, selection_mode="single", default=df_music[df_music.artist_name == artist_selected].datetime.dt.year.max())
             df_music = df_music[df_music.datetime.dt.year == year_selected]
 
     # pictures and summary cards 1
@@ -773,7 +774,8 @@ elif page == "Per Artist":
         # placeholder - does not need recalculating once re-organised on page
         top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
-        album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]   
+        # get album image - adjusted for variations in album name like "special edition" or "new version"
+        album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]  
         st.image(album_image_url, output_format="auto")
 
 
@@ -820,44 +822,46 @@ elif page == "Per Artist":
 
 
     with col2:
-
-        ## listening streak
-        # consecutive listening days
-        band_streak = df_music[df_music.artist_name == artist_selected].sort_values("datetime")
-        band_streak = band_streak["datetime"].dt.date.drop_duplicates().sort_values().diff().dt.days.fillna(1)
-        streak_ids = (band_streak != 1).cumsum()
-        max_streak = streak_ids.value_counts().max()
-        ## box stolen from the internet
-        st.markdown("<h4>Longest Streak:</h4>", unsafe_allow_html=True)
-        wch_colour_box = (64, 64, 64)
-        # wch_colour_box = (255, 255, 255)
-        wch_colour_font = (50, 205, 50)
-        fontsize = 38
-        valign = "left"
-        iconname = "fas fa-star"
-        i = f"{max_streak} Days"
-        htmlstr = f"""
-            <p style='background-color: rgb(
-                {wch_colour_box[0]},
-                {wch_colour_box[1]},
-                {wch_colour_box[2]}, 0.75
-            );
-            color: rgb(
-                {wch_colour_font[0]},
-                {wch_colour_font[1]},
-                {wch_colour_font[2]}, 0.75
-            );
-            font-size: {fontsize}px;
-            border-radius: 7px;
-            padding-top: 30px;
-            padding-bottom: 30px;
-            line-height:25px;
-            display: flex;
-            align-items: center;
-            justify-content: center;'>
-            <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
+        try:
+            ## listening streak
+            # consecutive listening days
+            band_streak = df_music[df_music.artist_name == artist_selected].sort_values("datetime")
+            band_streak = band_streak["datetime"].dt.date.drop_duplicates().sort_values().diff().dt.days.fillna(1)
+            streak_ids = (band_streak != 1).cumsum()
+            max_streak = streak_ids.value_counts().max()
+            ## box stolen from the internet
+            st.markdown("<h4>Longest Streak:</h4>", unsafe_allow_html=True)
+            wch_colour_box = (64, 64, 64)
+            # wch_colour_box = (255, 255, 255)
+            wch_colour_font = (50, 205, 50)
+            fontsize = 38
+            valign = "left"
+            iconname = "fas fa-star"
+            i = f"{max_streak} Days"
+            htmlstr = f"""
+                <p style='background-color: rgb(
+                    {wch_colour_box[0]},
+                    {wch_colour_box[1]},
+                    {wch_colour_box[2]}, 0.75
+                );
+                color: rgb(
+                    {wch_colour_font[0]},
+                    {wch_colour_font[1]},
+                    {wch_colour_font[2]}, 0.75
+                );
+                font-size: {fontsize}px;
+                border-radius: 7px;
+                padding-top: 30px;
+                padding-bottom: 30px;
+                line-height:25px;
+                display: flex;
+                align-items: center;
+                justify-content: center;'>
+                <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+            """
+            st.markdown(htmlstr, unsafe_allow_html=True)
+        except:
+            pass
 
 
     ## top songs graph

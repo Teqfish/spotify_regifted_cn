@@ -12,7 +12,7 @@ import ast
 from PIL import Image
 from plotly_calplot import calplot
 import country_converter as coco
-
+import random
 from streamlit_carousel import carousel
 
 
@@ -25,6 +25,7 @@ df_track = pd.read_csv('datasets/info_clean/info_track_clean.csv')
 df_album = pd.read_csv('datasets/info_clean/info_album_clean.csv')
 df_artist = pd.read_csv('datasets/info_clean/info_artist_genre_fix.csv')
 df_info = pd.read_csv('datasets/info_clean/trk_alb_art.csv')
+df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 
 # User Megas
 df_mega_ben = pd.read_csv('datasets/user_clean/BG_df_mega.csv')
@@ -1382,6 +1383,34 @@ elif page == "FUN":
     # project title
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
 
+    ## random event generator ##
+    df = users[user_selected][users[user_selected]['category'] == 'music']
+    df_event['datetime'] = pd.to_datetime(df_event['Datetime'], format='%Y-%m-%d')
+    df['date'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S UTC').dt.normalize()
+
+    st.markdown("## Random Event Selector")
+
+    if st.button("Pick a Random Event"):
+      # Selecting random event
+      random_event = df_event.sample(n=1)
+      # Extracting event details
+      event_date = random_event.iloc[0]['datetime']
+      event_year = random_event.iloc[0]['Year']
+      event_name = random_event.iloc[0]['Event']
+      display_date = event_date.strftime('%d %B %Y')
+    
+      # Display the selected event
+      st.write(f"**On {display_date}, {event_name}, you listened to:**")
+
+      # Match random event date to user's music listening history
+      df_music_event = df[df['date'] == event_date]
+     
+      # Display matched music history
+      if  len(df_music_event) == 0 :
+          st.write("No matching music history found for this date.")
+      else:
+          st.dataframe(df_music_event[['track_name', 'artist_name', 'album_name', 'minutes_played']].sort_values(by='minutes_played', ascending=False))
+    ## end of random event generator ##
 
 
 # ------------------------- About Us Page ------------------------- #

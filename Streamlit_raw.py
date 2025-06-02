@@ -27,8 +27,8 @@ df_artist = pd.read_csv('datasets/info_clean/info_artist_genre_fix.csv')
 df_info = pd.read_csv('datasets/info_clean/trk_alb_art.csv')
 
 # Podcasts, Audiobooks, Events
-df_podcast = pd.read_csv("/Users/beng/code/bebby95/spotify_regifted/info_tables/info_podcast.csv") # "datasets/info_clean/info_podcast.csv" after push
-df_audiobook = pd.read_csv("/Users/beng/code/bebby95/spotify_regifted/info_tables/info_audiobook.csv") # "datasets/info_clean/info_audiobook.csv" after push
+df_podcast = pd.read_csv('info_tables/info_podcast.csv') #  after push
+df_audiobook = pd.read_csv("info_tables/info_audiobook.csv") #  after push
 df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 
 
@@ -326,11 +326,11 @@ elif page == "Overall Review":
         elif mode == 'audiobook':
             audiobook_image_list = []
             df['hours_played'] = round(df['minutes_played'] / 60, 2)
-            df = df[df['category'] == 'audiobook'].groupby('audiobook_title', as_index=False)['hours_played'].sum()
+            df = df[df['category'] == 'audiobook'].groupby('audiobook_uri', as_index=False)['hours_played'].sum()
             df = df.sort_values(by='hours_played', ascending=False).head(10).reset_index(drop=True)
-            df.rename(columns={'audiobook_title': 'audiobook_name'}, inplace=True)
+            df.rename(columns={'audiobook_uri': 'audiobook_name'}, inplace=True)
             info_audiobook = pd.read_csv('info_tables/info_audiobook.csv')
-            df = df.merge(info_audiobook, on='audiobook_name', how='left')
+            df = df.merge(info_audiobook, on='audiobook_uri', how='left')
             st.dataframe(df)
             
             for idx, audiobook in enumerate(df["audiobook_name"], start=1):
@@ -339,7 +339,7 @@ elif page == "Overall Review":
                     title=f"",
                     df_filter = info_audiobook[info_audiobook.audiobook_name == audiobook],
                     
-                    #img = info_audiobook[info_audiobook.audiobook_name == audiobook].audiobook_artwork.values[0]
+                    img = info_audiobook[info_audiobook.audiobook_name == audiobook].audiobook_artwork.values[0]
                 ))
 
             # Create a carousel of audiobook images
@@ -453,6 +453,7 @@ elif page == "Per Year":
     
     df_grouped = df_grouped.sort_values(by='minutes_played', ascending=False)
     df_grouped['hours_played'] = round(df_grouped['minutes_played'] / 60, 2)
+    df_grouped = df_grouped[df_grouped['hours_played'] > 1]  
 
     # make top 10 based on hours played showing image, scorecard for comparison to last year ('first year lsitened to' if first year) and duration listened to
 
@@ -523,19 +524,34 @@ elif page == "Per Year":
     with st.expander("See data"):
         if selected_category == 'music':
             st.dataframe(df_grouped[['artist_name','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
+            fig_artists = px.bar(
+            df_grouped.head(10),
+            x="artist_name",
+            y="minutes_played",
+            labels={"artist_name": "Artist", "minutes_played": "Minutes Played"},
+            title=f"{user_selected}'s top 10 artists for {selected_year}:",
+            color_discrete_sequence=["#32CD32"])
         elif selected_category == 'podcast':
             st.dataframe(df_grouped[['episode_show_name','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
+            fig_artists = px.bar(
+            df_grouped.head(10),
+            x="episode_show_name",
+            y="minutes_played",
+            labels={"episode_show_name": "Podcast", "minutes_played": "Minutes Played"},
+            title=f"{user_selected}'s top 10 artists for {selected_year}:",
+            color_discrete_sequence=["#32CD32"])
         elif selected_category == 'audiobook':
             st.dataframe(df_grouped[['artist_name','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
+            fig_artists = px.bar(
+            df_grouped.head(10),
+            x="artist_name",
+            y="minutes_played",
+            labels={"artist_name": "Artist", "minutes_played": "Minutes Played"},
+            title=f"{user_selected}'s top 10 artists for {selected_year}:",
+            color_discrete_sequence=["#32CD32"])
         
         
-        fig_artists = px.bar(
-        df_grouped.head(10),
-        x="artist_name",
-        y="minutes_played",
-        labels={"artist_name": "Artist", "minutes_played": "Minutes Played"},
-        title=f"{user_selected}'s top 10 artists for {selected_year}:",
-        color_discrete_sequence=["#32CD32"])
+
 
 
     ## top 5 per year breakdowns ##
@@ -560,7 +576,7 @@ elif page == "Per Year":
     elif selected_category == "podcast":
      ## Top 5 artists in podcast category in horizontal bar graph##
      top_podcasts = df_podcasts.groupby('episode_show_name')['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
-     fig_podcast = px.bar(top_podcasts.head(10) ,x="minutes_played", y ="episode_name", title=f"Top {len(top_podcasts.head(10))} Podcast Episodes of {selected_year}", color_discrete_sequence=["#32CD32"], hover_data='episode_show_name', labels={'episode_name': 'Episode Name', 'episode_show_name': 'Podcast Show Name', "minutes_played": "Minutes Played"})
+     fig_podcast = px.bar(top_podcasts.head(10) ,x="minutes_played", y ="episode_show_name", title=f"Top {len(top_podcasts.head(10))} Podcast Episodes of {selected_year}", color_discrete_sequence=["#32CD32"], hover_data='episode_show_name', labels={'episode_name': 'Episode Name', 'episode_show_name': 'Podcast Show Name', "minutes_played": "Minutes Played"})
      fig_podcast.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
      fig_podcast.update_yaxes(categoryorder='total ascending')
      st.plotly_chart(fig_podcast, use_container_width=True)
@@ -593,11 +609,7 @@ elif page == "Per Year":
     df['datetime'] = pd.to_datetime(df['datetime'])
     df['year'] = df['datetime'].dt.year
 
-    # Category selection
-    categories = ['music','podcast']
-    if 'audiobook' in df['category'].unique():
-        categories.append('audiobook')
-    selected_category = st.selectbox("Choose a category to explore:", categories)
+
 
     # Map category to correct "title" field
     if selected_category == "music":

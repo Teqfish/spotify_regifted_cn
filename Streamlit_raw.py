@@ -867,7 +867,6 @@ elif page == "Per Artist":
         except:
             pass
 
-
     ## top songs graph
     top_songs = df_music[df_music.artist_name == artist_selected].groupby("track_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
@@ -876,6 +875,7 @@ elif page == "Per Artist":
     fig_top_songs.update_layout(yaxis_title=None)
     fig_top_songs.update_layout(xaxis_title="Total Minutes") 
     st.write(fig_top_songs)
+
 
     ## top albums graph
     top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()

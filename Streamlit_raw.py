@@ -318,9 +318,11 @@ users = load_csv_dataframes()
 
 # ------------------------- Home Page ------------------------- #
 if page == "Home":
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    
+    col1,col2,col3 = st.columns([3, 3, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=400)
     st.markdown("<h1 style='text-align: center; '>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center; font-size: 32px; '>This app analyzes your Spotify data and provides insights into your listening habits. Select a user to get started.</h1>", unsafe_allow_html=True)
 
     ## fundtion to create user selector ##
     user_index, user_selected = create_user_selector(users, label='User:')
@@ -333,9 +335,6 @@ if page == "Home":
     date_end = users[user_selected]['datetime'].max().date()
     start_day = date_start.strftime("%d %B %Y")
     end_day = date_end.strftime("%d %B %Y")
-
-    st.header(f"Welcome to Spotify Regifted {user_selected}!! This app is designed to analyze your Spotify data and provide insights into your listening habits. You can explore your overall listening patterns, year-by-year breakdowns, artist-specific analyses, and more. You have provided your listening history from {start_day} to {end_day} available for us to look at. That's {total_listened:.2f} hours of your listening for us to dive into! Please select a page from the sidebar to explore your Spotify data.")
-    st.markdown("<h1 style='text-align: center; font-size: 10px; '>(All data shared with Spotify Regifted™ is now property of the Spotify Regifted™ team to do with what they please)</h1>", unsafe_allow_html=True)
 
 # -------------------------------- CN UPLOADER --------------------------------- #
 
@@ -364,9 +363,10 @@ if page == "Home":
 
 
     user_filename = st.text_input(
+    
+        "Your Name Here:",
+        value=None,
 
-        "Enter a name for your dataset:",
-        value="spotify_data",
         help="This will be used as the base filename for saving your data"
     )
 
@@ -390,7 +390,7 @@ if page == "Home":
 
     # Display selected dataset (if a user is selected)
     if user_selected and users:
-        st.header("3. View Selected Dataset")
+        st.header("3. Scroll up and Select Your Dataset")
 
         df = users[user_selected]
 
@@ -413,7 +413,9 @@ elif page == "Overall Review":
     st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
     # Get current user from session state (NO SELECTBOX)
 
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=200)
 
 
     # Set page title and header
@@ -760,7 +762,9 @@ elif page == "Per Year":
     # Show current user info
     st.info(f"📅 Yearly analysis for: **{user_selected}** (change user on Home page)")
 
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=200)
     st.title("Your Yearly Deep-Dive:")
     st.markdown("This section allows you to analyze Spotify data by year.")
 
@@ -1055,7 +1059,9 @@ elif page == "Per Artist":
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
     # project titel
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=200)
 
     ## start content
     # Load user-specific music data, select relevant columns
@@ -1326,7 +1332,9 @@ elif page == "Per Album":
     user_selected = get_current_user(users)
     st.info(f"🎵 Artist analysis for: **{user_selected}**")
     # project titel
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=200)
 
     # Load user-specific data
     df = users[user_selected]# make music df
@@ -1567,7 +1575,9 @@ elif page == "Basic-O-Meter":
     user_selected = get_current_user(users)
     st.info(f"📈 Basic-O-Meter for: **{user_selected}**")
 
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=200)
     st.title("The Basic-O-Meter")
     st.markdown("Let's find out how basic your music taste is!")
 
@@ -1789,7 +1799,9 @@ elif page == "FUN":
     user_selected = get_current_user(users)
     st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
     # project title
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=200)
 
     ## random event generator ##
     df = users[user_selected][users[user_selected]['category'] == 'music']
@@ -1867,7 +1879,9 @@ elif page == "FUN":
 # ------------------------- About Us Page ------------------------- #
 elif page == "AbOuT uS":
 
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=200)
     st.title("About Us")
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
     st.write("Feel free to reach out for any questions or collaborations.")
@@ -1880,7 +1894,9 @@ elif page == "Charlies Play Place":
     st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
 
     # Page title
-    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
+    with col2:
+        st.image('media_images/logo_correct.png', width=200)
 
     # Load data
     listening_df = pd.read_csv("datasets/user_clean/ReRe_20250602_164123.csv")

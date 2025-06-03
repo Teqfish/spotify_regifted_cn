@@ -23,6 +23,7 @@ from pathlib import Path
 import json
 from datetime import datetime, timedelta
 import pickle
+import re
 # from chart_hit_scorer import chart_hit_scorer
 
 
@@ -44,7 +45,7 @@ df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 ##page navigation##
 st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Regifted Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "FUN", "AbOuT uS","Charlies Play Place"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "Basic-O-Meter", "FUN", "AbOuT uS","Charlies Play Place"])
 
 # Timestamp string to add to saved files
 def generate_timestamp():
@@ -414,7 +415,7 @@ if page == "Home":
 elif page == "Overall Review":
     # show current user info#
     user_selected = get_current_user(users)
-    
+
     # Get current user from session state (NO SELECTBOX)
 
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -570,7 +571,7 @@ elif page == "Overall Review":
                 .head(10)
                 .rename(columns={'artist_name': 'Artist', 'hours_played': 'Total Hours Listened'})
                 .reset_index(drop=True)
-                
+
             )
             top_music['rank'] = list(range(1, len(top_music) + 1))
             top_music = top_music[['rank', 'Artist', 'Total Hours Listened']]
@@ -1088,7 +1089,7 @@ elif page == "Per Artist":
     ## page set up
     # Get current user from session state
     user_selected = get_current_user(users)
- 
+
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
@@ -1600,12 +1601,255 @@ elif page == "Per Album":
     fig_line.update_layout(xaxis_title="Month", yaxis_title="Minutes Played", legend_title_text="Year")
     st.plotly_chart(fig_line,use_container_width=True)
 
+
+# ------------------------- Per Genre ----------------------------------------#
+elif page == "Per Genre":
+    # Get current user from session state (NO SELECTBOX)
+    # Select user
+    user_selected = get_current_user(users)
+    user_df = users[user_selected].copy()
+    df = users[user_selected].copy()
+
+
+    # ------------------------- Sunburst Chart Page ------------------------- #
+
+    df = pd.merge(df, df_info, left_on=["track_name","album_name","artist_name"],
+                right_on=["track_name","album_name","artist_name"], how="left", suffixes=["","_remove"])
+
+    # Ensure datetime and extract year
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['year'] = df['datetime'].dt.year
+
+    # Explode genres into separate rows
+    df_exploded = df.explode('super_genre').dropna(subset=['super_genre'])
+    df_exploded['super_genre'] = df_exploded['super_genre'].astype(str).str.strip()
+
+    # --- FILTER: TOP GENRES & ARTISTS & TRACKS ---
+
+    # Top 5 genres per year
+    top_genres = (
+        df_exploded.groupby(['year', 'super_genre'], as_index=False)['ms_played']
+        .sum()
+        .sort_values(['year', 'ms_played'], ascending=[True, False])
+        .groupby('year')
+        .head(5)
+    )
+
+    # Filter to top genres only
+    df_filtered = df_exploded.merge(top_genres[['year', 'super_genre']], on=['year', 'super_genre'])
+
+    # Top 5 artists per (year, genre)
+    top_artists = (
+        df_filtered.groupby(['year', 'super_genre', 'artist_name'], as_index=False)['ms_played']
+        .sum()
+        .sort_values(['year', 'super_genre', 'ms_played'], ascending=[True, True, False])
+        .groupby(['year', 'super_genre'])
+        .head(5)
+    )
+
+    # Filter to top artists only
+    df_filtered_artists = df_filtered.merge(
+        top_artists[['year', 'super_genre', 'artist_name']],
+        on=['year', 'super_genre', 'artist_name']
+    )
+
+    # Top 5 tracks per (year, genre, artist) - Fixed grouping and filtering
+    top_tracks = (
+        df_filtered_artists.groupby(['year', 'super_genre', 'artist_name', 'track_name'], as_index=False)['ms_played']
+        .sum()
+        .sort_values(['year', 'super_genre', 'artist_name', 'ms_played'], ascending=[True, True, True, False])
+        .groupby(['year', 'super_genre', 'artist_name'])  # Group by year, genre, AND artist
+        .head(5)
+    )
+
+    # --- BUILD SUNBURST CHART ---
+
+    fig = px.sunburst(
+        top_tracks,  # Use top_tracks instead of top_artists
+        path=['year', 'super_genre', 'artist_name', 'track_name'],  # Add track_name to path
+        values='ms_played',
+        color='ms_played',
+        color_continuous_scale=[
+            '#0F521A',
+            '#E6F5C7',
+        ],
+        title='🎧 Listening History: Year → Genre → Artist → Track (Spotify Style)'
+    )
+
+    # Make text more visible on dark background
+    fig.update_traces(
+        insidetextfont=dict(color='black'),
+        hovertemplate='<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>'
+    )
+
+    # Maximize layout size
+    fig.update_layout(
+        margin=dict(t=50, l=0, r=0, b=0),
+        height=800,
+        font=dict(color='black')
+    )
+
+    st.title("🎶 Spotify-Themed Listening Sunburst")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # MOST LISTENED TO HOURS OF THE DAY
+    # (Rest of your code remains the same)
+
+    # Convert 'datetime' to datetime type if needed
+    df['datetime'] = pd.to_datetime(df['datetime'])
+
+    # Extract hour and year
+    df['hour'] = df['datetime'].dt.hour
+    df['year'] = df['datetime'].dt.year
+
+    # Get list of available years
+    years = sorted(df['year'].unique())
+
 # ------------------------- Basic-O-Meter Page ------------------------- #
 elif page == "Basic-O-Meter":
-    # Get current user from session state
+
+    # Show current user info
     user_selected = get_current_user(users)
 
+    # ----------------------Chart_scorer --------- #
+    # load the pickles!!!
+    def load_latest_user_pickles(user_selected, folder="datasets/chart_scores"):
+        """Loads the most recent all_points and summary_stats pickle files for the given user."""
 
+        # Pattern to match filenames: Username_YYYYMMDD_HHMMSS_all_points.pkl
+        points_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_all_points\.pkl$")
+        summary_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_summary_stats\.pkl$")
+
+        # Find matching files and timestamps
+        timestamps = []
+        for f in os.listdir(folder):
+            match = points_pattern.match(f)
+            if match:
+                timestamps.append(match.group(1))  # Extract timestamp string
+
+        if not timestamps:
+            st.error(f"No chart data found for user '{user_selected}'.")
+            return None, None
+
+        # Sort timestamps to get the latest one
+        latest_ts = sorted(timestamps)[-1]
+
+        # Build final filepaths
+        points_file = f"{user_selected}_{latest_ts}_all_points.pkl"
+        summary_file = f"{user_selected}_{latest_ts}_summary_stats.pkl"
+
+        points_path = os.path.join(folder, points_file)
+        summary_path = os.path.join(folder, summary_file)
+
+        # Load both pickle files
+        with open(points_path, "rb") as f:
+            all_points_dfs = pickle.load(f)
+
+        with open(summary_path, "rb") as f:
+            summary_stats = pickle.load(f)
+
+        return all_points_dfs, summary_stats
+    # Show current user info
+    user_selected = get_current_user(users)
+
+    all_points_dfs, summary_stats = load_latest_user_pickles(user_selected)
+
+    if all_points_dfs is None or summary_stats is None:
+        st.stop()  # don't break me in none found
+
+    window_sizes = [7, 30, 61, 91, 182, 365]
+
+    # Create label-to-value mapping, e.g., "7 days" → 7
+    window_label_map = {f"{w} days": w for w in window_sizes}
+    label_list = list(window_label_map.keys())
+
+    # Default to the shortest window (or whatever you prefer)
+    default_label = f"{min(window_sizes)} days"
+
+    # Show segmented control
+    selected_label = st.segmented_control(
+        "Chart Match Window",
+        label_list,
+        selection_mode="single",
+        default=default_label)
+
+    # Get corresponding numeric window size
+    selected_window = window_label_map[selected_label]
+
+    # These now correctly match the dict keys
+    points_df = all_points_dfs[f'points_df_{selected_window}']
+    stats = summary_stats[f'summary_{selected_window}']
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Total Points", f"{stats['total_points']:,.0f}")
+    with col2:
+        st.metric("Chart Hit Rate", f"{stats['chart_hit_rate']:.1%}")
+    with col3:
+        st.metric("Chart Song Listens", f"{stats['chart_listens']:,}")
+    with col4:
+        st.metric("Avg Points/Listen", f"{stats['avg_points']:.1f}")
+
+    # Filter controls
+    st.subheader("Filter Results")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        show_only_hits = st.checkbox("Show only chart hits", value=False)
+        search_artist = st.text_input("Search artist", placeholder="Enter artist name...")
+
+    # Apply filters
+    filtered_df = points_df.copy()
+    if show_only_hits:
+        filtered_df = filtered_df[filtered_df['points_awarded'] > 0]
+    # if min_points > 0:
+    #     filtered_df = filtered_df[filtered_df['points_awarded'] >= min_points]
+    if search_artist:
+        filtered_df = filtered_df[filtered_df['artist_name'].str.contains(search_artist, case=False, na=False)]
+
+    # Top-performing songs
+    chart_hits = points_df[points_df['points_awarded'] > 0]
+    if not chart_hits.empty:
+        st.subheader("Top Performing Songs")
+        top_songs = chart_hits.groupby(['artist_name', 'track_name']).agg({
+            'points_awarded': 'sum',
+            'chart_weeks_matched': 'mean',
+            'datetime': 'count'
+        }).reset_index()
+        top_songs.columns = ['Artist', 'Track', 'Total Points', 'Avg Chart Weeks', 'Listen Count']
+        top_songs = top_songs.sort_values('Total Points', ascending=False).head(10)
+
+        st.dataframe(top_songs, use_container_width=True, hide_index=True)
+
+        # Charts
+        col1, col2 = st.columns(2)
+
+        with col1:
+            daily_points = chart_hits.copy()
+            daily_points['date'] = daily_points['datetime'].dt.date
+            daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
+
+            fig_timeline = px.line(
+                daily_summary,
+                x='date',
+                y='points_awarded',
+                title='Points Earned Over Time',
+                labels={'points_awarded': 'Points', 'date': 'Date'}
+            )
+            st.plotly_chart(fig_timeline, use_container_width=True)
+
+        with col2:
+            artist_points = chart_hits.groupby('artist_name')['points_awarded'].sum().sort_values(ascending=True).tail(10)
+            fig_artists = px.bar(
+                x=artist_points.values,
+                y=artist_points.index,
+                orientation='h',
+                title='Top 10 Artists by Points',
+                labels={'x': 'Total Points', 'y': 'Artist'}
+            )
+            st.plotly_chart(fig_artists, use_container_width=True)
+
+# ----------------------- old basic --------------- #
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
         st.image('media_images/logo_correct.png', width=200)
@@ -1828,7 +2072,7 @@ elif page == "Basic-O-Meter":
 elif page == "FUN":
     # Show current user info
     user_selected = get_current_user(users)
-    
+
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
@@ -1920,139 +2164,101 @@ elif page == "AbOuT uS":
 
 # ------------------------charlies play page ------------------------#
 elif page == "Charlies Play Place":
+
+    # load the pickles!!!
+    def load_latest_user_pickles(user_selected, folder="datasets/chart_scores"):
+        """Loads the most recent all_points and summary_stats pickle files for the given user."""
+
+        # Pattern to match filenames: Username_YYYYMMDD_HHMMSS_all_points.pkl
+        points_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_all_points\.pkl$")
+        summary_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_summary_stats\.pkl$")
+
+        # Find matching files and timestamps
+        timestamps = []
+        for f in os.listdir(folder):
+            match = points_pattern.match(f)
+            if match:
+                timestamps.append(match.group(1))  # Extract timestamp string
+
+        if not timestamps:
+            st.error(f"No chart data found for user '{user_selected}'.")
+            return None, None
+
+        # Sort timestamps to get the latest one
+        latest_ts = sorted(timestamps)[-1]
+
+        # Build final filepaths
+        points_file = f"{user_selected}_{latest_ts}_all_points.pkl"
+        summary_file = f"{user_selected}_{latest_ts}_summary_stats.pkl"
+
+        points_path = os.path.join(folder, points_file)
+        summary_path = os.path.join(folder, summary_file)
+
+        # Load both pickle files
+        with open(points_path, "rb") as f:
+            all_points_dfs = pickle.load(f)
+
+        with open(summary_path, "rb") as f:
+            summary_stats = pickle.load(f)
+
+        return all_points_dfs, summary_stats
+
     # Show current user info
     user_selected = get_current_user(users)
-    
+    all_points_dfs, summary_stats = load_latest_user_pickles(user_selected)
 
-    with open("datasets/chart_scores/ReRe_20250602_164123_all_points.pkl", "rb") as f:
-        all_points_dfs = pickle.load(f)
+    if all_points_dfs is None or summary_stats is None:
+        st.stop()  # don't break me in none found
 
-    with open("datasets/chart_scores/ReRe_20250602_164123_summary_stats.pkl", "rb") as f:
-        summary_stats = pickle.load(f)
+    window_sizes = [7, 30, 61, 91, 182, 365]
 
-    # Page title
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image('media_images/logo_correct.png', width=200)
+    # Create label-to-value mapping, e.g., "7 days" → 7
+    window_label_map = {f"{w} days": w for w in window_sizes}
+    label_list = list(window_label_map.keys())
 
+    # Default to the shortest window (or whatever you prefer)
+    default_label = f"{min(window_sizes)} days"
 
+    # Show segmented control
+    selected_label = st.segmented_control(
+        "Chart Match Window",
+        label_list,
+        selection_mode="single",
+        default=default_label)
 
-# >>>>>>>>>>>>> DON'T RUN THE CALC LIVE OFF STREAMLIT
+    # Get corresponding numeric window size
+    selected_window = window_label_map[selected_label]
 
-# listening_df = pd.read_csv("datasets/user_clean/Charlie_20250603_131714.csv")
-# charts_df = pd.read_csv("datasets/info_clean/info_charts_weighted.csv")
-
-# # Clean and convert datetime columns
-# listening_df["datetime"] = pd.to_datetime(listening_df["datetime"]).dt.tz_localize(None)
-# charts_df['weekdate'] = pd.to_datetime(charts_df['weekdate'], errors='coerce')
-# charts_df = charts_df.dropna(subset=['weekdate'])
-# listening_df['artist_name'] = listening_df['artist_name'].fillna('').str.lower().str.strip()
-# listening_df['track_name'] = listening_df['track_name'].fillna('').str.lower().str.strip()
-
-# # Window sizes
-# window_size = [365, 182, 91, 61, 30, 7]
-
-# # To store all results
-# all_points_dfs = {}
-# summary_stats = {}
-
-# for w in window_size:
-#     results = []
-
-#     for idx, listen_row in listening_df.iterrows():
-#         listen_datetime = listen_row['datetime']
-#         artist = listen_row['artist_name']
-#         track = listen_row['track_name']
-
-#         window_start = pd.Timestamp(listen_datetime - timedelta(days=w))
-#         window_end = pd.Timestamp(listen_datetime)
-
-#         chart_matches = charts_df[
-#             (charts_df['artist_name'] == artist) &
-#             (charts_df['track_name'] == track) &
-#             (charts_df['weekdate'] >= window_start) &
-#             (charts_df['weekdate'] <= window_end)
-#         ]
-
-#         total_points = chart_matches['weighting'].sum() if not chart_matches.empty else 0
-
-#         results.append({
-#             'datetime': listen_datetime,
-#             'artist_name': artist,
-#             'track_name': track,
-#             'points_awarded': total_points,
-#             'chart_weeks_matched': len(chart_matches),
-#             'best_position': chart_matches['position'].min() if not chart_matches.empty else None
-#         })
-
-#     # Big old results dataframe
-#     df = pd.DataFrame(results)
-#     all_points_dfs[f'points_df_{w}'] = df
-
-    # Agg stats
-    total_listens = len(all_points_dfs)
-    chart_listens = len(all_points_dfs[all_points_dfs['points_awarded'] > 0])
-    total_points = all_points_dfs['points_awarded'].sum()
-    avg_points = all_points_dfs['points_awarded'].mean()
-    chart_hit_rate = chart_listens / total_listens if total_listens > 0 else 0
-
-#     summary_stats[f'summary_{w}'] = {
-#     'total_listens': total_listens,
-#     'chart_listens': chart_listens,
-#     'total_points': total_points,
-#     'avg_points': avg_points,
-#     'chart_hit_rate': chart_hit_rate
-# #     }
+    # These now correctly match the dict keys
+    points_df = all_points_dfs[f'points_df_{selected_window}']
+    stats = summary_stats[f'summary_{selected_window}']
 
     col1, col2, col3, col4 = st.columns(4)
+
     with col1:
-        st.metric("Total Points", f"{total_points:,.0f}")
+        st.metric("Total Points", f"{stats['total_points']:,.0f}")
     with col2:
-        st.metric("Chart Hit Rate", f"{chart_hit_rate:.1%}")
+        st.metric("Chart Hit Rate", f"{stats['chart_hit_rate']:.1%}")
     with col3:
-        st.metric("Chart Song Listens", f"{chart_listens:,}")
+        st.metric("Chart Song Listens", f"{stats['chart_listens']:,}")
     with col4:
-        st.metric("Avg Points/Listen", f"{avg_points:.1f}")
+        st.metric("Avg Points/Listen", f"{stats['avg_points']:.1f}")
 
     # Filter controls
     st.subheader("Filter Results")
     col1, col2, col3 = st.columns(3)
     with col1:
         show_only_hits = st.checkbox("Show only chart hits", value=False)
-    with col2:
-        min_points = st.number_input("Min points filter", min_value=0, value=0)
-    with col3:
         search_artist = st.text_input("Search artist", placeholder="Enter artist name...")
 
     # Apply filters
     filtered_df = points_df.copy()
     if show_only_hits:
         filtered_df = filtered_df[filtered_df['points_awarded'] > 0]
-    if min_points > 0:
-        filtered_df = filtered_df[filtered_df['points_awarded'] >= min_points]
+    # if min_points > 0:
+    #     filtered_df = filtered_df[filtered_df['points_awarded'] >= min_points]
     if search_artist:
         filtered_df = filtered_df[filtered_df['artist_name'].str.contains(search_artist, case=False, na=False)]
-
-    # Display results table
-    st.subheader("Detailed Results")
-    display_df = filtered_df.copy()
-    display_df['datetime'] = display_df['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
-    display_df = display_df.rename(columns={
-        'datetime': 'Listen Date/Time',
-        'artist_name': 'Artist',
-        'track_name': 'Track',
-        'points_awarded': 'Points',
-        'chart_weeks_matched': 'Chart Weeks',
-        'best_position': 'Best Position'
-    })
-
-    st.dataframe(
-        display_df[['Listen Date/Time', 'Artist', 'Track', 'Points', 'Chart Weeks', 'Best Position']],
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.caption(f"Showing {len(filtered_df):,} of {len(points_df):,} listening instances")
 
     # Top-performing songs
     chart_hits = points_df[points_df['points_awarded'] > 0]

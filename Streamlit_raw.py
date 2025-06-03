@@ -53,8 +53,8 @@ df_mega_josh = pd.read_csv('datasets/user_clean/JQ_df_mega.csv')
 #users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, "Tom": df_mega_tom, "Hugh": df_mega_hugh, "Josh": df_mega_josh }
 
 ##page navigatrion##
-st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
-st.sidebar.title("Spotify Regifted")
+st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
+st.sidebar.title("Regifted Navigation")
 page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "FUN", "AbOuT uS","Charlies Play Place"])
 
 # Timestamp string to add to saved files

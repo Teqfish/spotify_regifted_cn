@@ -21,7 +21,7 @@ import random
 import string
 from pathlib import Path
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 ##Connecting to the Google Cloud BigQuery##
@@ -222,6 +222,7 @@ def run_cleaning_pipeline(df, dataset_name):
         cleaned_df = cleaned_df.rename(columns={'master_metadata_album_artist_name': 'artist_name'})
         cleaned_df = cleaned_df.rename(columns={'master_metadata_album_album_name': 'album_name'})
         # cast datetime to datetime
+        # >>>>>>>>>>>>> .dt.tz_localize(None) - if you want to lose the local time detail
         cleaned_df['datetime'] = pd.to_datetime(cleaned_df['datetime'])
         # create name column
         cleaned_df['username'] = user_filename
@@ -608,11 +609,11 @@ elif page == "Overall Review":
 
             # Aggregate hours played per audiobook
             df_grouped = df.groupby(['audiobook_title', 'audiobook_uri'], as_index=False)['hours_played'].sum()
-            
+
 
             # Sort and take top 10
             df_grouped = df_grouped.sort_values(by='hours_played', ascending=False).head(10).reset_index(drop=True)
-            
+
             # Load image info and merge
             info_audiobook = pd.read_csv('info_tables/info_audiobook.csv')
             merged_df = pd.merge(df_grouped, info_audiobook[['audiobook_uri', 'audiobook_artwork']], on='audiobook_uri', how='left')
@@ -624,7 +625,7 @@ elif page == "Overall Review":
                     title='',
                     img=row['audiobook_artwork']
                 ))
-            
+
 
             # Create a carousel of audiobook images
             if audiobook_image_list:
@@ -778,7 +779,7 @@ elif page == "Per Year":
         st.markdown("<h3 style='color: white;'>Hours Played</h3>", unsafe_allow_html=True)
 
     if selected_category == 'audiobook':
-        
+
         # Merge with audiobook info to get images
         df_audiobook_uri = df_grouped.merge(df_audiobook, on='audiobook_uri', how='left')
 
@@ -814,7 +815,7 @@ elif page == "Per Year":
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
 
-                f"{name}</div>", 
+                f"{name}</div>",
 
 
                 unsafe_allow_html=True
@@ -828,7 +829,7 @@ elif page == "Per Year":
             elif selected_category == 'audiobook':
 
                 hours_played = df_top10.loc[df_top10['audiobook_title'] == name, 'hours_played'].values[0]
-            
+
 
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
@@ -1774,5 +1775,157 @@ elif page == "Charlies Play Place":
     # Show current user info
     user_selected = get_current_user(users)
     st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
-    # project title
+
+    # Page title
     st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)
+
+    # Load data
+    listening_df = pd.read_csv("datasets/user_clean/ReRe_20250602_164123.csv")
+    charts_df = pd.read_csv("datasets/info_clean/info_charts_weighted.csv")
+
+
+# >>>>>>>>>>>>> DON' RUN THE CALC LIVE OFF STREAMLIT
+    # Convert datetime columns
+    listening_df["datetime"] = pd.to_datetime(listening_df["datetime"]).dt.tz_localize(None)
+    charts_df['weekdate'] = pd.to_datetime(charts_df['weekdate'], errors='coerce')
+    charts_df = charts_df.dropna(subset=['weekdate'])
+
+# DEBUGGER!!!!!!!!
+    # st.write("WEEKDATE dtype:", charts_df['weekdate'].dtype)
+    # st.write("listening date dtype:", listening_df['datetime'].dtype)
+    # st.write(charts_df['weekdate'].head())
+    # st.write(listening_df['datetime'].head())
+
+#     listening_df = listening_df.dropna(subset=['datetime'])
+
+    window_size = 30
+    results = []
+
+    # Calculate chart points
+    for idx, listen_row in listening_df.iterrows():
+        listen_datetime = listen_row['datetime']
+        artist = listen_row['artist_name']
+        track = listen_row['track_name']
+
+        # Convert window edges to pandas timestamps
+        window_start = pd.Timestamp(listen_datetime - timedelta(days=window_size))
+        window_end = pd.Timestamp(listen_datetime + timedelta(days=window_size))
+
+        chart_matches = charts_df[
+            (charts_df['artist_name'] == artist) &
+            (charts_df['track_name'] == track) &
+            (charts_df['weekdate'] >= window_start) &
+            (charts_df['weekdate'] <= window_end)
+]
+
+        total_points = chart_matches['weighting'].sum() if not chart_matches.empty else 0
+
+        results.append({
+            'datetime': listen_datetime,
+            'artist_name': artist,
+            'track_name': track,
+            'points_awarded': total_points,
+            'chart_weeks_matched': len(chart_matches),
+            'best_position': chart_matches['position'].min() if not chart_matches.empty else None
+        })
+
+    points_df = pd.DataFrame(results)
+
+    # Summary metrics
+    total_listens = len(points_df)
+    chart_listens = len(points_df[points_df['points_awarded'] > 0])
+    total_points = points_df['points_awarded'].sum()
+    avg_points = points_df['points_awarded'].mean()
+    chart_hit_rate = chart_listens / total_listens if total_listens > 0 else 0
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Points", f"{total_points:,.0f}")
+    with col2:
+        st.metric("Chart Hit Rate", f"{chart_hit_rate:.1%}")
+    with col3:
+        st.metric("Chart Song Listens", f"{chart_listens:,}")
+    with col4:
+        st.metric("Avg Points/Listen", f"{avg_points:.1f}")
+
+    # Filter controls
+    st.subheader("Filter Results")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        show_only_hits = st.checkbox("Show only chart hits", value=False)
+    with col2:
+        min_points = st.number_input("Min points filter", min_value=0, value=0)
+    with col3:
+        search_artist = st.text_input("Search artist", placeholder="Enter artist name...")
+
+    # Apply filters
+    filtered_df = points_df.copy()
+    if show_only_hits:
+        filtered_df = filtered_df[filtered_df['points_awarded'] > 0]
+    if min_points > 0:
+        filtered_df = filtered_df[filtered_df['points_awarded'] >= min_points]
+    if search_artist:
+        filtered_df = filtered_df[filtered_df['artist_name'].str.contains(search_artist, case=False, na=False)]
+
+    # Display results table
+    st.subheader("Detailed Results")
+    display_df = filtered_df.copy()
+    display_df['datetime'] = display_df['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    display_df = display_df.rename(columns={
+        'datetime': 'Listen Date/Time',
+        'artist_name': 'Artist',
+        'track_name': 'Track',
+        'points_awarded': 'Points',
+        'chart_weeks_matched': 'Chart Weeks',
+        'best_position': 'Best Position'
+    })
+
+    st.dataframe(
+        display_df[['Listen Date/Time', 'Artist', 'Track', 'Points', 'Chart Weeks', 'Best Position']],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(f"Showing {len(filtered_df):,} of {len(points_df):,} listening instances")
+
+    # Top-performing songs
+    chart_hits = points_df[points_df['points_awarded'] > 0]
+    if not chart_hits.empty:
+        st.subheader("Top Performing Songs")
+        top_songs = chart_hits.groupby(['artist_name', 'track_name']).agg({
+            'points_awarded': 'sum',
+            'chart_weeks_matched': 'mean',
+            'datetime': 'count'
+        }).reset_index()
+        top_songs.columns = ['Artist', 'Track', 'Total Points', 'Avg Chart Weeks', 'Listen Count']
+        top_songs = top_songs.sort_values('Total Points', ascending=False).head(10)
+
+        st.dataframe(top_songs, use_container_width=True, hide_index=True)
+
+        # Charts
+        col1, col2 = st.columns(2)
+
+        with col1:
+            daily_points = chart_hits.copy()
+            daily_points['date'] = daily_points['datetime'].dt.date
+            daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
+
+            fig_timeline = px.line(
+                daily_summary,
+                x='date',
+                y='points_awarded',
+                title='Points Earned Over Time',
+                labels={'points_awarded': 'Points', 'date': 'Date'}
+            )
+            st.plotly_chart(fig_timeline, use_container_width=True)
+
+        with col2:
+            artist_points = chart_hits.groupby('artist_name')['points_awarded'].sum().sort_values(ascending=True).tail(10)
+            fig_artists = px.bar(
+                x=artist_points.values,
+                y=artist_points.index,
+                orientation='h',
+                title='Top 10 Artists by Points',
+                labels={'x': 'Total Points', 'y': 'Artist'}
+            )
+            st.plotly_chart(fig_artists, use_container_width=True)

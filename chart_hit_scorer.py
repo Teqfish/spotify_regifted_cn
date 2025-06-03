@@ -1,21 +1,24 @@
-# Full set of window sizes
-
-import pandas as pd
-import json
-from datetime import datetime, timedelta
-import os
-from pathlib import Path
-import pickle
+# >>>>>>>>>>>> Chart scorer <<<<<<<<<<<<< #
 
 # Needs to be triggered by upload button in streamlit_raw.py
 # Searches for new cleaned csv from user_clean directory
 # Returns two pickles of chart scores to chart_scores directory
 
-user_clean = Path("datasets/user_clean/ReRe_20250602_164123.csv")
-listening_df = pd.read_csv("datasets/user_clean/ReRe_20250602_164123.csv")
-charts_df = pd.read_csv("datasets/info_clean/info_charts_weighted.csv")
+def chart_hit_scorer(user):
 
-def chart_hit_scorer("""user_clean path"""):
+    import pandas as pd
+    import json
+    from datetime import datetime, timedelta
+    import os
+    from pathlib import Path
+    import pickle
+    from Streamlit_raw import clean_csv_path
+
+    # import data
+    user_clean = clean_csv_path
+    listening_df = pd.read_csv(clean_csv_path)
+    charts_df = pd.read_csv("datasets/info_clean/info_charts_weighted.csv")
+
     # Clean and convert datetime columns
     listening_df["datetime"] = pd.to_datetime(listening_df["datetime"]).dt.tz_localize(None)
     charts_df['weekdate'] = pd.to_datetime(charts_df['weekdate'], errors='coerce')

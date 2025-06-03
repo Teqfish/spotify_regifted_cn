@@ -569,11 +569,17 @@ elif page == "Overall Review":
             info_artist = pd.read_csv('info_tables/info_artist.csv')
 
             for idx, artist in enumerate(df["artist_name"], start=1):
-                artist_image_list.append(dict(
-                    text=f'{artist}',
-                    title=f"#{idx}",
-                    img=info_artist[info_artist.artist_name == artist].artist_image.values[0]
-                ))
+                try:
+                    artist_image_list.append(dict(
+                        text=f'{artist}',
+                        title=f"#{idx}",
+                        img=info_artist[info_artist.artist_name == artist].artist_image.values[0]
+                    ))
+                except:
+                    artist_image_list.append(dict(
+                        text=f'{artist} image not found',
+                        title=f"#{idx}",
+                        img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
 
             # Create a carousel of artist images
             if artist_image_list:
@@ -586,13 +592,18 @@ elif page == "Overall Review":
             df = df[df['category'] == 'podcast'].groupby('episode_show_name', as_index=False)['hours_played'].sum()
             df = df.sort_values(by='hours_played', ascending=False).head(10).reset_index(drop=True)
             info_podcast = pd.read_csv('info_tables/info_podcast.csv')
-
-            for idx, podcast in enumerate(df["episode_show_name"], start=1):
-                podcast_image_list.append(dict(
+            try:
+                for idx, podcast in enumerate(df["episode_show_name"], start=1):
+                    podcast_image_list.append(dict(
                     text=f'',
                     title=f"",
-                    img=info_podcast[info_podcast.podcast_name == podcast].podcast_artwork.values[0]
-                ))
+                    img=info_podcast[info_podcast.podcast_name == podcast].podcast_artwork.values[0]))
+            except:
+                podcast_image_list.append(dict(
+                    text=f'{podcast} image not found',
+                    title=f"#{idx}",
+                    img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
+
 
             if podcast_image_list:
                 carousel(items=podcast_image_list,container_height=550)
@@ -619,12 +630,20 @@ elif page == "Overall Review":
             merged_df = pd.merge(df_grouped, info_audiobook[['audiobook_uri', 'audiobook_artwork']], on='audiobook_uri', how='left')
             #st.dataframe(df)
             # Build image list
-            for idx, row in merged_df.iterrows():
-                audiobook_image_list.append(dict(
+            try:
+                for idx, audiobook in merged_df.iterrows():
+                    audiobook_image_list.append(dict(
                     text='',
                     title='',
-                    img=row['audiobook_artwork']
+                    img=audiobook['audiobook_artwork']
                 ))
+
+            except:
+                audiobook_image_list.append(dict(
+                    text=f'{audiobook} image not found',
+                    title=f"#{idx}",
+                    img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
+
 
 
             # Create a carousel of audiobook images
@@ -678,7 +697,7 @@ elif page == "Overall Review":
     fig = px.choropleth(df_country, locations="country_iso",
                     color="hours_played", # lifeExp is a column of gapminder
                     hover_name="country", # column to add to hover information
-                    range_color=[0, df_country['hours_played'].iloc[0] / df_country['hours_played'].iloc[1]],
+                    range_color=[0, 20],
                     color_continuous_scale=px.colors.sequential.Inferno_r,  # Use a color scale
     )
     fig.update_layout(geo_bgcolor = "#0d100e", margin=dict(t=50, l=0, r=0, b=0), height=800,)  # Adjust margins)
@@ -796,10 +815,18 @@ elif page == "Per Year":
                 image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
         elif selected_category == 'podcast':
             name = row['episode_show_name']
-            image_url = df_podcast[df_podcast['podcast_name'] == name]['podcast_artwork'].values[0]
+            try:
+                image_url = df_podcast[df_podcast['podcast_name'] == name]['podcast_artwork'].values[0]
+            except:
+                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
+
         elif selected_category == 'audiobook':
-            name = row['audiobook_title']
-            image_url = df_audiobook_uri[df_audiobook_uri['audiobook_title'] == name]['audiobook_artwork'].values[0]
+            try:
+                name = row['audiobook_title']
+                image_url = df_audiobook_uri[df_audiobook_uri['audiobook_title'] == name]['audiobook_artwork'].values[0]
+            except:
+                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
+
 
 
 
@@ -1759,6 +1786,49 @@ elif page == "FUN":
       else:
           st.dataframe(df_music_event[['track_name', 'artist_name', 'album_name', 'minutes_played']].sort_values(by='minutes_played', ascending=False))
     ## end of random event generator ##
+
+    ##most skipped song Scorecard##
+    ## df grouped by year
+    df['date'] = pd.to_datetime(df['datetime']).dt.date
+    df['year'] = pd.to_datetime(df['datetime']).dt.year
+    year_list = df['year'].sort_values().unique().tolist()
+    selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=df['year'].max())
+    df_filtered = df[df['year'] == selected_year]
+    df_music = df_filtered[df_filtered['category'] == 'music']
+    most_skipped = (df_music[df_music['skipped'] > 0].groupby(['track_name', 'artist_name'])['skipped'].sum().reset_index().sort_values(by='skipped', ascending=False).head(1))
+
+    ## box stolen from the internet
+    st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)
+    wch_colour_box = (64, 64, 64)
+    wch_colour_font = (255, 255, 255)
+    #wch_colour_font = (50, 205, 50)
+    fontsize = 38
+    valign = "left"
+    iconname = "fas fa-star"
+    i = (most_skipped['track_name'].values[0] + ' by ' + most_skipped['artist_name'].values[0] if not most_skipped.empty else "No skipped tracks")
+
+    htmlstr = f"""
+          <p style='background-color: rgb(
+              {wch_colour_box[0]},
+              {wch_colour_box[1]},
+              {wch_colour_box[2]}, 0.75
+          );
+          color: rgb(
+              {wch_colour_font[0]},
+              {wch_colour_font[1]},
+              {wch_colour_font[2]}, 0.75
+          );
+          font-size: {fontsize}px;
+          border-radius: 7px;
+          padding-top: 40px;
+          padding-bottom: 40px;
+          line-height:25px;
+          display: flex;
+          align-items: center;
+          justify-content: center;'>
+          <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+      """
+    st.markdown(htmlstr, unsafe_allow_html=True)
 
 
 # ------------------------- About Us Page ------------------------- #

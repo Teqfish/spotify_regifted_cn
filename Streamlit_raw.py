@@ -1785,6 +1785,49 @@ elif page == "FUN":
           st.dataframe(df_music_event[['track_name', 'artist_name', 'album_name', 'minutes_played']].sort_values(by='minutes_played', ascending=False))
     ## end of random event generator ##
 
+    ##most skipped song Scorecard##
+    ## df grouped by year
+    df['date'] = pd.to_datetime(df['datetime']).dt.date
+    df['year'] = pd.to_datetime(df['datetime']).dt.year
+    year_list = df['year'].sort_values().unique().tolist()
+    selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=df['year'].max())
+    df_filtered = df[df['year'] == selected_year]
+    df_music = df_filtered[df_filtered['category'] == 'music']
+    most_skipped = (df_music[df_music['skipped'] > 0].groupby(['track_name', 'artist_name'])['skipped'].sum().reset_index().sort_values(by='skipped', ascending=False).head(1))
+
+    ## box stolen from the internet
+    st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)
+    wch_colour_box = (64, 64, 64)
+    wch_colour_font = (255, 255, 255)
+    #wch_colour_font = (50, 205, 50)
+    fontsize = 38
+    valign = "left"
+    iconname = "fas fa-star"
+    i = (most_skipped['track_name'].values[0] + ' by ' + most_skipped['artist_name'].values[0] if not most_skipped.empty else "No skipped tracks")
+
+    htmlstr = f"""
+          <p style='background-color: rgb(
+              {wch_colour_box[0]}, 
+              {wch_colour_box[1]}, 
+              {wch_colour_box[2]}, 0.75
+          ); 
+          color: rgb(
+              {wch_colour_font[0]}, 
+              {wch_colour_font[1]}, 
+              {wch_colour_font[2]}, 0.75
+          ); 
+          font-size: {fontsize}px;    
+          border-radius: 7px; 
+          padding-top: 40px; 
+          padding-bottom: 40px; 
+          line-height:25px;
+          display: flex;
+          align-items: center;
+          justify-content: center;'>
+          <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+      """
+    st.markdown(htmlstr, unsafe_allow_html=True)
+
 
 # ------------------------- About Us Page ------------------------- #
 elif page == "AbOuT uS":

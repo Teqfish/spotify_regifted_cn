@@ -1806,7 +1806,7 @@ elif page == "FUN":
     ## random event generator ##
     df = users[user_selected][users[user_selected]['category'] == 'music']
     df_event['datetime'] = pd.to_datetime(df_event['Datetime'], format='%Y-%m-%d')
-    df['date'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S UTC').dt.normalize()
+    df['date'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S+00:00').dt.normalize()
 
     st.markdown("## Random Event Selector")
 

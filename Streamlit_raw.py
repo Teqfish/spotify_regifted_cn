@@ -45,7 +45,7 @@ df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 ##page navigation##
 st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Regifted Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "Basic-O-Meter", "FUN", "AbOuT uS","Charlies Play Place"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "Individualism", "FUN", "AbOuT uS"])
 
 # Timestamp string to add to saved files
 def generate_timestamp():
@@ -1380,14 +1380,14 @@ elif page == "Per Album":
     df_music["date"] = pd.to_datetime(df_music.datetime).dt.date
 
     # list of artists ranked by play time
-    
+
     ##artist selection##
 
     col1, col2 = st.columns([0.7,1])
 
     with col1:
-      
-      
+
+
       artist_list = list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"])
       artist_selected = st.selectbox(
       'Artist:', options=list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index()["artist_name"]), index=0
@@ -1395,13 +1395,13 @@ elif page == "Per Album":
 
       album_selected = st.selectbox(
       'Album:', options=list(df_music[df_music['artist_name']==artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()["album_name"]), index=0)
-      
+
       ## first listened to
 
       # get first listening info
       df_first = df_music.sort_values(by='datetime',ascending=True).groupby("album_name").first().reset_index()
       df_last = df_music.sort_values(by='datetime',ascending=False).groupby("album_name").first().reset_index()
-      
+
             ### Total minutes listened
       ## box stolen from the internet
       st.markdown("<h4>Minutes Listened:</h4>", unsafe_allow_html=True)
@@ -1624,8 +1624,7 @@ elif page == "Per Genre":
     user_df = users[user_selected].copy()
     df = users[user_selected].copy()
 
-
-    # ------------------------- Sunburst Chart Page ------------------------- #
+    # >>>>>>>> NESTED SUNBURST
 
     df = pd.merge(df, df_info, left_on=["track_name","album_name","artist_name"],
                 right_on=["track_name","album_name","artist_name"], how="left", suffixes=["","_remove"])
@@ -1720,10 +1719,98 @@ elif page == "Per Genre":
     years = sorted(df['year'].unique())
 
 # ------------------------- Basic-O-Meter Page ------------------------- #
-elif page == "Basic-O-Meter":
+elif page == "Individualism":
 
     # Show current user info
     user_selected = get_current_user(users)
+    df = users[user_selected]
+
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
+        st.image('media_images/logo_correct.png', width=200)
+    st.title("The Basic-O-Meter")
+    st.markdown("Let's find out how basic your music taste is!")
+
+# define df as working variable for current user
+    df = users[user_selected]
+
+# join info to current user
+    df = pd.merge(df,df_info,left_on=["track_name","album_name","artist_name"],right_on=["track_name","album_name","artist_name"],how="left",suffixes=["","_remove"])
+
+# making the sliders
+    df['year'] = pd.to_datetime(df['datetime']).dt.year
+    min_year, max_year = df['year'].min(), df['year'].max()
+    selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
+
+# Prepare the data
+    df_filtered = df[df['year'] == selected_year]
+    df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
+    df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
+
+# datetime to month
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['year_month'] = df['datetime'].dt.to_period('M').dt.to_timestamp()
+
+# Aggregate
+    month_art_pop = df.groupby('year_month')['artist_popularity'].mean().reset_index()
+    month_trk_pop = df.groupby('year_month')['track_popularity'].mean().reset_index()
+
+
+# Scorecards
+# Overall average artist popularity metric method 1
+    track_pop_overall = round((df.groupby("track_name")["track_popularity"].mean()).mean(),2)
+
+# Overall average artist popularity metric method 2
+    art_pop_overall = round((df.groupby("artist_name")["artist_popularity"].mean()).mean(),2)
+
+# Display the scorecards
+    st.subheader("Scorecard title here")
+    a, b = st.columns(2)
+    c, d = st.columns(2)
+
+    a.metric("Average track popularity", value=track_pop_overall, delta="-12", border=True)
+    b.metric("Average artist popularity", value=art_pop_overall, delta="-13", border=True)
+    c.metric("metric C", value="Farts", delta="5%", border=True)
+    d.metric("metric D", "Smell", "-2 inHg", border=True)
+
+# CHART OF POPULISM ACROSS TIME
+    st.markdown("<h2 style='text-align: center; color: #32CD32;'>Artist and Track Popularity Over Time</h2>", unsafe_allow_html=True)
+    st.subheader(f"Here's a chart tracking {user_selected}'s _basicity_ over time")
+
+# Create figure
+    fig = go.Figure()
+
+# Add artist popularity line
+    fig.add_trace(go.Scatter(
+        x=month_art_pop['year_month'],
+        y=month_art_pop['artist_popularity'],
+        mode='lines',
+        name='Artist Popularity',
+        hovertemplate='Month: %{x|%B %Y}<br>Artist Popularity: %{y:.1f}<extra></extra>'
+    ))
+
+# Add track popularity line
+    fig.add_trace(go.Scatter(
+        x=month_trk_pop['year_month'],
+        y=month_trk_pop['track_popularity'],
+        mode='lines',
+        name='Track Popularity',
+        hovertemplate='Month: %{x|%B %Y}<br>Track Popularity: %{y:.1f}<extra></extra>'
+    ))
+
+# Update layout
+    fig.update_layout(
+        title='Average Artist and Track Popularity Over Time',
+        xaxis_title='Month',
+        yaxis_title='Average Popularity',
+        colorway=["#32CD32", "#199144"],
+        legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)', font=dict(color='white')),
+        hovermode="x",
+        hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white")),
+        # template='plotly_dark'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 
     # ----------------------Chart_scorer --------- #
     # load the pickles!!!
@@ -1863,225 +1950,6 @@ elif page == "Basic-O-Meter":
             )
             st.plotly_chart(fig_artists, use_container_width=True)
 
-# ----------------------- old basic --------------- #
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image('media_images/logo_correct.png', width=200)
-    st.title("The Basic-O-Meter")
-    st.markdown("Let's find out how basic your music taste is!")
-
-# define df as working variable for current user
-    df = users[user_selected]
-
-# join info to current user
-    df = pd.merge(df,df_info,left_on=["track_name","album_name","artist_name"],right_on=["track_name","album_name","artist_name"],how="left",suffixes=["","_remove"])
-
-# making the sliders
-    df['year'] = pd.to_datetime(df['datetime']).dt.year
-    min_year, max_year = df['year'].min(), df['year'].max()
-    selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
-
-# Prepare the data
-    df_filtered = df[df['year'] == selected_year]
-    df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
-    df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
-
-# datetime to month
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df['year_month'] = df['datetime'].dt.to_period('M').dt.to_timestamp()
-
-# Aggregate
-    month_art_pop = df.groupby('year_month')['artist_popularity'].mean().reset_index()
-    month_trk_pop = df.groupby('year_month')['track_popularity'].mean().reset_index()
-
-
-# Scorecards
-# Overall average artist popularity metric method 1
-    track_pop_overall = round((df.groupby("track_name")["track_popularity"].mean()).mean(),2)
-
-# Overall average artist popularity metric method 2
-    art_pop_overall = round((df.groupby("artist_name")["artist_popularity"].mean()).mean(),2)
-
-# Display the scorecards
-    st.subheader("Scorecard title here")
-    a, b = st.columns(2)
-    c, d = st.columns(2)
-
-    a.metric("Average track popularity", value=track_pop_overall, delta="-12", border=True)
-    b.metric("Average artist popularity", value=art_pop_overall, delta="-13", border=True)
-    c.metric("metric C", value="Farts", delta="5%", border=True)
-    d.metric("metric D", "Smell", "-2 inHg", border=True)
-
-# CHART OF POPULISM ACROSS TIME
-    st.markdown("<h2 style='text-align: center; color: #32CD32;'>Artist and Track Popularity Over Time</h2>", unsafe_allow_html=True)
-    st.subheader(f"Here's a chart tracking {user_selected}'s _basicity_ over time")
-
-# Create figure
-    fig = go.Figure()
-
-# Add artist popularity line
-    fig.add_trace(go.Scatter(
-        x=month_art_pop['year_month'],
-        y=month_art_pop['artist_popularity'],
-        mode='lines',
-        name='Artist Popularity',
-        hovertemplate='Month: %{x|%B %Y}<br>Artist Popularity: %{y:.1f}<extra></extra>'
-    ))
-
-# Add track popularity line
-    fig.add_trace(go.Scatter(
-        x=month_trk_pop['year_month'],
-        y=month_trk_pop['track_popularity'],
-        mode='lines',
-        name='Track Popularity',
-        hovertemplate='Month: %{x|%B %Y}<br>Track Popularity: %{y:.1f}<extra></extra>'
-    ))
-
-# Update layout
-    fig.update_layout(
-        title='Average Artist and Track Popularity Over Time',
-        xaxis_title='Month',
-        yaxis_title='Average Popularity',
-        colorway=["#32CD32", "#199144"],
-        legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)', font=dict(color='white')),
-        hovermode="x",
-        hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white")),
-        # template='plotly_dark'
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-# ------------------------- Sunburst Chart Page ------------------------- #
-
-    df = pd.merge(df, df_info, left_on=["track_name","album_name","artist_name"],
-                right_on=["track_name","album_name","artist_name"], how="left", suffixes=["","_remove"])
-
-    # Ensure datetime and extract year
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df['year'] = df['datetime'].dt.year
-
-    # Explode genres into separate rows
-    df_exploded = df.explode('super_genre').dropna(subset=['super_genre'])
-    df_exploded['super_genre'] = df_exploded['super_genre'].astype(str).str.strip()
-
-    # --- FILTER: TOP GENRES & ARTISTS & TRACKS ---
-
-    # Top 5 genres per year
-    top_genres = (
-        df_exploded.groupby(['year', 'super_genre'], as_index=False)['ms_played']
-        .sum()
-        .sort_values(['year', 'ms_played'], ascending=[True, False])
-        .groupby('year')
-        .head(5)
-    )
-
-    # Filter to top genres only
-    df_filtered = df_exploded.merge(top_genres[['year', 'super_genre']], on=['year', 'super_genre'])
-
-    # Top 5 artists per (year, genre)
-    top_artists = (
-        df_filtered.groupby(['year', 'super_genre', 'artist_name'], as_index=False)['ms_played']
-        .sum()
-        .sort_values(['year', 'super_genre', 'ms_played'], ascending=[True, True, False])
-        .groupby(['year', 'super_genre'])
-        .head(5)
-    )
-
-    # Filter to top artists only
-    df_filtered_artists = df_filtered.merge(
-        top_artists[['year', 'super_genre', 'artist_name']],
-        on=['year', 'super_genre', 'artist_name']
-    )
-
-    # Top 5 tracks per (year, genre, artist) - Fixed grouping and filtering
-    top_tracks = (
-        df_filtered_artists.groupby(['year', 'super_genre', 'artist_name', 'track_name'], as_index=False)['ms_played']
-        .sum()
-        .sort_values(['year', 'super_genre', 'artist_name', 'ms_played'], ascending=[True, True, True, False])
-        .groupby(['year', 'super_genre', 'artist_name'])  # Group by year, genre, AND artist
-        .head(5)
-    )
-
-    # --- BUILD SUNBURST CHART ---
-
-    fig = px.sunburst(
-        top_tracks,  # Use top_tracks instead of top_artists
-        path=['year', 'super_genre', 'artist_name', 'track_name'],  # Add track_name to path
-        values='ms_played',
-        color='ms_played',
-        color_continuous_scale=[
-            '#0F521A',
-            '#E6F5C7',
-        ],
-        title='🎧 Listening History: Year → Genre → Artist → Track (Spotify Style)'
-    )
-
-    # Make text more visible on dark background
-    fig.update_traces(
-        insidetextfont=dict(color='black'),
-        hovertemplate='<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>'
-    )
-
-    # Maximize layout size
-    fig.update_layout(
-        margin=dict(t=50, l=0, r=0, b=0),
-        height=800,
-        font=dict(color='black')
-    )
-
-    st.title("🎶 Spotify-Themed Listening Sunburst")
-    st.plotly_chart(fig, use_container_width=True)
-
-    # MOST LISTENED TO HOURS OF THE DAY
-    # (Rest of your code remains the same)
-
-    # Convert 'datetime' to datetime type if needed
-    df['datetime'] = pd.to_datetime(df['datetime'])
-
-    # Extract hour and year
-    df['hour'] = df['datetime'].dt.hour
-    df['year'] = df['datetime'].dt.year
-
-    # Get list of available years
-    years = sorted(df['year'].unique())
-
-    # Streamlit layout
-    st.title("Listening Activity by Hour of Day")
-
-    # Sidebar with radio buttons for year filter
-    selected_year = st.radio("Select Year", years)
-
-    # Filter data by selected year
-    df_filtered = df[df['year'] == selected_year]
-
-    # Group by hour and sum listening time (convert ms to minutes)
-    hourly_data = (
-        df_filtered.groupby('hour')['ms_played']
-        .sum()
-        .reset_index()
-    )
-    hourly_data['minutes_played'] = hourly_data['ms_played'] / (1000 * 60)
-
-    # Fill in missing hours with zero minutes (if any)
-    all_hours = pd.DataFrame({'hour': range(24)})
-    hourly_data = all_hours.merge(hourly_data, on='hour', how='left').fillna(0)
-
-    # Plotly bar chart
-    fig = px.bar(
-        hourly_data,
-        x='hour',
-        y='minutes_played',
-        labels={'hour': 'Hour of Day', 'minutes_played': 'Minutes Listened'},
-        title=f"Minutes Listened per Hour in {selected_year}",
-        template='plotly_dark'
-    )
-
-    fig.update_layout(xaxis=dict(tickmode='linear'))
-
-    # Show chart in Streamlit
-    st.plotly_chart(fig, use_container_width=True)
-
-    df = users[user_selected]
-
 # ---------------------FUN Page--------------------- #
 elif page == "FUN":
     # Show current user info
@@ -2174,144 +2042,3 @@ elif page == "AbOuT uS":
     st.title("About Us")
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
     st.write("Feel free to reach out for any questions or collaborations.")
-
-
-# ------------------------charlies play page ------------------------#
-elif page == "Charlies Play Place":
-
-    # load the pickles!!!
-    def load_latest_user_pickles(user_selected, folder="datasets/chart_scores"):
-        """Loads the most recent all_points and summary_stats pickle files for the given user."""
-
-        # Pattern to match filenames: Username_YYYYMMDD_HHMMSS_all_points.pkl
-        points_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_all_points\.pkl$")
-        summary_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_summary_stats\.pkl$")
-
-        # Find matching files and timestamps
-        timestamps = []
-        for f in os.listdir(folder):
-            match = points_pattern.match(f)
-            if match:
-                timestamps.append(match.group(1))  # Extract timestamp string
-
-        if not timestamps:
-            st.error(f"No chart data found for user '{user_selected}'.")
-            return None, None
-
-        # Sort timestamps to get the latest one
-        latest_ts = sorted(timestamps)[-1]
-
-        # Build final filepaths
-        points_file = f"{user_selected}_{latest_ts}_all_points.pkl"
-        summary_file = f"{user_selected}_{latest_ts}_summary_stats.pkl"
-
-        points_path = os.path.join(folder, points_file)
-        summary_path = os.path.join(folder, summary_file)
-
-        # Load both pickle files
-        with open(points_path, "rb") as f:
-            all_points_dfs = pickle.load(f)
-
-        with open(summary_path, "rb") as f:
-            summary_stats = pickle.load(f)
-
-        return all_points_dfs, summary_stats
-
-    # Show current user info
-    user_selected = get_current_user(users)
-    all_points_dfs, summary_stats = load_latest_user_pickles(user_selected)
-
-    if all_points_dfs is None or summary_stats is None:
-        st.stop()  # don't break me in none found
-
-    window_sizes = [7, 30, 61, 91, 182, 365]
-
-    # Create label-to-value mapping, e.g., "7 days" → 7
-    window_label_map = {f"{w} days": w for w in window_sizes}
-    label_list = list(window_label_map.keys())
-
-    # Default to the shortest window (or whatever you prefer)
-    default_label = f"{min(window_sizes)} days"
-
-    # Show segmented control
-    selected_label = st.segmented_control(
-        "Chart Match Window",
-        label_list,
-        selection_mode="single",
-        default=default_label)
-
-    # Get corresponding numeric window size
-    selected_window = window_label_map[selected_label]
-
-    # These now correctly match the dict keys
-    points_df = all_points_dfs[f'points_df_{selected_window}']
-    stats = summary_stats[f'summary_{selected_window}']
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("Total Points", f"{stats['total_points']:,.0f}")
-    with col2:
-        st.metric("Chart Hit Rate", f"{stats['chart_hit_rate']:.1%}")
-    with col3:
-        st.metric("Chart Song Listens", f"{stats['chart_listens']:,}")
-    with col4:
-        st.metric("Avg Points/Listen", f"{stats['avg_points']:.1f}")
-
-    # Filter controls
-    st.subheader("Filter Results")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        show_only_hits = st.checkbox("Show only chart hits", value=False)
-        search_artist = st.text_input("Search artist", placeholder="Enter artist name...")
-
-    # Apply filters
-    filtered_df = points_df.copy()
-    if show_only_hits:
-        filtered_df = filtered_df[filtered_df['points_awarded'] > 0]
-    # if min_points > 0:
-    #     filtered_df = filtered_df[filtered_df['points_awarded'] >= min_points]
-    if search_artist:
-        filtered_df = filtered_df[filtered_df['artist_name'].str.contains(search_artist, case=False, na=False)]
-
-    # Top-performing songs
-    chart_hits = points_df[points_df['points_awarded'] > 0]
-    if not chart_hits.empty:
-        st.subheader("Top Performing Songs")
-        top_songs = chart_hits.groupby(['artist_name', 'track_name']).agg({
-            'points_awarded': 'sum',
-            'chart_weeks_matched': 'mean',
-            'datetime': 'count'
-        }).reset_index()
-        top_songs.columns = ['Artist', 'Track', 'Total Points', 'Avg Chart Weeks', 'Listen Count']
-        top_songs = top_songs.sort_values('Total Points', ascending=False).head(10)
-
-        st.dataframe(top_songs, use_container_width=True, hide_index=True)
-
-        # Charts
-        col1, col2 = st.columns(2)
-
-        with col1:
-            daily_points = chart_hits.copy()
-            daily_points['date'] = daily_points['datetime'].dt.date
-            daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
-
-            fig_timeline = px.line(
-                daily_summary,
-                x='date',
-                y='points_awarded',
-                title='Points Earned Over Time',
-                labels={'points_awarded': 'Points', 'date': 'Date'}
-            )
-            st.plotly_chart(fig_timeline, use_container_width=True)
-
-        with col2:
-            artist_points = chart_hits.groupby('artist_name')['points_awarded'].sum().sort_values(ascending=True).tail(10)
-            fig_artists = px.bar(
-                x=artist_points.values,
-                y=artist_points.index,
-                orientation='h',
-                title='Top 10 Artists by Points',
-                labels={'x': 'Total Points', 'y': 'Artist'}
-            )
-            st.plotly_chart(fig_artists, use_container_width=True)

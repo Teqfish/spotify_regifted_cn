@@ -45,7 +45,7 @@ df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 ##page navigation##
 st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Regifted Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "Individualism", "FUN", "AbOuT uS"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "Individuality", "FUN", "AbOuT uS"])
 
 # Timestamp string to add to saved files
 def generate_timestamp():
@@ -305,7 +305,7 @@ if 'dataframes_dict' not in st.session_state:
 # Load datasets at the beginning of each page load
 users = load_csv_dataframes()
 
-# ------------------------- Home Page ------------------------- #
+# ------------------------------- Home Page ---------------------------------- #
 if page == "Home":
 
     col1,col2,col3 = st.columns([3, 3, 3], vertical_alignment='center')
@@ -347,9 +347,6 @@ if page == "Home":
             )
         else:
             audiobook=None
-
-
-
 
     user_filename = st.text_input(
 
@@ -403,15 +400,14 @@ if page == "Home":
         if rows == 'All':
             st.dataframe(df)
         else:
-            st.dataframe(df.head(int(rows)))
+            st.dataframe(df.sample(int(rows)))
 
     elif users:
         st.info("Select a user dataset from the dropdown above to view the data.")
     else:
         st.info("No datasets loaded. Upload a zip file or check if there are existing CSV files in the 'user_clean' directory.")
 
-
-# --------------------------- Overall Review Page ------------------------- #
+# --------------------------- Overall Review Page ---------------------------- #
 elif page == "Overall Review":
     # show current user info#
     user_selected = get_current_user(users)
@@ -781,7 +777,7 @@ elif page == "Overall Review":
 
         st.dataframe(df_country[df_country['country'] != 'not found'].dropna().sort_values(by='hours_played', ascending=False), use_container_width=True)
 
-# --------------------------- Per Year Page ------------------------- #
+# ----------------------------- Per Year Page -------------------------------- #
 elif page == "Per Year":
     # Get current user from session state (NO SELECTBOX)
     # Select user
@@ -1083,7 +1079,7 @@ elif page == "Per Year":
     # Show chart
     st.plotly_chart(fig, use_container_width=True)
 
-# ------------------------- Per Artist Page ------------------------- #
+# ---------------------------- Per Artist Page ------------------------------- #
 elif page == "Per Artist":
 
     ## page set up
@@ -1360,7 +1356,7 @@ elif page == "Per Artist":
         fig_cal = calplot(df_day, x = "date", y = "minutes_played")
         st.plotly_chart(fig_cal, use_container_width=True)
 
-# ------------------------- Per Album Page ------------------------- #
+# ---------------------------- Per Album Page -------------------------------- #
 elif page == "Per Album":
 
     # Get current user from session state
@@ -1615,8 +1611,7 @@ elif page == "Per Album":
     fig_line.update_layout(xaxis_title="Month", yaxis_title="Minutes Played", legend_title_text="Year")
     st.plotly_chart(fig_line,use_container_width=True)
 
-
-# ------------------------- Per Genre ----------------------------------------#
+# ------------------------------ Per Genre ------------------------------------#
 elif page == "Per Genre":
     # Get current user from session state (NO SELECTBOX)
     # Select user
@@ -1718,8 +1713,8 @@ elif page == "Per Genre":
     # Get list of available years
     years = sorted(df['year'].unique())
 
-# ------------------------- Basic-O-Meter Page ------------------------- #
-elif page == "Individualism":
+# -------------------------- Individuality Page ------------------------------ #
+elif page == "Individuality":
 
     # Show current user info
     user_selected = get_current_user(users)
@@ -1812,10 +1807,10 @@ elif page == "Individualism":
     st.plotly_chart(fig, use_container_width=True)
 
 
-    # ----------------------Chart_scorer --------- #
+    # >>>>>>>>>>>>>>  Chart_scorer --------- #
+
     # load the pickles!!!
     def load_latest_user_pickles(user_selected, folder="datasets/chart_scores"):
-        """Loads the most recent all_points and summary_stats pickle files for the given user."""
 
         # Pattern to match filenames: Username_YYYYMMDD_HHMMSS_all_points.pkl
         points_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_all_points\.pkl$")
@@ -1922,35 +1917,71 @@ elif page == "Individualism":
 
         st.dataframe(top_songs, use_container_width=True, hide_index=True)
 
-        # Charts
-        col1, col2 = st.columns(2)
+        artist_points = chart_hits.groupby('artist_name')['points_awarded'].sum().sort_values(ascending=True).tail(10)
+        fig_artists = px.bar(
+            x=artist_points.values,
+            y=artist_points.index,
+            orientation='h',
+            title='Top 10 Artists by Points',
+            labels={'x': 'Total Points', 'y': 'Artist'}
+        )
+        st.plotly_chart(fig_artists, use_container_width=True)
 
-        with col1:
-            daily_points = chart_hits.copy()
-            daily_points['date'] = daily_points['datetime'].dt.date
-            daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
+# --------------------------
+        # Prepare daily summary
+        daily_points = chart_hits.copy()
+        daily_points['date'] = daily_points['datetime'].dt.date
+        daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
 
-            fig_timeline = px.line(
-                daily_summary,
-                x='date',
-                y='points_awarded',
-                title='Points Earned Over Time',
-                labels={'points_awarded': 'Points', 'date': 'Date'}
-            )
-            st.plotly_chart(fig_timeline, use_container_width=True)
+        # Add year and "day-of-year" style plotting column (preserves month/day but ignores actual year)
+        daily_summary['year'] = pd.to_datetime(daily_summary['date']).dt.year
+        daily_summary['month_day'] = pd.to_datetime(daily_summary['date']).apply(lambda x: x.replace(year=2000))
 
-        with col2:
-            artist_points = chart_hits.groupby('artist_name')['points_awarded'].sum().sort_values(ascending=True).tail(10)
-            fig_artists = px.bar(
-                x=artist_points.values,
-                y=artist_points.index,
-                orientation='h',
-                title='Top 10 Artists by Points',
-                labels={'x': 'Total Points', 'y': 'Artist'}
-            )
-            st.plotly_chart(fig_artists, use_container_width=True)
+        # Create full Jan–Dec date range to reindex against
+        full_md_range = pd.date_range('2000-01-01', '2000-12-31', freq='D')
 
-# ---------------------FUN Page--------------------- #
+        # Generate zero-filled data for each year
+        all_years = []
+
+        for year, group in daily_summary.groupby('year'):
+            group = group.set_index('month_day').reindex(full_md_range, fill_value=0).reset_index()
+            group['year'] = year
+            group.rename(columns={'index': 'month_day'}, inplace=True)
+            all_years.append(group)
+
+        # Concatenate into one DataFrame
+        plot_df = pd.concat(all_years, ignore_index=True)
+
+        # Filter only the selected years (or include all for setup)
+        years = sorted(plot_df['year'].unique())
+        latest_year = max(years)
+
+        # Create figure manually to control trace visibility
+        fig_timeline = go.Figure()
+
+        for year in years:
+            year_data = plot_df[plot_df['year'] == year]
+            fig_timeline.add_trace(go.Scatter(
+                x=year_data['month_day'],
+                y=year_data['points_awarded'],
+                mode='lines',
+                name=str(year),
+                visible=True if year == latest_year else 'legendonly'
+            ))
+
+        fig_timeline.update_layout(
+            title='Points Earned Over the Year (Toggle Years via Legend)',
+            xaxis=dict(
+                title='Date (Jan–Dec)',
+                tickformat='%b',
+                dtick='M1'
+            ),
+            yaxis_title='Points',
+            legend_title='Year'
+        )
+
+        st.plotly_chart(fig_timeline, use_container_width=True)
+# ------------------------------ FUN Page ------------------------------------ #
 elif page == "FUN":
     # Show current user info
     user_selected = get_current_user(users)
@@ -2032,8 +2063,7 @@ elif page == "FUN":
       """
     st.markdown(htmlstr, unsafe_allow_html=True)
 
-
-# ------------------------- About Us Page ------------------------- #
+# ---------------------------- About Us Page --------------------------------- #
 elif page == "AbOuT uS":
 
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')

@@ -55,14 +55,14 @@ df_mega_josh = pd.read_csv('datasets/user_clean/JQ_df_mega.csv')
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Spotify Regifted")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "FUN", "AbOuT uS"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "FUN", "AbOuT uS","Charlies Play Place"])
 
 # Timestamp string to add to saved files
 def generate_timestamp():
 
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
-# Function to create a user selector for the Home page#
+# Function to create a user selector for the Home page
 def create_user_selector(users, label='User:'):
     """Only for Home page - creates selectbox and updates session state"""
     if 'user_index' not in st.session_state:
@@ -1821,3 +1821,12 @@ elif page == "AbOuT uS":
     st.title("About Us")
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
     st.write("Feel free to reach out for any questions or collaborations.")
+
+
+# ------------------------charlies play page ------------------------#
+elif page == "Charlies Play Place":
+    # Show current user info
+    user_selected = get_current_user(users)
+    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
+    # project title
+    st.markdown("<h1 style='text-align: center; color: #32CD32;'>Spotify Regifted</h1>", unsafe_allow_html=True)

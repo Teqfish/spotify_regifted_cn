@@ -22,6 +22,7 @@ import string
 from pathlib import Path
 import json
 from datetime import datetime, timedelta
+# from chart_hit_scorer import chart_hit_scorer
 
 
 ##Connecting to the Google Cloud BigQuery##
@@ -116,7 +117,7 @@ def process_uploaded_zip(uploaded_file, user_filename):
         except Exception as e:
             st.error(f"Failed to extract zip file: {e}")
             return None
-        
+
         if audiobook:
             try:
                 audiobook_path = os.path.join(extract_dir, audiobook.name)
@@ -130,6 +131,8 @@ def process_uploaded_zip(uploaded_file, user_filename):
         json_files = []
         for root, dirs, files in os.walk(extract_dir):
             for file in files:
+                # if file.startswith('._'):
+                #     continue  # Skip macOS metadata files
                 if file.lower().endswith('.json'):
                     json_files.append(os.path.join(root, file))
 
@@ -343,7 +346,7 @@ if page == "Home":
         help="Upload a zip file containing your Spotify data export"
     )
     col1, col2 = st.columns(2)
-    
+
     with col1:
         add_audiobook = st.toggle("Add Audiobook Data", value=False, help="Upload a single .json with your audiobook listening data")
     with col2:
@@ -352,8 +355,10 @@ if page == "Home":
             "",
             type=['json'],
             help="Upload a json file containing your Spotify data export"
-    )
-                
+            )
+        else:
+            audiobook=None
+
 
 
 
@@ -361,6 +366,7 @@ if page == "Home":
     
         "Your Name Here:",
         value=None,
+
         help="This will be used as the base filename for saving your data"
     )
 
@@ -1843,7 +1849,7 @@ elif page == "FUN":
     ## random event generator ##
     df = users[user_selected][users[user_selected]['category'] == 'music']
     df_event['datetime'] = pd.to_datetime(df_event['Datetime'], format='%Y-%m-%d')
-    df['date'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S UTC').dt.normalize()
+    df['date'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S+00:00').dt.normalize()
 
     st.markdown("## Random Event Selector")
 
@@ -1941,6 +1947,10 @@ elif page == "Charlies Play Place":
 
 
 # >>>>>>>>>>>>> DON' RUN THE CALC LIVE OFF STREAMLIT
+
+
+
+
     # Convert datetime columns
     listening_df["datetime"] = pd.to_datetime(listening_df["datetime"]).dt.tz_localize(None)
     charts_df['weekdate'] = pd.to_datetime(charts_df['weekdate'], errors='coerce')

@@ -41,6 +41,8 @@ def chart_hit_scorer("""user_clean path"""):
             window_start = pd.Timestamp(listen_datetime - timedelta(days=w))
             window_end = pd.Timestamp(listen_datetime)
 
+# add pre-filter for charts artists in listening history
+
             chart_matches = charts_df[
                 (charts_df['artist_name'] == artist) &
                 (charts_df['track_name'] == track) &

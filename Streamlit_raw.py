@@ -395,10 +395,26 @@ if page == "Home":
         df = users[user_selected]
 
         # Display dataset info
-        st.subheader(f"{user_selected}... This is your _clean_ dataset!!!")
-        st.write(f"{df.shape[0]} listening events")
+        st.subheader(f"{user_selected}... Here is your data!")
+        cl1, cl2, cl3 = st.columns([6,10,2], vertical_alignment='center')
+        with cl1:
+            st.write(f"{df.shape[0]} listening instances")
+        with cl3:
+            rows_toggle = {'10': 10, '25': 25, '50': 50, '100': 100, 'All': None}
+            # create dropdown from rows_toggle
+            rows = st.selectbox(
+                "No. rows:",
+                options=list(rows_toggle.keys()),
+                index=0,
+            )
+        with cl2:
+            if rows == 'All':
+                st.warning("Please do not leave this table on 'All' to reduce lag.")
 
-        st.dataframe(df)
+        if rows == 'All':
+            st.dataframe(df)
+        else:
+            st.dataframe(df.head(int(rows)))
 
     elif users:
         st.info("Select a user dataset from the dropdown above to view the data.")
@@ -410,11 +426,11 @@ if page == "Home":
 elif page == "Overall Review":
     # show current user info#
     user_selected = get_current_user(users)
-    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
+    
     # Get current user from session state (NO SELECTBOX)
 
-    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
-    with col2:
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
         st.image('media_images/logo_correct.png', width=200)
 
 
@@ -542,20 +558,7 @@ elif page == "Overall Review":
         """
         st.markdown(htmlstr, unsafe_allow_html=True)
 
-        # artist_image_list = []
-        # df = df[df['category'] == 'music'].groupby('artist_name', as_index=False)['hours_played'].sum().reset_index().sort_values(by='hours_played', ascending=False).head(10)
-        # info_artist = pd.read_csv('info_tables/info_artist.csv')
-        # for artist in df["artist_name"]:
-        #     artist_image_list.append(dict(
-        #         title=f'{artist}',
-        #         text=f"#{df['artist_name'].index(artist)+1}",
-        #         img = info_artist[info_artist.artist_name == artist].artist_image.values[0]
-        #     ))
-        # # Create a carousel of artist images
-        # if artist_image_list != []:
-        #     carousel( items=artist_image_list)
-        # else:
-        #     st.warning("No artist images available.")
+
 
     col1, col2 = st.columns(2)
     df = users[user_selected]
@@ -569,12 +572,52 @@ elif page == "Overall Review":
 
         ## Graphs here please###
         df['hours_played'] = round(df['minutes_played'] / 60, 2)
+
         if mode == 'music':
-            st.dataframe(df[df['category'] == 'music'].groupby('artist_name')['hours_played'].sum().reset_index().sort_values(by='hours_played', ascending=False).head(10), use_container_width=True,)
+            top_music = (
+                df[df['category'] == 'music']
+                .groupby('artist_name')['hours_played'].sum()
+                .reset_index()
+                .sort_values(by='hours_played', ascending=False)
+                .head(10)
+                .rename(columns={'artist_name': 'Artist', 'hours_played': 'Total Hours Listened'})
+                .reset_index(drop=True)
+                
+            )
+            top_music['rank'] = list(range(1, len(top_music) + 1))
+            top_music = top_music[['rank', 'Artist', 'Total Hours Listened']]
+            st.dataframe(top_music, use_container_width=True, hide_index=True)
+
         elif mode == 'podcast':
-            st.dataframe(df[df['category'] == 'podcast'].groupby('episode_show_name')['hours_played'].sum().reset_index().sort_values(by='hours_played', ascending=False).head(10), use_container_width=True)
+            top_podcasts = (
+                df[df['category'] == 'podcast']
+                .groupby('episode_show_name')['hours_played'].sum()
+                .reset_index()
+                .sort_values(by='hours_played', ascending=False)
+                .head(10)
+                .rename(columns={'episode_show_name': 'Podcast', 'hours_played': 'Total Hours Listened'})
+                .reset_index(drop=True)
+            )
+            top_podcasts['rank'] = list(range(1, len(top_podcasts) + 1))
+            top_podcasts = top_podcasts[['rank', 'Podcast', 'Total Hours Listened']]
+            st.dataframe(top_podcasts, use_container_width=True, hide_index=True)
+
         elif mode == 'audiobook':
-            st.dataframe(df[df['category'] == 'audiobook'].groupby('audiobook_title')['hours_played'].sum().reset_index().sort_values(by='hours_played', ascending=False).head(10), use_container_width=True)
+            top_audiobooks = (
+                df[df['category'] == 'audiobook']
+                .groupby('audiobook_title')['hours_played'].sum()
+                .reset_index()
+                .sort_values(by='hours_played', ascending=False)
+                .head(10)
+                .rename(columns={'audiobook_title': 'Book Title', 'hours_played': 'Total Hours Listened'})
+                .reset_index(drop=True)
+            )
+            top_audiobooks['rank'] = list(range(1, len(top_audiobooks) + 1))
+            top_audiobooks = top_audiobooks[['rank', 'Book Title', 'Total Hours Listened']]
+            st.dataframe(top_audiobooks, use_container_width=True, hide_index=True)
+
+
+
         minutes_by_type = users[user_selected].groupby("category")["minutes_played"].sum().reset_index()
         minutes_by_type['days_played'] = minutes_by_type['minutes_played'] / 60 / 24
         fig = px.pie(
@@ -759,11 +802,11 @@ elif page == "Per Year":
     # Extract year from datetime
     user_df['year'] = pd.to_datetime(user_df['datetime']).dt.year
 
-    # Show current user info
-    st.info(f"📅 Yearly analysis for: **{user_selected}** (change user on Home page)")
 
-    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
-    with col2:
+
+
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
         st.image('media_images/logo_correct.png', width=200)
     st.title("Your Yearly Deep-Dive:")
     st.markdown("This section allows you to analyze Spotify data by year.")
@@ -818,7 +861,7 @@ elif page == "Per Year":
         st.markdown("<h2 style='text-align: center;'>Your Top Bands</h2>", unsafe_allow_html=True)
         top5 = dataset.head(5).reset_index(drop=True)
 
-    col1, col2, col3, col4 = st.columns([1, 3, 4.7, 6])
+    col1, col2, col3, col4 = st.columns([1, 2.5, 7, 2.5])
 
     with col1:
         st.markdown("<h3 style='color: white;'>Rank</h3>", unsafe_allow_html=True)
@@ -837,7 +880,7 @@ elif page == "Per Year":
 
 
     for i, row in df_top10.iterrows():
-        col1, col2, col3, col4 = st.columns([1, 3, 4.7, 6], vertical_alignment='center')
+        col1, col2, col3, col4 = st.columns(([1, 2.5, 7, 1.5]), vertical_alignment='center')
 
         # Determine display name depending on category
         if selected_category == 'music':
@@ -1057,10 +1100,10 @@ elif page == "Per Artist":
     ## page set up
     # Get current user from session state
     user_selected = get_current_user(users)
-    st.info(f"🎵 Artist analysis for: **{user_selected}**")
+ 
     # project titel
-    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
-    with col2:
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
         st.image('media_images/logo_correct.png', width=200)
 
     ## start content
@@ -1330,10 +1373,10 @@ elif page == "Per Album":
 
     # Get current user from session state
     user_selected = get_current_user(users)
-    st.info(f"🎵 Artist analysis for: **{user_selected}**")
+
     # project titel
-    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
-    with col2:
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
         st.image('media_images/logo_correct.png', width=200)
 
     # Load user-specific data
@@ -1573,10 +1616,10 @@ elif page == "Per Album":
 elif page == "Basic-O-Meter":
     # Get current user from session state
     user_selected = get_current_user(users)
-    st.info(f"📈 Basic-O-Meter for: **{user_selected}**")
 
-    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
-    with col2:
+
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
         st.image('media_images/logo_correct.png', width=200)
     st.title("The Basic-O-Meter")
     st.markdown("Let's find out how basic your music taste is!")
@@ -1797,10 +1840,10 @@ elif page == "Basic-O-Meter":
 elif page == "FUN":
     # Show current user info
     user_selected = get_current_user(users)
-    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
+    
     # project title
-    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
-    with col2:
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
         st.image('media_images/logo_correct.png', width=200)
 
     ## random event generator ##
@@ -1879,8 +1922,8 @@ elif page == "FUN":
 # ------------------------- About Us Page ------------------------- #
 elif page == "AbOuT uS":
 
-    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
-    with col2:
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
         st.image('media_images/logo_correct.png', width=200)
     st.title("About Us")
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
@@ -1891,11 +1934,11 @@ elif page == "AbOuT uS":
 elif page == "Charlies Play Place":
     # Show current user info
     user_selected = get_current_user(users)
-    st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
+    
 
     # Page title
-    col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
-    with col2:
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
         st.image('media_images/logo_correct.png', width=200)
 
     # Load data

@@ -50,7 +50,7 @@ df_mega_josh = pd.read_csv('datasets/user_clean/JQ_df_mega.csv')
 
 
 ## Variables##
-users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, "Tom": df_mega_tom, "Hugh": df_mega_hugh, "Josh": df_mega_josh }
+#users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, "Tom": df_mega_tom, "Hugh": df_mega_hugh, "Josh": df_mega_josh }
 
 ##page navigatrion##
 st.set_page_config(page_title="Spotify Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
@@ -116,6 +116,15 @@ def process_uploaded_zip(uploaded_file, user_filename):
         except Exception as e:
             st.error(f"Failed to extract zip file: {e}")
             return None
+        
+        if audiobook:
+            try:
+                audiobook_path = os.path.join(extract_dir, audiobook.name)
+                with open(audiobook_path, 'wb') as f:
+                    f.write(audiobook.getbuffer())
+                st.success(f"Audiobook JSON saved to: {audiobook_path}")
+            except Exception as e:
+                st.warning(f"Failed to save audiobook JSON: {e}")
 
         # Find all JSON files
         json_files = []
@@ -333,8 +342,23 @@ if page == "Home":
         type=['zip'],
         help="Upload a zip file containing your Spotify data export"
     )
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        add_audiobook = st.toggle("Add Audiobook Data", value=False, help="Upload a single .json with your audiobook listening data")
+    with col2:
+        if add_audiobook:
+            audiobook = st.file_uploader(
+            "",
+            type=['json'],
+            help="Upload a json file containing your Spotify data export"
+    )
+                
+
+
 
     user_filename = st.text_input(
+    
         "Enter a name for your dataset:",
         value="spotify_data",
         help="This will be used as the base filename for saving your data"
@@ -835,7 +859,11 @@ elif page == "Per Year":
                 unsafe_allow_html=True
             )
         with col2:
-            st.image(image_url, width=150)
+            try:
+                st.image(image_url, width=150)
+            except:
+                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
+
         with col3:
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"

@@ -22,6 +22,7 @@ import string
 from pathlib import Path
 import json
 from datetime import datetime, timedelta
+import pickle
 # from chart_hit_scorer import chart_hit_scorer
 
 
@@ -40,20 +41,7 @@ df_podcast = pd.read_csv('info_tables/info_podcast.csv') #  after push
 df_audiobook = pd.read_csv("info_tables/info_audiobook.csv") #  after push
 df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 
-
-# User Megas
-df_mega_ben = pd.read_csv('datasets/user_clean/BG_df_mega.csv')
-df_mega_tom = pd.read_csv('datasets/user_clean/TW_df_mega.csv')
-df_mega_jana = pd.read_csv('datasets/user_clean/JH_df_mega.csv')
-df_mega_charlie = pd.read_csv('datasets/user_clean/CN_df_mega.csv')
-df_mega_hugh = pd.read_csv('datasets/user_clean/HW_df_mega.csv')
-df_mega_josh = pd.read_csv('datasets/user_clean/JQ_df_mega.csv')
-
-
-## Variables##
-#users = {"Ben" : df_mega_ben, "Jana": df_mega_jana, "Charlie": df_mega_charlie, "Tom": df_mega_tom, "Hugh": df_mega_hugh, "Josh": df_mega_josh }
-
-##page navigatrion##
+##page navigation##
 st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Regifted Navigation")
 page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Basic-O-Meter", "FUN", "AbOuT uS","Charlies Play Place"])
@@ -318,7 +306,7 @@ users = load_csv_dataframes()
 
 # ------------------------- Home Page ------------------------- #
 if page == "Home":
-    
+
     col1,col2,col3 = st.columns([3, 3, 3], vertical_alignment='center')
     with col2:
         st.image('media_images/logo_correct.png', width=400)
@@ -336,7 +324,7 @@ if page == "Home":
     start_day = date_start.strftime("%d %B %Y")
     end_day = date_end.strftime("%d %B %Y")
 
-# -------------------------------- CN UPLOADER --------------------------------- #
+# -------------------------------- CN UPLOADER ------------------------------- #
 
     # Upload section
     st.header("1. Upload Spotify Data")
@@ -363,7 +351,7 @@ if page == "Home":
 
 
     user_filename = st.text_input(
-    
+
         "Your Name Here:",
         value=None,
 
@@ -1893,73 +1881,85 @@ elif page == "Charlies Play Place":
     user_selected = get_current_user(users)
     st.info(f"📊 Showing data for: **{user_selected}** (change user on Home page)")
 
+    with open("datasets/chart_scores/ReRe_20250602_164123_all_points.pkl", "rb") as f:
+        all_points_dfs = pickle.load(f)
+
+    with open("datasets/chart_scores/ReRe_20250602_164123_summary_stats.pkl", "rb") as f:
+        summary_stats = pickle.load(f)
+
     # Page title
     col1,col2,col3 = st.columns([3, 1, 3], vertical_alignment='center')
     with col2:
         st.image('media_images/logo_correct.png', width=200)
 
-    # Load data
-    listening_df = pd.read_csv("datasets/user_clean/ReRe_20250602_164123.csv")
-    charts_df = pd.read_csv("datasets/info_clean/info_charts_weighted.csv")
 
 
-# >>>>>>>>>>>>> DON' RUN THE CALC LIVE OFF STREAMLIT
+# >>>>>>>>>>>>> DON'T RUN THE CALC LIVE OFF STREAMLIT
 
+# listening_df = pd.read_csv("datasets/user_clean/Charlie_20250603_131714.csv")
+# charts_df = pd.read_csv("datasets/info_clean/info_charts_weighted.csv")
 
+# # Clean and convert datetime columns
+# listening_df["datetime"] = pd.to_datetime(listening_df["datetime"]).dt.tz_localize(None)
+# charts_df['weekdate'] = pd.to_datetime(charts_df['weekdate'], errors='coerce')
+# charts_df = charts_df.dropna(subset=['weekdate'])
+# listening_df['artist_name'] = listening_df['artist_name'].fillna('').str.lower().str.strip()
+# listening_df['track_name'] = listening_df['track_name'].fillna('').str.lower().str.strip()
 
+# # Window sizes
+# window_size = [365, 182, 91, 61, 30, 7]
 
-    # Convert datetime columns
-    listening_df["datetime"] = pd.to_datetime(listening_df["datetime"]).dt.tz_localize(None)
-    charts_df['weekdate'] = pd.to_datetime(charts_df['weekdate'], errors='coerce')
-    charts_df = charts_df.dropna(subset=['weekdate'])
+# # To store all results
+# all_points_dfs = {}
+# summary_stats = {}
 
-# DEBUGGER!!!!!!!!
-    # st.write("WEEKDATE dtype:", charts_df['weekdate'].dtype)
-    # st.write("listening date dtype:", listening_df['datetime'].dtype)
-    # st.write(charts_df['weekdate'].head())
-    # st.write(listening_df['datetime'].head())
+# for w in window_size:
+#     results = []
 
-#     listening_df = listening_df.dropna(subset=['datetime'])
+#     for idx, listen_row in listening_df.iterrows():
+#         listen_datetime = listen_row['datetime']
+#         artist = listen_row['artist_name']
+#         track = listen_row['track_name']
 
-    window_size = 30
-    results = []
+#         window_start = pd.Timestamp(listen_datetime - timedelta(days=w))
+#         window_end = pd.Timestamp(listen_datetime)
 
-    # Calculate chart points
-    for idx, listen_row in listening_df.iterrows():
-        listen_datetime = listen_row['datetime']
-        artist = listen_row['artist_name']
-        track = listen_row['track_name']
+#         chart_matches = charts_df[
+#             (charts_df['artist_name'] == artist) &
+#             (charts_df['track_name'] == track) &
+#             (charts_df['weekdate'] >= window_start) &
+#             (charts_df['weekdate'] <= window_end)
+#         ]
 
-        # Convert window edges to pandas timestamps
-        window_start = pd.Timestamp(listen_datetime - timedelta(days=window_size))
-        window_end = pd.Timestamp(listen_datetime + timedelta(days=window_size))
+#         total_points = chart_matches['weighting'].sum() if not chart_matches.empty else 0
 
-        chart_matches = charts_df[
-            (charts_df['artist_name'] == artist) &
-            (charts_df['track_name'] == track) &
-            (charts_df['weekdate'] >= window_start) &
-            (charts_df['weekdate'] <= window_end)
-]
+#         results.append({
+#             'datetime': listen_datetime,
+#             'artist_name': artist,
+#             'track_name': track,
+#             'points_awarded': total_points,
+#             'chart_weeks_matched': len(chart_matches),
+#             'best_position': chart_matches['position'].min() if not chart_matches.empty else None
+#         })
 
-        total_points = chart_matches['weighting'].sum() if not chart_matches.empty else 0
+#     # Big old results dataframe
+#     df = pd.DataFrame(results)
+#     all_points_dfs[f'points_df_{w}'] = df
 
-        results.append({
-            'datetime': listen_datetime,
-            'artist_name': artist,
-            'track_name': track,
-            'points_awarded': total_points,
-            'chart_weeks_matched': len(chart_matches),
-            'best_position': chart_matches['position'].min() if not chart_matches.empty else None
-        })
-
-    points_df = pd.DataFrame(results)
-
-    # Summary metrics
-    total_listens = len(points_df)
-    chart_listens = len(points_df[points_df['points_awarded'] > 0])
-    total_points = points_df['points_awarded'].sum()
-    avg_points = points_df['points_awarded'].mean()
+    # Agg stats
+    total_listens = len(all_points_dfs)
+    chart_listens = len(all_points_dfs[all_points_dfs['points_awarded'] > 0])
+    total_points = all_points_dfs['points_awarded'].sum()
+    avg_points = all_points_dfs['points_awarded'].mean()
     chart_hit_rate = chart_listens / total_listens if total_listens > 0 else 0
+
+#     summary_stats[f'summary_{w}'] = {
+#     'total_listens': total_listens,
+#     'chart_listens': chart_listens,
+#     'total_points': total_points,
+#     'avg_points': avg_points,
+#     'chart_hit_rate': chart_hit_rate
+# #     }
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:

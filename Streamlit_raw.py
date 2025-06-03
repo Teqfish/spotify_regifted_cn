@@ -1223,8 +1223,11 @@ elif page == "Per Artist":
             album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]
             st.image(album_image_url, output_format="auto")
         except:
-            album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]
-            st.image(album_image_url, output_format="auto")
+            try:
+                album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]
+                st.image(album_image_url, output_format="auto")
+            except:
+                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
 
 
 
@@ -1543,14 +1546,20 @@ elif page == "Per Album":
     with col2:
 
 
-      ## top album image
-      info_album = pd.read_csv('info_tables/info_album.csv')
-      # placeholder - does not need recalculating once re-organised on page
-      top_albums = df_music[df_music.album_name == album_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
+## top album image
+        info_album = pd.read_csv('info_tables/info_album.csv')
+# placeholder - does not need recalculating once re-organised on page
+        top_albums = df_music[df_music.album_name == album_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
-      album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]
-      st.image(album_image_url, output_format="auto", use_container_width=True)
-
+        try:
+            album_image_url = info_album[info_album.album_name == top_albums.album_name[0]]["album_artwork"].values[0]
+            st.image(album_image_url, output_format="auto")
+        except:
+            try:
+                album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]
+                st.image(album_image_url, output_format="auto")
+            except:
+                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
 
 
     # top songs graph

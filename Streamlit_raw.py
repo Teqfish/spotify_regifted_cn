@@ -1123,6 +1123,7 @@ elif page == "Per Year":
         margin=dict(t=50, l=0, r=0, b=0),
         height=800,  # Adjust margins
     )
+    fig.update_coloraxes(showscale=False)
     # Show chart
     st.plotly_chart(fig, use_container_width=True)
 
@@ -1364,7 +1365,7 @@ elif page == "Per Artist":
     fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", title=f"Top songs by {artist_selected} of {year_selected}", color_discrete_sequence=["#32CD32"], text_auto=True)
     fig_top_songs.update_yaxes(categoryorder='total ascending')
     fig_top_songs.update_layout(yaxis_title=None)
-    fig_top_songs.update_layout(xaxis_title="Total Minutes")
+    fig_top_songs.update_layout(xaxis_title="Minutes Played")
     st.write(fig_top_songs)
 
 
@@ -1373,7 +1374,7 @@ elif page == "Per Artist":
     fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Top albums by {artist_selected} of {year_selected}", color_discrete_sequence=["#32CD32"], text_auto=True)
     fig_top_albums.update_yaxes(categoryorder='total ascending')
     fig_top_albums.update_layout(yaxis_title=None)
-    fig_top_albums.update_layout(xaxis_title="Total Minutes")
+    fig_top_albums.update_layout(xaxis_title="Minutes Played")
     st.write(fig_top_albums)
 
 
@@ -1666,6 +1667,11 @@ elif page == "Per Genre":
     user_df = users[user_selected].copy()
     df = users[user_selected].copy()
 
+    # project titel
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
+        st.image('media_images/logo_correct.png', width=200)
+
     # >>>>>>>> NESTED SUNBURST
 
     df = pd.merge(df, df_info, left_on=["track_name","album_name","artist_name"],
@@ -1728,7 +1734,7 @@ elif page == "Per Genre":
             '#0F521A',
             '#E6F5C7',
         ],
-        title='Top 5 Genre/Year, Artist/Genre, Track/Artist'
+        title=' '
     )
 
     # Make text more visible on dark background
@@ -1743,8 +1749,9 @@ elif page == "Per Genre":
         height=800,
         font=dict(color='black')
     )
-
-    st.title("La Roue Des Genres")
+    fig.update_coloraxes(showscale=False)
+    st.markdown("<h1 style='text-align: center;'>Le Moulin Des Genres (Windmill of Genre)</h1>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center;'>Choose Year 👉 Top 5 Genres 👉 Top 5 Artists (by genre) 🌞</h4>", unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True)
 
     # MOST LISTENED TO HOURS OF THE DAY
@@ -2134,6 +2141,7 @@ elif page == "FUN":
     ## end of random event generator ##
 
     ##most skipped song Scorecard##
+    st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)
     ## df grouped by year
     df['date'] = pd.to_datetime(df['datetime']).dt.date
     df['year'] = pd.to_datetime(df['datetime']).dt.year
@@ -2144,7 +2152,6 @@ elif page == "FUN":
     most_skipped = (df_music[df_music['skipped'] > 0].groupby(['track_name', 'artist_name'])['skipped'].sum().reset_index().sort_values(by='skipped', ascending=False).head(1))
 
     ## box stolen from the internet
-    st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)
     wch_colour_box = (64, 64, 64)
     wch_colour_font = (255, 255, 255)
     #wch_colour_font = (50, 205, 50)

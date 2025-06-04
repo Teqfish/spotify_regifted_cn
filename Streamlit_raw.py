@@ -1783,10 +1783,10 @@ elif page == "The Farm":
     users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
     year_list = users[user_selected]['year'].sort_values().unique().tolist()
 
-    c1,c2 = st.columns([3,1],vertical_alignment='center')
+    c1, c2, c3 = st.columns([3, 1, 1], vertical_alignment='center')
     with c1:
         selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=users[user_selected]['year'].max())
-
+        show_all_years = st.toggle("Show all years", value=False)
 
     # Aggregate
     month_art_pop = df.groupby('year_month')['artist_popularity'].mean().reset_index()
@@ -1817,7 +1817,7 @@ elif page == "The Farm":
 
 
     popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
-    def display_popularity_comparison(user_id, user_weekly_df, smoothing_window):
+    def display_popularity_comparison(user_id, user_weekly_df, smoothing_window, show_all_years):
         # Load reference
         if not Path(popularity_ref_pickle).exists():
             st.warning("No reference data available yet.")
@@ -1830,13 +1830,18 @@ elif page == "The Farm":
         user_weekly_df['year'] = user_weekly_df['year_week'].astype(str).str[:4].astype(int)
         reference_df['year'] = reference_df['year_week'].astype(str).str[:4].astype(int)
 
-        user_weekly_df = user_weekly_df[user_weekly_df['year'] == selected_year]
-        reference_df = reference_df[reference_df['year'] == selected_year]
+        if not show_all_years:
+            user_weekly_df = user_weekly_df[user_weekly_df['year'] == selected_year]
+            reference_df = reference_df[reference_df['year'] == selected_year]
+
+        user_min_week = user_weekly_df['year_week'].min()
+        user_max_week = user_weekly_df['year_week'].max()
+
 
         # Filter out current user
         others_df = reference_df[reference_df['user_id'] != user_id]
         avg_ref = others_df.groupby('year_week')[['artist_popularity', 'track_popularity']].mean().reset_index()
-
+        avg_ref = avg_ref[(avg_ref['year_week'] >= user_min_week) & (avg_ref['year_week'] <= user_max_week)]
         # Sort for consistency
         user_weekly_df = user_weekly_df.sort_values("year_week")
         avg_ref = avg_ref.sort_values("year_week")
@@ -1895,8 +1900,9 @@ elif page == "The Farm":
     # Generate weekly stats
     weekly_df = get_user_weekly_popularity(df, user_selected)
     # Smoothing window slider
-    smoothing_window = st.slider("Smoothing window (weeks)", min_value=1, max_value=12, value=7)
-    display_popularity_comparison(user_selected, weekly_df, smoothing_window)
+    # smoothing_window = st.slider("Smoothing window (weeks)", min_value=1, max_value=12, value=7)
+    smoothing_window = 10 if show_all_years else 4
+    display_popularity_comparison(user_selected, weekly_df, smoothing_window, show_all_years)
 
     # >>>>>>>>>>>>>>  Chart_scorer --------- #
 

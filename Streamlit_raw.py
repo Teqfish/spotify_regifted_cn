@@ -24,7 +24,6 @@ import json
 from datetime import datetime, timedelta
 import pickle
 import re
-# from chart_hit_scorer import chart_hit_scorer
 
 
 ##Connecting to the Google Cloud BigQuery##
@@ -51,6 +50,35 @@ page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Art
 def generate_timestamp():
 
     return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
+def process_and_store_user_popularity(csv_path, user_id):
+    df = pd.read_csv(csv_path)
+
+    # Ensure datetime is parsed
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['year_week'] = df['datetime'].dt.to_period('W').apply(lambda r: r.start_time)
+
+    # Weekly mean popularity
+    weekly_artist_pop = df.groupby('year_week')['artist_popularity'].mean().reset_index(name='artist_popularity')
+    weekly_track_pop = df.groupby('year_week')['track_popularity'].mean().reset_index(name='track_popularity')
+
+    weekly_df = pd.merge(weekly_artist_pop, weekly_track_pop, on='year_week')
+    weekly_df['user_id'] = user_id
+
+    # Append to or create reference pickle
+    if os.path.exists(popularity_ref_pickle):
+        with open(popularity_ref_pickle, "rb") as f:
+            reference_df = pickle.load(f)
+    else:
+        reference_df = pd.DataFrame()
+
+    reference_df = pd.concat([reference_df, weekly_df], ignore_index=True)
+
+    with open(popularity_ref_pickle, "wb") as f:
+        pickle.dump(reference_df, f)
+
+    return weekly_df
 
 # Function to create a user selector for the Home page
 def create_user_selector(users, label='User:'):
@@ -182,6 +210,13 @@ def process_uploaded_zip(uploaded_file, user_filename):
             cleaned_df.to_csv(clean_csv_path, index=False)
             st.success(f"Saved cleaned CSV to: {clean_csv_path}")
 
+            # After saving the cleaned CSV, update popularity reference data
+            try:
+                weekly_df = process_and_store_user_popularity(clean_csv_path, user_filename)
+                st.success("User popularity statistics added to reference dataset.")
+            except Exception as e:
+                st.error(f"Failed to process popularity statistics: {e}")
+
             return str(clean_csv_path)
 
         except Exception as e:
@@ -209,7 +244,7 @@ def run_cleaning_pipeline(df, dataset_name):
         cleaned_df = cleaned_df.drop_duplicates()
         st.write(f"• Removed {duplicates_removed} duplicate rows")
 
-# BUILD MEGA CLEANING CODE
+        # >>>>>>>>>> BUILD MEGA CLEANING CODE
         # filter out rows with no listen time
         cleaned_df = cleaned_df[cleaned_df['ms_played'] != 0]
         # transform ms to seconds
@@ -298,6 +333,18 @@ def load_csv_dataframes(directory="datasets/user_clean"):
 
     return csv_dict
 
+def get_user_weekly_popularity(df, user_id):
+    df = df.copy()
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['year_week'] = df['datetime'].dt.to_period('W').apply(lambda r: r.start_time)
+
+    weekly_artist = df.groupby('year_week')['artist_popularity'].mean().reset_index(name='artist_popularity')
+    weekly_track = df.groupby('year_week')['track_popularity'].mean().reset_index(name='track_popularity')
+
+    weekly_df = pd.merge(weekly_artist, weekly_track, on='year_week')
+    weekly_df['user_id'] = user_id
+    return weekly_df
+
 # Initialize session state
 if 'dataframes_dict' not in st.session_state:
     st.session_state.dataframes_dict = {}
@@ -313,7 +360,7 @@ if page == "Home":
         st.image('media_images/logo_correct.png', width=400)
     st.markdown("<h1 style='text-align: center; '>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
 
-    ## fundtion to create user selector ##
+    ## function to create user selector ##
     user_index, user_selected = create_user_selector(users, label='User:')
 
     ## some paragraphs of welcome fluff and dataset parameters ##
@@ -1681,7 +1728,7 @@ elif page == "Per Genre":
             '#0F521A',
             '#E6F5C7',
         ],
-        title='🎧 Listening History: Year → Genre → Artist → Track (Spotify Style)'
+        title='Top 5 Genre/Year, Artist/Genre, Track/Artist'
     )
 
     # Make text more visible on dark background
@@ -1697,7 +1744,7 @@ elif page == "Per Genre":
         font=dict(color='black')
     )
 
-    st.title("🎶 Spotify-Themed Listening Sunburst")
+    st.title("La Roue Des Genres")
     st.plotly_chart(fig, use_container_width=True)
 
     # MOST LISTENED TO HOURS OF THE DAY
@@ -1723,59 +1770,53 @@ elif page == "Individuality":
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
         st.image('media_images/logo_correct.png', width=200)
-    st.title("The Basic-O-Meter")
-    st.markdown("Let's find out how basic your music taste is!")
+    st.title("_The Individuality Test_")
+    st.markdown("Let's find out how individual your music taste is!")
 
-# define df as working variable for current user
-    df = users[user_selected]
-
-# join info to current user
+    # join info to current user
     df = pd.merge(df,df_info,left_on=["track_name","album_name","artist_name"],right_on=["track_name","album_name","artist_name"],how="left",suffixes=["","_remove"])
 
-# making the sliders
-    df['year'] = pd.to_datetime(df['datetime']).dt.year
-    min_year, max_year = df['year'].min(), df['year'].max()
-    selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
+    # # making the sliders
+    # df['year'] = pd.to_datetime(df['datetime']).dt.year
+    # min_year, max_year = df['year'].min(), df['year'].max()
+    # selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
 
-# Prepare the data
-    df_filtered = df[df['year'] == selected_year]
-    df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
-    df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
+    # # Prepare the data
+    # df_filtered = df[df['year'] == selected_year]
+    # df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
+    # df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
 
-# datetime to month
+    # datetime to month
     df['datetime'] = pd.to_datetime(df['datetime'])
     df['year_month'] = df['datetime'].dt.to_period('M').dt.to_timestamp()
 
-# Aggregate
+    # Aggregate
     month_art_pop = df.groupby('year_month')['artist_popularity'].mean().reset_index()
     month_trk_pop = df.groupby('year_month')['track_popularity'].mean().reset_index()
 
 
-# Scorecards
-# Overall average artist popularity metric method 1
+    # Scorecards
+    # Overall average artist popularity metric method 1
     track_pop_overall = round((df.groupby("track_name")["track_popularity"].mean()).mean(),2)
 
-# Overall average artist popularity metric method 2
+    # Overall average artist popularity metric method 2
     art_pop_overall = round((df.groupby("artist_name")["artist_popularity"].mean()).mean(),2)
 
-# Display the scorecards
+    # Display the scorecards
     st.subheader("Scorecard title here")
     a, b = st.columns(2)
-    c, d = st.columns(2)
 
     a.metric("Average track popularity", value=track_pop_overall, delta="-12", border=True)
     b.metric("Average artist popularity", value=art_pop_overall, delta="-13", border=True)
-    c.metric("metric C", value="Farts", delta="5%", border=True)
-    d.metric("metric D", "Smell", "-2 inHg", border=True)
 
-# CHART OF POPULISM ACROSS TIME
+    # CHART OF POPULISM ACROSS TIME
     st.markdown("<h2 style='text-align: center; color: #32CD32;'>Artist and Track Popularity Over Time</h2>", unsafe_allow_html=True)
     st.subheader(f"Here's a chart tracking {user_selected}'s _basicity_ over time")
 
-# Create figure
+    # Create figure
     fig = go.Figure()
 
-# Add artist popularity line
+    # Add artist popularity line
     fig.add_trace(go.Scatter(
         x=month_art_pop['year_month'],
         y=month_art_pop['artist_popularity'],
@@ -1784,7 +1825,7 @@ elif page == "Individuality":
         hovertemplate='Month: %{x|%B %Y}<br>Artist Popularity: %{y:.1f}<extra></extra>'
     ))
 
-# Add track popularity line
+    # Add track popularity line
     fig.add_trace(go.Scatter(
         x=month_trk_pop['year_month'],
         y=month_trk_pop['track_popularity'],
@@ -1793,7 +1834,7 @@ elif page == "Individuality":
         hovertemplate='Month: %{x|%B %Y}<br>Track Popularity: %{y:.1f}<extra></extra>'
     ))
 
-# Update layout
+    # Update layout
     fig.update_layout(
         title='Average Artist and Track Popularity Over Time',
         xaxis_title='Month',
@@ -1802,10 +1843,75 @@ elif page == "Individuality":
         legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)', font=dict(color='white')),
         hovermode="x",
         hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white")),
-        # template='plotly_dark'
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
+    def display_popularity_comparison(user_id, user_weekly_df):
+        # Load reference
+        if not Path(popularity_ref_pickle).exists():
+            st.warning("No reference data available yet.")
+            return
+
+        with open(popularity_ref_pickle, "rb") as f:
+            reference_df = pickle.load(f)
+
+        # Filter out current user
+        others_df = reference_df[reference_df['user_id'] != user_id]
+        avg_ref = others_df.groupby('year_week')[['artist_popularity', 'track_popularity']].mean().reset_index()
+
+        # Sort for consistency
+        user_weekly_df = user_weekly_df.sort_values("year_week")
+        avg_ref = avg_ref.sort_values("year_week")
+
+        fig = go.Figure()
+
+        # User lines
+        fig.add_trace(go.Scatter(
+            x=user_weekly_df['year_week'],
+            y=user_weekly_df['artist_popularity'],
+            mode='lines',
+            name=f"{user_id} Artist",
+            line=dict(color='royalblue')
+        ))
+        fig.add_trace(go.Scatter(
+            x=user_weekly_df['year_week'],
+            y=user_weekly_df['track_popularity'],
+            mode='lines',
+            name=f"{user_id} Track",
+            line=dict(color='cornflowerblue')
+        ))
+
+        # Reference average
+        fig.add_trace(go.Scatter(
+            x=avg_ref['year_week'],
+            y=avg_ref['artist_popularity'],
+            mode='lines',
+            name="Avg Artist",
+            line=dict(color='darkgreen', dash='dash')
+        ))
+        fig.add_trace(go.Scatter(
+            x=avg_ref['year_week'],
+            y=avg_ref['track_popularity'],
+            mode='lines',
+            name="Avg Track",
+            line=dict(color='forestgreen', dash='dash')
+        ))
+
+        fig.update_layout(
+            title=f"Popularity Comparison – {user_id}",
+            xaxis_title="Week",
+            yaxis_title="Popularity",
+            hovermode="x unified"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Generate weekly stats
+    weekly_df = get_user_weekly_popularity(df, user_selected)
+
+    # Show chart
+    display_popularity_comparison(user_selected, weekly_df)
 
     # >>>>>>>>>>>>>>  Chart_scorer --------- #
 
@@ -1887,22 +1993,6 @@ elif page == "Individuality":
     with col4:
         st.metric("Avg Points/Listen", f"{stats['avg_points']:.1f}")
 
-    # Filter controls
-    st.subheader("Filter Results")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        show_only_hits = st.checkbox("Show only chart hits", value=False)
-        search_artist = st.text_input("Search artist", placeholder="Enter artist name...")
-
-    # Apply filters
-    filtered_df = points_df.copy()
-    if show_only_hits:
-        filtered_df = filtered_df[filtered_df['points_awarded'] > 0]
-    # if min_points > 0:
-    #     filtered_df = filtered_df[filtered_df['points_awarded'] >= min_points]
-    if search_artist:
-        filtered_df = filtered_df[filtered_df['artist_name'].str.contains(search_artist, case=False, na=False)]
-
     # Top-performing songs
     chart_hits = points_df[points_df['points_awarded'] > 0]
     if not chart_hits.empty:
@@ -1977,10 +2067,17 @@ elif page == "Individuality":
                 dtick='M1'
             ),
             yaxis_title='Points',
-            legend_title='Year'
+            legend_title='Year',
+            legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)', font=dict(color='white')),
+            hovermode="x",
+            hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white"))
         )
 
         st.plotly_chart(fig_timeline, use_container_width=True)
+
+        # user_df = process_and_store_user_data(csv_filepath, user_id)
+        # display_popularity_comparison(user_id, user_df)
+
 # ------------------------------ FUN Page ------------------------------------ #
 elif page == "FUN":
     # Show current user info

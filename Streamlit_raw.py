@@ -1777,8 +1777,9 @@ elif page == "The Farm":
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
         st.image('media_images/logo_correct.png', width=200)
-    st.title("_Welcome To The Farm_")
-    st.markdown("Are you a chart-swallowing sheep?")
+    with col1:    
+        st.title("_Welcome To The Farm_")
+        st.markdown("Are you a chart-swallowing sheep?")
 
     # join info to current user
     df = pd.merge(df,df_info,left_on=["track_name","album_name","artist_name"],right_on=["track_name","album_name","artist_name"],how="left",suffixes=["","_remove"])
@@ -1818,7 +1819,7 @@ elif page == "The Farm":
 
 
     # CHART OF POPULISM ACROSS TIME
-    st.markdown("<h2 style='text-align: center; color: #32CD32;'>Artist and Track Popularity Over Time</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>Artist and Track Popularity Over Time</h2>", unsafe_allow_html=True)
     st.subheader(f"Here's a chart tracking {user_selected}'s _basicity_ over time")
 
 

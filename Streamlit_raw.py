@@ -1113,7 +1113,7 @@ elif page == "Per Year":
         sunburst_data,
         path=['year', title_field],
         values='hours_played',
-        title=f'top 10 in {selected_category} by most listened to (Year → {title_field.replace("_", " ").title()})',
+        title=' ',
         color='hours_played',
         color_continuous_scale=[
             # '#181E05',  # black
@@ -1135,6 +1135,10 @@ elif page == "Per Year":
     )
     fig.update_coloraxes(showscale=False)
     # Show chart
+   # st.header(f"Top 10 in {selected_category} by most listened to (Year → {title_field.replace('_', ' ').title()})")
+    st.title('')
+    st.title('')
+    st.header("CLICK THE WHEEL!!")
     st.plotly_chart(fig, use_container_width=True)
 
 # ---------------------------- Per Artist Page ------------------------------- #

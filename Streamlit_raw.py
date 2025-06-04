@@ -44,7 +44,7 @@ df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 ##page navigation##
 st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Regifted Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "Individuality", "FUN", "AbOuT uS"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "The Farm", "FUN", "AbOuT uS"])
 
 # Timestamp string to add to saved files
 def generate_timestamp():
@@ -1761,7 +1761,7 @@ elif page == "Per Genre":
     years = sorted(df['year'].unique())
 
 # -------------------------- Individuality Page ------------------------------ #
-elif page == "Individuality":
+elif page == "The Farm":
 
     # Show current user info
     user_selected = get_current_user(users)
@@ -1770,30 +1770,27 @@ elif page == "Individuality":
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
         st.image('media_images/logo_correct.png', width=200)
-    st.title("_The Individuality Test_")
-    st.markdown("Let's find out how individual your music taste is!")
+    st.title("_Welcome To The Farm_")
+    st.markdown("Are you a chart-swallowing sheep?")
 
     # join info to current user
     df = pd.merge(df,df_info,left_on=["track_name","album_name","artist_name"],right_on=["track_name","album_name","artist_name"],how="left",suffixes=["","_remove"])
-
-    # # making the sliders
-    # df['year'] = pd.to_datetime(df['datetime']).dt.year
-    # min_year, max_year = df['year'].min(), df['year'].max()
-    # selected_year = st.slider("Select a year", min_year, max_year, value=max_year)  # Defaults to latest year
-
-    # # Prepare the data
-    # df_filtered = df[df['year'] == selected_year]
-    # df_grouped = df_filtered.groupby('artist_name', as_index=False)['ms_played'].sum()
-    # df_grouped = df_grouped.sort_values(by='ms_played', ascending=False)
 
     # datetime to month
     df['datetime'] = pd.to_datetime(df['datetime'])
     df['year_month'] = df['datetime'].dt.to_period('M').dt.to_timestamp()
 
+    users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
+    year_list = users[user_selected]['year'].sort_values().unique().tolist()
+
+    c1,c2 = st.columns([3,1],vertical_alignment='center')
+    with c1:
+        selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=users[user_selected]['year'].max())
+
+
     # Aggregate
     month_art_pop = df.groupby('year_month')['artist_popularity'].mean().reset_index()
     month_trk_pop = df.groupby('year_month')['track_popularity'].mean().reset_index()
-
 
     # Scorecards
     # Overall average artist popularity metric method 1
@@ -1802,52 +1799,25 @@ elif page == "Individuality":
     # Overall average artist popularity metric method 2
     art_pop_overall = round((df.groupby("artist_name")["artist_popularity"].mean()).mean(),2)
 
+    # avg_trk_pop_delta =
     # Display the scorecards
-    st.subheader("Scorecard title here")
-    a, b = st.columns(2)
+    # st.subheader("Scorecard title here")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Average track popularity", value=f'{track_pop_overall}%', delta="-12")
+    with col2:
+        st.metric("Average artist popularity", value=f'{art_pop_overall}%', delta="-13")
+    # with col3:
 
-    a.metric("Average track popularity", value=track_pop_overall, delta="-12", border=True)
-    b.metric("Average artist popularity", value=art_pop_overall, delta="-13", border=True)
 
     # CHART OF POPULISM ACROSS TIME
     st.markdown("<h2 style='text-align: center; color: #32CD32;'>Artist and Track Popularity Over Time</h2>", unsafe_allow_html=True)
     st.subheader(f"Here's a chart tracking {user_selected}'s _basicity_ over time")
 
-    # Create figure
-    fig = go.Figure()
 
-    # Add artist popularity line
-    fig.add_trace(go.Scatter(
-        x=month_art_pop['year_month'],
-        y=month_art_pop['artist_popularity'],
-        mode='lines',
-        name='Artist Popularity',
-        hovertemplate='Month: %{x|%B %Y}<br>Artist Popularity: %{y:.1f}<extra></extra>'
-    ))
-
-    # Add track popularity line
-    fig.add_trace(go.Scatter(
-        x=month_trk_pop['year_month'],
-        y=month_trk_pop['track_popularity'],
-        mode='lines',
-        name='Track Popularity',
-        hovertemplate='Month: %{x|%B %Y}<br>Track Popularity: %{y:.1f}<extra></extra>'
-    ))
-
-    # Update layout
-    fig.update_layout(
-        title='Average Artist and Track Popularity Over Time',
-        xaxis_title='Month',
-        yaxis_title='Average Popularity',
-        colorway=["#32CD32", "#199144"],
-        legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)', font=dict(color='white')),
-        hovermode="x",
-        hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white")),
-    )
-    st.plotly_chart(fig, use_container_width=True)
 
     popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
-    def display_popularity_comparison(user_id, user_weekly_df):
+    def display_popularity_comparison(user_id, user_weekly_df, smoothing_window):
         # Load reference
         if not Path(popularity_ref_pickle).exists():
             st.warning("No reference data available yet.")
@@ -1855,6 +1825,13 @@ elif page == "Individuality":
 
         with open(popularity_ref_pickle, "rb") as f:
             reference_df = pickle.load(f)
+
+        # Filter by selected year
+        user_weekly_df['year'] = user_weekly_df['year_week'].astype(str).str[:4].astype(int)
+        reference_df['year'] = reference_df['year_week'].astype(str).str[:4].astype(int)
+
+        user_weekly_df = user_weekly_df[user_weekly_df['year'] == selected_year]
+        reference_df = reference_df[reference_df['year'] == selected_year]
 
         # Filter out current user
         others_df = reference_df[reference_df['user_id'] != user_id]
@@ -1864,54 +1841,62 @@ elif page == "Individuality":
         user_weekly_df = user_weekly_df.sort_values("year_week")
         avg_ref = avg_ref.sort_values("year_week")
 
+        # Apply rolling smoothing
+        user_weekly_df['artist_popularity_smooth'] = user_weekly_df['artist_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
+        user_weekly_df['track_popularity_smooth'] = user_weekly_df['track_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
+
+        avg_ref['artist_popularity_smooth'] = avg_ref['artist_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
+        avg_ref['track_popularity_smooth'] = avg_ref['track_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
+
         fig = go.Figure()
 
         # User lines
         fig.add_trace(go.Scatter(
             x=user_weekly_df['year_week'],
-            y=user_weekly_df['artist_popularity'],
+            y=user_weekly_df['artist_popularity_smooth'],
             mode='lines',
             name=f"{user_id} Artist",
-            line=dict(color='royalblue')
+            line=dict(color='#fd6bff') #0082d9
         ))
         fig.add_trace(go.Scatter(
             x=user_weekly_df['year_week'],
-            y=user_weekly_df['track_popularity'],
+            y=user_weekly_df['track_popularity_smooth'],
             mode='lines',
             name=f"{user_id} Track",
-            line=dict(color='cornflowerblue')
+            line=dict(color='#b800bb') #2c2991
         ))
 
         # Reference average
         fig.add_trace(go.Scatter(
             x=avg_ref['year_week'],
-            y=avg_ref['artist_popularity'],
+            y=avg_ref['artist_popularity_smooth'],
             mode='lines',
             name="Avg Artist",
-            line=dict(color='darkgreen', dash='dash')
+            line=dict(color='#19ab19')
         ))
         fig.add_trace(go.Scatter(
             x=avg_ref['year_week'],
-            y=avg_ref['track_popularity'],
+            y=avg_ref['track_popularity_smooth'],
             mode='lines',
             name="Avg Track",
-            line=dict(color='forestgreen', dash='dash')
+            line=dict(color='#199144')
         ))
 
         fig.update_layout(
-            title=f"Popularity Comparison – {user_id}",
+            title=f"{user_id} vs Sampleset Average Listening Popularity",
             xaxis_title="Week",
             yaxis_title="Popularity",
-            hovermode="x unified"
+            hovermode="x unified",
+            hoverlabel=dict(bgcolor="#2d5730", font=dict(color="white"))
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
     # Generate weekly stats
     weekly_df = get_user_weekly_popularity(df, user_selected)
-
-    # Show chart
-    display_popularity_comparison(user_selected, weekly_df)
+    # Smoothing window slider
+    smoothing_window = st.slider("Smoothing window (weeks)", min_value=1, max_value=12, value=7)
+    display_popularity_comparison(user_selected, weekly_df, smoothing_window)
 
     # >>>>>>>>>>>>>>  Chart_scorer --------- #
 
@@ -1985,13 +1970,13 @@ elif page == "Individuality":
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Total Points", f"{stats['total_points']:,.0f}")
+        st.metric("# Chart Song Listens", f"{stats['chart_listens']:,}")
     with col2:
-        st.metric("Chart Hit Rate", f"{stats['chart_hit_rate']:.1%}")
+        st.metric("Avg Points/Year", f"{stats['total_points']/df.shape[0]*365:,.0f}")
     with col3:
-        st.metric("Chart Song Listens", f"{stats['chart_listens']:,}")
-    with col4:
         st.metric("Avg Points/Listen", f"{stats['avg_points']:.1f}")
+    with col4:
+        st.metric("Chart Hit Rate", f"{stats['chart_hit_rate']:.1%}")
 
     # Top-performing songs
     chart_hits = points_df[points_df['points_awarded'] > 0]
@@ -2013,7 +1998,8 @@ elif page == "Individuality":
             y=artist_points.index,
             orientation='h',
             title='Top 10 Artists by Points',
-            labels={'x': 'Total Points', 'y': 'Artist'}
+            labels={'x': 'Total Points', 'y': 'Artist'},
+            color_discrete_sequence =['#19ab19']*len(df),
         )
         st.plotly_chart(fig_artists, use_container_width=True)
 
@@ -2042,18 +2028,37 @@ elif page == "Individuality":
         # Concatenate into one DataFrame
         plot_df = pd.concat(all_years, ignore_index=True)
 
+        # Prepare cumulative data per year
+        plot_df['cumulative_points'] = plot_df.sort_values(['year', 'month_day']) \
+            .groupby('year')['points_awarded'].cumsum()
+
         # Filter only the selected years (or include all for setup)
         years = sorted(plot_df['year'].unique())
         latest_year = max(years)
+
+        for year in years:
+            year_data = plot_df[plot_df['year'] == year]
+
+        c1,c2 = st.columns([3,1],vertical_alignment='center')
+        with c1:
+            toggle_map = {"Discrete": year_data['points_awarded'],"Cumulative": year_data['points_awarded']}
+            points_method = st.segmented_control(
+                "View Mode",
+                options=["Discrete", "Cumulative"],
+                selection_mode="single"
+            )
 
         # Create figure manually to control trace visibility
         fig_timeline = go.Figure()
 
         for year in years:
             year_data = plot_df[plot_df['year'] == year]
+
+            y_data = year_data['points_awarded'] if points_method == "Discrete" else year_data['cumulative_points']
+
             fig_timeline.add_trace(go.Scatter(
                 x=year_data['month_day'],
-                y=year_data['points_awarded'],
+                y=y_data,
                 mode='lines',
                 name=str(year),
                 visible=True if year == latest_year else 'legendonly'
@@ -2066,17 +2071,22 @@ elif page == "Individuality":
                 tickformat='%b',
                 dtick='M1'
             ),
-            yaxis_title='Points',
+            yaxis_title='Cumulative Points' if points_method == "Cumulative" else 'Daily Points',
             legend_title='Year',
             legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)', font=dict(color='white')),
             hovermode="x",
             hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white"))
         )
-
         st.plotly_chart(fig_timeline, use_container_width=True)
 
-        # user_df = process_and_store_user_data(csv_filepath, user_id)
-        # display_popularity_comparison(user_id, user_df)
+        st.title("_UNIQUE.NGAUGE()_")
+        gauge = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = 270,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "Individuality"}))
+        st.plotly_chart(gauge, use_container_width=False)
+
 
 # ------------------------------ FUN Page ------------------------------------ #
 elif page == "FUN":

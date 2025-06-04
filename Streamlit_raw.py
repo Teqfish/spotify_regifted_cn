@@ -44,7 +44,7 @@ df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 ##page navigation##
 st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "The Farm", "FUN", "AbOuT uS"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "The Farm", "FUN", "AbOuT uS", "How To"])
 
 # Timestamp string to add to saved files
 def generate_timestamp():
@@ -2212,3 +2212,35 @@ elif page == "AbOuT uS":
     st.title("About Us")
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
     st.write("Feel free to reach out for any questions or collaborations.")
+
+
+# ------------------- How To Page --------------------- #
+elif page == "How To":
+    # project title
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
+        st.image('media_images/logo_correct.png', width=200)
+
+    st.markdown("<h1 style='text-align: center;'>How to request your Spotify data</h1>", unsafe_allow_html=True)
+    st.markdown("<h3>In order to request the extended streaming history files, simply press the correct buttons on the Spotify website.</h3>", unsafe_allow_html=True)
+    st.markdown('1. To get started, open the <a href="https://www.spotify.com/account/privacy/" target="_blank">Spotify Privacy Page</a> on the Spotify website.', unsafe_allow_html=True)
+    st.markdown('2. Scroll down to the "Download your data" section and Configure the page so it looks like the screenshot below (Unticked the "Account data" and ticked the "Extended streaming history" boxes).', unsafe_allow_html=True)
+    col1,col2,col3 = st.columns([1, 3, 1], vertical_alignment='center')
+    with col2:
+        st.image('media_images/download_settings.png', width=600)
+
+    st.markdown('3. Press the "Request data" button.')
+    st.markdown('')
+    st.markdown('4. You will receive an email from Spotify with a link to download your data. Click on the link in the email to access your data.')
+    st.image('media_images/confirm_request.png', width=1200)
+    st.markdown('')
+    st.markdown("<h3>5. Wait until you receive your data. (This may take up to 30 days)</h3>", unsafe_allow_html=True)
+    st.markdown('6. Once you receive the email, download the ZIP file containing your data.')
+    st.markdown('This file will contain personal information, so please be careful with it.')
+    st.image('media_images/Download_json.png', width=1200)
+    st.markdown('')
+    st.markdown('')
+    
+    st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
+
+ 

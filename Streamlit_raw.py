@@ -44,7 +44,7 @@ df_event = pd.read_csv('datasets/info_clean/info_events.csv')
 ##page navigation##
 st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "The Farm", "FUN", "FAQs"])
+page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "The Farm", "FUN"])
 
 # Timestamp string to add to saved files
 def generate_timestamp():
@@ -2260,25 +2260,3 @@ elif page == "FUN":
       """
     st.markdown(htmlstr, unsafe_allow_html=True)
 
-# ---------------------------- About Us Page --------------------------------- #
-elif page == "FAQs":
-        # Show current user info
-    user_selected = get_current_user(users)
-
-    # project title
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image('media_images/logo_correct.png', width=200)
-    st.title("FAQs")
-
-
-    st.markdown("1. How do I get my Spotify data?")
-    st.markdown("https://www.spotify.com/uk/account/privacy/")
-    st.markdown("2. Why don't I know half the artists in my data?")
-    st.markdown("The data don't lie.")
-    st.markdown("3. I thought I would be less basic.  Where do I go from here?")
-    st.markdown("Steely Dan")
-
-
-    st.write("This project is created by Jana Only to analyze Spotify data in a fun way.")
-    st.write("Feel free to reach out for any questions or collaborations.")

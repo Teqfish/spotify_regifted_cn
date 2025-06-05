@@ -1197,7 +1197,7 @@ elif page == "Per Artist":
         ### Artist Rank
         year_rank = list(df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending = False).reset_index().artist_name)
         ## box stolen from the internet
-        st.markdown(f"<h4>Rank of {year_selected.lower()}</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h4>Rank of {str(year_selected).lower()}</h4>", unsafe_allow_html=True)
         wch_colour_box = (64, 64, 64)
         # wch_colour_box = (255, 255, 255)
         wch_colour_font = (50, 205, 50)
@@ -1378,7 +1378,7 @@ elif page == "Per Artist":
     ## top songs graph
     top_songs = df_music[df_music.artist_name == artist_selected].groupby("track_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
-    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", title=f"Your favourite songs by {artist_selected} - {year_selected.lower()}", color_discrete_sequence=["#32CD32"], text_auto=True)
+    fig_top_songs = px.bar(top_songs.head(15) ,x="minutes_played", y = "track_name", title=f"Your favourite songs by {artist_selected} - {str(year_selected).lower()}", color_discrete_sequence=["#32CD32"], text_auto=True)
     fig_top_songs.update_yaxes(categoryorder='total ascending')
     fig_top_songs.update_layout(yaxis_title=None)
     fig_top_songs.update_layout(xaxis_title="Minutes Played")
@@ -1387,7 +1387,7 @@ elif page == "Per Artist":
 
     ## top albums graph
     top_albums = df_music[df_music.artist_name == artist_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
-    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Your favourite albums by {artist_selected} - {year_selected.lower()}", color_discrete_sequence=["#32CD32"], text_auto=True)
+    fig_top_albums = px.bar(top_albums.head(5) ,x="minutes_played", y = "album_name", title=f"Your favourite albums by {artist_selected} - {str(year_selected).lower()}", color_discrete_sequence=["#32CD32"], text_auto=True)
     fig_top_albums.update_yaxes(categoryorder='total ascending')
     fig_top_albums.update_layout(yaxis_title=None)
     fig_top_albums.update_layout(xaxis_title="Minutes Played")

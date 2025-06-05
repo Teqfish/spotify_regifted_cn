@@ -1,3 +1,15 @@
+# ----------------------------- INTRO/CREDITS -------------------------------- #
+
+'''
+An ETL and EDA app for listening habits based on user Spotify listening history.
+Enriched with Discogs API, chart-scraping, and more.
+
+Please contact us to give feedback and feature requests.
+
+Built by Ben Garalnick, Jana Hueppe, Tom Witt & Charlie Nash (06.2025)
+'''
+
+# -------------------------------- IMPORT ------------------------------------ #
 import streamlit as st
 import pandas as pd
 import plotly.express as px

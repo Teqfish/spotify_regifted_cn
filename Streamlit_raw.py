@@ -1760,7 +1760,7 @@ elif page == "Per Genre":
 
     # Make text more visible on dark background
     fig.update_traces(
-        insidetextfont=dict(color='black'),
+        insidetextfont=dict(color='white'),
         hovertemplate='<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>'
     )
 
@@ -1923,15 +1923,14 @@ elif page == "The Farm":
 
         st.plotly_chart(fig, use_container_width=True)
 
-    def display_gauge_chart(basic_score):
+    def display_gauge_chart(basic_score, fixed_delta_str="±0.08"):
         gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=basic_score,
-            number={'suffix': "%"},
             domain={'x': [0, 1], 'y': [0, 1]},
-            # title={'text': "The Meter of Sheepleness"},
-            gauge={'axis': {'range': [0, 100]}}
+            gauge={'axis': {'range': [0, 1]}}
         ))
+
         gauge.update_layout(
             title=dict(
                 text="Sheeple-O-Meter",
@@ -1940,7 +1939,17 @@ elif page == "The Farm":
                 xanchor='center',
                 y=0.9,
                 yanchor='top'
-                ))
+            ),
+            annotations=[
+                dict(
+                    x=0.5,
+                    y=-0.1,
+                    text=f"{fixed_delta_str}",
+                    showarrow=False,
+                    font=dict(size=20)
+                )
+            ]
+        )
 
         st.plotly_chart(gauge, use_container_width=True)
 
@@ -2090,7 +2099,7 @@ elif page == "The Farm":
         avg_points_per_year_filtered = 0
         chart_listens_filtered = 0
 
-    basic_score = (track_pop_filtered + chart_hit_rate_filtered * 100) / 2
+    basic_score = round((track_pop_filtered + chart_hit_rate_filtered)/200,2)
 
     # Display gauge
     display_gauge_chart(basic_score)

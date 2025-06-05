@@ -1854,6 +1854,18 @@ elif page == "The Farm":
         avg_ref = others_df.groupby('year_week')[['artist_popularity', 'track_popularity']].mean().reset_index()
         avg_ref = avg_ref[(avg_ref['year_week'] >= user_min_week) & (avg_ref['year_week'] <= user_max_week)]
 
+        # Reference averages
+        ref_track_pop = round(avg_ref['track_popularity'].mean(), 2)
+        ref_art_pop = round(avg_ref['artist_popularity'].mean(), 2)
+
+        # Deltas
+        track_delta = round(track_pop_filtered - ref_track_pop, 2)
+        art_delta = round(art_pop_filtered - ref_art_pop, 2)
+
+        # Convert deltas to string format for Streamlit (signed)
+        track_delta_str = f"{'+' if track_delta >= 0 else ''}{track_delta}"
+        art_delta_str = f"{'+' if art_delta >= 0 else ''}{art_delta}"
+
         # Sort for consistency
         user_weekly_df = user_weekly_df.sort_values("year_week")
         avg_ref = avg_ref.sort_values("year_week")
@@ -1915,9 +1927,19 @@ elif page == "The Farm":
             value=basic_score,
             number={'suffix': "%"},
             domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Basic-O-Meter"},
+            # title={'text': "The Meter of Sheepleness"},
             gauge={'axis': {'range': [0, 100]}}
         ))
+        gauge.update_layout(
+            title=dict(
+                text="Sheeple-O-Meter",
+                font=dict(size=30),
+                x=0.5,
+                xanchor='center',
+                y=0.9,
+                yanchor='top'
+                ))
+
         st.plotly_chart(gauge, use_container_width=True)
 
     def display_artist_points_chart(chart_hits):
@@ -1992,11 +2014,10 @@ elif page == "The Farm":
         st.image('media_images/logo_correct.png', width=200)
 
     # Title section
-    c1, c2 = st.columns(2)
-    with c1:
-        st.title("_Welcome To The Farm_")
-        st.subheader("Here we try to determine if you are a chart-swallowing sheep or a lone-listening wolf")
-
+    c1, c2, c3 = st.columns([1,2,1])
+    with c2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The Farm</b></em></p>")
+        st.html("<p style='text-align: center; font-size: 30px;'>Here we try to determine if you are a chart-swallowing sheep or a lone-listening wolf</p>")
     # Filter data based on current session state
     if st.session_state.show_all_years:
         filtered_df = df
@@ -2006,6 +2027,33 @@ elif page == "The Farm":
     # Calculate metrics based on filtered data
     track_pop_filtered = round((filtered_df.groupby("track_name")["track_popularity"].mean()).mean(), 2)
     art_pop_filtered = round((filtered_df.groupby("artist_name")["artist_popularity"].mean()).mean(), 2)
+
+
+    # >>>>>>>>>>> DUPLICITY - can this be called from a function?
+    # Load reference data for comparison
+    popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
+    if Path(popularity_ref_pickle).exists():
+        with open(popularity_ref_pickle, "rb") as f:
+            reference_df = pickle.load(f)
+
+        reference_df['year'] = reference_df['year_week'].astype(str).str[:4].astype(int)
+
+        if st.session_state.show_all_years:
+            relevant_ref = reference_df[reference_df['user_id'] != user_selected]
+        else:
+            relevant_ref = reference_df[(reference_df['user_id'] != user_selected) & (reference_df['year'] == st.session_state.selected_year)]
+
+        ref_track_pop = round(relevant_ref['track_popularity'].mean(), 2)
+        ref_art_pop = round(relevant_ref['artist_popularity'].mean(), 2)
+
+        track_delta = round(track_pop_filtered - ref_track_pop, 2)
+        art_delta = round(art_pop_filtered - ref_art_pop, 2)
+
+        track_delta_str = f"{'+' if track_delta >= 0 else ''}{track_delta}"
+        art_delta_str = f"{'+' if art_delta >= 0 else ''}{art_delta}"
+    else:
+        ref_track_pop = ref_art_pop = None
+        track_delta_str = art_delta_str = "N/A"
 
     # Calculate chart-based metrics from filtered data
     if summary_stats and all_points_dfs:
@@ -2049,9 +2097,9 @@ elif page == "The Farm":
     col1, col2, col3, col4, col5, col6 = st.columns(6)
 
     with col1:
-        st.metric("Average track popularity", value=f'{track_pop_filtered}%', delta="-12")
+        st.metric("Average track popularity", value=f'{track_pop_filtered}%', delta=f'{track_delta_str}%')
     with col2:
-        st.metric("Average artist popularity", value=f'{art_pop_filtered}%', delta="-13")
+        st.metric("Average artist popularity", value=f'{art_pop_filtered}%', delta=f'{art_delta_str}%')
 
     # Chart-based metrics (now filtered by year)
     with col3:
@@ -2118,6 +2166,16 @@ elif page == "The Farm":
         # These now correctly match the dict keys
         points_df = all_points_dfs[f'points_df_{selected_window}']
         stats = summary_stats[f'summary_{selected_window}']
+
+        col3, col4, col5, col6 = st.columns(4)
+        with col3:
+            st.metric("# Chart Song Listens", f"{chart_listens_filtered:,}")
+        with col4:
+            st.metric("Avg Points/Year", f"{avg_points_per_year_filtered:,.0f}")
+        with col5:
+            st.metric("Avg Points/Listen", f"{avg_points_filtered:.1f}")
+        with col6:
+            st.metric("Chart Hit Rate", f"{chart_hit_rate_filtered:.1%}")
 
         # Top-performing songs
         chart_hits = points_df[points_df['points_awarded'] > 0]

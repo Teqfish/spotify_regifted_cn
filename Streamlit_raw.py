@@ -2097,7 +2097,6 @@ elif page == "The Farm":
 
     # Display all 6 scorecards
     col1, col2, col3, col4, col5, col6 = st.columns(6)
-
     with col1:
         st.metric("Average track popularity", value=f'{track_pop_filtered}%', delta=f'{track_delta_str}%')
     with col2:
@@ -2169,19 +2168,47 @@ elif page == "The Farm":
         points_df = all_points_dfs[f'points_df_{selected_window}']
         stats = summary_stats[f'summary_{selected_window}']
 
+        # Compute fresh metrics for the selected window
+        points_df['year'] = pd.to_datetime(points_df['datetime']).dt.year
+
+        if st.session_state.show_all_years:
+            filtered_points_window = points_df
+        else:
+            filtered_points_window = points_df[points_df['year'] == st.session_state.selected_year]
+
+        chart_hits_window = filtered_points_window[filtered_points_window['points_awarded'] > 0]
+        total_listens_window = len(filtered_points_window)
+        chart_listens_window = len(chart_hits_window)
+
+        if total_listens_window > 0:
+            chart_hit_rate_window = chart_listens_window / total_listens_window
+            avg_points_window = filtered_points_window['points_awarded'].mean()
+            total_points_window = filtered_points_window['points_awarded'].sum()
+            avg_points_per_year_window = total_points_window / total_listens_window * 365
+        else:
+            chart_hit_rate_window = 0
+            avg_points_window = 0
+            avg_points_per_year_window = 0
+            chart_listens_window = 0
+
+        # Display updated metrics
         col3, col4, col5, col6 = st.columns(4)
         with col3:
-            st.metric("# Chart Song Listens", f"{chart_listens_filtered:,}")
+            st.metric("# Chart Song Listens", f"{chart_listens_window:,}")
         with col4:
-            st.metric("Avg Chart Points/Year", f"{avg_points_per_year_filtered:,.0f}")
+            st.metric("Avg Chart Points/Year", f"{avg_points_per_year_window:,.0f}")
         with col5:
-            st.metric("Avg Chart Points/Listen", f"{avg_points_filtered:.1f}")
+            st.metric("Avg Chart Points/Listen", f"{avg_points_window:.1f}")
         with col6:
-            st.metric("Chart Listen Rate", f"{chart_hit_rate_filtered:.1%}")
+            st.metric("Chart Listen Rate", f"{chart_hit_rate_window:.1%}")
 
         # Top-performing songs
         chart_hits = points_df[points_df['points_awarded'] > 0]
         if not chart_hits.empty:
+
+            # Display artist points chart
+            display_artist_points_chart(chart_hits)
+
             top_songs = chart_hits.groupby(['artist_name', 'track_name']).agg({
                 'points_awarded': 'sum',
                 'chart_weeks_matched': 'mean',
@@ -2192,51 +2219,49 @@ elif page == "The Farm":
 
             st.dataframe(top_songs, use_container_width=True, hide_index=True)
 
-            # Display artist points chart
-            display_artist_points_chart(chart_hits)
+            # >>>>>>>>>>>>>>>>>>>>>>>>>> Points scored throughout the year chart
+            # # Prepare daily summary for timeline
+            # daily_points = chart_hits.copy()
+            # daily_points['date'] = daily_points['datetime'].dt.date
+            # daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
 
-            # Prepare daily summary for timeline
-            daily_points = chart_hits.copy()
-            daily_points['date'] = daily_points['datetime'].dt.date
-            daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
+            # # Add year and "day-of-year" style plotting column (preserves month/day but ignores actual year)
+            # daily_summary['year'] = pd.to_datetime(daily_summary['date']).dt.year
+            # daily_summary['month_day'] = pd.to_datetime(daily_summary['date']).apply(lambda x: x.replace(year=2000))
 
-            # Add year and "day-of-year" style plotting column (preserves month/day but ignores actual year)
-            daily_summary['year'] = pd.to_datetime(daily_summary['date']).dt.year
-            daily_summary['month_day'] = pd.to_datetime(daily_summary['date']).apply(lambda x: x.replace(year=2000))
+            # # Create full Jan–Dec date range to reindex against
+            # full_md_range = pd.date_range('2000-01-01', '2000-12-31', freq='D')
 
-            # Create full Jan–Dec date range to reindex against
-            full_md_range = pd.date_range('2000-01-01', '2000-12-31', freq='D')
+            # # Generate zero-filled data for each year
+            # all_years = []
 
-            # Generate zero-filled data for each year
-            all_years = []
+            # for year, group in daily_summary.groupby('year'):
+            #     group = group.set_index('month_day').reindex(full_md_range, fill_value=0).reset_index()
+            #     group['year'] = year
+            #     group.rename(columns={'index': 'month_day'}, inplace=True)
+            #     all_years.append(group)
 
-            for year, group in daily_summary.groupby('year'):
-                group = group.set_index('month_day').reindex(full_md_range, fill_value=0).reset_index()
-                group['year'] = year
-                group.rename(columns={'index': 'month_day'}, inplace=True)
-                all_years.append(group)
+            # # Concatenate into one DataFrame
+            # plot_df = pd.concat(all_years, ignore_index=True)
 
-            # Concatenate into one DataFrame
-            plot_df = pd.concat(all_years, ignore_index=True)
+            # # Prepare cumulative data per year
+            # plot_df['cumulative_points'] = plot_df.sort_values(['year', 'month_day']) \
+            #     .groupby('year')['points_awarded'].cumsum()
 
-            # Prepare cumulative data per year
-            plot_df['cumulative_points'] = plot_df.sort_values(['year', 'month_day']) \
-                .groupby('year')['points_awarded'].cumsum()
+            # # Filter only the selected years (or include all for setup)
+            # years = sorted(plot_df['year'].unique())
+            # latest_year = max(years)
 
-            # Filter only the selected years (or include all for setup)
-            years = sorted(plot_df['year'].unique())
-            latest_year = max(years)
+            # c1, c2 = st.columns([3, 1], vertical_alignment='center')
+            # with c1:
+            #     points_method = st.segmented_control(
+            #         "View Mode",
+            #         options=["Discrete", "Cumulative"],
+            #         selection_mode="single"
+            #     )
 
-            c1, c2 = st.columns([3, 1], vertical_alignment='center')
-            with c1:
-                points_method = st.segmented_control(
-                    "View Mode",
-                    options=["Discrete", "Cumulative"],
-                    selection_mode="single"
-                )
-
-            # Display timeline chart
-            display_timeline_chart(chart_hits, plot_df, years, latest_year, points_method)
+            # # Display timeline chart
+            # display_timeline_chart(chart_hits, plot_df, years, latest_year, points_method)
 
 # ------------------------------ FUN Page ------------------------------------ #
 elif page == "FUN":
@@ -2358,8 +2383,5 @@ elif page == "How To":
     st.image('media_images/Download_json.png', width=1200)
     st.markdown('')
     st.markdown('')
-    
+
     st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
-
- 
-

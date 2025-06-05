@@ -2017,7 +2017,7 @@ elif page == "The Farm":
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The Farm</b></em></p>")
-        st.html("<p style='text-align: center; font-size: 30px;'>Here we try to determine if you are a chart-swallowing sheep or a lone-listening wolf</p>")
+        st.html("<p style='text-align: center; font-size: 30px;'>Here we try to determine if you are a chart-following sheep or a lone-listening wolf</p>")
     # Filter data based on current session state
     if st.session_state.show_all_years:
         filtered_df = df
@@ -2171,11 +2171,11 @@ elif page == "The Farm":
         with col3:
             st.metric("# Chart Song Listens", f"{chart_listens_filtered:,}")
         with col4:
-            st.metric("Avg Points/Year", f"{avg_points_per_year_filtered:,.0f}")
+            st.metric("Avg Chart Points/Year", f"{avg_points_per_year_filtered:,.0f}")
         with col5:
-            st.metric("Avg Points/Listen", f"{avg_points_filtered:.1f}")
+            st.metric("Avg Chart Points/Listen", f"{avg_points_filtered:.1f}")
         with col6:
-            st.metric("Chart Hit Rate", f"{chart_hit_rate_filtered:.1%}")
+            st.metric("Chart Listen Rate", f"{chart_hit_rate_filtered:.1%}")
 
         # Top-performing songs
         chart_hits = points_df[points_df['points_awarded'] > 0]

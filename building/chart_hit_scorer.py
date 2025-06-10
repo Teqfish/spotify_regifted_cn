@@ -12,7 +12,7 @@ def chart_hit_scorer(user):
     import os
     from pathlib import Path
     import pickle
-    from Streamlit_raw import clean_csv_path
+    from regifted_app import clean_csv_path
 
     # import data
     user_clean = clean_csv_path

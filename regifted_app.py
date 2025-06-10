@@ -6,7 +6,9 @@ Enriched with Discogs API, chart-scraping, and more.
 
 Please contact us to give feedback and feature requests.
 
-Built by Ben Garalnick, Jana Hueppe, Tom Witt & Charlie Nash (06.2025)
+Built by Ben Gee, Jana Hueppe, Tom Witt & Charlie Nash (06.2025)
+
+ after running file: run `streamlit run regifted_app.py` in the terminal to start the app.
 '''
 
 # -------------------------------- IMPORT ------------------------------------ #

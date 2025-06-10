@@ -2,7 +2,7 @@
 A deeper dive into your Spotify data!
 
 ********************************************************************************
-- run the file Streamlit_raw.py in your IDE of choice
+- run the file regifted_app.py in your IDE of choice
 - in terminal, run 'streamlit run regifted_app.py'
 
 for best results, please choose from the following datasets:

@@ -1,5 +1,15 @@
-# spotify_regifted
+# regifted
 A deeper dive into your Spotify data!
+
+********************************************************************************
+- run the file Streamlit_raw.py in your IDE of choice
+- in terminal, run 'streamlit run regifted_app.py'
+
+for best results, please choose from the following datasets:
+- Jana, Thomas, Benjie, Charlie, Reyhane
+
+You are welcome to upload your own data, however The Farm will not function.
+********************************************************************************
 
 # DESCRIPTION
 Spotify's yearly wrapped doesn't feel satisfying enough, so we've extracted, loaded, transformed, cleaned our (and our friends') data to find out what we can find out about our listening habits!

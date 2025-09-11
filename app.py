@@ -1,24 +1,14 @@
-# ----------------------------- INTRO/CREDITS -------------------------------- #
-
-'''
-An ETL and EDA app for listening habits based on user Spotify listening history.
-Enriched with Discogs API, chart-scraping, and more.
-
-Please contact us to give feedback and feature requests.
-
-Built by Ben Gee, Jana Hueppe, Tom Witt & Charlie Nash (06.2025)
-
- after running file: run `streamlit run regifted_app.py` in the terminal to start the app.
-'''
-
-# -------------------------------- IMPORT ------------------------------------ #
+from grpc import local_channel_credentials
 import streamlit as st
 import pandas as pd
+import json
+import os
+import bcrypt
+import secrets
+import time
+from datetime import datetime, timedelta, timezone
 import plotly.express as px
 import plotly.graph_objects as go
-from google.cloud import bigquery
-import pandas_gbq
-import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -34,261 +24,284 @@ import shutil
 import random
 import string
 from pathlib import Path
-import json
 from datetime import datetime, timedelta
 import pickle
 import re
+from supabase import create_client
+import io
+from io import StringIO
+import threading
+import jwt
+import extra_streamlit_components as stx
 
+from supabase_io import set_status, inc_status, finish_status
+from enrichment import background_enrich
 
-# Music Info
-df_track = pd.read_csv('datasets/info_clean/info_track_clean.csv')
-df_album = pd.read_csv('datasets/info_clean/info_album_clean.csv')
-df_artist = pd.read_csv('datasets/info_clean/info_artist_genre_fix.csv')
-df_info = pd.read_csv('datasets/info_clean/trk_alb_art.csv')
+# --- CONFIG / CLIENTS ---
+st.set_page_config(page_title="Regifted", page_icon=":gift:", layout="wide", initial_sidebar_state="expanded")
 
-# Podcasts, Audiobooks, Events
-df_podcast = pd.read_csv('info_tables/info_podcast.csv') #  after push
-df_audiobook = pd.read_csv("info_tables/info_audiobook.csv") #  after push
-df_event = pd.read_csv('datasets/info_clean/info_events.csv')
+SUPABASE_URL = st.secrets["supabase"]["url"]
+SUPABASE_KEY = st.secrets["supabase"]["key"]
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-##page navigation##
-st.set_page_config(page_title="Regifted", page_icon=":musical_note:",layout="wide", initial_sidebar_state="expanded")
-st.sidebar.title("Navigation")
-
-# ------------------ NEW CODE ------------------- #
+JWT_COOKIE_NAME = "regifted_auth"
+JWT_ALG = "HS256"
+JWT_TTL_HOURS = 24
+JWT_SECRET = st.secrets["auth"]["jwt_secret"]
 
 # --- SESSION INIT ---
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# --- AUTH UI ---
-st.title("Regifted: Login")
+# --- AUTH FUNCTIONS ---
+def save_user(user_id, email, hashed_pw, first_name, last_name):
+    try:
+        response = supabase.table("users").insert({
+            "user_id": user_id,
+            "email": email,
+            "hashed_password": hashed_pw,
+            "first_name": first_name,
+            "last_name": last_name,
+        }).execute()
+    except Exception as e:
+        raise RuntimeError(f"Supabase insert failed: {e}")
 
-if not st.session_state.user:
-    mode = st.toggle("Not yet a user? Sign up here.")
+    # The new API returns a list in response.data if successful
+    if not response.data:
+        raise RuntimeError(f"Supabase insert returned no data: {response}")
 
-    if mode:
-        st.subheader("Sign Up")
-        with st.form("signup_form"):
-            first_name = st.text_input("First Name")
-            email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
-            confirm = st.text_input("Confirm Password", type="password")
-            submit = st.form_submit_button("Create Account")
-            if submit:
-                success, msg, *rest = signup_user(email, password, confirm, first_name)
-                if success:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-    else:
-        st.subheader("Login")
-        with st.form("login_form"):
-            email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
-            submit = st.form_submit_button("Log In")
-            if submit:
-                success, result = login_user(email, password)
-                if success:
-                    st.session_state.user = result
-                    st.success(f"Welcome, {result['first_name']}!")
-                    st.rerun()
-                else:
-                    st.error(result)
-else:
-    user = st.session_state.user
-    st.sidebar.success(f"Logged in as {user['first_name']}")
+    print(f"✅ User {email} saved successfully.")
+    return response.data
 
-# ------------------END OF NEW CODE------------------- #
+def hash_password(password):
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-page = st.sidebar.radio("Go to", ["Home", "Overall Review", "Per Year", "Per Artist", "Per Album", "Per Genre", "The Farm", "FUN", "AbOuT uS", "How To"])
+def verify_password(password, hashed):
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
+def generate_user_id():
+    return secrets.token_hex(8)
 
-# Timestamp string to add to saved files
-def generate_timestamp():
+def signup(email, password, confirm_password, first_name, last_name):
+    try:
+        # Check if email already exists
+        result = supabase.table("users").select("email").eq("email", email).execute()
+    except Exception as e:
+        return False, f"Error checking existing users: {e}"
 
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
+    if result.data and len(result.data) > 0:
+        return False, "Email already exists."
 
-popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
-def process_and_store_user_popularity(csv_path, user_id):
-    df = pd.read_csv(csv_path)
+    if password != confirm_password:
+        return False, "Passwords do not match."
 
-    # Ensure datetime is parsed
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df['year_week'] = df['datetime'].dt.to_period('W').apply(lambda r: r.start_time)
+    try:
+        user_id = generate_user_id()
+        hashed_pw = hash_password(password)
+        save_user(user_id, email, hashed_pw, first_name, last_name)
+    except Exception as e:
+        return False, f"Error saving user: {e}"
 
-    # Weekly mean popularity
-    weekly_artist_pop = df.groupby('year_week')['artist_popularity'].mean().reset_index(name='artist_popularity')
-    weekly_track_pop = df.groupby('year_week')['track_popularity'].mean().reset_index(name='track_popularity')
+    return True, "Signup successful!"
 
-    weekly_df = pd.merge(weekly_artist_pop, weekly_track_pop, on='year_week')
-    weekly_df['user_id'] = user_id
+def login(email, password):
+    result = supabase.table("users").select("*").eq("email", email).execute()
+    if not result.data:
+        log_login_attempt(email, False)
+        return False, "Email not found."
 
-    # Append to or create reference pickle
-    if os.path.exists(popularity_ref_pickle):
-        with open(popularity_ref_pickle, "rb") as f:
-            reference_df = pickle.load(f)
-    else:
-        reference_df = pd.DataFrame()
+    user = result.data[0]
+    if not verify_password(password, user["hashed_password"]):
+        log_login_attempt(email, False, user["user_id"])
+        return False, "Incorrect password."
 
-    reference_df = pd.concat([reference_df, weekly_df], ignore_index=True)
+    log_login_attempt(email, True, user["user_id"])
+    return True, user
 
-    with open(popularity_ref_pickle, "wb") as f:
-        pickle.dump(reference_df, f)
+def log_login_attempt(email, success, user_id=None):
+    supabase.table("login_events").insert({
+        "event_time": datetime.now().isoformat(),
+        "user_id": user_id,
+        "email": email,
+        "success": success,
+    }).execute()
 
-    return weekly_df
+# ---- Cookie Manager (singleton) ----
+def get_cookie_manager():
+    if "cookie_mgr" not in st.session_state:
+        st.session_state.cookie_mgr = stx.CookieManager(key="regifted_cookies")
+    return st.session_state.cookie_mgr
 
-# Function to create a user selector for the Home page
-def create_user_selector(users, label='User:'):
-    """Only for Home page - creates selectbox and updates session state"""
-    if 'user_index' not in st.session_state:
-        st.session_state.user_index = 0
+# ---- JWT helpers ----
+def make_jwt(user: dict) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user["user_id"],
+        "email": user["email"],
+        "first_name": user.get("first_name"),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(hours=JWT_TTL_HOURS)).timestamp()),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
-    user_names = list(users.keys())
-    user_index = st.selectbox(
-        label,
-        options=range(len(user_names)),
-        index=st.session_state.user_index,
-        format_func=lambda x: user_names[x],
-        key='user_index'
+def set_auth_cookie(token: str):
+    cm = get_cookie_manager()
+    cm.set(
+        JWT_COOKIE_NAME,
+        token,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=JWT_TTL_HOURS),
     )
 
-# Update session state with selected user name ##
-    st.session_state.user_selected = user_names[st.session_state.user_index]
+def clear_auth_cookie():
+    cm = get_cookie_manager()
+    try:
+        cm.delete(JWT_COOKIE_NAME)
+    except Exception:
+        cm.set(JWT_COOKIE_NAME, "", expires_at=datetime.now(timezone.utc) - timedelta(days=1))
 
-    return user_index, user_names[user_index]
+def try_restore_session_from_cookie():
+    """If a valid JWT cookie exists, populate st.session_state.user."""
+    if st.session_state.get("user"):
+        return st.spinner("Restoring session...")
 
-def get_current_user(users):
-    """For other pages - gets current user from session state"""
-    # Initialize if not exists
-    if 'user_index' not in st.session_state:
-        st.session_state.user_index = 0
-    if 'user_selected' not in st.session_state:
-        user_names = list(users.keys())
-        st.session_state.user_selected = user_names[0]
+    cm = get_cookie_manager()
+    token = cm.get(JWT_COOKIE_NAME)
+    if not token:
+        return
 
-    return st.session_state.user_selected
+    try:
+        claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        st.session_state.user = {
+            "user_id": claims["sub"],
+            "email": claims["email"],
+            "first_name": claims.get("first_name", ""),
+        }
+    except jwt.ExpiredSignatureError:
+        clear_auth_cookie()
+    except jwt.InvalidTokenError:
+        clear_auth_cookie()
 
-# Upload zip, extract & concat JSONs, send out to
-# run_cleaning_pipeline and back again to save as CSV.
-def process_uploaded_zip(uploaded_file, user_filename):
+def refresh_cookie_if_needed():
+    if not st.session_state.get("user"):
+        return
+    # Re-issue with a fresh 24h expiry (sliding session). Remove if you prefer fixed 24h.
+    token = make_jwt(st.session_state.user)
+    set_auth_cookie(token)
 
+# ---- Mount cookie manager and restore session BEFORE any UI ----
+cm = get_cookie_manager()
+_ = cm.get_all()  # force the component to hydrate so get/set works this run
 
-    # Create a temporary directory to work with the uploaded file
+try_restore_session_from_cookie()
+refresh_cookie_if_needed()   # optional sliding renewal
+
+# --- SUPABASE DATA I/O ---
+def list_user_tables(user_id):
+    """Return a list of (label, table_name) tuples for a given user."""
+    response = supabase.table("uploads") \
+        .select("dataset_label, table_name") \
+        .eq("user_id", user_id) \
+        .order("upload_time", desc=True) \
+        .execute()
+
+    if hasattr(response, "error") and response.error:
+        raise RuntimeError(f"Supabase error: {response.error.message}")
+
+    return [(row["dataset_label"], row["table_name"]) for row in response.data]
+
+def upload_user_data_to_supabase(user_id, dataframe, dataset_label, filename):
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
+    path = f"{user_id}/{table_name}.csv"
+
+    # Save CSV to temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+        dataframe.to_csv(tmp.name, index=False)
+        tmp.flush()
+
+        # Upload to Supabase
+        supabase.storage.from_("userdata").upload(
+            path=path,
+            file=tmp.name,
+            file_options={"content-type": "text/csv"}
+        )
+
+    # Log metadata
+    log_upload(user_id, table_name, dataset_label, filename)
+    return table_name
+
+def load_user_table_from_supabase(user_id, table_name):
+    path = f"{user_id}/{table_name}.csv"
+    res = supabase.storage.from_("userdata").download(path)
+    if res:
+        decoded = res.decode("utf-8")
+        return pd.read_csv(StringIO(decoded))
+    else:
+        st.error(f"Failed to load {table_name}")
+        return pd.DataFrame()
+
+# --- DATA PROCESSING ---
+def process_uploaded_zip(uploaded_file, dataset_label, user_id):
+    """Processes a Spotify ZIP upload, cleans data, and uploads to Supabase."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Save uploaded file to temp directory
-        temp_zip_path = os.path.join(temp_dir, uploaded_file.name)
-        with open(temp_zip_path, 'wb') as f:
+        # Save uploaded ZIP
+        zip_path = os.path.join(temp_dir, uploaded_file.name)
+        with open(zip_path, 'wb') as f:
             f.write(uploaded_file.getbuffer())
 
-        # Create extraction directory
+        # Extract contents
         extract_dir = os.path.join(temp_dir, 'extracted')
-
-        # Extract zip file
         try:
-            with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(extract_dir)
-            st.success(f"Successfully extracted {uploaded_file.name}")
         except Exception as e:
-            st.error(f"Failed to extract zip file: {e}")
+            st.error(f"❌ Failed to extract zip: {e}")
             return None
 
-        if audiobook:
-            try:
-                audiobook_path = os.path.join(extract_dir, audiobook.name)
-                with open(audiobook_path, 'wb') as f:
-                    f.write(audiobook.getbuffer())
-                st.success(f"Audiobook JSON saved to: {audiobook_path}")
-            except Exception as e:
-                st.warning(f"Failed to save audiobook JSON: {e}")
-
-        # Find all JSON files
+        # Collect all JSON files from ZIP
         json_files = []
         for root, dirs, files in os.walk(extract_dir):
             for file in files:
-                # if file.startswith('._'):
-                #     continue  # Skip macOS metadata files
-                if file.lower().endswith('.json'):
+                if file.lower().endswith(".json") and not file.startswith("._"):
                     json_files.append(os.path.join(root, file))
 
         if not json_files:
-            st.warning("No JSON files found in the uploaded zip.")
+            st.warning("⚠️ No JSON files found in the uploaded ZIP.")
             return None
 
-        # Combine all JSON files into one
+        # Merge JSON content
         combined_data = []
-        for json_file in json_files:
+        for file in json_files:
             try:
-                with open(json_file, 'r', encoding='utf-8') as f:
+                with open(file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    if isinstance(data, list):
-                        combined_data.extend(data)
-                    else:
-                        combined_data.append(data)
-                st.info(f"Processed: {os.path.basename(json_file)}")
+                    combined_data.extend(data if isinstance(data, list) else [data])
             except Exception as e:
-                st.warning(f"Failed to read {json_file}: {e}")
+                st.warning(f"⚠️ Couldn't read {os.path.basename(file)}: {e}")
 
-        # Create output directories
-        raw_dir = Path("datasets/user_raw")
-        clean_dir = Path("datasets/user_clean")
-        raw_dir.mkdir(exist_ok=True)
-        clean_dir.mkdir(exist_ok=True)
-
-        # Generate filename with timestamp
-        timestamp_suffix = generate_timestamp()
-        json_filename = f"{user_filename}_{timestamp_suffix}.json"
-        csv_filename = f"{user_filename}_{timestamp_suffix}.csv"
-
-        raw_json_path = raw_dir / json_filename
-        clean_csv_path = clean_dir / csv_filename
-
-        # Save combined JSON to user_raw
-        try:
-            with open(raw_json_path, 'w', encoding='utf-8') as f:
-                json.dump(combined_data, f, indent=2, ensure_ascii=False)
-            st.success(f"Saved raw JSON to: {raw_json_path}")
-        except Exception as e:
-            st.error(f"Failed to save raw JSON: {e}")
+        if not combined_data:
+            st.error("❌ Failed to parse any valid listening data.")
             return None
 
-        # Convert to DataFrame for cleaning pipeline
-        try:
-            if isinstance(combined_data, list) and len(combined_data) > 0:
-                df = pd.json_normalize(combined_data)
-            else:
-                df = pd.DataFrame([combined_data]) if combined_data else pd.DataFrame()
+        # Create DataFrame
+        df = pd.json_normalize(combined_data)
+        st.info(f"📦 Parsed {len(df)} rows of listening data")
 
-            st.info(f"Created DataFrame with {len(df)} rows and {len(df.columns)} columns")
+        # Clean the data
+        cleaned_df = run_cleaning_pipeline(df, dataset_label)
 
-            # Run cleaning pipeline
-            cleaned_df = run_cleaning_pipeline(df, user_filename)
+        # Upload cleaned data to Supabase
+        filename = uploaded_file.name
+        table_name = upload_user_data_to_supabase(user_id, cleaned_df, dataset_label, filename)
 
-            # Save cleaned data as CSV to user_clean
-            cleaned_df.to_csv(clean_csv_path, index=False)
-            st.success(f"Saved cleaned CSV to: {clean_csv_path}")
+        st.success(f"✅ Cleaned CSV uploaded as `{table_name}.csv`")
+        return table_name, cleaned_df
 
-            # After saving the cleaned CSV, update popularity reference data
-            try:
-                weekly_df = process_and_store_user_popularity(clean_csv_path, user_filename)
-                st.success("User popularity statistics added to reference dataset.")
-            except Exception as e:
-                st.error(f"Failed to process popularity statistics: {e}")
-
-            return str(clean_csv_path)
-
-        except Exception as e:
-            st.error(f"Failed to process data: {e}")
-            return None
-
-# CLEANING PIPELINE
-def run_cleaning_pipeline(df, dataset_name):
-
+def run_cleaning_pipeline(df, username_label):
+    """Cleans a Spotify listening dataframe and adds session/user metadata."""
     st.subheader("Running Data Cleaning Pipeline...")
 
     cleaned_df = df.copy()
-
-    # Basic cleaning steps - customize these based on your needs
     initial_rows = len(cleaned_df)
 
     with st.expander("Cleaning Steps", expanded=True):
@@ -296,243 +309,297 @@ def run_cleaning_pipeline(df, dataset_name):
         cleaned_df = cleaned_df.dropna(how='all')
         st.write(f"• Removed {initial_rows - len(cleaned_df)} completely empty rows")
 
-        # Remove duplicate rows
+        # Remove duplicates
         duplicates_removed = len(cleaned_df) - len(cleaned_df.drop_duplicates())
         cleaned_df = cleaned_df.drop_duplicates()
         st.write(f"• Removed {duplicates_removed} duplicate rows")
 
-        # >>>>>>>>>> BUILD MEGA CLEANING CODE
-        # filter out rows with no listen time
+        # Remove zero-duration rows
         cleaned_df = cleaned_df[cleaned_df['ms_played'] != 0]
-        # transform ms to seconds
-        cleaned_df['seconds_played'] = cleaned_df['ms_played'] / 1000
-        # transform seconds to minutes
-        cleaned_df['minutes_played'] = round(cleaned_df['seconds_played'] / 60, 2)
-        # rename columns
-        cleaned_df = cleaned_df.rename(columns={'ts': 'datetime'})
-        cleaned_df = cleaned_df.rename(columns={'conn_country': 'country'})
-        cleaned_df = cleaned_df.rename(columns={'master_metadata_track_name': 'track_name'})
-        cleaned_df = cleaned_df.rename(columns={'master_metadata_album_artist_name': 'artist_name'})
-        cleaned_df = cleaned_df.rename(columns={'master_metadata_album_album_name': 'album_name'})
-        # cast datetime to datetime
-        # >>>>>>>>>>>>> .dt.tz_localize(None) - if you want to lose the local time detail
-        cleaned_df['datetime'] = pd.to_datetime(cleaned_df['datetime'])
-        # create name column
-        cleaned_df['username'] = user_filename
 
-        # add categories for music, audio and audiobook
+        # Convert time
+        cleaned_df['seconds_played'] = cleaned_df['ms_played'] / 1000
+        cleaned_df['minutes_played'] = round(cleaned_df['seconds_played'] / 60, 2)
+
+        # Rename useful columns
+        cleaned_df = cleaned_df.rename(columns={
+            'ts': 'datetime',
+            'conn_country': 'country',
+            'master_metadata_track_name': 'track_name',
+            'master_metadata_album_artist_name': 'artist_name',
+            'master_metadata_album_album_name': 'album_name'
+        })
+
+        # Parse datetime
+        cleaned_df['datetime'] = pd.to_datetime(cleaned_df['datetime'])
+
+        # Add user label
+        cleaned_df['username'] = username_label
+
+        # Categorise each row
         def categorise(row):
-            if pd.isnull(row['track_name']):
-                if pd.isnull(row['episode_show_name']):
+            if pd.isnull(row.get('track_name')):
+                if pd.isnull(row.get('episode_show_name')):
                     return 'audiobook'
                 else:
                     return 'podcast'
             else:
-                if pd.isnull(row['episode_show_name']):
+                if pd.isnull(row.get('episode_show_name')):
                     return 'music'
                 else:
-                    return row['no category']
-
+                    return 'no category'
 
         cleaned_df['category'] = cleaned_df.apply(categorise, axis=1)
 
-        # drop unecessary columns
-        cleaned_df = cleaned_df.drop(columns=['offline','offline_timestamp','incognito_mode','endTime','audiobookName','chapterName','msPlayed', "platform", "ip_addr"], errors='ignore')
-        # drop nulls
-        cleaned_df = cleaned_df[~cleaned_df[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
+        # Drop unneeded columns if present
+        cleaned_df = cleaned_df.drop(columns=[
+            'offline', 'offline_timestamp', 'incognito_mode',
+            'endTime', 'audiobookName', 'chapterName',
+            'msPlayed', 'platform', 'ip_addr'
+        ], errors='ignore')
 
-# TODO  MAKE DF_TRACKS <<<<<<<<<< REMIND ME WHAT THIS IS FOR
-        df_tracks = cleaned_df.groupby(['track_name', 'artist_name', 'spotify_track_uri'],as_index=False)['ms_played'].sum()
+        # Drop rows with no content
+        cleaned_df = cleaned_df[~cleaned_df[['track_name', 'episode_name', 'audiobook_title']].isnull().all(axis=1)]
 
         st.write(f"• Final dataset: {len(cleaned_df)} rows, {len(cleaned_df.columns)} columns")
 
     return cleaned_df
 
-# Load all CSVs in directory as dataframes
-# >>>>>>>> No longer sure if this is doing anything although
-# >>>>>>>> new datasets are present in old dropdown...
-def load_csv_dataframes(directory="datasets/user_clean"):
+def log_upload(user_id, table_name, dataset_label, filename):
+    supabase.table("uploads").insert({
+        "upload_time": datetime.now().isoformat(),
+        "user_id": user_id,
+        "table_name": table_name,
+        "dataset_label": dataset_label,
+        "filename": filename
+    }).execute()
 
-    csv_dict = {}
-    data_dir = Path(directory)
+def info_tables_update(user_id, table_name):
+    try:
+        # Load the dataset from run_cleaning_pipeline
+        df = cleaned_df
 
-    if not data_dir.exists():
-        return csv_dict
+        # Step 1: Extract necessary column values
 
-    # Find all CSV files
-    csv_files = list(data_dir.glob("*.csv"))
+        # Step 2: Enrich via API
 
-    if not csv_files:
-        return csv_dict
+        # Step 3: Save or upload enriched table to Supabase
 
-    # Load each CSV file as a dataframe
-    for csv_file in csv_files:
-        try:
-            # Extract the base name (without extension and timestamp suffix)
-            filename = csv_file.stem
-            # Remove the timestamp suffix (format: _YYYYMMDD_HHMMSS)
-            if '_' in filename:
-                parts = filename.split('_')
-                # Check if last two parts look like timestamp (YYYYMMDD and HHMMSS)
-                if len(parts) >= 2 and len(parts[-1]) == 6 and len(parts[-2]) == 8:
-                    base_name = '_'.join(parts[:-2])
-                else:
-                    base_name = filename
-            else:
-                base_name = filename
+    except Exception as e:
+        print(f"[Background task error] {e}")
 
-            # Load CSV as DataFrame
-            df = pd.read_csv(csv_file)
-            csv_dict[base_name] = df
-
-        except Exception as e:
-            st.error(f"Failed to load {csv_file.name}: {e}")
-
-    return csv_dict
-
-def get_user_weekly_popularity(df, user_id):
-    df = df.copy()
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df['year_week'] = df['datetime'].dt.to_period('W').apply(lambda r: r.start_time)
-
-    weekly_artist = df.groupby('year_week')['artist_popularity'].mean().reset_index(name='artist_popularity')
-    weekly_track = df.groupby('year_week')['track_popularity'].mean().reset_index(name='track_popularity')
-
-    weekly_df = pd.merge(weekly_artist, weekly_track, on='year_week')
-    weekly_df['user_id'] = user_id
-    return weekly_df
-
-# # Initialize session state
-if 'dataframes_dict' not in st.session_state:
-    st.session_state.dataframes_dict = {}
-
-# Load datasets at the beginning of each page load
-users = load_csv_dataframes()
-
-# ------------------------------- Home Page ---------------------------------- #
-if page == "Home":
-
-    col1,col2,col3 = st.columns([3, 3, 3], vertical_alignment='center')
+# --- LOGIN UI ---
+if not st.session_state.user:
+    st.markdown("<h1 style='text-align: center;'>Regifted: Login</h1>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.image('media_images/logo_correct.png', width=400)
-    st.markdown("<h1 style='text-align: center; '>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
+        mode = st.toggle("Sign Up")
 
-    ## function to create user selector ##
-    user_index, user_selected = create_user_selector(users, label='User:')
+        if mode:
+            with st.form("signup_form"):
+                first_name = st.text_input("First Name")
+                last_name = st.text_input("Last Name")
+                email = st.text_input("Email")
+                password = st.text_input("Password", type="password")
+                confirm = st.text_input("Confirm Password", type="password")
+                submitted = st.form_submit_button("Create Account")
+                if submitted:
+                    success, msg = signup(email, password, confirm, first_name, last_name)
+                    if success:
+                        # ✅ Auto-login after successful signup
+                        ok, userdata = login(email, password)
+                        if ok:
+                            st.session_state.user = userdata
+                            token = make_jwt(userdata)
+                            set_auth_cookie(token)
+                            st.rerun()
+                        else:
+                            # extremely unlikely, but handle gracefully
+                            st.success(msg)
+                            st.info("Account created. Please log in.")
+                    else:
+                        st.error(msg)
+        else:
+            with st.form("login_form"):
+                email = st.text_input("Email")
+                password = st.text_input("Password", type="password")
+                submitted = st.form_submit_button("Log In")
+                if submitted:
+                    success, userdata = login(email, password)
+                    if success:
+                        st.session_state.user = userdata
+                        token = make_jwt(userdata)
+                        set_auth_cookie(token)
+                        st.rerun()
+                    else:
+                        st.error(userdata)
 
-    ## some paragraphs of welcome fluff and dataset parameters ##
-    users[user_selected]['datetime'] = pd.to_datetime(users[user_selected]['datetime'])
-    users[user_selected]['date'] = users[user_selected]['datetime'].dt.date
-    total_listened = (users[user_selected]['minutes_played'].sum() /60)
-    date_start = users[user_selected]['datetime'].min().date()
-    date_end = users[user_selected]['datetime'].max().date()
-    start_day = date_start.strftime("%d %B %Y")
-    end_day = date_end.strftime("%d %B %Y")
+    st.stop()
 
-# ----- CN UPLOADER ----- #
+# --- PAGE NAVIGATION ---
+st.sidebar.title("Navigation")
+st.sidebar.write(f"Logged in as: **{st.session_state.user['first_name']}**")
+if st.sidebar.button("Log out"):
+    clear_auth_cookie()
+    st.session_state.pop("user", None)
+    st.rerun()
 
-    # Upload section
-    st.header("1. Upload Spotify Data")
-    uploaded_file = st.file_uploader(
-        "Upload your **Spotify Listening History** zip here!",
-        type=['zip'],
-        help="Upload a zip file containing your Spotify data export"
-    )
-    col1, col2 = st.columns([2,1])
+page = st.sidebar.radio("Go to",
+                        ["Home",
+                         "Overall Review",
+                         "Per Year",
+                         "Per Artist",
+                         "Per Album",
+                         "Per Genre",
+                         "The Farm",
+                         "FUN",
+                         "AbOuT uS",
+                         "How To"
+                         ]
+                        )
+
+
+# --- Enrichment Status Widget ---
+import time
+from supabase_io import sb  # same client
+
+def enrichment_status_widget(user_id: str, dataset_label: str, refresh_seconds: int = 5):
+    st.subheader("Metadata Enrichment")
+
+    res = sb.table("enrichment_status").select("*") \
+        .eq("user_id", user_id).eq("dataset_label", dataset_label).limit(1).execute()
+    data = getattr(res, "data", None)
+    row = data[0] if isinstance(data, list) and data else None
+    if not row:
+        return
+
+    st.markdown(f"**Status:** {row['status'].upper()}  •  **Phase:** {row['phase']}")
+    if row.get("detail"):
+        st.caption(row["detail"])
+
+    bd = row.get("batches_done") or 0
+    tb = row.get("total_batches")
+    st.write(f"**Batches done:** {bd}" + (f" / {tb}" if tb else ""))
+
+    if row.get("percent") is not None:
+        st.progress(min(max(float(row["percent"]), 0), 100) / 100.0)
+
+    st.caption(f"Last update: {row['updated_at']}")
+
+    if row.get("status") == "running":
+        st.write(f"🔄 Refreshing every {refresh_seconds}s")
+        time.sleep(refresh_seconds)
+        st.rerun()
+
+# --- Sidebar render: only show when running ---
+user_id = st.session_state.user["user_id"]
+current_label = st.session_state.get("current_dataset_label")
+
+with st.sidebar:
+    if current_label:
+        res = sb.table("enrichment_status").select("status") \
+            .eq("user_id", user_id).eq("dataset_label", current_label).limit(1).execute()
+
+        data = getattr(res, "data", None)
+        row = data[0] if isinstance(data, list) and data else None
+        if row and row.get("status") == "running":
+            st.divider()
+            enrichment_status_widget(user_id, current_label, refresh_seconds=5)
+
+# -------------------------------- Home Page --------------------------------- #
+if page == "Home":
+    user_id = st.session_state.user["user_id"]
+
+    col1, col2, col3 = st.columns([3, 3, 3], vertical_alignment='center')
+    with col2:
+        st.image("media_images/logo_correct.png", width=400)
+    st.markdown("<h1 style='text-align: center;'>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
+
+    dataset_options = list_user_tables(user_id)
+
+    # Existing dataset dropdown
+    if dataset_options:
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            labels = [label for label, _ in dataset_options]
+            selected_label = st.selectbox("Choose a dataset you've uploaded", labels)
+
+        selected_table = dict(dataset_options)[selected_label]
+        df = load_user_table_from_supabase(user_id, selected_table)
+
+        if df.empty:
+            st.warning("Failed to load selected dataset.")
+            st.stop()
+
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        df["date"] = df["datetime"].dt.date
+        st.session_state.current_df = df
+        st.session_state.current_dataset_label = selected_label
+
+        total_listened = df["minutes_played"].sum() / 60
+        st.markdown(f"🗓️ From **{df['datetime'].min().date()}** to **{df['datetime'].max().date()}**")
+        st.markdown(f"🎧 Total listening time: **{total_listened:.2f} hours**")
+        st.dataframe(df.sample(50))
+
+    else:
+        st.info("You haven’t uploaded any datasets yet.")
 
     with col1:
-        add_audiobook = st.toggle("Add Audiobook Data", value=False, help="Upload a single .json with your audiobook listening data")
-    with col2:
-        if add_audiobook:
-            audiobook = st.file_uploader(
-            "",
-            type=['json'],
-            help="Upload a json file containing your Spotify data export"
+        mode = st.toggle("Upload new dataset")
+        if mode:
+            uploaded_file = st.file_uploader(
+                "Upload your full Spotify ZIP file (music, podcasts, audiobooks)",
+                type=["zip"],
+                help="This is the ZIP file you downloaded from Spotify"
             )
-        else:
-            audiobook=None
+            dataset_label = st.text_input("Give this dataset a label (e.g. '2023', 'Main', 'Friend1')")
 
-    user_filename = st.text_input(
+            if uploaded_file and dataset_label:
+                if st.button("Process Upload"):
+                    with st.spinner("Processing your Spotify data..."):
+                        # Modified process_uploaded_zip to return BOTH table_name and cleaned_df
+                        table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
 
-        "Type Name Below:        [then press ENTER]",
-        value=None,
+                        if cleaned_df is not None:
+                            # Save to session state
+                            st.session_state.cleaned_df = cleaned_df
+                            st.session_state.current_dataset_label = dataset_label
 
-        help="This will be used as the base filename for saving your data"
-    )
+                            st.success("✅ Dataset uploaded, cleaned, and enrichment started!")
+                            st.rerun()
 
-    if uploaded_file is not None and user_filename:
-        if st.button("Process Upload"):
-            with st.spinner("Processing uploaded file..."):
-                result = process_uploaded_zip(uploaded_file, user_filename)
-                if result:
-                    st.session_state.last_processed = result
-                    # Refresh the dataframes dictionary from cleaned CSV files
-                    st.session_state.dataframes_dict = load_csv_dataframes()
-                    st.success("Dataset processed successfully! It will now appear in the user selector.")
-                    st.rerun()  # Refresh the page to update the user selector
-
-    # Load existing data section
-    st.header("2. Refresh Data")
-    if st.button("Refresh Data List"):
-        st.session_state.dataframes_dict = load_csv_dataframes()
-        st.success("Data list refreshed!")
-        st.rerun()  # Refresh the page to update the user selector
-
-    # Display selected dataset (if a user is selected)
-    if user_selected and users:
-        st.header("3. Scroll up and Select Your Dataset")
-
-        df = users[user_selected]
-
-        # Display dataset info
-        st.subheader(f"{user_selected}... Here is your data!")
-        cl1, cl2, cl3 = st.columns([6,10,2], vertical_alignment='center')
-        with cl1:
-            st.write(f"{df.shape[0]} listening instances")
-        with cl3:
-            rows_toggle = {'10': 10, '25': 25, '50': 50, '100': 100, 'All': None}
-            # create dropdown from rows_toggle
-            rows = st.selectbox(
-                "No. rows:",
-                options=list(rows_toggle.keys()),
-                index=0,
-            )
-        with cl2:
-            if rows == 'All':
-                st.warning("Please do not leave this table on 'All' to reduce lag.")
-
-        if rows == 'All':
-            st.dataframe(df)
-        else:
-            st.dataframe(df.sample(int(rows)))
-
-    elif users:
-        st.info("Select a user dataset from the dropdown above to view the data.")
-    else:
-        st.info("No datasets loaded. Upload a zip file or check if there are existing CSV files in the 'user_clean' directory.")
+            # --- 3. Refresh Data ---
+            if st.button("Refresh list of uploaded datasets"):
+                st.rerun()
 
 # --------------------------- Overall Review Page ---------------------------- #
 elif page == "Overall Review":
-    # show current user info#
-    user_selected = get_current_user(users)
 
-    # Get current user from session state (NO SELECTBOX)
+    # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
 
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    df = st.session_state.current_df.copy()
+
+    # ✅ Parse date column
+    df['date'] = pd.to_datetime(df['datetime']).dt.date
+
+    # --- HEADER AND LOGO ---
+    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
         st.image('media_images/logo_correct.png', width=200)
 
-
-    # Set page title and header
-        ## overall stats##
-
-    df = users[user_selected]
-    df['date'] = pd.to_datetime(df['datetime']).dt.date
-
+    # --- DATE SUMMARY HEADER ---
     st.header("you've been listening since:")
+    start = df["date"].min()
+    end = df["date"].max()
+    years = round((end - start).days / 365, 1)
 
-    st.title(f"{df["date"].min().strftime("%d %B %Y")}, that was {round((df["date"].max() - df["date"].min()).days / 365, 1)} years ago!")
-    st.markdown('')
+    st.title(f"{start.strftime('%d %B %Y')}, that was {years} years ago!")
+    st.markdown("")
+
+    # --- METRIC COLUMNS ---
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -545,7 +612,7 @@ elif page == "Overall Review":
         fontsize = 38
         valign = "left"
         iconname = "fas fa-star"
-        i = f'{round((users[user_selected]['minutes_played'].sum()) / 60 / 24,1)}  days'
+        i = f'{round((df['minutes_played'].sum()) / 60 / 24,1)}  days'
 
         htmlstr = f"""
             <p style='background-color: rgb(
@@ -584,7 +651,7 @@ elif page == "Overall Review":
         fontsize = 38
         valign = "left"
         iconname = "fas fa-star"
-        i = f'{(users[user_selected]['track_name'].nunique())} tracks'
+        i = f'{(df['track_name'].nunique())} tracks'
 
         htmlstr = f"""
             <p style='background-color: rgb(
@@ -609,7 +676,6 @@ elif page == "Overall Review":
         """
         st.markdown(htmlstr, unsafe_allow_html=True)
 
-        df = users[user_selected]
 
 
 
@@ -622,7 +688,7 @@ elif page == "Overall Review":
         fontsize = 38
         valign = "left"
         iconname = "fas fa-star"
-        i = f'{(users[user_selected]['artist_name'].nunique())} artists'
+        i = f'{(df['artist_name'].nunique())} artists'
 
         htmlstr = f"""
             <p style='background-color: rgb(
@@ -650,7 +716,6 @@ elif page == "Overall Review":
 
 
     col1, col2 = st.columns(2)
-    df = users[user_selected]
     with col1:
         if 'audiobook' in df['category'].unique():
             mode = st.segmented_control('',["music", "podcast",'audiobook'], selection_mode="single", default='music')
@@ -707,7 +772,7 @@ elif page == "Overall Review":
 
 
 
-        minutes_by_type = users[user_selected].groupby("category")["minutes_played"].sum().reset_index()
+        minutes_by_type = df.groupby("category")["minutes_played"].sum().reset_index()
         minutes_by_type['days_played'] = minutes_by_type['minutes_played'] / 60 / 24
         fig = px.pie(
             minutes_by_type,
@@ -819,10 +884,10 @@ elif page == "Overall Review":
 
 
     ##Ben's Big ol Graphs##
-    users[user_selected]['datetime'] = pd.to_datetime(users[user_selected]['datetime'])
-    users[user_selected]['year'] = users[user_selected]['datetime'].dt.year
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['year'] = df['datetime'].dt.year
 
-    grouped = users[user_selected].groupby(['year', 'category'])['minutes_played'].sum().reset_index()
+    grouped = df.groupby(['year', 'category'])['minutes_played'].sum().reset_index()
     st.title('')
     st.title('')
     #st.title('')
@@ -854,7 +919,7 @@ elif page == "Overall Review":
     # Map Title #
     st.markdown("<h1 style='text-align: center;'>Where you've been with your music</h1>", unsafe_allow_html=True)
 
-    df_country = users[user_selected].groupby("country")["minutes_played"].sum().reset_index()
+    df_country = df.groupby("country")["minutes_played"].sum().reset_index()
     df_country['country'] = df_country['country'].apply(lambda x: coco.convert(x, to='name_short'))
     df_country['country_iso'] = df_country['country'].apply(lambda x: coco.convert(x, to='ISO3'))
     df_country['hours_played'] = round(df_country['minutes_played'] / 60, 2)
@@ -883,12 +948,17 @@ elif page == "Overall Review":
 
         st.dataframe(df_country[df_country['country'] != 'not found'].dropna().sort_values(by='hours_played', ascending=False), use_container_width=True)
 
-# ----------------------------- Per Year Page -------------------------------- #
+# ------------------------------ Per Year Page ------------------------------- #
 elif page == "Per Year":
     # Get current user from session state (NO SELECTBOX)
     # Select user
-    user_selected = get_current_user(users)
-    user_df = users[user_selected].copy()
+        # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df = st.session_state.current_df.copy()
+    user_df = df.copy()
 
     # Extract year from datetime
     user_df['year'] = pd.to_datetime(user_df['datetime']).dt.year
@@ -907,13 +977,13 @@ elif page == "Per Year":
     st.markdown('')
 
     ## making the buttons##
-    users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
+    df['year'] = pd.to_datetime(df['datetime']).dt.year
 
 
 
 
 
-    year_list = users[user_selected]['year'].sort_values().unique().tolist()
+    year_list = df['year'].sort_values().unique().tolist()
 
 
 
@@ -924,13 +994,13 @@ elif page == "Per Year":
 
     c1,c2 = st.columns([3,1],vertical_alignment='center')
     with c1:
-        selected_year = st.segmented_control("Select Year", year_list, selection_mode="single", default=users[user_selected]['year'].max())
+        selected_year = st.segmented_control("Select Year", year_list, selection_mode="single", default=df['year'].max())
 
     with c2:
         selected_category = st.segmented_control('Category', categories, selection_mode="single", default='music')
 
     ##filtering the data##
-    df_filtered = users[user_selected][users[user_selected]['year'] == selected_year]
+    df_filtered = df[df['year'] == selected_year]
     df_filtered['date'] = pd.to_datetime(df_filtered['datetime']).dt.date
 
     if selected_category == 'music':
@@ -1117,8 +1187,8 @@ elif page == "Per Year":
 
     ##per year stats##
     # Fix: Get the track name properly
-   # top_track_idx = users[user_selected][users[user_selected]['year'] == selected_year]['ms_played'].idxmax()
-    #top_track_name = users[user_selected].loc[top_track_idx, 'track_name']
+   # top_track_idx = df[df['year'] == selected_year]['ms_played'].idxmax()
+    #top_track_name = df.loc[top_track_idx, 'track_name']
 
    # fig5 = go.Figure(go.Indicator(
    #     mode="gauge+number",
@@ -1128,7 +1198,7 @@ elif page == "Per Year":
    # st.plotly_chart(fig5, use_container_width=True)
 
        # Load user-specific data
-    df = users[user_selected]
+    df = df
 
     # Convert datetime and extract year
     df['datetime'] = pd.to_datetime(df['datetime'])
@@ -1198,12 +1268,17 @@ elif page == "Per Year":
     st.header("CLICK THE WHEEL!!")
     st.plotly_chart(fig, use_container_width=True)
 
-# ---------------------------- Per Artist Page ------------------------------- #
+# ----------------------------- Per Artist Page ------------------------------ #
 elif page == "Per Artist":
 
     ## page set up
     # Get current user from session state
-    user_selected = get_current_user(users)
+        # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df = st.session_state.current_df.copy()
 
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -1212,7 +1287,7 @@ elif page == "Per Artist":
 
     ## start content
     # Load user-specific music data, select relevant columns
-    df = users[user_selected]
+    df = df
     df_music = df[df["category"] == "music"]
     df_music = df_music[["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]]
     # shorten datetime column
@@ -1475,11 +1550,16 @@ elif page == "Per Artist":
         fig_cal = calplot(df_day, x = "date", y = "minutes_played")
         st.plotly_chart(fig_cal, use_container_width=True)
 
-# ---------------------------- Per Album Page -------------------------------- #
+# ------------------------------ Per Album Page ------------------------------ #
 elif page == "Per Album":
 
     # Get current user from session state
-    user_selected = get_current_user(users)
+        # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df = st.session_state.current_df.copy()
 
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -1487,7 +1567,7 @@ elif page == "Per Album":
         st.image('media_images/logo_correct.png', width=200)
 
     # Load user-specific data
-    df = users[user_selected]# make music df
+    df = df# make music df
     df_music = df[df["category"] == "music"]
     df_music = df_music[["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]]
     # shorten datetime column
@@ -1735,13 +1815,18 @@ elif page == "Per Album":
     fig_line.update_layout(xaxis_title="Month", yaxis_title="Minutes Played", legend_title_text="Year")
     st.plotly_chart(fig_line,use_container_width=True)
 
-# ------------------------------ Per Genre ------------------------------------#
+# -------------------------------- Per Genre --------------------------------- #
 elif page == "Per Genre":
     # Get current user from session state (NO SELECTBOX)
     # Select user
-    user_selected = get_current_user(users)
-    user_df = users[user_selected].copy()
-    df = users[user_selected].copy()
+        # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df = st.session_state.current_df.copy()
+    user_df = df.copy()
+    df = df.copy()
 
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -1843,7 +1928,7 @@ elif page == "Per Genre":
     # Get list of available years
     years = sorted(df['year'].unique())
 
-# ------------------------------- The Farm ----------------------------------- #
+# --------------------------------- The Farm --------------------------------- #
 elif page == "The Farm":
 
 # >>>>>>>>>>>>>>>>>>>>> FUNCTION DEFINITIONS
@@ -2053,10 +2138,15 @@ elif page == "The Farm":
 # >>>>>>>>>>>>>>>>>>>>> DATA PREP
 
     # Show current user info
-    user_selected = get_current_user(users)
-    df = users[user_selected]
-    users[user_selected]['year'] = pd.to_datetime(users[user_selected]['datetime']).dt.year
-    year_list = users[user_selected]['year'].sort_values().unique().tolist()
+        # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df = st.session_state.current_df.copy()
+    df = df.copy
+    df['year'] = pd.to_datetime(df['datetime']).dt.year
+    year_list = df['year'].sort_values().unique().tolist()
 
     # Merge info and calculate score early
     df = pd.merge(df, df_info, on=["track_name", "album_name", "artist_name"], how="left", suffixes=["", "_remove"])
@@ -2327,10 +2417,15 @@ elif page == "The Farm":
             # # Display timeline chart
             # display_timeline_chart(chart_hits, plot_df, years, latest_year, points_method)
 
-# ------------------------------ FUN Page ------------------------------------ #
+# --------------------------------- FUN Page --------------------------------- #
 elif page == "FUN":
     # Show current user info
-    user_selected = get_current_user(users)
+        # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df = st.session_state.current_df.copy()
 
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -2338,7 +2433,7 @@ elif page == "FUN":
         st.image('media_images/logo_correct.png', width=200)
 
     ## random event generator ##
-    df = users[user_selected][users[user_selected]['category'] == 'music']
+    df = df[df['category'] == 'music']
     df_event['datetime'] = pd.to_datetime(df_event['Datetime'], format='%Y-%m-%d')
     df['date'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S+00:00').dt.normalize()
 
@@ -2409,7 +2504,7 @@ elif page == "FUN":
       """
     st.markdown(htmlstr, unsafe_allow_html=True)
 
-# ---------------------------- About Us Page --------------------------------- #
+# ------------------------------ About Us Page ------------------------------- #
 elif page == "AbOuT uS":
 
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -2419,7 +2514,7 @@ elif page == "AbOuT uS":
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
     st.write("Feel free to reach out for any questions or collaborations.")
 
-# ------------------- How To Page --------------------- #
+# ------------------------------- How To Page -------------------------------- #
 elif page == "How To":
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')

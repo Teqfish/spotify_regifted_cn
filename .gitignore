@@ -1,0 +1,7 @@
+# Ignore secret credentials and keys
+.streamlit/secrets.toml
+*.json
+*.pkl
+__pycache__/
+.env
+.DS_Store

@@ -1,3 +1,13 @@
+# ----------------------------- INTRO/CREDITS -------------------------------- #
+'''
+An ETL and EDA app for listening habits based on user Spotify listening history.
+Enriched with Discogs API, chart-scraping, and more.
+
+Please contact us to give feedback and feature requests.
+
+Built by Ben Gee, Jana Hueppe, Tom Witt & Charlie Nash (06.2025)
+'''
+# ----------------------------- IMPORTS --------------------------------------- #
 from grpc import local_channel_credentials
 import streamlit as st
 import pandas as pd
@@ -21,7 +31,6 @@ from streamlit_carousel import carousel
 import zipfile
 import tempfile
 import shutil
-import random
 import string
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -48,6 +57,11 @@ JWT_COOKIE_NAME = "regifted_auth"
 JWT_ALG = "HS256"
 JWT_TTL_HOURS = 24
 JWT_SECRET = st.secrets["auth"]["jwt_secret"]
+JWT_COOKIE_PATH = "/"
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 
 # --- SESSION INIT ---
 if "user" not in st.session_state:
@@ -82,25 +96,66 @@ def verify_password(password, hashed):
 def generate_user_id():
     return secrets.token_hex(8)
 
+def validate_signup_inputs(email, password, confirm_password, first_name, last_name):
+    errors = []
+
+    fn = (first_name or "").strip()
+    ln = (last_name or "").strip()
+    em = (email or "").strip()
+    pw = password or ""
+    cpw = confirm_password or ""
+
+    # Required fields
+    if not fn:
+        errors.append("First name is required.")
+    if not ln:
+        errors.append("Last name is required.")
+    if not em:
+        errors.append("Email is required.")
+    if not pw:
+        errors.append("Password is required.")
+    if not cpw:
+        errors.append("Please confirm your password.")
+
+    # Only run format checks if present
+    if em and not EMAIL_RE.match(em):
+        errors.append("Enter a valid email address (e.g., name@example.com).")
+
+    if pw and len(pw) < 6:
+        errors.append("Password must be at least 6 characters.")
+
+    if pw and cpw and pw != cpw:
+        errors.append("Passwords do not match.")
+
+    return errors
+
 def signup(email, password, confirm_password, first_name, last_name):
+    # Normalize inputs
+    email = (email or "").strip().lower()
+    first_name = (first_name or "").strip()
+    last_name = (last_name or "").strip()
+
+    # Client-side validations
+    errs = validate_signup_inputs(email, password, confirm_password, first_name, last_name)
+    if errs:
+        return False, errs
+
+    # Uniqueness check (server-side)
     try:
-        # Check if email already exists
-        result = supabase.table("users").select("email").eq("email", email).execute()
+        result = supabase.table("users").select("email").eq("email", email).limit(1).execute()
     except Exception as e:
-        return False, f"Error checking existing users: {e}"
+        return False, [f"Error checking existing users: {e}"]
 
     if result.data and len(result.data) > 0:
-        return False, "Email already exists."
+        return False, ["Email already in use. Try logging in instead."]
 
-    if password != confirm_password:
-        return False, "Passwords do not match."
-
+    # Create user
     try:
         user_id = generate_user_id()
         hashed_pw = hash_password(password)
         save_user(user_id, email, hashed_pw, first_name, last_name)
     except Exception as e:
-        return False, f"Error saving user: {e}"
+        return False, [f"Error saving user: {e}"]
 
     return True, "Signup successful!"
 
@@ -126,6 +181,20 @@ def log_login_attempt(email, success, user_id=None):
         "success": success,
     }).execute()
 
+def logout():
+    st.session_state["_skip_restore"] = True  # block restore on subsequent reruns
+    clear_auth_cookie()
+    st.session_state.pop("user", None)
+    st.session_state.pop("current_dataset_label", None)
+    try:
+        st.cache_data.clear()
+        st.cache_resource.clear()
+    except Exception:
+        pass
+    # Nudge the client so cookie JS commits before next run
+    st.experimental_set_query_params(_=secrets.token_hex(4))
+    st.rerun()
+
 # ---- Cookie Manager (singleton) ----
 def get_cookie_manager():
     if "cookie_mgr" not in st.session_state:
@@ -144,31 +213,54 @@ def make_jwt(user: dict) -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
+def _cm_key(prefix: str) -> str:
+    st.session_state["_cm_seq"] = st.session_state.get("_cm_seq", 0) + 1
+    return f"{prefix}_{st.session_state['_cm_seq']}"
+
 def set_auth_cookie(token: str):
     cm = get_cookie_manager()
     cm.set(
         JWT_COOKIE_NAME,
         token,
+        path=JWT_COOKIE_PATH,
         expires_at=datetime.now(timezone.utc) + timedelta(hours=JWT_TTL_HOURS),
+        key=_cm_key("cm_set_auth"),
     )
+
+def _uniq(prefix: str) -> str:
+    # monotonically increasing id to keep keys unique this session/run
+    st.session_state["_cm_seq"] = st.session_state.get("_cm_seq", 0) + 1
+    return f"{prefix}_{st.session_state['_cm_seq']}"
 
 def clear_auth_cookie():
     cm = get_cookie_manager()
+    past = datetime.now(timezone.utc) - timedelta(days=1)
+
+    # Overwrite at the exact path you used for set()
+    cm.set(
+        JWT_COOKIE_NAME, "",
+        path=JWT_COOKIE_PATH,
+        expires_at=past,
+        key=_cm_key("cm_set_clear"),
+    )
+    # Best-effort delete
     try:
-        cm.delete(JWT_COOKIE_NAME)
+        cm.delete(JWT_COOKIE_NAME, key=_cm_key("cm_del_clear"))
     except Exception:
-        cm.set(JWT_COOKIE_NAME, "", expires_at=datetime.now(timezone.utc) - timedelta(days=1))
+        pass
+
+    # Belt-and-braces: also stomp common paths in case it was set differently in the past
+    for i, p in enumerate(("/", "/app", "/home")):
+        cm.set(JWT_COOKIE_NAME, "", path=p, expires_at=past, key=_cm_key(f"cm_set_clear_{i}"))
 
 def try_restore_session_from_cookie():
     """If a valid JWT cookie exists, populate st.session_state.user."""
     if st.session_state.get("user"):
-        return st.spinner("Restoring session...")
-
+        return  # don't return a spinner object
     cm = get_cookie_manager()
     token = cm.get(JWT_COOKIE_NAME)
     if not token:
         return
-
     try:
         claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
         st.session_state.user = {
@@ -188,12 +280,19 @@ def refresh_cookie_if_needed():
     token = make_jwt(st.session_state.user)
     set_auth_cookie(token)
 
-# ---- Mount cookie manager and restore session BEFORE any UI ----
 cm = get_cookie_manager()
-_ = cm.get_all()  # force the component to hydrate so get/set works this run
+_ = cm.get_all()  # hydrate component
 
-try_restore_session_from_cookie()
-refresh_cookie_if_needed()   # optional sliding renewal
+# If we just logged out, keep skipping cookie-restore until the browser shows it's gone
+if st.session_state.get("_skip_restore"):
+    if not cm.get(JWT_COOKIE_NAME):  # cookie really gone now
+        st.session_state["_skip_restore"] = False
+else:
+    try_restore_session_from_cookie()
+
+# Only refresh/slide expiry when we actually have a user
+if st.session_state.get("user"):
+    refresh_cookie_if_needed()
 
 # --- SUPABASE DATA I/O ---
 def list_user_tables(user_id):
@@ -256,7 +355,7 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
                 zip_ref.extractall(extract_dir)
         except Exception as e:
             st.error(f"❌ Failed to extract zip: {e}")
-            return None
+            return None, None
 
         # Collect all JSON files from ZIP
         json_files = []
@@ -267,7 +366,7 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
 
         if not json_files:
             st.warning("⚠️ No JSON files found in the uploaded ZIP.")
-            return None
+            return None, None
 
         # Merge JSON content
         combined_data = []
@@ -281,7 +380,7 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
 
         if not combined_data:
             st.error("❌ Failed to parse any valid listening data.")
-            return None
+            return None, None
 
         # Create DataFrame
         df = pd.json_normalize(combined_data)
@@ -414,11 +513,13 @@ if not st.session_state.user:
                             set_auth_cookie(token)
                             st.rerun()
                         else:
-                            # extremely unlikely, but handle gracefully
                             st.success(msg)
                             st.info("Account created. Please log in.")
                     else:
-                        st.error(msg)
+                        # msg may be a list of errors or a single string
+                        errors = msg if isinstance(msg, list) else [msg]
+                        for e in errors:
+                            st.error(e)
         else:
             with st.form("login_form"):
                 email = st.text_input("Email")
@@ -439,10 +540,8 @@ if not st.session_state.user:
 # --- PAGE NAVIGATION ---
 st.sidebar.title("Navigation")
 st.sidebar.write(f"Logged in as: **{st.session_state.user['first_name']}**")
-if st.sidebar.button("Log out"):
-    clear_auth_cookie()
-    st.session_state.pop("user", None)
-    st.rerun()
+if st.sidebar.button("Log out", key="logout_btn"):
+    logout()
 
 page = st.sidebar.radio("Go to",
                         ["Home",
@@ -463,17 +562,22 @@ page = st.sidebar.radio("Go to",
 import time
 from supabase_io import sb  # same client
 
-def enrichment_status_widget(user_id: str, dataset_label: str, refresh_seconds: int = 5):
+def enrichment_status_widget(user_id: str, dataset_label: str):
     st.subheader("Metadata Enrichment")
+
+    # Auto-refresh every 5s without time.sleep blocking
+    st.autorefresh(interval=5_000, key=f"enrich_refresh_{dataset_label}")
 
     res = sb.table("enrichment_status").select("*") \
         .eq("user_id", user_id).eq("dataset_label", dataset_label).limit(1).execute()
     data = getattr(res, "data", None)
     row = data[0] if isinstance(data, list) and data else None
+
     if not row:
+        st.caption("No enrichment job found yet.")
         return
 
-    st.markdown(f"**Status:** {row['status'].upper()}  •  **Phase:** {row['phase']}")
+    st.markdown(f"**Status:** {row['status'].upper()}  •  **Phase:** {row.get('phase','')}")
     if row.get("detail"):
         st.caption(row["detail"])
 
@@ -482,69 +586,151 @@ def enrichment_status_widget(user_id: str, dataset_label: str, refresh_seconds: 
     st.write(f"**Batches done:** {bd}" + (f" / {tb}" if tb else ""))
 
     if row.get("percent") is not None:
-        st.progress(min(max(float(row["percent"]), 0), 100) / 100.0)
+        st.progress(min(max(float(row["percent"]), 0.0), 100.0) / 100.0)
 
-    st.caption(f"Last update: {row['updated_at']}")
+    st.caption(f"Last update: {row.get('updated_at','—')}")
 
-    if row.get("status") == "running":
-        st.write(f"🔄 Refreshing every {refresh_seconds}s")
-        time.sleep(refresh_seconds)
-        st.rerun()
+# --- Background Enrichment Orchestrator (app.py) ---
+def _enrichment_tasks():
+    # lives across reruns
+    return st.session_state.setdefault("_enrichment_tasks", {})  # {label: {"thread": t, "cancel": Event}}
+
+def start_enrichment(user_id: str, dataset_label: str, table_name: str):
+    tasks = _enrichment_tasks()
+
+    # don't double-start
+    if dataset_label in tasks and tasks[dataset_label]["thread"].is_alive():
+        return
+
+    cancel = threading.Event()
+
+    def run():
+        # fresh client in the thread; don't touch streamlit APIs here
+        sb_thread = create_client(SUPABASE_URL, SUPABASE_KEY)
+        try:
+            set_status(user_id, dataset_label, status="running", phase="initialising",
+                       detail="Starting enrichment...")
+            background_enrich(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                table_name=table_name,
+                cancel_event=cancel,   # <-- make sure enrichment.py supports this
+                sb_client=sb_thread
+            )
+            if cancel.is_set():
+                finish_status(user_id, dataset_label, status="cancelled", detail="Stopped by user")
+            else:
+                finish_status(user_id, dataset_label, status="done", detail="Complete")
+        except Exception as e:
+            finish_status(user_id, dataset_label, status="error", detail=str(e))
+
+    t = threading.Thread(target=run, daemon=True, name=f"enrich:{dataset_label}")
+    tasks[dataset_label] = {"thread": t, "cancel": cancel}
+    t.start()
 
 # --- Sidebar render: only show when running ---
 user_id = st.session_state.user["user_id"]
 current_label = st.session_state.get("current_dataset_label")
 
 with st.sidebar:
-    if current_label:
-        res = sb.table("enrichment_status").select("status") \
-            .eq("user_id", user_id).eq("dataset_label", current_label).limit(1).execute()
+    # auto-refresh the whole script every 5s so progress updates without blocking
+    if hasattr(st, "autorefresh"):
+        st.autorefresh(interval=5_000, key="enrichment_sidebar_refresh")
 
-        data = getattr(res, "data", None)
-        row = data[0] if isinstance(data, list) and data else None
-        if row and row.get("status") == "running":
-            st.divider()
-            enrichment_status_widget(user_id, current_label, refresh_seconds=5)
+    st.divider()
+    current_label = st.session_state.get("current_dataset_label")
+
+    # safety: user might be None right after logout
+    user = st.session_state.get("user") or {}
+    user_id = user.get("user_id")
+
+    if current_label and user_id:
+        st.caption(f"Dataset: **{current_label}**")
+
+        # Kill switch (signals the background thread to stop)
+        if st.button("🛑 Kill enrichment", key="kill_enrichment_btn"):
+            task = st.session_state.get("_enrichment_tasks", {}).get(current_label)
+            if task:
+                task["cancel"].set()
+                try:
+                    set_status(
+                        user_id,
+                        current_label,
+                        status="cancelling",
+                        phase="shutdown",
+                        detail="User requested stop",
+                    )
+                except Exception:
+                    pass
+                st.success("Sent stop signal to enrichment.")
+            else:
+                st.info("No active enrichment task found for this dataset.")
+
+        # Clean up finished/cancelled threads (prevents stale buttons)
+        tasks = st.session_state.get("_enrichment_tasks", {})
+        task = tasks.get(current_label)
+        if task and not task["thread"].is_alive():
+            tasks.pop(current_label, None)
+            st.session_state["_enrichment_tasks"] = tasks
+
+        # Live progress (non-blocking)
+        enrichment_status_widget(user_id, current_label)
+    else:
+        st.caption("No dataset selected yet.")
+
+
 
 # -------------------------------- Home Page --------------------------------- #
 if page == "Home":
     user_id = st.session_state.user["user_id"]
 
-    col1, col2, col3 = st.columns([3, 3, 3], vertical_alignment='center')
-    with col2:
+    # Header
+    h1, h2, h3 = st.columns([3, 3, 3], vertical_alignment="center")
+    with h2:
         st.image("media_images/logo_correct.png", width=400)
     st.markdown("<h1 style='text-align: center;'>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
 
-    dataset_options = list_user_tables(user_id)
+    # --- Existing datasets ---
+    dataset_options = list_user_tables(user_id)  # [(label, table_name), ...]
+    label_to_table = dict(dataset_options) if dataset_options else {}
+    labels = [label for label, _ in dataset_options] if dataset_options else []
 
-    # Existing dataset dropdown
-    if dataset_options:
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col1:
-            labels = [label for label, _ in dataset_options]
-            selected_label = st.selectbox("Choose a dataset you've uploaded", labels)
+    # Default to the last-used dataset if available
+    default_index = 0
+    if labels and st.session_state.get("current_dataset_label") in labels:
+        default_index = labels.index(st.session_state["current_dataset_label"])
 
-        selected_table = dict(dataset_options)[selected_label]
+    if labels:
+        s1, s2, s3 = st.columns([1, 1, 1])
+        with s1:
+            selected_label = st.selectbox("Choose a dataset you've uploaded", labels, index=default_index)
+        selected_table = label_to_table[selected_label]
+
         df = load_user_table_from_supabase(user_id, selected_table)
-
         if df.empty:
             st.warning("Failed to load selected dataset.")
             st.stop()
 
-        df["datetime"] = pd.to_datetime(df["datetime"])
+        # Normalize datetime + quick summary
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+        df = df.dropna(subset=["datetime"])
         df["date"] = df["datetime"].dt.date
+
         st.session_state.current_df = df
         st.session_state.current_dataset_label = selected_label
 
-        total_listened = df["minutes_played"].sum() / 60
+        total_listened_hours = (df["minutes_played"].sum() / 60.0) if "minutes_played" in df.columns else 0.0
         st.markdown(f"🗓️ From **{df['datetime'].min().date()}** to **{df['datetime'].max().date()}**")
-        st.markdown(f"🎧 Total listening time: **{total_listened:.2f} hours**")
-        st.dataframe(df.sample(50))
+        st.markdown(f"🎧 Total listening time: **{total_listened_hours:.2f} hours**")
+
+        st.dataframe(df.sample(min(50, len(df))) if len(df) > 0 else df)
 
     else:
         st.info("You haven’t uploaded any datasets yet.")
 
-    with col1:
+    # --- Upload new dataset (non-blocking enrichment) ---
+    u1, u2, u3 = st.columns([1, 1, 1])
+    with u1:
         mode = st.toggle("Upload new dataset")
         if mode:
             uploaded_file = st.file_uploader(
@@ -555,22 +741,26 @@ if page == "Home":
             dataset_label = st.text_input("Give this dataset a label (e.g. '2023', 'Main', 'Friend1')")
 
             if uploaded_file and dataset_label:
-                if st.button("Process Upload"):
+                if st.button("Process Upload", key="btn_upload_process"):
                     with st.spinner("Processing your Spotify data..."):
-                        # Modified process_uploaded_zip to return BOTH table_name and cleaned_df
                         table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
 
-                        if cleaned_df is not None:
-                            # Save to session state
-                            st.session_state.cleaned_df = cleaned_df
-                            st.session_state.current_dataset_label = dataset_label
+                    if table_name:
+                        # Make immediately available for exploration
+                        st.session_state["current_dataset_label"] = dataset_label
+                        st.session_state["current_df"] = cleaned_df
+                        st.session_state["last_table_name"] = table_name
 
-                            st.success("✅ Dataset uploaded, cleaned, and enrichment started!")
-                            st.rerun()
+                        # Fire enrichment in background (no blocking)
+                        if "start_enrichment" in globals():
+                            start_enrichment(user_id, dataset_label, table_name)
 
-            # --- 3. Refresh Data ---
-            if st.button("Refresh list of uploaded datasets"):
-                st.rerun()
+                        st.success("✅ Dataset uploaded & cleaned. Enrichment is running in the background.")
+                        st.rerun()
+
+    # --- Refresh list ---
+    if st.button("Refresh list of uploaded datasets", key="btn_refresh_datasets"):
+        st.rerun()
 
 # --------------------------- Overall Review Page ---------------------------- #
 elif page == "Overall Review":

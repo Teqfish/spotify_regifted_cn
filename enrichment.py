@@ -853,5 +853,6 @@ def background_enrich(user_id: str, cleaned_df: pd.DataFrame, dataset_label: str
             finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
             print(f"[Background enrichment error]\n{tb}")
 
+            if cancel_event.is_set(): return
     t = threading.Thread(target=job, daemon=False)
     t.start()

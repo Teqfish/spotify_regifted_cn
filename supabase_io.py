@@ -1,5 +1,5 @@
 # supabase_io.py
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 import pandas as pd
 import streamlit as st
@@ -21,8 +21,6 @@ def set_status(user_id: str, dataset_label: str, *, phase: str, detail: str = ""
         "updated_at": datetime.utcnow().isoformat()
     }
     sb.table("enrichment_status").upsert(payload, on_conflict="user_id,dataset_label").execute()
-
-from datetime import datetime, timezone
 
 def inc_status(user_id: str, dataset_label: str, *, add_batches: int = 1, detail: Optional[str] = None):
     # fetch row safely

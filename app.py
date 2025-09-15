@@ -63,9 +63,15 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 
+# ---- DEBUG/TEST: ETL-only mode ----
+ENABLE_ENRICHMENT = False  # <— set True later when we re-enable background processing
+
 # --- SESSION INIT ---
 if "user" not in st.session_state:
     st.session_state.user = None
+
+st.session_state["_runs"] = st.session_state.get("_runs", 0) + 1
+st.sidebar.caption(f"Debug: run #{st.session_state['_runs']}")
 
 # --- AUTH FUNCTIONS ---
 def save_user(user_id, email, hashed_pw, first_name, last_name):
@@ -218,13 +224,14 @@ def _cm_key(prefix: str) -> str:
     return f"{prefix}_{st.session_state['_cm_seq']}"
 
 def set_auth_cookie(token: str):
+    # Use a STABLE component key so the component doesn't remount every run
     cm = get_cookie_manager()
     cm.set(
         JWT_COOKIE_NAME,
         token,
         path=JWT_COOKIE_PATH,
         expires_at=datetime.now(timezone.utc) + timedelta(hours=JWT_TTL_HOURS),
-        key=_cm_key("cm_set_auth"),
+        key="cm_set_auth_static",  # <-- stable key, NOT changing every run
     )
 
 def _uniq(prefix: str) -> str:
@@ -241,17 +248,17 @@ def clear_auth_cookie():
         JWT_COOKIE_NAME, "",
         path=JWT_COOKIE_PATH,
         expires_at=past,
-        key=_cm_key("cm_set_clear"),
+        key="cm_set_clear_static",  # stable key
     )
     # Best-effort delete
     try:
-        cm.delete(JWT_COOKIE_NAME, key=_cm_key("cm_del_clear"))
+        cm.delete(JWT_COOKIE_NAME, key="cm_del_clear_static")
     except Exception:
         pass
 
     # Belt-and-braces: also stomp common paths in case it was set differently in the past
     for i, p in enumerate(("/", "/app", "/home")):
-        cm.set(JWT_COOKIE_NAME, "", path=p, expires_at=past, key=_cm_key(f"cm_set_clear_{i}"))
+        cm.set(JWT_COOKIE_NAME, "", path=p, expires_at=past, key=f"cm_set_clear_{i}_static")
 
 def try_restore_session_from_cookie():
     """If a valid JWT cookie exists, populate st.session_state.user."""
@@ -274,11 +281,16 @@ def try_restore_session_from_cookie():
         clear_auth_cookie()
 
 def refresh_cookie_if_needed():
+    """Slide the session *at most* every 10 minutes; otherwise do nothing."""
     if not st.session_state.get("user"):
         return
-    # Re-issue with a fresh 24h expiry (sliding session). Remove if you prefer fixed 24h.
+    now = datetime.now(timezone.utc)
+    last = st.session_state.get("_cookie_refreshed_at")
+    if last and (now - last).total_seconds() < 600:  # 10 minutes
+        return  # skip refresh to avoid constant reruns
     token = make_jwt(st.session_state.user)
     set_auth_cookie(token)
+    st.session_state["_cookie_refreshed_at"] = now
 
 cm = get_cookie_manager()
 _ = cm.get_all()  # hydrate component
@@ -293,6 +305,24 @@ else:
 # Only refresh/slide expiry when we actually have a user
 if st.session_state.get("user"):
     refresh_cookie_if_needed()
+
+# ---- ETL helpers (wrappers) ----
+def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
+    """
+    Thin wrapper around process_uploaded_zip.
+    NOTE: Not cached because it writes to Supabase; caching side effects is brittle.
+    """
+    return process_uploaded_zip(uploaded_file, dataset_label, user_id)
+
+def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str):
+    """
+    No-op when ENABLE_ENRICHMENT is False.
+    When re-enabling, route to your existing start_enrichment().
+    """
+    if not ENABLE_ENRICHMENT:
+        return
+    # When ready to re-enable:
+    # start_enrichment(user_id=user_id, dataset_label=dataset_label, table_name=table_name)§
 
 # --- SUPABASE DATA I/O ---
 def list_user_tables(user_id):
@@ -562,12 +592,14 @@ page = st.sidebar.radio("Go to",
 import time
 from supabase_io import sb  # same client
 
-def enrichment_status_widget(user_id: str, dataset_label: str):
+def enrichment_status_widget(user_id: str, dataset_label: str, *, enable_enrichment: bool):
     st.subheader("Metadata Enrichment")
 
-    # Auto-refresh every 5s without time.sleep blocking
-    st.autorefresh(interval=5_000, key=f"enrich_refresh_{dataset_label}")
+    if not enable_enrichment:
+        st.caption("Enrichment disabled.")
+        return
 
+    # Fetch current job row
     res = sb.table("enrichment_status").select("*") \
         .eq("user_id", user_id).eq("dataset_label", dataset_label).limit(1).execute()
     data = getattr(res, "data", None)
@@ -577,7 +609,14 @@ def enrichment_status_widget(user_id: str, dataset_label: str):
         st.caption("No enrichment job found yet.")
         return
 
-    st.markdown(f"**Status:** {row['status'].upper()}  •  **Phase:** {row.get('phase','')}")
+    status_str = (row.get("status") or "").lower()
+
+    # ✅ Only auto-refresh if enrichment is actively running
+    if status_str in {"queued", "running"} and enable_enrichment:
+        st.autorefresh(interval=10_000, key=f"enrich_refresh_{user_id}_{dataset_label}")
+
+
+    st.markdown(f"**Status:** {status_str.upper()}  •  **Phase:** {row.get('phase','')}")
     if row.get("detail"):
         st.caption(row["detail"])
 
@@ -585,8 +624,12 @@ def enrichment_status_widget(user_id: str, dataset_label: str):
     tb = row.get("total_batches")
     st.write(f"**Batches done:** {bd}" + (f" / {tb}" if tb else ""))
 
-    if row.get("percent") is not None:
-        st.progress(min(max(float(row["percent"]), 0.0), 100.0) / 100.0)
+    pct = row.get("percent")
+    if pct is not None:
+        try:
+            st.progress(min(max(float(pct), 0.0), 100.0) / 100.0)
+        except Exception:
+            pass
 
     st.caption(f"Last update: {row.get('updated_at','—')}")
 
@@ -605,24 +648,31 @@ def start_enrichment(user_id: str, dataset_label: str, table_name: str):
     cancel = threading.Event()
 
     def run():
-        # fresh client in the thread; don't touch streamlit APIs here
-        sb_thread = create_client(SUPABASE_URL, SUPABASE_KEY)
         try:
-            set_status(user_id, dataset_label, status="running", phase="initialising",
-                       detail="Starting enrichment...")
+            # IMPORTANT: call status helpers with the correct signature (no 'status=' kw)
+            set_status(user_id, dataset_label, phase="initialising", detail="Starting enrichment...")
+
+            # Get the cleaned df from session (you already stored it after upload)
+            cleaned_df = st.session_state.get("current_df")
+            if cleaned_df is None or cleaned_df.empty:
+                # If you prefer, you can load from Supabase here using table_name.
+                raise RuntimeError("No cleaned_df in session. Cannot start enrichment.")
+
+            # Run enrichment synchronously inside this thread
             background_enrich(
                 user_id=user_id,
                 dataset_label=dataset_label,
-                table_name=table_name,
-                cancel_event=cancel,   # <-- make sure enrichment.py supports this
-                sb_client=sb_thread
+                cleaned_df=cleaned_df,
+                cancel_event=cancel,
             )
+
             if cancel.is_set():
-                finish_status(user_id, dataset_label, status="cancelled", detail="Stopped by user")
+                finish_status(user_id, dataset_label, ok=False, detail="Stopped by user")
             else:
-                finish_status(user_id, dataset_label, status="done", detail="Complete")
+                finish_status(user_id, dataset_label, ok=True, detail="Complete")
+
         except Exception as e:
-            finish_status(user_id, dataset_label, status="error", detail=str(e))
+            finish_status(user_id, dataset_label, ok=False, detail=str(e))
 
     t = threading.Thread(target=run, daemon=True, name=f"enrich:{dataset_label}")
     tasks[dataset_label] = {"thread": t, "cancel": cancel}
@@ -633,52 +683,44 @@ user_id = st.session_state.user["user_id"]
 current_label = st.session_state.get("current_dataset_label")
 
 with st.sidebar:
-    # auto-refresh the whole script every 5s so progress updates without blocking
-    if hasattr(st, "autorefresh"):
-        st.autorefresh(interval=5_000, key="enrichment_sidebar_refresh")
-
     st.divider()
-    current_label = st.session_state.get("current_dataset_label")
 
-    # safety: user might be None right after logout
     user = st.session_state.get("user") or {}
     user_id = user.get("user_id")
+    current_label = st.session_state.get("current_dataset_label")
 
     if current_label and user_id:
         st.caption(f"Dataset: **{current_label}**")
 
-        # Kill switch (signals the background thread to stop)
-        if st.button("🛑 Kill enrichment", key="kill_enrichment_btn"):
-            task = st.session_state.get("_enrichment_tasks", {}).get(current_label)
-            if task:
-                task["cancel"].set()
-                try:
-                    set_status(
-                        user_id,
-                        current_label,
-                        status="cancelling",
-                        phase="shutdown",
-                        detail="User requested stop",
-                    )
-                except Exception:
-                    pass
-                st.success("Sent stop signal to enrichment.")
+        if ENABLE_ENRICHMENT:
+            if st.button("🛑 Kill enrichment", key="kill_enrichment_btn"):
+                task = st.session_state.get("_enrichment_tasks", {}).get(current_label)
+                if task:
+                    task["cancel"].set()
+                    try:
+                        set_status(user_id, current_label, phase="shutdown", detail="User requested stop")
+                    except Exception:
+                        pass
+                    st.success("Sent stop signal to enrichment.")
+                else:
+                    st.info("No active enrichment task found for this dataset.")
+
+            # Clean up finished/cancelled threads (prevents stale buttons)
+            tasks = st.session_state.get("_enrichment_tasks", {})
+            task = tasks.get(current_label)
+            if task and not task["thread"].is_alive():
+                tasks.pop(current_label, None)
+                st.session_state["_enrichment_tasks"] = tasks
+
+            # Only show/live-refresh when ETL is done
+            if st.session_state.get("etl_done"):
+                enrichment_status_widget(user_id, current_label, enable_enrichment=True)
             else:
-                st.info("No active enrichment task found for this dataset.")
-
-        # Clean up finished/cancelled threads (prevents stale buttons)
-        tasks = st.session_state.get("_enrichment_tasks", {})
-        task = tasks.get(current_label)
-        if task and not task["thread"].is_alive():
-            tasks.pop(current_label, None)
-            st.session_state["_enrichment_tasks"] = tasks
-
-        # Live progress (non-blocking)
-        enrichment_status_widget(user_id, current_label)
+                st.caption("Enrichment will be available once ETL is complete.")
+        else:
+            st.caption("Enrichment disabled for testing.")
     else:
         st.caption("No dataset selected yet.")
-
-
 
 # -------------------------------- Home Page --------------------------------- #
 if page == "Home":
@@ -728,39 +770,68 @@ if page == "Home":
     else:
         st.info("You haven’t uploaded any datasets yet.")
 
-    # --- Upload new dataset (non-blocking enrichment) ---
-    u1, u2, u3 = st.columns([1, 1, 1])
-    with u1:
-        mode = st.toggle("Upload new dataset")
-        if mode:
-            uploaded_file = st.file_uploader(
-                "Upload your full Spotify ZIP file (music, podcasts, audiobooks)",
-                type=["zip"],
-                help="This is the ZIP file you downloaded from Spotify"
-            )
-            dataset_label = st.text_input("Give this dataset a label (e.g. '2023', 'Main', 'Friend1')")
+    # --- Upload new dataset (ETL only; enrichment disabled during testing) ---
+    st.markdown("### Upload a new dataset")
 
-            if uploaded_file and dataset_label:
-                if st.button("Process Upload", key="btn_upload_process"):
-                    with st.spinner("Processing your Spotify data..."):
-                        table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
+    # Ensure session flags exist
+    st.session_state.setdefault("etl_done", False)
+    st.session_state.setdefault("current_df", None)
+    st.session_state.setdefault("current_dataset_label", None)
+    st.session_state.setdefault("last_table_name", None)
 
-                    if table_name:
-                        # Make immediately available for exploration
-                        st.session_state["current_dataset_label"] = dataset_label
+    with st.form("upload_form", clear_on_submit=False):
+        uploaded = st.file_uploader(
+            "Upload your full Spotify ZIP (music, podcasts, audiobooks)",
+            type=["zip"],
+            accept_multiple_files=False,
+            key="zip_uploader"
+        )
+        dataset_label = st.text_input(
+            "Dataset label (e.g. '2023', 'Main', 'Friend1')",
+            key="zip_label"
+        )
+
+        submitted = st.form_submit_button("Process Upload")
+
+        if submitted:
+            # Safeguards
+            if uploaded is None:
+                st.error("Please select a ZIP file before uploading.")
+            elif not dataset_label.strip():
+                st.error("Please enter a dataset label.")
+            else:
+                try:
+                    with st.spinner("Processing your data (ETL only)…"):
+                        # Reset one-time flag for a new run
+                        st.session_state.etl_done = False
+
+                        table_name, cleaned_df = _etl_process_zip(
+                            uploaded, dataset_label.strip(), user_id
+                        )
+
+                    if cleaned_df is None or cleaned_df.empty:
+                        st.error("ETL produced no rows. Please check your ZIP export.")
+                    else:
+                        # Persist for exploration and navigation
+                        st.session_state["current_dataset_label"] = dataset_label.strip()
                         st.session_state["current_df"] = cleaned_df
                         st.session_state["last_table_name"] = table_name
+                        st.session_state.etl_done = True
 
-                        # Fire enrichment in background (no blocking)
-                        if "start_enrichment" in globals():
-                            start_enrichment(user_id, dataset_label, table_name)
+                        st.success("✅ Dataset uploaded & cleaned. You can now explore your data.")
+                        if not ENABLE_ENRICHMENT:
+                            st.info("Background enrichment is disabled while we test ETL.")
+                except zipfile.BadZipFile:
+                    st.error("That file isn't a valid ZIP.")
+                except Exception as e:
+                    st.error(f"ETL failed: {e}")
 
-                        st.success("✅ Dataset uploaded & cleaned. Enrichment is running in the background.")
-                        st.rerun()
-
-    # --- Refresh list ---
+    # --- Refresh list (safe; no rerun) ---
     if st.button("Refresh list of uploaded datasets", key="btn_refresh_datasets"):
-        st.rerun()
+        # Re-query and re-render in-place (no st.rerun to avoid loops)
+        dataset_options = list_user_tables(user_id)
+        st.success("Dataset list refreshed.")
+
 
 # --------------------------- Overall Review Page ---------------------------- #
 elif page == "Overall Review":

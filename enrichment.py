@@ -22,6 +22,9 @@ SPOTIFY_ID = st.secrets["spotify"]["client_id"]
 SPOTIFY_SECRET = st.secrets["spotify"]["client_secret"]
 DISCOGS_TOKEN = st.secrets["discogs"]["token"]
 
+# ---- ensure no side-effects on import during ETL-only testing ----
+AUTO_START_ENRICHMENT = False  # keep False for this test; set True only if you intentionally autostart elsewhere
+
 # ============ Simple storage hooks (replace with your Supabase funcs) ============
 def save_info_table_to_supabase(user_id: str, table_name: str, df: pd.DataFrame, kind: str):
     """
@@ -843,16 +846,40 @@ def run_all(self):
         raise
 
 # ============ Thread entry ============
-def background_enrich(user_id: str, cleaned_df: pd.DataFrame, dataset_label: str):
-    def job():
-        try:
-            enricher = MetadataEnricher(user_id, cleaned_df, dataset_label, verbose=True)
-            enricher.run_all()
-        except Exception as e:
-            tb = traceback.format_exc()
-            finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
-            print(f"[Background enrichment error]\n{tb}")
+def background_enrich(
+    *,
+    user_id: str,
+    dataset_label: str,
+    cleaned_df: pd.DataFrame,
+    cancel_event: Optional[threading.Event] = None,
+) -> None:
+    """
+    Run enrichment synchronously (no inner thread). This is called *inside*
+    the background thread created by app.py.
 
-            if cancel_event.is_set(): return
-    t = threading.Thread(target=job, daemon=False)
-    t.start()
+    Parameters
+    ----------
+    user_id : str
+        The user's id.
+    dataset_label : str
+        Label for the dataset (used by status + table naming).
+    cleaned_df : pd.DataFrame
+        The already-cleaned listening dataframe from the upload step.
+    cancel_event : threading.Event | None
+        Optional kill switch. We check it before long phases begin.
+    """
+    try:
+        # Optional pre-run cancellation check
+        if cancel_event is not None and cancel_event.is_set():
+            return
+
+        enricher = MetadataEnricher(user_id, cleaned_df, dataset_label, verbose=True)
+
+        # If you want mid-run cancellation, add small checks inside long loops
+        # in MetadataEnricher.run_all() (e.g., every N batches). For now we run through.
+        enricher.run_all()
+
+    except Exception as e:
+        tb = traceback.format_exc()
+        finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
+        print(f"[Background enrichment error]\n{tb}")

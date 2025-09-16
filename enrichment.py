@@ -163,49 +163,56 @@ def get_artists(ids: List[str]) -> List[dict]:
         spin_sleep(0.1)
     return out
 
-def get_tracks(ids: List[str]) -> List[dict]:
-    out = []
+def get_tracks(ids: List[str], cancel_event: Optional[threading.Event] = None) -> List[dict]:
+    out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
+        check_cancel(cancel_event)
         payload = get_several("tracks", batch)
         out.extend(payload.get("tracks", []))
         spin_sleep(0.1)
     return out
 
-def get_albums(ids: List[str]) -> List[dict]:
-    out = []
+def get_albums(ids: List[str], cancel_event: Optional[threading.Event] = None) -> List[dict]:
+    out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
+        check_cancel(cancel_event)
         payload = get_several("albums", batch)
         out.extend(payload.get("albums", []))
         spin_sleep(0.1)
     return out
 
-def get_shows(ids: List[str]) -> List[dict]:
-    out = []
+
+def get_shows(ids: List[str], cancel_event: Optional[threading.Event] = None) -> List[dict]:
+    out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
+        check_cancel(cancel_event)
         payload = get_several("shows", batch)
         out.extend(payload.get("shows", []))
         spin_sleep(0.1)
     return out
 
-def get_episodes(ids: List[str]) -> List[dict]:
-    out = []
+def get_episodes(ids: List[str], cancel_event: Optional[threading.Event] = None) -> List[dict]:
+    out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
+        check_cancel(cancel_event)
         payload = get_several("episodes", batch)
         out.extend(payload.get("episodes", []))
         spin_sleep(0.1)
     return out
 
-def get_audiobooks(ids: List[str]) -> List[dict]:
-    out = []
+def get_audiobooks(ids: List[str], cancel_event: Optional[threading.Event] = None) -> List[dict]:
+    out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
+        check_cancel(cancel_event)
         payload = get_several("audiobooks", batch)
         out.extend(payload.get("audiobooks", []))
         spin_sleep(0.1)
     return out
 
-def get_chapters(ids: List[str]) -> List[dict]:
-    out = []
+def get_chapters(ids: List[str], cancel_event: Optional[threading.Event] = None) -> List[dict]:
+    out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
+        check_cancel(cancel_event)
         payload = get_several("chapters", batch)
         out.extend(payload.get("chapters", []))
         spin_sleep(0.1)
@@ -545,65 +552,111 @@ class MetadataEnricher:
         self.seen_audiobooks.update(titles)
         inc_status(self.user_id, self.label, add_batches=1, detail=f"Audiobooks batch saved ({len(titles)})")
 
-    def fetch_and_save_albums_by_pairs(self, artist_album_pairs: List[Tuple[str, str]]):
-        """
-        artist_album_pairs: list of (artist_name, album_name)
-        Resolve album IDs via one of:
-          - direct album URI columns if you have any
-          - track sample within that album
-          - search fallback "album:... artist:..."
-        """
-        pairs = [p for p in artist_album_pairs if p not in self.seen_albums]
-        if not pairs:
-            return
+# Top-level cancellation tools (usable by any free function)
+class CancelledError(Exception):
+    """Raised when a cancel_event is set to stop enrichment early."""
+    pass
 
-        # Try to map via existing track URIs to album IDs (fastest)
-        if "spotify_track_uri" in self.df.columns:
-            df_sub = self.df[
-                (self.df["category"] == "music")
-                & (self.df["artist_name"].isin([a for a, _ in pairs]))
-                & (self.df["album_name"].isin([b for _, b in pairs]))
-            ][["artist_name", "album_name", "spotify_track_uri"]].dropna().drop_duplicates()
-            # choose one track per album
-            df_rep = df_sub.groupby(["artist_name", "album_name"])["spotify_track_uri"].agg(lambda s: s.iloc[0]).reset_index()
-            track_ids = [parse_spotify_id(x, "track") for x in df_rep["spotify_track_uri"]]
-            track_ids = [x for x in track_ids if x]
-            if track_ids:
-                t_info = get_tracks(track_ids)
-                for i, t in enumerate(t_info):
-                    if not t:
-                        continue
-                    alb = t.get("album") or {}
-                    aid = alb.get("id")
-                    a_name = df_rep.iloc[i]["artist_name"]
-                    al_name = df_rep.iloc[i]["album_name"]
-                    if aid:
-                        self.album_ids_by_key.setdefault((a_name, al_name), aid)
+def check_cancel(cancel_event: Optional[threading.Event]) -> None:
+    """Raise CancelledError if a cancel_event is set."""
+    if cancel_event is not None and cancel_event.is_set():
+        raise CancelledError()
 
-        # Fallback search per album (slower, but only for unresolved)
-        unresolved = [p for p in pairs if p not in self.album_ids_by_key]
-        for (artist_name, album_name) in unresolved:
-            try:
-                r = requests.get(
-                    f"{BASE}/search",
-                    headers=auth_header(),
-                    params={"q": f"album:{album_name} artist:{artist_name}", "type": "album", "limit": 1},
-                    timeout=30,
-                )
-                r.raise_for_status()
-                items = r.json().get("albums", {}).get("items", [])
-                if items:
-                    self.album_ids_by_key[(artist_name, album_name)] = items[0]["id"]
-                spin_sleep(0.1)
-            except Exception:
-                pass
+def fetch_and_save_albums_by_pairs(
+    self,
+    artist_album_pairs: List[Tuple[str, str]],
+    cancel_event: Optional[threading.Event] = None,
+):
+    """
+    artist_album_pairs: list of (artist_name, album_name)
+    Resolve album IDs via one of:
+      - direct album URI columns if you have any
+      - track sample within that album
+      - search fallback "album:... artist:..."
+    """
+    # ✅ early gate
+    self._check_cancel(cancel_event)
 
-        ids = [self.album_ids_by_key.get(p) for p in pairs if self.album_ids_by_key.get(p)]
-        info = get_albums(ids)
+    pairs = [p for p in artist_album_pairs if p not in self.seen_albums]
+    if not pairs:
+        return
+
+    # ---------- Fast path via existing track URIs ----------
+    if "spotify_track_uri" in self.df.columns:
+        # quick gate before heavy filtering/groupby
+        self._check_cancel(cancel_event)
+
+        df_sub = self.df[
+            (self.df["category"] == "music")
+            & (self.df["artist_name"].isin([a for a, _ in pairs]))
+            & (self.df["album_name"].isin([b for _, b in pairs]))
+        ][["artist_name", "album_name", "spotify_track_uri"]].dropna().drop_duplicates()
+
+        # choose one track per album
+        df_rep = (
+            df_sub.groupby(["artist_name", "album_name"])["spotify_track_uri"]
+            .agg(lambda s: s.iloc[0])
+            .reset_index()
+        )
+        track_ids = [parse_spotify_id(x, "track") for x in df_rep["spotify_track_uri"]]
+        track_ids = [x for x in track_ids if x]
+
+        if track_ids:
+            # ✅ gate right before API call
+            self._check_cancel(cancel_event)
+
+            # 🔁 if your get_tracks batches internally, ensure it also accepts cancel_event
+            t_info = get_tracks(track_ids, cancel_event=cancel_event)
+
+            for i, t in enumerate(t_info):
+                # light gate inside loop
+                self._check_cancel(cancel_event)
+
+                if not t:
+                    continue
+                alb = t.get("album") or {}
+                aid = alb.get("id")
+                a_name = df_rep.iloc[i]["artist_name"]
+                al_name = df_rep.iloc[i]["album_name"]
+                if aid:
+                    self.album_ids_by_key.setdefault((a_name, al_name), aid)
+
+    # ---------- Fallback search per album (slower; unresolved only) ----------
+    unresolved = [p for p in pairs if p not in self.album_ids_by_key]
+    for (artist_name, album_name) in unresolved:
+        # ✅ gate once per pair
+        self._check_cancel(cancel_event)
+        try:
+            r = requests.get(
+                f"{BASE}/search",
+                headers=auth_header(),
+                params={"q": f"album:{album_name} artist:{artist_name}", "type": "album", "limit": 1},
+                timeout=30,
+            )
+            r.raise_for_status()
+            items = r.json().get("albums", {}).get("items", [])
+            if items:
+                self.album_ids_by_key[(artist_name, album_name)] = items[0]["id"]
+            spin_sleep(0.1)
+        except Exception:
+            # Optional: you could set a status hint here
+            pass
+
+    # ---------- Bulk fetch album details (final step) ----------
+    ids = [self.album_ids_by_key.get(p) for p in pairs if self.album_ids_by_key.get(p)]
+    if ids:
+        # ✅ gate before API batch
+        self._check_cancel(cancel_event)
+
+        # Ensure top-level helper accepts cancel_event and checks per batch
+        info = get_albums(ids, cancel_event=cancel_event)
+
         if info:
             df_alb = pd.json_normalize(info)
             save_info_table_to_supabase(self.user_id, f"{self.label}_albums", df_alb, kind="album")
-        self.seen_albums.update(pairs)
+
+    # mark all seen (even unresolved are considered processed for this phase)
+    self.seen_albums.update(pairs)
 
     # ---------- Phase runners ----------
     def run_phase_overall_first50(self):
@@ -704,6 +757,9 @@ class MetadataEnricher:
         For 'Per Album' page: get artwork for *every album* the top artists have in the dataset,
         ordered by artist then album frequency/plays.
         """
+        # quick gate at phase start
+        self._check_cancel(self.cancel_event)
+
         music = self.df[self.df["category"] == "music"]
         top_artists = (
             music.groupby("artist_name")["minutes_played"].sum().sort_values(ascending=False).index.tolist()
@@ -715,9 +771,18 @@ class MetadataEnricher:
             .reset_index()
             .sort_values(["artist_name", "minutes_played"], ascending=[True, False])
         )
-        pairs = [(r["artist_name"], r["album_name"]) for _, r in all_pairs.iterrows() if (r["artist_name"], r["album_name"]) not in self.seen_albums]
+        pairs = [
+            (r["artist_name"], r["album_name"])
+            for _, r in all_pairs.iterrows()
+            if (r["artist_name"], r["album_name"]) not in self.seen_albums
+        ]
+
         for b in batched(pairs, 50):
-            self.fetch_and_save_albums_by_pairs(b)
+            # gate each batch to be responsive to the kill switch
+            self._check_cancel(self.cancel_event)
+            # pass the event down so inner helpers can also bail quickly
+            self.fetch_and_save_albums_by_pairs(b, cancel_event=self.cancel_event)
+
 
     def run_phase_breadth_first_years_remaining(self):
         """
@@ -799,6 +864,10 @@ class MetadataEnricher:
 
         return max(total, 1)  # avoid 0 to keep progress bar working
 
+    def _check_cancel(self, cancel_event: Optional[threading.Event]) -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise CancelledError()
+
     # ---------- Public entry ----------
 def safe_process(func, retries=3, backoff=2):
     """
@@ -814,33 +883,53 @@ def safe_process(func, retries=3, backoff=2):
             print(f"[Retry] {func.__name__} failed (attempt {attempt}/{retries}): {e} — retrying in {sleep_for:.1f}s")
             time.sleep(sleep_for)
 
-def run_all(self):
+def run_all(self, cancel_event: Optional[threading.Event] = None):
+    """
+    Orchestrate all enrichment phases, with cancel checks in between.
+    """
     try:
+        # Make cancel_event available to all phase methods & helpers
+        self.cancel_event = cancel_event
+
         # 1️⃣ Precompute total batches
         total_batches_est = self.estimate_total_batches()
-        set_status(self.user_id, self.label, phase="overall", detail="Starting enrichment", total=total_batches_est)
+        set_status(
+            self.user_id,
+            self.label,
+            phase="overall",
+            detail="Starting enrichment",
+            total=total_batches_est
+        )
 
-        # 2️⃣ Proceed with actual enrichment
+        # 2️⃣ Proceed with actual enrichment (with cancel checks)
+        self._check_cancel(cancel_event)
         self.run_phase_overall_first50()
         inc_status(self.user_id, self.label, add_batches=3, detail="Overall fetched")
 
+        self._check_cancel(cancel_event)
         set_status(self.user_id, self.label, phase="per_year", detail="Per-year top 10s")
         self.run_phase_per_year()
         inc_status(self.user_id, self.label, add_batches=1, detail="Per-year done")
 
+        self._check_cancel(cancel_event)
         set_status(self.user_id, self.label, phase="per_artist", detail="Top artists: most listened album/year")
         self.run_phase_per_artist_albums_of_year()
         inc_status(self.user_id, self.label, add_batches=1, detail="Per-artist albums saved")
 
+        self._check_cancel(cancel_event)
         set_status(self.user_id, self.label, phase="per_album", detail="All albums for top artists")
         self.run_phase_per_album_all_albums_for_top_artists()
         inc_status(self.user_id, self.label, add_batches=1, detail="Top-artist albums saved")
 
+        self._check_cancel(cancel_event)
         set_status(self.user_id, self.label, phase="breadth_first", detail="Remaining artists by year")
         self.run_phase_breadth_first_years_remaining()
 
         finish_status(self.user_id, self.label, ok=True, detail="✅ Enrichment completed")
 
+    except CancelledError:
+        finish_status(self.user_id, self.label, ok=False, detail="❌ Cancelled by user")
+        raise
     except Exception as e:
         finish_status(self.user_id, self.label, ok=False, detail=f"❌ Failed: {e}")
         raise
@@ -856,29 +945,31 @@ def background_enrich(
     """
     Run enrichment synchronously (no inner thread). This is called *inside*
     the background thread created by app.py.
-
-    Parameters
-    ----------
-    user_id : str
-        The user's id.
-    dataset_label : str
-        Label for the dataset (used by status + table naming).
-    cleaned_df : pd.DataFrame
-        The already-cleaned listening dataframe from the upload step.
-    cancel_event : threading.Event | None
-        Optional kill switch. We check it before long phases begin.
     """
     try:
-        # Optional pre-run cancellation check
+        # Quick pre-run cancel
         if cancel_event is not None and cancel_event.is_set():
+            finish_status(user_id, dataset_label, ok=False, detail="Cancelled before start")
             return
+
+        # Optional: set a clear starting status
+        set_status(user_id, dataset_label, phase="running", detail="Starting enrichment")
 
         enricher = MetadataEnricher(user_id, cleaned_df, dataset_label, verbose=True)
 
-        # If you want mid-run cancellation, add small checks inside long loops
-        # in MetadataEnricher.run_all() (e.g., every N batches). For now we run through.
-        enricher.run_all()
+        # Make the cancel_event visible to the enricher
+        # (works even if __init__ doesn't accept it)
+        setattr(enricher, "cancel_event", cancel_event)
 
+        # Pass it down so inner loops can check
+        enricher.run_all(cancel_event=cancel_event)
+
+        # Success
+        finish_status(user_id, dataset_label, ok=True, detail="Complete")
+
+    except CancelledError:
+        # We'll define CancelledError below (or reuse if you already have one)
+        finish_status(user_id, dataset_label, ok=False, detail="Cancelled by user")
     except Exception as e:
         tb = traceback.format_exc()
         finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")

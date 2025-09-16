@@ -821,6 +821,12 @@ if page == "Home":
                         st.success("✅ Dataset uploaded & cleaned. You can now explore your data.")
                         if not ENABLE_ENRICHMENT:
                             st.info("Background enrichment is disabled while we test ETL.")
+                        if ENABLE_ENRICHMENT:  # NEW: only when you flip the flag
+                            start_enrichment(
+                                user_id=st.session_state.user["user_id"],          # NEW
+                                dataset_label=st.session_state["current_dataset_label"],  # NEW
+                                table_name=st.session_state["last_table_name"],    # NEW
+                            )
                 except zipfile.BadZipFile:
                     st.error("That file isn't a valid ZIP.")
                 except Exception as e:
@@ -1045,11 +1051,6 @@ elif page == "Overall Review":
         fig.update_layout(margin=dict(t=50, l=0, r=0, b=0), height=525)
 
     with col2:
-        ''
-        ''
-        ''
-        ''
-        ''
         if mode == 'music':
             artist_image_list = []
             df['hours_played'] = round(df['minutes_played'] / 60, 2)
@@ -1068,7 +1069,7 @@ elif page == "Overall Review":
                     artist_image_list.append(dict(
                         text=f'{artist} image not found',
                         title=f"#{idx}",
-                        img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
+                        img='media_images/Image-Coming-Soon_vector.svg'))
 
             # Create a carousel of artist images
             if artist_image_list:
@@ -1091,7 +1092,7 @@ elif page == "Overall Review":
                 podcast_image_list.append(dict(
                     text=f'{podcast} image not found',
                     title=f"#{idx}",
-                    img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
+                    img='media_images/Image-Coming-Soon_vector.svg'))
 
 
             if podcast_image_list:
@@ -1131,7 +1132,7 @@ elif page == "Overall Review":
                 audiobook_image_list.append(dict(
                     text=f'{audiobook} image not found',
                     title=f"#{idx}",
-                    img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
+                    img='media_images/Image-Coming-Soon_vector.svg'))
 
 
 
@@ -1140,9 +1141,6 @@ elif page == "Overall Review":
                 carousel(items=audiobook_image_list,container_height=550)
             else:
                 st.warning("No audiobook images available.")
-
-
-
 
     ##Ben's Big ol Graphs##
     df['datetime'] = pd.to_datetime(df['datetime'])
@@ -1313,20 +1311,20 @@ elif page == "Per Year":
             try:
                 image_url = df_artist[df_artist['artist_name'] == name]['artist_image'].values[0]
             except:
-                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
+                image_url = 'media_images/Image-Coming-Soon_vector.svg'
         elif selected_category == 'podcast':
             name = row['episode_show_name']
             try:
                 image_url = df_podcast[df_podcast['podcast_name'] == name]['podcast_artwork'].values[0]
             except:
-                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
+                image_url = 'media_images/Image-Coming-Soon_vector.svg'
 
         elif selected_category == 'audiobook':
             try:
                 name = row['audiobook_title']
                 image_url = df_audiobook_uri[df_audiobook_uri['audiobook_title'] == name]['audiobook_artwork'].values[0]
             except:
-                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
+                image_url = 'media_images/Image-Coming-Soon_vector.svg'
 
 
 
@@ -1341,7 +1339,7 @@ elif page == "Per Year":
             try:
                 st.image(image_url, width=150)
             except:
-                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
+                st.image('media_images/Image-Coming-Soon_vector.svg')
 
         with col3:
             st.markdown(
@@ -1678,7 +1676,7 @@ elif page == "Per Artist":
                 album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]
                 st.image(album_image_url, output_format="auto")
             except:
-                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
+                st.image('media_images/Image-Coming-Soon_vector.svg')
 
 
 
@@ -2015,7 +2013,7 @@ elif page == "Per Album":
                 album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]
                 st.image(album_image_url, output_format="auto",use_container_width=True)
             except:
-                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
+                st.image('media_images/Image-Coming-Soon_vector.svg')
 
 
     # top songs graph

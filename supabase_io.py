@@ -1,4 +1,3 @@
-# supabase_io.py
 from datetime import datetime, timezone
 from typing import Optional, List
 import pandas as pd

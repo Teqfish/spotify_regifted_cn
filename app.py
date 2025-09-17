@@ -5,46 +5,47 @@ Enriched with Discogs API, chart-scraping, and more.
 
 Please contact us to give feedback and feature requests.
 
-Built by Ben Gee, Jana Hueppe, Tom Witt & Charlie Nash (06.2025)
+Built by Charlie Nash, Ben Gee, Jana Hueppe, & Tom Witt (06.2025)
 '''
-# ----------------------------- IMPORTS --------------------------------------- #
-from grpc import local_channel_credentials
-import streamlit as st
-import pandas as pd
-import json
-import os
+# ----------------------------- IMPORTS -------------------------------------- #
 import bcrypt
-import secrets
-import time
+import country_converter as coco
 from datetime import datetime, timedelta, timezone
+import extra_streamlit_components as stx
+from grpc import local_channel_credentials
+import json
+from io import StringIO
+import jwt
+import os
+import pandas as pd
+from pathlib import Path
+import pickle
+from plotly_calplot import calplot
 import plotly.express as px
 import plotly.graph_objects as go
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
-import ast
-from PIL import Image
-from plotly_calplot import calplot
-import country_converter as coco
-import random
-from streamlit_carousel import carousel
-import zipfile
-import tempfile
-import shutil
-import string
-from pathlib import Path
-from datetime import datetime, timedelta
-import pickle
 import re
+import secrets
+import streamlit as st
+from streamlit_autorefresh import st_autorefresh
+from streamlit_carousel import carousel
 from supabase import create_client
-import io
-from io import StringIO
+import tempfile
 import threading
-import jwt
-import extra_streamlit_components as stx
+import time
+from typing import Optional
+import zipfile
 
-from supabase_io import set_status, inc_status, finish_status
-from enrichment import background_enrich
+from enrichment import background_enrich, set_status, inc_status, finish_status, sb, save_info_table_to_supabase
+
+# import ast
+# import io
+# import matplotlib.pyplot as plt
+# import numpy as np
+# from PIL import Image
+# import random
+# import seaborn as sns
+# import shutil
+# import string
 
 # --- CONFIG / CLIENTS ---
 st.set_page_config(page_title="Regifted", page_icon=":gift:", layout="wide", initial_sidebar_state="expanded")
@@ -64,7 +65,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 
 # ---- DEBUG/TEST: ETL-only mode ----
-ENABLE_ENRICHMENT = False  # <— set True later when we re-enable background processing
+ENABLE_ENRICHMENT = True  # <— set True later when we re-enable background processing
 
 # --- SESSION INIT ---
 if "user" not in st.session_state:
@@ -314,15 +315,19 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
     """
     return process_uploaded_zip(uploaded_file, dataset_label, user_id)
 
-def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str):
+def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str, cleaned_df: Optional[pd.DataFrame] = None):
     """
-    No-op when ENABLE_ENRICHMENT is False.
-    When re-enabling, route to your existing start_enrichment().
+    Start enrichment only when enabled. Pass cleaned_df explicitly so the worker
+    doesn't depend on st.session_state inside a thread.
     """
     if not ENABLE_ENRICHMENT:
         return
-    # When ready to re-enable:
-    # start_enrichment(user_id=user_id, dataset_label=dataset_label, table_name=table_name)§
+    start_enrichment(
+        user_id=user_id,
+        dataset_label=dataset_label,
+        table_name=table_name,
+        cleaned_df=cleaned_df,
+    )
 
 # --- SUPABASE DATA I/O ---
 def list_user_tables(user_id):
@@ -338,25 +343,40 @@ def list_user_tables(user_id):
 
     return [(row["dataset_label"], row["table_name"]) for row in response.data]
 
-def upload_user_data_to_supabase(user_id, dataframe, dataset_label, filename):
+def upload_user_data_to_supabase(user_id, dataframe, dataset_label, filename) -> str:
+    """
+    Writes cleaned CSV to Storage and logs a row in `uploads`. Returns table_name.
+    Raises on failure.
+    """
+    # Normalize once so the same label is used everywhere
+    dataset_label = (dataset_label or "").strip()
+    if not dataset_label:
+        raise ValueError("Empty dataset_label")
+
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
     path = f"{user_id}/{table_name}.csv"
 
-    # Save CSV to temporary file
+    # Save CSV then upload
     with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
         dataframe.to_csv(tmp.name, index=False)
         tmp.flush()
+        try:
+            # NOTE: supabase-py storage returns dict-ish object; check for error if available
+            res = supabase.storage.from_("userdata").upload(
+                path=path, file=tmp.name, file_options={"content-type": "text/csv"}
+            )
+            # Some clients return {'error': None} or raise — treat anything falsy as suspicious
+            if res is None:
+                raise RuntimeError("Storage upload returned None")
+        except Exception as e:
+            raise RuntimeError(f"Storage upload failed: {e}")
+    try:
+        log_upload(user_id, table_name, dataset_label, filename)
+    except Exception as e:
+        # Bubble up so we can see why the dropdown is empty
+        raise RuntimeError(f"uploads insert failed: {e}")
 
-        # Upload to Supabase
-        supabase.storage.from_("userdata").upload(
-            path=path,
-            file=tmp.name,
-            file_options={"content-type": "text/csv"}
-        )
-
-    # Log metadata
-    log_upload(user_id, table_name, dataset_label, filename)
     return table_name
 
 def load_user_table_from_supabase(user_id, table_name):
@@ -368,6 +388,24 @@ def load_user_table_from_supabase(user_id, table_name):
     else:
         st.error(f"Failed to load {table_name}")
         return pd.DataFrame()
+
+# ---------- DEBUG LOGGING (lightweight) ----------
+def dbg(user_id: str, dataset_label: str, where: str, msg: str, level: str = "info", data: dict | None = None):
+    """Best-effort: write a debug log row; fall back to print on failure."""
+    payload = {
+        "event_time": datetime.now().isoformat(),
+        "user_id": user_id,
+        "dataset_label": dataset_label,
+        "where": where,
+        "level": level,
+        "message": msg,
+        "data": json.dumps(data) if data is not None else None,
+    }
+    try:
+        supabase.table("enrichment_logs").insert(payload).execute()
+    except Exception as e:
+        # Don't crash enrichment if the log table doesn't exist yet
+        print("[dbg]", e, payload)
 
 # --- DATA PROCESSING ---
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
@@ -495,13 +533,28 @@ def run_cleaning_pipeline(df, username_label):
     return cleaned_df
 
 def log_upload(user_id, table_name, dataset_label, filename):
-    supabase.table("uploads").insert({
+    """Insert/Upsert the uploads row; raise on error so caller can show it."""
+    payload = {
         "upload_time": datetime.now().isoformat(),
         "user_id": user_id,
         "table_name": table_name,
-        "dataset_label": dataset_label,
-        "filename": filename
-    }).execute()
+        "dataset_label": (dataset_label or "").strip(),
+        "filename": filename,
+    }
+    res = supabase.table("uploads").insert(payload).execute()
+    # Some clients expose .error, some raise — handle both
+    if hasattr(res, "error") and res.error:
+        raise RuntimeError(res.error.message)
+    if not getattr(res, "data", None):
+        # If policies/returning are disabled, we may not get data back; do a light verify
+        verify = supabase.table("uploads") \
+            .select("table_name") \
+            .eq("user_id", user_id) \
+            .eq("dataset_label", payload["dataset_label"]) \
+            .eq("table_name", table_name) \
+            .limit(1).execute()
+        if not getattr(verify, "data", None):
+            raise RuntimeError("uploads verify query returned no row")
 
 def info_tables_update(user_id, table_name):
     try:
@@ -587,17 +640,28 @@ page = st.sidebar.radio("Go to",
                          ]
                         )
 
-
-# --- Enrichment Status Widget ---
-import time
-from supabase_io import sb  # same client
-
+# --- Enrichment Status Widget (manual refresh friendly) ---
 def enrichment_status_widget(user_id: str, dataset_label: str, *, enable_enrichment: bool):
+    import json
     st.subheader("Metadata Enrichment")
 
     if not enable_enrichment:
         st.caption("Enrichment disabled.")
         return
+
+    # Manual refresh button (safe when autorefresh is off)
+    # cols = st.columns([1, 1, 6])
+    # with cols[0]:
+    if st.button("🔁 Refresh status", key=f"btn_refresh_status_{dataset_label}"):
+        st.rerun()
+
+    # Optional auto-refresh if you later install streamlit-autorefresh
+    try:
+        from streamlit_autorefresh import st_autorefresh
+        # Only poll while a job is running/queued (we’ll decide after we fetch the row)
+        want_autorefresh = True
+    except Exception:
+        want_autorefresh = False
 
     # Fetch current job row
     res = sb.table("enrichment_status").select("*") \
@@ -609,73 +673,148 @@ def enrichment_status_widget(user_id: str, dataset_label: str, *, enable_enrichm
         st.caption("No enrichment job found yet.")
         return
 
-    status_str = (row.get("status") or "").lower()
-
-    # ✅ Only auto-refresh if enrichment is actively running
-    if status_str in {"queued", "running"} and enable_enrichment:
-        st.autorefresh(interval=10_000, key=f"enrich_refresh_{user_id}_{dataset_label}")
-
-
-    st.markdown(f"**Status:** {status_str.upper()}  •  **Phase:** {row.get('phase','')}")
-    if row.get("detail"):
-        st.caption(row["detail"])
-
-    bd = row.get("batches_done") or 0
+    # Read fields defensively
+    status_str = (row.get("status") or "").lower()      # running | done | error
+    phase = row.get("phase") or "—"
+    detail = row.get("detail")
+    bd = int(row.get("batches_done") or 0)
     tb = row.get("total_batches")
+    pct = row.get("percent")
+    updated = row.get("updated_at", "—")
+
+    # Enable lightweight polling only while actively running (if the package is installed)
+    if want_autorefresh and status_str in {"running"}:
+        st_autorefresh(interval=8_000, key=f"enrich_refresh_{user_id}_{dataset_label}")
+
+    # Render status
+    st.markdown(f"**Status:** {status_str.upper()}  •  **Phase:** {phase}")
+    if detail:
+        st.caption(detail)
+
     st.write(f"**Batches done:** {bd}" + (f" / {tb}" if tb else ""))
 
-    pct = row.get("percent")
-    if pct is not None:
+    if isinstance(pct, (int, float)):
         try:
-            st.progress(min(max(float(pct), 0.0), 100.0) / 100.0)
+            st.progress(max(0.0, min(float(pct), 100.0)) / 100.0)
         except Exception:
             pass
 
-    st.caption(f"Last update: {row.get('updated_at','—')}")
+    st.caption(f"Last update: {updated}")
+
+    # Optional logs panel: only show if the table exists
+    with st.expander("Recent enrichment logs", expanded=False):
+        try:
+            logs = sb.table("enrichment_logs") \
+                .select("event_time,where,level,message,data") \
+                .eq("user_id", user_id).eq("dataset_label", dataset_label) \
+                .order("event_time", desc=True).limit(20).execute()
+            rows = getattr(logs, "data", []) or []
+            if not rows:
+                st.caption("No logs yet.")
+            else:
+                for r in rows:
+                    ts = (r.get("event_time") or "")[:19].replace("T", " ")
+                    where = r.get("where", "")
+                    lvl = r.get("level", "")
+                    msg = r.get("message", "")
+                    data_json = r.get("data")
+                    st.markdown(f"`{ts}` • **{where}** • _{lvl}_ — {msg}")
+                    if data_json:
+                        try:
+                            st.code(json.loads(data_json), language="json")
+                        except Exception:
+                            st.code(str(data_json))
+        except Exception as e:
+            st.caption(f"(Could not load logs: {e})")
 
 # --- Background Enrichment Orchestrator (app.py) ---
 def _enrichment_tasks():
     # lives across reruns
     return st.session_state.setdefault("_enrichment_tasks", {})  # {label: {"thread": t, "cancel": Event}}
 
-def start_enrichment(user_id: str, dataset_label: str, table_name: str):
+def start_enrichment(
+    user_id: str,
+    dataset_label: str,
+    table_name: str,
+    cleaned_df: Optional[pd.DataFrame] = None
+):
+    # Normalize once so every place uses the same key
+    label_key = (dataset_label or "").strip()
+
     tasks = _enrichment_tasks()
 
-    # don't double-start
-    if dataset_label in tasks and tasks[dataset_label]["thread"].is_alive():
+    # don't double-start for the same label
+    if label_key in tasks and tasks[label_key]["thread"].is_alive():
         return
+
+    # ✅ SEED the status row so the widget has something to read immediately
+    # NOTE: your set_status signature is set_status(user_id, dataset_label, *, phase, detail="", total=None)
+    try:
+        set_status(user_id, label_key, phase="initialising", detail="Queued for enrichment", total=None)
+    except Exception as e:
+        # non-fatal; widget may briefly show "No job" if this fails
+        print("[start_enrichment] set_status seed failed:", e)
+
+    # Safe copy for thread
+    df_copy = None
+    if cleaned_df is not None:
+        try:
+            df_copy = cleaned_df.copy(deep=True)
+        except Exception:
+            df_copy = cleaned_df
 
     cancel = threading.Event()
 
     def run():
         try:
-            # IMPORTANT: call status helpers with the correct signature (no 'status=' kw)
-            set_status(user_id, dataset_label, phase="initialising", detail="Starting enrichment...")
+            dbg(user_id, label_key, "start_enrichment", "thread spawn")
+            # Update status: moving from initialising/queued to running
+            set_status(user_id, label_key, phase="running", detail="Planning batches…", total=None)
+            dbg(user_id, label_key, "start_enrichment", "status: running(plan)")
 
-            # Get the cleaned df from session (you already stored it after upload)
-            cleaned_df = st.session_state.get("current_df")
-            if cleaned_df is None or cleaned_df.empty:
-                # If you prefer, you can load from Supabase here using table_name.
-                raise RuntimeError("No cleaned_df in session. Cannot start enrichment.")
+            # Prefer in-memory DF; else load by table_name
+            df_local = df_copy
+            if df_local is None:
+                dbg(user_id, label_key, "start_enrichment", "loading df from storage", data={"table": table_name})
+                df_local = load_user_table_from_supabase(user_id, table_name)
+                if df_local is None or df_local.empty:
+                    dbg(user_id, label_key, "start_enrichment", "df empty after storage load", level="error")
+                    raise RuntimeError("Could not load cleaned data from storage.")
 
-            # Run enrichment synchronously inside this thread
+            dbg(user_id, label_key, "start_enrichment", "df ready", data={"rows": int(len(df_local))})
+
+            # Do the work (cancel-aware)
             background_enrich(
                 user_id=user_id,
-                dataset_label=dataset_label,
-                cleaned_df=cleaned_df,
+                dataset_label=label_key,
+                cleaned_df=df_local,
                 cancel_event=cancel,
             )
 
             if cancel.is_set():
-                finish_status(user_id, dataset_label, ok=False, detail="Stopped by user")
+                dbg(user_id, label_key, "start_enrichment", "cancel seen")
+                finish_status(user_id, label_key, ok=False, detail="Stopped by user")
             else:
-                finish_status(user_id, dataset_label, ok=True, detail="Complete")
+                # Make end-state explicit and consistent for the widget
+                set_status(user_id, label_key, phase="done", detail="Wrapping up")
+                finish_status(user_id, label_key, ok=True, detail="Complete")
+                dbg(user_id, label_key, "start_enrichment", "finished ok")
 
         except Exception as e:
-            finish_status(user_id, dataset_label, ok=False, detail=str(e))
+            dbg(user_id, label_key, "start_enrichment", f"error: {e}", level="error")
+            finish_status(user_id, label_key, ok=False, detail=str(e))
+        finally:
+            # Clean up the task registry to avoid stale kill buttons / lookups
+            try:
+                task_map = st.session_state.get("_enrichment_tasks", {})
+                if label_key in task_map and not task_map[label_key]["thread"].is_alive():
+                    task_map.pop(label_key, None)
+                    st.session_state["_enrichment_tasks"] = task_map
+            except Exception:
+                pass
 
-    t = threading.Thread(target=run, daemon=True, name=f"enrich:{dataset_label}")
-    tasks[dataset_label] = {"thread": t, "cancel": cancel}
+    t = threading.Thread(target=run, daemon=True, name=f"enrich:{label_key}")
+    tasks[label_key] = {"thread": t, "cancel": cancel}
     t.start()
 
 # --- Sidebar render: only show when running ---
@@ -818,9 +957,37 @@ if page == "Home":
                         st.session_state["last_table_name"] = table_name
                         st.session_state.etl_done = True
 
-                        st.success("✅ Dataset uploaded & cleaned. You can now explore your data.")
-                        if not ENABLE_ENRICHMENT:
-                            st.info("Background enrichment is disabled while we test ETL.")
+                        st.success(
+                            "✅ Dataset uploaded & cleaned. Enrichment is starting in the background..."
+                            if ENABLE_ENRICHMENT else
+                            "✅ Dataset uploaded & cleaned. You can now explore your data."
+                        )
+
+                        # ---- Verify the new dataset is queryable for the dropdown ----
+                        try:
+                            # Re-query just this label; don’t rely on a later rerun to discover it
+                            check = supabase.table("uploads") \
+                                .select("dataset_label, table_name") \
+                                .eq("user_id", user_id) \
+                                .eq("dataset_label", dataset_label.strip()) \
+                                .eq("table_name", table_name) \
+                                .limit(1).execute()
+                            if not getattr(check, "data", None):
+                                st.warning("Upload log not visible yet; the dataset list may not show until the next reload.")
+                        except Exception as e:
+                            st.info(f"(Non-blocking) Could not verify upload row: {e}")
+
+                        # Start enrichment safely (pass the DF so the thread doesn't read session_state)
+                        _maybe_start_enrichment(
+                            user_id=user_id,
+                            dataset_label=dataset_label.strip(),
+                            table_name=table_name,
+                            cleaned_df=cleaned_df,
+                        )
+
+                        # One clean rerun so the Home list re-queries and auto-selects the new dataset
+                        st.rerun()
+
                 except zipfile.BadZipFile:
                     st.error("That file isn't a valid ZIP.")
                 except Exception as e:
@@ -1045,11 +1212,6 @@ elif page == "Overall Review":
         fig.update_layout(margin=dict(t=50, l=0, r=0, b=0), height=525)
 
     with col2:
-        ''
-        ''
-        ''
-        ''
-        ''
         if mode == 'music':
             artist_image_list = []
             df['hours_played'] = round(df['minutes_played'] / 60, 2)
@@ -1068,7 +1230,7 @@ elif page == "Overall Review":
                     artist_image_list.append(dict(
                         text=f'{artist} image not found',
                         title=f"#{idx}",
-                        img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
+                        img='media_images/Image-Coming-Soon_vector.svg'))
 
             # Create a carousel of artist images
             if artist_image_list:
@@ -1091,7 +1253,7 @@ elif page == "Overall Review":
                 podcast_image_list.append(dict(
                     text=f'{podcast} image not found',
                     title=f"#{idx}",
-                    img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
+                    img='media_images/Image-Coming-Soon_vector.svg'))
 
 
             if podcast_image_list:
@@ -1131,7 +1293,7 @@ elif page == "Overall Review":
                 audiobook_image_list.append(dict(
                     text=f'{audiobook} image not found',
                     title=f"#{idx}",
-                    img='https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'))
+                    img='media_images/Image-Coming-Soon_vector.svg'))
 
 
 
@@ -1140,9 +1302,6 @@ elif page == "Overall Review":
                 carousel(items=audiobook_image_list,container_height=550)
             else:
                 st.warning("No audiobook images available.")
-
-
-
 
     ##Ben's Big ol Graphs##
     df['datetime'] = pd.to_datetime(df['datetime'])
@@ -1313,20 +1472,20 @@ elif page == "Per Year":
             try:
                 image_url = df_artist[df_artist['artist_name'] == name]['artist_image'].values[0]
             except:
-                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
+                image_url = 'media_images/Image-Coming-Soon_vector.svg'
         elif selected_category == 'podcast':
             name = row['episode_show_name']
             try:
                 image_url = df_podcast[df_podcast['podcast_name'] == name]['podcast_artwork'].values[0]
             except:
-                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
+                image_url = 'media_images/Image-Coming-Soon_vector.svg'
 
         elif selected_category == 'audiobook':
             try:
                 name = row['audiobook_title']
                 image_url = df_audiobook_uri[df_audiobook_uri['audiobook_title'] == name]['audiobook_artwork'].values[0]
             except:
-                image_url = 'https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png'
+                image_url = 'media_images/Image-Coming-Soon_vector.svg'
 
 
 
@@ -1341,7 +1500,7 @@ elif page == "Per Year":
             try:
                 st.image(image_url, width=150)
             except:
-                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
+                st.image('media_images/Image-Coming-Soon_vector.svg')
 
         with col3:
             st.markdown(
@@ -1678,7 +1837,7 @@ elif page == "Per Artist":
                 album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]
                 st.image(album_image_url, output_format="auto")
             except:
-                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
+                st.image('media_images/Image-Coming-Soon_vector.svg')
 
 
 
@@ -2015,7 +2174,7 @@ elif page == "Per Album":
                 album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]
                 st.image(album_image_url, output_format="auto",use_container_width=True)
             except:
-                st.image('https://em-content.zobj.net/source/openmoji/413/woman-shrugging_1f937-200d-2640-fe0f.png')
+                st.image('media_images/Image-Coming-Soon_vector.svg')
 
 
     # top songs graph

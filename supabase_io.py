@@ -7,7 +7,7 @@ from supabase import create_client, Client
 SUPABASE_URL = st.secrets["supabase"]["url"]
 SUPABASE_KEY = st.secrets["supabase"]["key"]  # use service key server-side
 sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
+                                                                                    
 # ---------- Status helpers ----------
 def set_status(user_id: str, dataset_label: str, *, phase: str, detail: str = "", total: Optional[int] = None):
     payload = {

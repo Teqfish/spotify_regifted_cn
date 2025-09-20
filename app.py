@@ -35,7 +35,7 @@ import time
 from typing import Optional
 import zipfile
 
-from dao import SupabaseDAOs
+from dao import SupabaseDAOs, LocalDAOs   # ⬅ add LocalDAOs
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
 
 # --- CONFIG / CLIENTS ---
@@ -445,11 +445,13 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
         # Clean the data
         cleaned_df = run_cleaning_pipeline(df, dataset_label)
 
-        # Upload cleaned data to Supabase
+        # Save cleaned data locally (userdata/) for testing
+        from dao import LocalUserDataDAO
+        local_user_dao = LocalUserDataDAO(base_dir="userdata")
         filename = uploaded_file.name
-        table_name = upload_user_data_to_supabase(user_id, cleaned_df, dataset_label, filename)
+        table_name, path = local_user_dao.save_user_data(user_id, dataset_label, cleaned_df, filename)
 
-        st.success(f"✅ Cleaned CSV uploaded as `{table_name}.csv`")
+        st.success(f"✅ Cleaned CSV saved locally at `{path}`")
         return table_name, cleaned_df
 
 def run_cleaning_pipeline(df, username_label):
@@ -582,6 +584,28 @@ def background_enrich(*, user_id: str, dataset_label: str, cleaned_df):
     except Exception as e:
         daos.finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
         raise
+
+# ---- DEBUG LOCAL ENRICHMENT (saves CSVs to ./info_test) ----
+def run_local_enrichment_test(cleaned_df):
+    """Run the enrichment pipeline locally, saving CSVs to ./info_test instead of Supabase."""
+    local_daos = LocalDAOs(base_dir="metadata")
+    local_token = SpotifyToken(SPOTIFY_ID, SPOTIFY_SECRET)
+
+    enricher = MetadataEnricher(
+        user_id="localuser",
+        label="testdataset",
+        df=cleaned_df,
+        spotify_token=local_token,
+        discogs_key=DISCOGS_KEY,
+        discogs_secret=DISCOGS_SECRET,
+        status_dao=local_daos,
+        storage_dao=local_daos,
+        info_table_dao=local_daos,
+        verbose=True,
+    )
+
+    enricher.run_all(cancel_event=None)
+    st.success("✅ Local enrichment test complete. Check ./info_test for CSV files.")
 
 def spawn_enrichment_thread(user_id, label, cleaned_df):
     t = threading.Thread(target=background_enrich, kwargs={
@@ -910,6 +934,20 @@ with st.sidebar:
                 st.caption("Enrichment will be available once ETL is complete.")
         else:
             st.caption("Enrichment disabled for testing.")
+
+        # ---- Debug: Local enrichment ----
+        if st.button("🐞 Run Local Enrichment Test", key="btn_local_enrich"):
+            from dao import LocalUserDataDAO
+            user_dao = LocalUserDataDAO(base_dir="userdata")
+            try:
+                df = user_dao.load_user_data(current_label)
+                if df is not None and not df.empty:
+                    run_local_enrichment_test(df)  # saves results into metadata/
+                else:
+                    st.error("No data found to enrich locally.")
+            except Exception as e:
+                st.error(f"❌ Local enrichment failed: {e}")
+
     else:
         st.caption("No dataset selected yet.")
 
@@ -1050,7 +1088,6 @@ if page == "Home":
         # Re-query and re-render in-place (no st.rerun to avoid loops)
         dataset_options = list_user_tables(user_id)
         st.success("Dataset list refreshed.")
-
 
 # --------------------------- Overall Review Page ---------------------------- #
 elif page == "Overall Review":

@@ -35,21 +35,23 @@ import time
 from typing import Optional
 import zipfile
 
-from enrichment import background_enrich, set_status, inc_status, finish_status, sb, save_info_table_to_supabase
-
-# import ast
-# import io
-# import matplotlib.pyplot as plt
-# import numpy as np
-# from PIL import Image
-# import random
-# import seaborn as sns
-# import shutil
-# import string
+from dao import SupabaseDAOs
+from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
 
 # --- CONFIG / CLIENTS ---
 st.set_page_config(page_title="Regifted", page_icon=":gift:", layout="wide", initial_sidebar_state="expanded")
 
+SPOTIFY_ID = st.secrets["spotify"]["client_id"]
+SPOTIFY_SECRET = st.secrets["spotify"]["client_secret"]
+token = SpotifyToken(SPOTIFY_ID, SPOTIFY_SECRET)
+
+DISCOGS_KEY = st.secrets["discogs"]["key"]
+DISCOGS_SECRET = st.secrets["discogs"]["secret"]
+
+daos = SupabaseDAOs(  # you can rename to `dao` if you prefer
+    supabase_url=st.secrets["supabase"]["url"],
+    supabase_service_key=st.secrets["supabase"]["key"],
+)
 SUPABASE_URL = st.secrets["supabase"]["url"]
 SUPABASE_KEY = st.secrets["supabase"]["key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -315,20 +317,6 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
     """
     return process_uploaded_zip(uploaded_file, dataset_label, user_id)
 
-def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str, cleaned_df: Optional[pd.DataFrame] = None):
-    """
-    Start enrichment only when enabled. Pass cleaned_df explicitly so the worker
-    doesn't depend on st.session_state inside a thread.
-    """
-    if not ENABLE_ENRICHMENT:
-        return
-    start_enrichment(
-        user_id=user_id,
-        dataset_label=dataset_label,
-        table_name=table_name,
-        cleaned_df=cleaned_df,
-    )
-
 # --- SUPABASE DATA I/O ---
 def list_user_tables(user_id):
     """Return a list of (label, table_name) tuples for a given user."""
@@ -556,6 +544,66 @@ def log_upload(user_id, table_name, dataset_label, filename):
         if not getattr(verify, "data", None):
             raise RuntimeError("uploads verify query returned no row")
 
+def background_enrich(*, user_id: str, dataset_label: str, cleaned_df):
+    try:
+        # Sanity checks
+        daos.set_status(user_id, dataset_label, phase="sanity", detail="Checking Spotify…")
+        ok, msg = spotify_sanity_check(token)
+        if not ok:
+            daos.finish_status(user_id, dataset_label, ok=False, detail=f"Spotify check failed: {msg}")
+            return
+
+        daos.set_status(user_id, dataset_label, phase="sanity", detail="Checking Discogs…")
+        ok, msg = discogs_sanity_check(DISCOGS_KEY, DISCOGS_SECRET)
+        if not ok:
+            daos.finish_status(user_id, dataset_label, ok=False, detail=f"Discogs check failed: {msg}")
+            return
+
+        # Build + run
+        enricher = MetadataEnricher(
+            user_id=user_id,
+            label=dataset_label,
+            df=cleaned_df,
+            spotify_token=token,
+            discogs_key=DISCOGS_KEY,
+            discogs_secret=DISCOGS_SECRET,
+            status_dao=daos,      # progress/status writes
+            storage_dao=daos,     # CSV upload/download
+            info_table_dao=None,  # keep None unless you want table upserts again
+            verbose=True,
+        )
+
+        daos.set_status(user_id, dataset_label, phase="running", detail="Calling run_all()")
+        enricher.run_all(cancel_event=None)
+
+    except CancelledError:
+        daos.finish_status(user_id, dataset_label, ok=False, detail="Cancelled by user")
+        raise
+    except Exception as e:
+        daos.finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
+        raise
+
+def spawn_enrichment_thread(user_id, label, cleaned_df):
+    t = threading.Thread(target=background_enrich, kwargs={
+        "user_id": user_id, "dataset_label": label, "cleaned_df": cleaned_df
+    }, daemon=True)
+    t.start()
+    return t
+
+def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str, cleaned_df: Optional[pd.DataFrame] = None):
+    """
+    Start enrichment only when enabled. Pass cleaned_df explicitly so the worker
+    doesn't depend on st.session_state inside a thread.
+    """
+    if not ENABLE_ENRICHMENT:
+        return
+    start_enrichment(
+        user_id=user_id,
+        dataset_label=dataset_label,
+        table_name=table_name,
+        cleaned_df=cleaned_df,
+    )
+
 def info_tables_update(user_id, table_name):
     try:
         # Load the dataset from run_cleaning_pipeline
@@ -664,7 +712,7 @@ def enrichment_status_widget(user_id: str, dataset_label: str, *, enable_enrichm
         want_autorefresh = False
 
     # Fetch current job row
-    res = sb.table("enrichment_status").select("*") \
+    res = supabase.table("enrichment_status").select("*") \
         .eq("user_id", user_id).eq("dataset_label", dataset_label).limit(1).execute()
     data = getattr(res, "data", None)
     row = data[0] if isinstance(data, list) and data else None
@@ -704,7 +752,7 @@ def enrichment_status_widget(user_id: str, dataset_label: str, *, enable_enrichm
     # Optional logs panel: only show if the table exists
     with st.expander("Recent enrichment logs", expanded=False):
         try:
-            logs = sb.table("enrichment_logs") \
+            logs = supabase.table("enrichment_logs") \
                 .select("event_time,where,level,message,data") \
                 .eq("user_id", user_id).eq("dataset_label", dataset_label) \
                 .order("event_time", desc=True).limit(20).execute()
@@ -750,7 +798,7 @@ def start_enrichment(
     # ✅ SEED the status row so the widget has something to read immediately
     # NOTE: your set_status signature is set_status(user_id, dataset_label, *, phase, detail="", total=None)
     try:
-        set_status(user_id, label_key, phase="initialising", detail="Queued for enrichment", total=None)
+        daos.set_status(user_id, label_key, phase="initialising", detail="Queued for enrichment", total=None)
     except Exception as e:
         # non-fatal; widget may briefly show "No job" if this fails
         print("[start_enrichment] set_status seed failed:", e)
@@ -769,7 +817,7 @@ def start_enrichment(
         try:
             dbg(user_id, label_key, "start_enrichment", "thread spawn")
             # Update status: moving from initialising/queued to running
-            set_status(user_id, label_key, phase="running", detail="Planning batches…", total=None)
+            daos.set_status(user_id, label_key, phase="running", detail="Planning batches…", total=None)
             dbg(user_id, label_key, "start_enrichment", "status: running(plan)")
 
             # Prefer in-memory DF; else load by table_name
@@ -786,23 +834,27 @@ def start_enrichment(
             # Do the work (cancel-aware)
             background_enrich(
                 user_id=user_id,
-                dataset_label=label_key,
-                cleaned_df=df_local,
-                cancel_event=cancel,
+                dataset_label=current_label,
+                cleaned_df=cleaned_df,
+                daos=daos,
+                token=token,
+                discogs_key=st.secrets["discogs"]["key"],
+                discogs_secret=st.secrets["discogs"]["secret"],
+                cancel_event=None,
             )
 
             if cancel.is_set():
                 dbg(user_id, label_key, "start_enrichment", "cancel seen")
-                finish_status(user_id, label_key, ok=False, detail="Stopped by user")
+                daos.finish_status(user_id, label_key, ok=False, detail="Stopped by user")
             else:
                 # Make end-state explicit and consistent for the widget
-                set_status(user_id, label_key, phase="done", detail="Wrapping up")
-                finish_status(user_id, label_key, ok=True, detail="Complete")
+                daos.set_status(user_id, label_key, phase="done", detail="Wrapping up")
+                daos.finish_status(user_id, label_key, ok=True, detail="Complete")
                 dbg(user_id, label_key, "start_enrichment", "finished ok")
 
         except Exception as e:
             dbg(user_id, label_key, "start_enrichment", f"error: {e}", level="error")
-            finish_status(user_id, label_key, ok=False, detail=str(e))
+            daos.finish_status(user_id, label_key, ok=False, detail=str(e))
         finally:
             # Clean up the task registry to avoid stale kill buttons / lookups
             try:
@@ -837,7 +889,7 @@ with st.sidebar:
                 if task:
                     task["cancel"].set()
                     try:
-                        set_status(user_id, current_label, phase="shutdown", detail="User requested stop")
+                        daos.set_status(user_id, current_label, phase="shutdown", detail="User requested stop")
                     except Exception:
                         pass
                     st.success("Sent stop signal to enrichment.")

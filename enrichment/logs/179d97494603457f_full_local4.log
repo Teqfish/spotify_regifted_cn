@@ -1,0 +1,10 @@
+{"event_time": "2025-09-23T15:32:17.799343", "where": "start_enrichment", "level": "info", "message": "thread spawn", "data": null}
+{"event_time": "2025-09-23T15:32:17.839967", "where": "start_enrichment", "level": "info", "message": "status: running(plan)", "data": null}
+{"event_time": "2025-09-23T15:32:17.840164", "where": "start_enrichment", "level": "info", "message": "df ready", "data": {"rows": 73451}}
+{"event_time": "2025-09-23T15:32:17.840549", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-09-23T15:32:18.229737", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-23T15:32:18.230114", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-09-23T15:32:18.447906", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-23T15:32:18.463392", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-09-23T15:32:18.463791", "where": "enrichment", "level": "info", "message": "Finished enrichment successfully", "data": null}
+{"event_time": "2025-09-23T15:32:18.463997", "where": "start_enrichment", "level": "info", "message": "finished ok", "data": null}

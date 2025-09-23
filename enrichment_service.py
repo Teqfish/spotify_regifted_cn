@@ -11,6 +11,11 @@ from dao import StatusDAO, StorageDAO, InfoTableDAO
 DISCOGS_KEY = st.secrets["discogs"]["key"]
 DISCOGS_SECRET = st.secrets["discogs"]["secret"]
 
+# ---- Cancel gate ----
+class CancelledError(Exception):
+    """Raised when a cancel_event is set to stop enrichment early."""
+    pass
+
 # ============ Helpers ============
 def parse_spotify_id(value: Optional[str], expected: str) -> Optional[str]:
     """
@@ -102,34 +107,61 @@ def make_auth_header(token: SpotifyToken) -> Dict[str, str]:
 
 # ---------- Connectivity sanity checks ----------
 def spotify_sanity_check(token) -> tuple[bool, str]:
+    """
+    Run a very lightweight query against Spotify API to confirm token works.
+    Returns (ok, message).
+    """
+    url = f"{BASE}/search"
+    params = {"q": "artist:radiohead", "type": "artist", "limit": 1}
+    headers = make_auth_header(token)
+
     try:
-        r = requests.get(
-            f"{BASE}/search",
-            headers=make_auth_header(token),
-            params={"q": "artist:radiohead", "type": "artist", "limit": 1},
-            timeout=10,
-        )
+        r = requests.get(url, headers=headers, params=params, timeout=5)
         r.raise_for_status()
-        return True, "ok"
+
+        data = r.json()
+        # Basic sanity: check that response contains 'artists'
+        if "artists" in data:
+            return True, "ok"
+        else:
+            return False, f"Unexpected response format: {list(data.keys())}"
+
+    except requests.exceptions.Timeout:
+        return False, "Spotify sanity check timed out after 5s"
+    except requests.exceptions.HTTPError as e:
+        return False, f"HTTP error {r.status_code}: {r.text[:200]}"
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {e}"
     except Exception as e:
-        return False, str(e)
+        return False, f"Unexpected error: {e}"
 
 def discogs_sanity_check(key: str, secret: str) -> tuple[bool, str]:
-    try:
-        r = requests.get(
-            "https://api.discogs.com/database/search",
-            params={"q": "Radiohead", "type": "artist", "key": key, "secret": secret},
-            timeout=10,
-        )
-        r.raise_for_status()
-        return True, "ok"
-    except Exception as e:
-        return False, str(e)
+    """
+    Run a quick search against Discogs API to confirm credentials work.
+    Returns (ok, message).
+    """
+    url = "https://api.discogs.com/database/search"
+    params = {"q": "Radiohead", "type": "artist", "key": key, "secret": secret}
 
-# ---- Cancel gate ----
-class CancelledError(Exception):
-    """Raised when a cancel_event is set to stop enrichment early."""
-    pass
+    try:
+        r = requests.get(url, params=params, timeout=5)
+        r.raise_for_status()
+
+        data = r.json()
+        # Sanity check: expect "results" key
+        if "results" in data:
+            return True, "ok"
+        else:
+            return False, f"Unexpected response format: {list(data.keys())}"
+
+    except requests.exceptions.Timeout:
+        return False, "Discogs sanity check timed out after 5s"
+    except requests.exceptions.HTTPError as e:
+        return False, f"HTTP error {r.status_code}: {r.text[:200]}"
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {e}"
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
 
 def check_cancel(cancel_event: Optional[threading.Event]) -> None:
     """Raise CancelledError if a cancel_event is set."""
@@ -163,7 +195,7 @@ def get_several(endpoint: str, ids: List[str], *, token: SpotifyToken) -> dict:
     raise RuntimeError(f"Spotify {endpoint} fetch failed after retries")
 
 # ----- Typed helpers (all dependency-injected with token) -----
-def get_artists(ids: List[str], token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
+def get_artists(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
     out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
         check_cancel(cancel_event)
@@ -172,7 +204,7 @@ def get_artists(ids: List[str], token: SpotifyToken, cancel_event: Optional[thre
         spin_sleep(0.1)
     return out
 
-def get_tracks(ids: List[str], token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
+def get_tracks(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
     out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
         check_cancel(cancel_event)
@@ -181,17 +213,16 @@ def get_tracks(ids: List[str], token: SpotifyToken, cancel_event: Optional[threa
         spin_sleep(0.1)
     return out
 
-def get_albums(ids: List[str], token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
-    # Keep 20 to avoid occasional 400s from very large album payloads
+def get_albums(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
     out: List[dict] = []
-    for batch in batched(unique_keep_order([i for i in ids if i]), 20):
+    for batch in batched(unique_keep_order([i for i in ids if i]), 20):  # 20 avoids occasional 400s
         check_cancel(cancel_event)
         payload = get_several("albums", batch, token=token)
         out.extend(payload.get("albums") or [])
         spin_sleep(0.1)
     return out
 
-def get_shows(ids: List[str], token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
+def get_shows(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
     out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
         check_cancel(cancel_event)
@@ -200,7 +231,7 @@ def get_shows(ids: List[str], token: SpotifyToken, cancel_event: Optional[thread
         spin_sleep(0.1)
     return out
 
-def get_episodes(ids: List[str], token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
+def get_episodes(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
     out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
         check_cancel(cancel_event)
@@ -209,7 +240,7 @@ def get_episodes(ids: List[str], token: SpotifyToken, cancel_event: Optional[thr
         spin_sleep(0.1)
     return out
 
-def get_audiobooks(ids: List[str], token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
+def get_audiobooks(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
     out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
         check_cancel(cancel_event)
@@ -218,7 +249,7 @@ def get_audiobooks(ids: List[str], token: SpotifyToken, cancel_event: Optional[t
         spin_sleep(0.1)
     return out
 
-def get_chapters(ids: List[str], token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
+def get_chapters(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[threading.Event] = None) -> List[dict]:
     out: List[dict] = []
     for batch in batched(unique_keep_order([i for i in ids if i]), 50):
         check_cancel(cancel_event)
@@ -326,6 +357,17 @@ class MetadataEnricher:
         self.buf_artists: list[dict] = []
         self.buf_albums: list[dict] = []
         self.buf_tracks: list[dict] = []
+                # seen + id caches
+        self.seen_artists: Set[str] = set()
+        self.seen_albums: Set[Tuple[str, str]] = set()
+        self.artist_ids_by_name: Dict[str, str] = {}
+        self.album_ids_by_key: Dict[Tuple[str, str], str] = {}
+
+        # NEW: shows & audiobooks caches
+        self.seen_shows: Set[str] = set()
+        self.seen_audiobooks: Set[str] = set()
+        self.show_ids_by_name: Dict[str, str] = {}
+        self.audiobook_ids_by_title: Dict[str, str] = {}
 
     def log(self, msg: str):
         if self.verbose:
@@ -467,6 +509,7 @@ class MetadataEnricher:
     def resolve_artist_ids(self, names: List[str]):
         # Try to pull from any track URIs first (fewer API calls overall).
         music = self.df[(self.df["category"] == "music") & (self.df["artist_name"].isin(names))]
+
         # If your dataset has "spotify_artist_uri" column, grab that first
         if "spotify_artist_uri" in self.df.columns:
             for _, r in music[["artist_name", "spotify_artist_uri"]].dropna().drop_duplicates().iterrows():
@@ -476,7 +519,6 @@ class MetadataEnricher:
 
         # Otherwise, go via tracks -> artists
         if "spotify_track_uri" in self.df.columns:
-            # Pick a top track per artist for a cheap hop to artist id
             reps = (
                 music.dropna(subset=["spotify_track_uri"])
                 .groupby(["artist_name"])["spotify_track_uri"]
@@ -486,7 +528,7 @@ class MetadataEnricher:
             track_ids = [parse_spotify_id(x, "track") for x in reps["spotify_track_uri"].tolist()]
             track_ids = [x for x in track_ids if x]
             if track_ids:
-                t_info = get_tracks(track_ids, cancel_event=self.cancel_event)
+                t_info = get_tracks(track_ids, token=self.token, cancel_event=self.cancel_event)
                 for t in t_info:
                     if not t:
                         continue
@@ -502,7 +544,7 @@ class MetadataEnricher:
             try:
                 r = requests.get(
                     f"{BASE}/search",
-                    headers=make_auth_header(),
+                    headers=make_auth_header(self.token),
                     params={"q": name, "type": "artist", "limit": 1},
                     timeout=30,
                 )
@@ -515,7 +557,7 @@ class MetadataEnricher:
                 pass
 
     def resolve_show_ids(self, show_names: List[str]):
-        # Prefer direct show URIs if you have them
+        # Prefer direct show URIs if present
         if "spotify_show_uri" in self.df.columns:
             sub = self.df[self.df["episode_show_name"].isin(show_names)][["episode_show_name", "spotify_show_uri"]].dropna().drop_duplicates()
             for _, r in sub.iterrows():
@@ -534,9 +576,9 @@ class MetadataEnricher:
             ep_ids = [parse_spotify_id(x, "episode") for x in reps["spotify_episode_uri"].tolist()]
             ep_ids = [x for x in ep_ids if x]
             if ep_ids:
-                eps = get_episodes(ep_ids)
+                eps = get_episodes(ep_ids, token=self.token, cancel_event=self.cancel_event)
                 for e in eps:
-                    if not e:            # guard None placeholders
+                    if not e:
                         continue
                     show = e.get("show") or {}
                     sid = show.get("id")
@@ -544,13 +586,13 @@ class MetadataEnricher:
                     if sid and sname:
                         self.show_ids_by_name.setdefault(sname, sid)
 
-        # Fallback search by show name
+        # Fallback: search by show name
         unresolved = [n for n in show_names if n not in self.show_ids_by_name]
         for name in unresolved:
             try:
                 r = requests.get(
                     f"{BASE}/search",
-                    headers=make_auth_header(),
+                    headers=make_auth_header(self.token),
                     params={"q": name, "type": "show", "limit": 1},
                     timeout=30,
                 )
@@ -563,7 +605,7 @@ class MetadataEnricher:
                 pass
 
     def resolve_audiobook_ids(self, titles: List[str]):
-        # Prefer direct audiobook URIs if you have them
+        # Prefer direct audiobook URIs if present
         if "spotify_audiobook_uri" in self.df.columns:
             sub = self.df[self.df["audiobook_title"].isin(titles)][["audiobook_title", "spotify_audiobook_uri"]].dropna().drop_duplicates()
             for _, r in sub.iterrows():
@@ -582,9 +624,9 @@ class MetadataEnricher:
             ch_ids = [parse_spotify_id(x, "chapter") for x in reps["spotify_chapter_uri"].tolist()]
             ch_ids = [x for x in ch_ids if x]
             if ch_ids:
-                chs = get_chapters(ch_ids)
+                chs = get_chapters(ch_ids, token=self.token, cancel_event=self.cancel_event)
                 for ch in chs:
-                    if not ch:           # guard None placeholders
+                    if not ch:
                         continue
                     book = ch.get("audiobook") or {}
                     bid = book.get("id")
@@ -592,14 +634,13 @@ class MetadataEnricher:
                     if bid and btitle:
                         self.audiobook_ids_by_title.setdefault(btitle, bid)
 
-
         # Fallback search by title
         unresolved = [t for t in titles if t not in self.audiobook_ids_by_title]
         for title in unresolved:
             try:
                 r = requests.get(
                     f"{BASE}/search",
-                    headers=make_auth_header(),
+                    headers=make_auth_header(self.token),
                     params={"q": title, "type": "audiobook", "limit": 1},
                     timeout=30,
                 )
@@ -613,34 +654,29 @@ class MetadataEnricher:
 
     # ---------- Fire batch calls on-the-fly ----------
     def fetch_and_save_artists(self, names: List[str], cancel_event: Optional[threading.Event] = None):
-        # normalize input
         names = [n for n in unique_keep_order(names) if isinstance(n, str) and n.strip()]
         if not names:
             return
 
-        self._check_cancel(cancel_event)
+        self._check_cancel(self.cancel_event)
 
-        # Resolve IDs (your existing resolver)
         self.resolve_artist_ids(names)
         ids = [self.artist_ids_by_name.get(n) for n in names if self.artist_ids_by_name.get(n)]
         if not ids:
             return
 
-        # Prefer an injected header; fall back to global
-        hdr_func = getattr(self, "auth_header", None) or make_auth_header
-
-        self._check_cancel(cancel_event)
-        info = get_artists(ids, hdr_func, cancel_event=cancel_event)
+        self._check_cancel(self.cancel_event)
+        info = get_artists(ids, token=self.token, cancel_event=self.cancel_event)
         if not info:
             return
 
         df_art = pd.json_normalize(info)
 
-        # Merge Discogs only for rows with empty Spotify genres
+        # Fill missing genres from Discogs
         df_art["genres"] = df_art.get("genres", pd.Series([[]]*len(df_art))).apply(lambda x: x or [])
         missing = df_art[df_art["genres"].apply(len) == 0]["name"].tolist()
         if missing:
-            self._check_cancel(cancel_event)
+            self._check_cancel(self.cancel_event)
             df_disc = discogs_search_genres(missing)
             df_art = df_art.merge(df_disc, left_on="name", right_on="artist_name", how="left")
             df_art["genres"] = df_art.apply(
@@ -648,7 +684,6 @@ class MetadataEnricher:
             )
             df_art = df_art.drop(columns=["artist_name", "discogs_genre"], errors="ignore")
 
-        # Buffer minimal normalized payload (list of dicts)
         out = pd.DataFrame({
             "artist_id": df_art["id"],
             "artist_name": df_art["name"],
@@ -662,23 +697,19 @@ class MetadataEnricher:
         })
         self.buf_artists.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
 
-        # housekeeping
         self.seen_artists.update(names)
         self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Buffered artists ({len(names)})")
 
     def fetch_and_save_albums_by_pairs(self, artist_album_pairs: List[Tuple[str, str]], cancel_event: Optional[threading.Event] = None):
-        self._check_cancel(cancel_event)
+        self._check_cancel(self.cancel_event)
 
-        # de-dupe and skip already-seen
         pairs = [p for p in unique_keep_order(artist_album_pairs) if p not in self.seen_albums]
         if not pairs:
             return
 
-        hdr_func = getattr(self, "auth_header", None) or make_auth_header
-
         # ---- fast path via existing track URIs -> album ids
         if "spotify_track_uri" in self.df.columns:
-            self._check_cancel(cancel_event)
+            self._check_cancel(self.cancel_event)
             df_sub = self.df[
                 (self.df["category"] == "music")
                 & (self.df["artist_name"].isin([a for a, _ in pairs]))
@@ -694,10 +725,10 @@ class MetadataEnricher:
                 track_ids = [x for x in track_ids if x]
 
                 if track_ids:
-                    self._check_cancel(cancel_event)
-                    t_info = get_tracks(track_ids, hdr_func, cancel_event=cancel_event)
+                    self._check_cancel(self.cancel_event)
+                    t_info = get_tracks(track_ids, token=self.token, cancel_event=self.cancel_event)
                     for i, t in enumerate(t_info):
-                        self._check_cancel(cancel_event)
+                        self._check_cancel(self.cancel_event)
                         if not t:
                             continue
                         alb = t.get("album") or {}
@@ -710,11 +741,11 @@ class MetadataEnricher:
         # ---- fallback search for unresolved (name -> album id)
         unresolved = [p for p in pairs if p not in self.album_ids_by_key]
         for artist_name, album_name in unresolved:
-            self._check_cancel(cancel_event)
+            self._check_cancel(self.cancel_event)
             try:
                 r = requests.get(
                     f"{BASE}/search",
-                    headers=hdr_func(),
+                    headers=make_auth_header(self.token),
                     params={"q": f"album:{album_name} artist:{artist_name}", "type": "album", "limit": 1},
                     timeout=30,
                 )
@@ -724,17 +755,14 @@ class MetadataEnricher:
                     self.album_ids_by_key[(artist_name, album_name)] = items[0]["id"]
                 spin_sleep(0.1)
             except Exception:
-                # swallow and keep going
                 pass
 
         ids = [self.album_ids_by_key.get(p) for p in pairs if self.album_ids_by_key.get(p)]
         if ids:
-            self._check_cancel(cancel_event)
-            info = get_albums(ids, hdr_func, cancel_event=cancel_event)
+            self._check_cancel(self.cancel_event)
+            info   = get_albums(ids, token=self.token, cancel_event=self.cancel_event)
             if info:
                 df_alb = pd.json_normalize(info)
-
-                # buffer minimal normalized payload
                 out = pd.DataFrame({
                     "album_id": df_alb["id"],
                     "album_name": df_alb["name"],
@@ -756,17 +784,14 @@ class MetadataEnricher:
         if not names:
             return
 
-        self._check_cancel(cancel_event)
+        self._check_cancel(self.cancel_event)
         self.resolve_show_ids(names)
         ids = [self.show_ids_by_name.get(n) for n in names if self.show_ids_by_name.get(n)]
         if not ids:
             return
 
-        hdr_func = getattr(self, "auth_header", None) or make_auth_header
-
-        self._check_cancel(cancel_event)
-        # Resolve to ensure IDs are valid/rate limit friendly; you don't store shows yet
-        _ = get_shows(ids, hdr_func, cancel_event=cancel_event)
+        self._check_cancel(self.cancel_event)
+        _ = get_shows(ids, token=self.token, cancel_event=self.cancel_event)
 
         self.seen_shows.update(names)
         self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Resolved shows ({len(names)})")
@@ -776,17 +801,14 @@ class MetadataEnricher:
         if not titles:
             return
 
-        self._check_cancel(cancel_event)
+        self._check_cancel(self.cancel_event)
         self.resolve_audiobook_ids(titles)
         ids = [self.audiobook_ids_by_title.get(t) for t in titles if self.audiobook_ids_by_title.get(t)]
         if not ids:
             return
 
-        hdr_func = getattr(self, "auth_header", None) or make_auth_header
-
-        self._check_cancel(cancel_event)
-        # Resolve to ensure IDs are valid/rate limit friendly; you don't store audiobooks yet
-        _ = get_audiobooks(ids, hdr_func, cancel_event=cancel_event)
+        self._check_cancel(self.cancel_event)
+        _ = get_audiobooks(ids, token=self.token, cancel_event=self.cancel_event)
 
         self.seen_audiobooks.update(titles)
         self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Resolved audiobooks ({len(titles)})")
@@ -1000,17 +1022,61 @@ class MetadataEnricher:
         #     self.info_tables.upsert_track_rows(tracks)
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
+        """
+        Full enrichment pipeline with clear phase/status updates.
+        This actually drives the phases so buffers fill, then flushes to CSV.
+        """
+        # Make the cancel_event available everywhere in this instance
+        self.cancel_event = cancel_event
+
         try:
-            # estimate + set running status (you can reuse your estimate function)
-            self.status.set_status(self.user_id, self.label, phase="overall", detail="Starting enrichment", total=None)
+            # 1) Plan & announce total work
+            total = self.estimate_total_batches()
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="planning",
+                detail=f"Estimating batches… (~{total})",
+                total=total
+            )
 
-            # phases (call your same methods, but use fetch_and_buffer_* instead of saving)
-            # e.g., top_overall = ...
-            # self.fetch_and_buffer_artists(...); self.fetch_and_buffer_albums(...)
+            # 2) Build priority sets
+            self._check_cancel(self.cancel_event)
+            top_art, top_shows, top_books = self.top_overall()
+            per_art, per_show, per_book = self.top_per_year(set(), set(), set())
 
-            # finally flush once
+            # 3) Overall “first 50”
+            self._check_cancel(self.cancel_event)
+            self.status.set_status(self.user_id, self.label, phase="overall", detail="Processing overall top…", total=total)
+            self.run_phase_overall_first50(top_art, top_shows, top_books)
+
+            # 4) Per-year
+            self._check_cancel(self.cancel_event)
+            self.status.set_status(self.user_id, self.label, phase="per_year", detail="Processing per-year top…", total=total)
+            self.run_phase_per_year(per_art, per_show, per_book)
+
+            # 5) Per-artist: most listened album per year
+            self._check_cancel(self.cancel_event)
+            self.status.set_status(self.user_id, self.label, phase="albums_of_year", detail="Top albums per artist-year…", total=total)
+            self.run_phase_per_artist_albums_of_year()
+
+            # 6) Per-album: artwork for every album for top artists
+            self._check_cancel(self.cancel_event)
+            self.status.set_status(self.user_id, self.label, phase="per_album", detail="All albums for top artists…", total=total)
+            self.run_phase_per_album_all_albums_for_top_artists()
+
+            # 7) Breadth-first remaining artists by year
+            self._check_cancel(self.cancel_event)
+            self.status.set_status(self.user_id, self.label, phase="breadth_first", detail="Filling remaining artists by year…", total=total)
+            self.run_phase_breadth_first_years_remaining()
+
+            # 8) Flush to CSV(s) once
+            self._check_cancel(self.cancel_event)
+            self.status.set_status(self.user_id, self.label, phase="flush", detail="Writing CSV snapshots…", total=total)
             self.flush_all()
+
+            # 9) Done
             self.status.finish_status(self.user_id, self.label, ok=True, detail="✅ Enrichment completed (CSV flushed)")
+
         except CancelledError:
             self.status.finish_status(self.user_id, self.label, ok=False, detail="❌ Cancelled by user")
             raise

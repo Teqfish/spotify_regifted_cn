@@ -1,0 +1,4 @@
+{"event_time": "2025-09-21T00:58:20.553195", "where": "start_enrichment", "level": "info", "message": "thread spawn", "data": null}
+{"event_time": "2025-09-21T00:58:20.637730", "where": "start_enrichment", "level": "info", "message": "status: running(plan)", "data": null}
+{"event_time": "2025-09-21T00:58:20.638070", "where": "start_enrichment", "level": "info", "message": "df ready", "data": {"rows": 73451}}
+{"event_time": "2025-09-21T00:58:20.638168", "where": "start_enrichment", "level": "error", "message": "error: background_enrich() got an unexpected keyword argument 'daos'", "data": null}

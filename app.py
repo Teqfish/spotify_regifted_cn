@@ -35,7 +35,8 @@ import time
 from typing import Optional
 import zipfile
 
-from dao import SupabaseDAOs
+from dao import SupabaseDAOs, LocalMetadataDAO, LocalStatusDAO, LocalLogDAO
+from dao_selector import get_daos
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
 
 # --- CONFIG / CLIENTS ---
@@ -48,13 +49,26 @@ token = SpotifyToken(SPOTIFY_ID, SPOTIFY_SECRET)
 DISCOGS_KEY = st.secrets["discogs"]["key"]
 DISCOGS_SECRET = st.secrets["discogs"]["secret"]
 
-daos = SupabaseDAOs(  # you can rename to `dao` if you prefer
-    supabase_url=st.secrets["supabase"]["url"],
-    supabase_service_key=st.secrets["supabase"]["key"],
-)
 SUPABASE_URL = st.secrets["supabase"]["url"]
 SUPABASE_KEY = st.secrets["supabase"]["key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+daos = SupabaseDAOs(supabase)
+
+local_status = LocalStatusDAO()
+local_storage = LocalMetadataDAO()
+local_logs = LocalLogDAO()
+
+# Toggle between "local", "supabase", "cloudflare"
+SERVER_MODE = "local"
+
+daos_bundle = get_daos(SERVER_MODE)
+
+# For convenience, alias the DAOs
+user_data_dao = daos_bundle.get("user_data")   # only in local mode
+status_dao    = daos_bundle.get("status")
+metadata_dao  = daos_bundle.get("metadata")
+log_dao       = daos_bundle.get("logs")
+supabase_dao  = daos_bundle.get("main")        # only in supabase mode
 
 JWT_COOKIE_NAME = "regifted_auth"
 JWT_ALG = "HS256"
@@ -313,91 +327,97 @@ if st.session_state.get("user"):
 def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
     """
     Thin wrapper around process_uploaded_zip.
-    NOTE: Not cached because it writes to Supabase; caching side effects is brittle.
+    Not cached because it writes files to disk (side effects).
     """
     return process_uploaded_zip(uploaded_file, dataset_label, user_id)
 
 # --- SUPABASE DATA I/O ---
-def list_user_tables(user_id):
-    """Return a list of (label, table_name) tuples for a given user."""
-    response = supabase.table("uploads") \
-        .select("dataset_label, table_name") \
-        .eq("user_id", user_id) \
-        .order("upload_time", desc=True) \
-        .execute()
+# def list_user_tables(user_id):
+#     """Return a list of (label, table_name) tuples for a given user."""
+#     response = supabase.table("uploads") \
+#         .select("dataset_label, table_name") \
+#         .eq("user_id", user_id) \
+#         .order("upload_time", desc=True) \
+#         .execute()
 
-    if hasattr(response, "error") and response.error:
-        raise RuntimeError(f"Supabase error: {response.error.message}")
+#     if hasattr(response, "error") and response.error:
+#         raise RuntimeError(f"Supabase error: {response.error.message}")
 
-    return [(row["dataset_label"], row["table_name"]) for row in response.data]
+#     return [(row["dataset_label"], row["table_name"]) for row in response.data]
 
-def upload_user_data_to_supabase(user_id, dataframe, dataset_label, filename) -> str:
-    """
-    Writes cleaned CSV to Storage and logs a row in `uploads`. Returns table_name.
-    Raises on failure.
-    """
-    # Normalize once so the same label is used everywhere
-    dataset_label = (dataset_label or "").strip()
-    if not dataset_label:
-        raise ValueError("Empty dataset_label")
+# def upload_user_data_to_supabase(user_id, dataframe, dataset_label, filename) -> str:
+#     """
+#     Writes cleaned CSV to Storage and logs a row in `uploads`. Returns table_name.
+#     Raises on failure.
+#     """
+#     # Normalize once so the same label is used everywhere
+#     dataset_label = (dataset_label or "").strip()
+#     if not dataset_label:
+#         raise ValueError("Empty dataset_label")
 
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
-    path = f"{user_id}/{table_name}.csv"
+#     timestamp = time.strftime("%Y%m%d-%H%M%S")
+#     table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
+#     path = f"{user_id}/{table_name}.csv"
 
-    # Save CSV then upload
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
-        dataframe.to_csv(tmp.name, index=False)
-        tmp.flush()
-        try:
-            # NOTE: supabase-py storage returns dict-ish object; check for error if available
-            res = supabase.storage.from_("userdata").upload(
-                path=path, file=tmp.name, file_options={"content-type": "text/csv"}
-            )
-            # Some clients return {'error': None} or raise — treat anything falsy as suspicious
-            if res is None:
-                raise RuntimeError("Storage upload returned None")
-        except Exception as e:
-            raise RuntimeError(f"Storage upload failed: {e}")
-    try:
-        log_upload(user_id, table_name, dataset_label, filename)
-    except Exception as e:
-        # Bubble up so we can see why the dropdown is empty
-        raise RuntimeError(f"uploads insert failed: {e}")
+#     # Save CSV then upload
+#     with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+#         dataframe.to_csv(tmp.name, index=False)
+#         tmp.flush()
+#         try:
+#             # NOTE: supabase-py storage returns dict-ish object; check for error if available
+#             res = supabase.storage.from_("userdata").upload(
+#                 path=path, file=tmp.name, file_options={"content-type": "text/csv"}
+#             )
+#             # Some clients return {'error': None} or raise — treat anything falsy as suspicious
+#             if res is None:
+#                 raise RuntimeError("Storage upload returned None")
+#         except Exception as e:
+#             raise RuntimeError(f"Storage upload failed: {e}")
+#     try:
+#         log_upload(user_id, table_name, dataset_label, filename)
+#     except Exception as e:
+#         # Bubble up so we can see why the dropdown is empty
+#         raise RuntimeError(f"uploads insert failed: {e}")
 
-    return table_name
+#     return table_name
 
-def load_user_table_from_supabase(user_id, table_name):
-    path = f"{user_id}/{table_name}.csv"
-    res = supabase.storage.from_("userdata").download(path)
-    if res:
-        decoded = res.decode("utf-8")
-        return pd.read_csv(StringIO(decoded))
-    else:
-        st.error(f"Failed to load {table_name}")
-        return pd.DataFrame()
+# def load_user_table_from_supabase(user_id, table_name):
+#     path = f"{user_id}/{table_name}.csv"
+#     res = supabase.storage.from_("userdata").download(path)
+#     if res:
+#         decoded = res.decode("utf-8")
+#         return pd.read_csv(StringIO(decoded))
+#     else:
+#         st.error(f"Failed to load {table_name}")
+#         return pd.DataFrame()
 
-# ---------- DEBUG LOGGING (lightweight) ----------
+# --- LOCAL DATA I/O (for testing) ---
+def list_local_datasets(user_id):
+    """Return [(label, table_name), ...] for datasets in userdata/."""
+    base = Path("userdata")
+    index_path = base / "index.json"
+    if not index_path.exists():
+        return []
+
+    index = json.loads(index_path.read_text())
+    # Only return datasets for this user_id
+    return [(label, table) for table, label in index.items() if table.startswith(f"{user_id}_")]
+
+# # ---------- DEBUG LOGGING (lightweight) ----------
 def dbg(user_id: str, dataset_label: str, where: str, msg: str, level: str = "info", data: dict | None = None):
-    """Best-effort: write a debug log row; fall back to print on failure."""
-    payload = {
-        "event_time": datetime.now().isoformat(),
-        "user_id": user_id,
-        "dataset_label": dataset_label,
-        "where": where,
-        "level": level,
-        "message": msg,
-        "data": json.dumps(data) if data is not None else None,
-    }
+    """Write a debug log row via the active log_dao (local or supabase)."""
     try:
-        supabase.table("enrichment_logs").insert(payload).execute()
+        if log_dao:
+            log_dao.log(user_id, dataset_label, where, msg, level=level, data=data)
+        else:
+            print(f"[{level}] {user_id}/{dataset_label} {where}: {msg} {data or ''}")
     except Exception as e:
-        # Don't crash enrichment if the log table doesn't exist yet
-        print("[dbg]", e, payload)
+        # Never let logging crash enrichment
+        print(f"[dbg-error] {e} — {user_id}/{dataset_label} {where}: {msg}")
 
 # --- DATA PROCESSING ---
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
-    """Processes a Spotify ZIP upload, cleans data, and uploads to Supabase."""
+    """Processes a Spotify ZIP upload, cleans data, and saves locally to userdata/."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Save uploaded ZIP
         zip_path = os.path.join(temp_dir, uploaded_file.name)
@@ -445,11 +465,20 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
         # Clean the data
         cleaned_df = run_cleaning_pipeline(df, dataset_label)
 
-        # Upload cleaned data to Supabase
+        # Save cleaned data locally (userdata/) for testing
+        from dao import LocalUserDataDAO
+        local_user_dao = LocalUserDataDAO(base_dir="userdata")
         filename = uploaded_file.name
-        table_name = upload_user_data_to_supabase(user_id, cleaned_df, dataset_label, filename)
+        table_name, path = user_data_dao.save_user_data(user_id, dataset_label, cleaned_df, filename)
 
-        st.success(f"✅ Cleaned CSV uploaded as `{table_name}.csv`")
+        # TODO: removal of supabase refs
+        # Log metadata in Supabase uploads table (so dataset list still works)
+        # try:
+        # #     log_upload(user_id, table_name, dataset_label, filename)
+        # except Exception as e:
+        #     st.warning(f"⚠️ Upload log could not be recorded in Supabase: {e}")
+
+        st.success(f"✅ Cleaned CSV saved locally at `{path}`")
         return table_name, cleaned_df
 
 def run_cleaning_pipeline(df, username_label):
@@ -520,46 +549,63 @@ def run_cleaning_pipeline(df, username_label):
 
     return cleaned_df
 
-def log_upload(user_id, table_name, dataset_label, filename):
-    """Insert/Upsert the uploads row; raise on error so caller can show it."""
-    payload = {
-        "upload_time": datetime.now().isoformat(),
-        "user_id": user_id,
-        "table_name": table_name,
-        "dataset_label": (dataset_label or "").strip(),
-        "filename": filename,
-    }
-    res = supabase.table("uploads").insert(payload).execute()
-    # Some clients expose .error, some raise — handle both
-    if hasattr(res, "error") and res.error:
-        raise RuntimeError(res.error.message)
-    if not getattr(res, "data", None):
-        # If policies/returning are disabled, we may not get data back; do a light verify
-        verify = supabase.table("uploads") \
-            .select("table_name") \
-            .eq("user_id", user_id) \
-            .eq("dataset_label", payload["dataset_label"]) \
-            .eq("table_name", table_name) \
-            .limit(1).execute()
-        if not getattr(verify, "data", None):
-            raise RuntimeError("uploads verify query returned no row")
+# def log_upload(user_id, table_name, dataset_label, filename):
+#     """Insert/Upsert the uploads row; raise on error so caller can show it."""
+#     payload = {
+#         "upload_time": datetime.now().isoformat(),
+#         "user_id": user_id,
+#         "table_name": table_name,
+#         "dataset_label": (dataset_label or "").strip(),
+#         "filename": filename,
+#     }
+#     res = supabase.table("uploads").insert(payload).execute()
+#     # Some clients expose .error, some raise — handle both
+#     if hasattr(res, "error") and res.error:
+#         raise RuntimeError(res.error.message)
+#     if not getattr(res, "data", None):
+#         # If policies/returning are disabled, we may not get data back; do a light verify
+#         verify = supabase.table("uploads") \
+#             .select("table_name") \
+#             .eq("user_id", user_id) \
+#             .eq("dataset_label", payload["dataset_label"]) \
+#             .eq("table_name", table_name) \
+#             .limit(1).execute()
+#         if not getattr(verify, "data", None):
+#             raise RuntimeError("uploads verify query returned no row")
 
 def background_enrich(*, user_id: str, dataset_label: str, cleaned_df):
     try:
-        # Sanity checks
-        daos.set_status(user_id, dataset_label, phase="sanity", detail="Checking Spotify…")
-        ok, msg = spotify_sanity_check(token)
+        # ---- Spotify Sanity Check ----
+        local_status.set_status(user_id, dataset_label, phase="sanity", detail="Checking Spotify…")
+        log_dao.log(user_id, dataset_label, "sanity", "Starting spotify_sanity_check")
+
+        try:
+            ok, msg = spotify_sanity_check(token)
+        except Exception as e:
+            ok, msg = False, f"spotify_sanity_check crashed: {e}"
+
+        log_dao.log(user_id, dataset_label, "sanity", f"spotify_sanity_check result: ok={ok}, msg={msg}")
+
         if not ok:
-            daos.finish_status(user_id, dataset_label, ok=False, detail=f"Spotify check failed: {msg}")
+            local_status.finish_status(user_id, dataset_label, ok=False, detail=f"Spotify check failed: {msg}")
             return
 
-        daos.set_status(user_id, dataset_label, phase="sanity", detail="Checking Discogs…")
-        ok, msg = discogs_sanity_check(DISCOGS_KEY, DISCOGS_SECRET)
+        # ---- Discogs Sanity Check ----
+        local_status.set_status(user_id, dataset_label, phase="sanity", detail="Checking Discogs…")
+        log_dao.log(user_id, dataset_label, "sanity", "Starting discogs_sanity_check")
+
+        try:
+            ok, msg = discogs_sanity_check(DISCOGS_KEY, DISCOGS_SECRET)
+        except Exception as e:
+            ok, msg = False, f"discogs_sanity_check crashed: {e}"
+
+        log_dao.log(user_id, dataset_label, "sanity", f"discogs_sanity_check result: ok={ok}, msg={msg}")
+
         if not ok:
-            daos.finish_status(user_id, dataset_label, ok=False, detail=f"Discogs check failed: {msg}")
+            local_status.finish_status(user_id, dataset_label, ok=False, detail=f"Discogs check failed: {msg}")
             return
 
-        # Build + run
+        # ---- Run Metadata Enrichment ----
         enricher = MetadataEnricher(
             user_id=user_id,
             label=dataset_label,
@@ -567,21 +613,50 @@ def background_enrich(*, user_id: str, dataset_label: str, cleaned_df):
             spotify_token=token,
             discogs_key=DISCOGS_KEY,
             discogs_secret=DISCOGS_SECRET,
-            status_dao=daos,      # progress/status writes
-            storage_dao=daos,     # CSV upload/download
-            info_table_dao=None,  # keep None unless you want table upserts again
+            status_dao=local_status,
+            storage_dao=local_storage,
+            info_table_dao=None,
             verbose=True,
         )
 
-        daos.set_status(user_id, dataset_label, phase="running", detail="Calling run_all()")
+        local_status.set_status(user_id, dataset_label, phase="running", detail="Calling run_all()")
+        log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
+
         enricher.run_all(cancel_event=None)
 
+        local_status.finish_status(user_id, dataset_label, ok=True, detail="Enrichment complete")
+        log_dao.log(user_id, dataset_label, "enrichment", "Finished enrichment successfully")
+
     except CancelledError:
-        daos.finish_status(user_id, dataset_label, ok=False, detail="Cancelled by user")
+        local_status.finish_status(user_id, dataset_label, ok=False, detail="Cancelled by user")
+        log_dao.log(user_id, dataset_label, "enrichment", "Cancelled by user", level="warning")
         raise
+
     except Exception as e:
-        daos.finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
+        local_status.finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
+        log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
         raise
+
+# ---- DEBUG LOCAL ENRICHMENT (saves CSVs to ./info_test) ----
+def run_local_enrichment_test(cleaned_df, user_id: str, dataset_label: str):
+    """Run the enrichment pipeline locally, saving outputs to ./enrichment instead of Supabase."""
+
+    # Use the global local DAOs we defined earlier in app.py
+    enricher = MetadataEnricher(
+        user_id=user_id,
+        label=dataset_label,
+        df=cleaned_df,
+        spotify_token=token,       # you already have this global SpotifyToken
+        discogs_key=DISCOGS_KEY,
+        discogs_secret=DISCOGS_SECRET,
+        status_dao=local_status,   # <-- local JSON status
+        storage_dao=local_storage, # <-- local metadata CSVs
+        info_table_dao=None,
+        verbose=True,
+    )
+
+    enricher.run_all(cancel_event=None)
+    st.success("✅ Local enrichment test complete. Check ./enrichment/ for outputs.")
 
 def spawn_enrichment_thread(user_id, label, cleaned_df):
     t = threading.Thread(target=background_enrich, kwargs={
@@ -697,32 +772,21 @@ def enrichment_status_widget(user_id: str, dataset_label: str, *, enable_enrichm
         st.caption("Enrichment disabled.")
         return
 
-    # Manual refresh button (safe when autorefresh is off)
-    # cols = st.columns([1, 1, 6])
-    # with cols[0]:
-    if st.button("🔁 Refresh status", key=f"btn_refresh_status_{dataset_label}"):
-        st.rerun()
-
-    # Optional auto-refresh if you later install streamlit-autorefresh
+    # ---- Read status via DAO (local JSON or Supabase table) ----
     try:
-        from streamlit_autorefresh import st_autorefresh
-        # Only poll while a job is running/queued (we’ll decide after we fetch the row)
-        want_autorefresh = True
-    except Exception:
-        want_autorefresh = False
-
-    # Fetch current job row
-    res = supabase.table("enrichment_status").select("*") \
-        .eq("user_id", user_id).eq("dataset_label", dataset_label).limit(1).execute()
-    data = getattr(res, "data", None)
-    row = data[0] if isinstance(data, list) and data else None
-
-    if not row:
-        st.caption("No enrichment job found yet.")
+        # LocalStatusDAO writes JSON, SupabaseStatusDAO would query table
+        status_path = Path("enrichment/status") / f"{user_id}_{dataset_label}.json"
+        if status_path.exists():
+            row = json.loads(status_path.read_text())
+        else:
+            st.caption("No enrichment job found yet.")
+            return
+    except Exception as e:
+        st.error(f"Could not load status: {e}")
         return
 
-    # Read fields defensively
-    status_str = (row.get("status") or "").lower()      # running | done | error
+    # Render status info
+    status_str = (row.get("status") or "").lower()
     phase = row.get("phase") or "—"
     detail = row.get("detail")
     bd = int(row.get("batches_done") or 0)
@@ -730,50 +794,36 @@ def enrichment_status_widget(user_id: str, dataset_label: str, *, enable_enrichm
     pct = row.get("percent")
     updated = row.get("updated_at", "—")
 
-    # Enable lightweight polling only while actively running (if the package is installed)
-    if want_autorefresh and status_str in {"running"}:
-        st_autorefresh(interval=8_000, key=f"enrich_refresh_{user_id}_{dataset_label}")
-
-    # Render status
     st.markdown(f"**Status:** {status_str.upper()}  •  **Phase:** {phase}")
     if detail:
         st.caption(detail)
-
     st.write(f"**Batches done:** {bd}" + (f" / {tb}" if tb else ""))
 
     if isinstance(pct, (int, float)):
-        try:
-            st.progress(max(0.0, min(float(pct), 100.0)) / 100.0)
-        except Exception:
-            pass
+        st.progress(max(0.0, min(float(pct), 100.0)) / 100.0)
 
     st.caption(f"Last update: {updated}")
 
-    # Optional logs panel: only show if the table exists
+    # ---- Logs via DAO ----
     with st.expander("Recent enrichment logs", expanded=False):
         try:
-            logs = supabase.table("enrichment_logs") \
-                .select("event_time,where,level,message,data") \
-                .eq("user_id", user_id).eq("dataset_label", dataset_label) \
-                .order("event_time", desc=True).limit(20).execute()
-            rows = getattr(logs, "data", []) or []
-            if not rows:
+            log_path = Path("enrichment/logs") / f"{user_id}_{dataset_label}.log"
+            if not log_path.exists():
                 st.caption("No logs yet.")
             else:
-                for r in rows:
-                    ts = (r.get("event_time") or "")[:19].replace("T", " ")
-                    where = r.get("where", "")
-                    lvl = r.get("level", "")
-                    msg = r.get("message", "")
-                    data_json = r.get("data")
-                    st.markdown(f"`{ts}` • **{where}** • _{lvl}_ — {msg}")
-                    if data_json:
+                with open(log_path, "r", encoding="utf-8") as f:
+                    for line in f.readlines()[-20:]:
                         try:
-                            st.code(json.loads(data_json), language="json")
+                            r = json.loads(line)
+                            ts = (r.get("event_time") or "")[:19].replace("T", " ")
+                            st.markdown(f"`{ts}` • **{r.get('where')}** • _{r.get('level')}_ — {r.get('message')}")
+                            if r.get("data"):
+                                st.code(json.dumps(r["data"], indent=2), language="json")
                         except Exception:
-                            st.code(str(data_json))
+                            st.write(line.strip())
         except Exception as e:
             st.caption(f"(Could not load logs: {e})")
+
 
 # --- Background Enrichment Orchestrator (app.py) ---
 def _enrichment_tasks():
@@ -786,24 +836,17 @@ def start_enrichment(
     table_name: str,
     cleaned_df: Optional[pd.DataFrame] = None
 ):
-    # Normalize once so every place uses the same key
     label_key = (dataset_label or "").strip()
-
     tasks = _enrichment_tasks()
 
-    # don't double-start for the same label
     if label_key in tasks and tasks[label_key]["thread"].is_alive():
         return
 
-    # ✅ SEED the status row so the widget has something to read immediately
-    # NOTE: your set_status signature is set_status(user_id, dataset_label, *, phase, detail="", total=None)
     try:
-        daos.set_status(user_id, label_key, phase="initialising", detail="Queued for enrichment", total=None)
+        local_status.set_status(user_id, label_key, phase="initialising", detail="Queued for enrichment", total=None)
     except Exception as e:
-        # non-fatal; widget may briefly show "No job" if this fails
         print("[start_enrichment] set_status seed failed:", e)
 
-    # Safe copy for thread
     df_copy = None
     if cleaned_df is not None:
         try:
@@ -815,55 +858,43 @@ def start_enrichment(
 
     def run():
         try:
-            dbg(user_id, label_key, "start_enrichment", "thread spawn")
-            # Update status: moving from initialising/queued to running
-            daos.set_status(user_id, label_key, phase="running", detail="Planning batches…", total=None)
-            dbg(user_id, label_key, "start_enrichment", "status: running(plan)")
+            local_logs.log(user_id, label_key, "start_enrichment", "thread spawn")
+            local_status.set_status(user_id, label_key, phase="running", detail="Planning batches…", total=None)
+            local_logs.log(user_id, label_key, "start_enrichment", "status: running(plan)")
 
-            # Prefer in-memory DF; else load by table_name
             df_local = df_copy
             if df_local is None:
-                dbg(user_id, label_key, "start_enrichment", "loading df from storage", data={"table": table_name})
-                df_local = load_user_table_from_supabase(user_id, table_name)
+                local_logs.log(user_id, label_key, "start_enrichment", "loading df from storage", data={"table": table_name})
+                df_local = LocalUserDataDAO("userdata").load_user_data(table_name)
                 if df_local is None or df_local.empty:
-                    dbg(user_id, label_key, "start_enrichment", "df empty after storage load", level="error")
+                    local_logs.log(user_id, label_key, "start_enrichment", "df empty after storage load", level="error")
                     raise RuntimeError("Could not load cleaned data from storage.")
 
-            dbg(user_id, label_key, "start_enrichment", "df ready", data={"rows": int(len(df_local))})
+            local_logs.log(user_id, label_key, "start_enrichment", "df ready", data={"rows": int(len(df_local))})
 
-            # Do the work (cancel-aware)
+            # Run enrichment
             background_enrich(
                 user_id=user_id,
-                dataset_label=current_label,
-                cleaned_df=cleaned_df,
-                daos=daos,
-                token=token,
-                discogs_key=st.secrets["discogs"]["key"],
-                discogs_secret=st.secrets["discogs"]["secret"],
-                cancel_event=None,
+                dataset_label=label_key,
+                cleaned_df=df_local,
             )
 
             if cancel.is_set():
-                dbg(user_id, label_key, "start_enrichment", "cancel seen")
-                daos.finish_status(user_id, label_key, ok=False, detail="Stopped by user")
+                local_logs.log(user_id, label_key, "start_enrichment", "cancel seen")
+                local_status.finish_status(user_id, label_key, ok=False, detail="Stopped by user")
             else:
-                # Make end-state explicit and consistent for the widget
-                daos.set_status(user_id, label_key, phase="done", detail="Wrapping up")
-                daos.finish_status(user_id, label_key, ok=True, detail="Complete")
-                dbg(user_id, label_key, "start_enrichment", "finished ok")
+                local_status.set_status(user_id, label_key, phase="done", detail="Wrapping up")
+                local_status.finish_status(user_id, label_key, ok=True, detail="Complete")
+                local_logs.log(user_id, label_key, "start_enrichment", "finished ok")
 
         except Exception as e:
-            dbg(user_id, label_key, "start_enrichment", f"error: {e}", level="error")
-            daos.finish_status(user_id, label_key, ok=False, detail=str(e))
+            local_logs.log(user_id, label_key, "start_enrichment", f"error: {e}", level="error")
+            local_status.finish_status(user_id, label_key, ok=False, detail=str(e))
         finally:
-            # Clean up the task registry to avoid stale kill buttons / lookups
-            try:
-                task_map = st.session_state.get("_enrichment_tasks", {})
-                if label_key in task_map and not task_map[label_key]["thread"].is_alive():
-                    task_map.pop(label_key, None)
-                    st.session_state["_enrichment_tasks"] = task_map
-            except Exception:
-                pass
+            task_map = st.session_state.get("_enrichment_tasks", {})
+            if label_key in task_map and not task_map[label_key]["thread"].is_alive():
+                task_map.pop(label_key, None)
+                st.session_state["_enrichment_tasks"] = task_map
 
     t = threading.Thread(target=run, daemon=True, name=f"enrich:{label_key}")
     tasks[label_key] = {"thread": t, "cancel": cancel}
@@ -878,7 +909,18 @@ with st.sidebar:
 
     user = st.session_state.get("user") or {}
     user_id = user.get("user_id")
-    current_label = st.session_state.get("current_dataset_label")
+    # datasets = list_local_datasets(user_id)
+
+    # if datasets:
+    #     # Dropdown to select a dataset
+    #     labels = [label for label, table_name in datasets]
+    #     selected = st.selectbox("Select a dataset", labels, index=0 if current_label is None else labels.index(current_label) if current_label in labels else 0)
+
+    #     # Keep current dataset label in session
+    #     st.session_state["current_dataset_label"] = selected
+    #     current_label = selected
+    # else:
+    #     st.caption("⚠️ No local datasets found in ./userdata")
 
     if current_label and user_id:
         st.caption(f"Dataset: **{current_label}**")
@@ -910,6 +952,22 @@ with st.sidebar:
                 st.caption("Enrichment will be available once ETL is complete.")
         else:
             st.caption("Enrichment disabled for testing.")
+
+        # ---- Debug: Local enrichment ----
+        if st.button("🐞 Run Local Enrichment Test", key="btn_local_enrich"):
+            if current_label and user_id:
+                try:
+                    # Load from local userdata folder instead of Supabase
+                    from dao import LocalUserDataDAO
+                    local_user_dao = LocalUserDataDAO("userdata")
+                    df = local_user_dao.load_user_data(current_label)
+
+                    if df is not None and not df.empty:
+                        run_local_enrichment_test(df, user_id, current_label)
+                    else:
+                        st.error("No data found to enrich locally.")
+                except Exception as e:
+                    st.error(f"❌ Local enrichment failed: {e}")
     else:
         st.caption("No dataset selected yet.")
 
@@ -924,7 +982,9 @@ if page == "Home":
     st.markdown("<h1 style='text-align: center;'>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
 
     # --- Existing datasets ---
-    dataset_options = list_user_tables(user_id)  # [(label, table_name), ...]
+    from dao import LocalUserDataDAO
+    local_user_dao = LocalUserDataDAO("userdata")
+    dataset_options = local_user_dao.list_datasets(user_id)  # [(label, filename_stem), ...]
     label_to_table = dict(dataset_options) if dataset_options else {}
     labels = [label for label, _ in dataset_options] if dataset_options else []
 
@@ -939,7 +999,8 @@ if page == "Home":
             selected_label = st.selectbox("Choose a dataset you've uploaded", labels, index=default_index)
         selected_table = label_to_table[selected_label]
 
-        df = load_user_table_from_supabase(user_id, selected_table)
+        df = local_user_dao.load_user_data(selected_table)
+
         if df.empty:
             st.warning("Failed to load selected dataset.")
             st.stop()
@@ -960,6 +1021,7 @@ if page == "Home":
 
     else:
         st.info("You haven’t uploaded any datasets yet.")
+
 
     # --- Upload new dataset (ETL only; enrichment disabled during testing) ---
     st.markdown("### Upload a new dataset")
@@ -1016,18 +1078,18 @@ if page == "Home":
                         )
 
                         # ---- Verify the new dataset is queryable for the dropdown ----
-                        try:
-                            # Re-query just this label; don’t rely on a later rerun to discover it
-                            check = supabase.table("uploads") \
-                                .select("dataset_label, table_name") \
-                                .eq("user_id", user_id) \
-                                .eq("dataset_label", dataset_label.strip()) \
-                                .eq("table_name", table_name) \
-                                .limit(1).execute()
-                            if not getattr(check, "data", None):
-                                st.warning("Upload log not visible yet; the dataset list may not show until the next reload.")
-                        except Exception as e:
-                            st.info(f"(Non-blocking) Could not verify upload row: {e}")
+                        # try:
+                        #     # Re-query just this label; don’t rely on a later rerun to discover it
+                        #     check = supabase.table("uploads") \
+                        #         .select("dataset_label, table_name") \
+                        #         .eq("user_id", user_id) \
+                        #         .eq("dataset_label", dataset_label.strip()) \
+                        #         .eq("table_name", table_name) \
+                        #         .limit(1).execute()
+                        #     if not getattr(check, "data", None):
+                        #         st.warning("Upload log not visible yet; the dataset list may not show until the next reload.")
+                        # except Exception as e:
+                        #     st.info(f"(Non-blocking) Could not verify upload row: {e}")
 
                         # Start enrichment safely (pass the DF so the thread doesn't read session_state)
                         _maybe_start_enrichment(
@@ -1048,9 +1110,8 @@ if page == "Home":
     # --- Refresh list (safe; no rerun) ---
     if st.button("Refresh list of uploaded datasets", key="btn_refresh_datasets"):
         # Re-query and re-render in-place (no st.rerun to avoid loops)
-        dataset_options = list_user_tables(user_id)
+        dataset_options = local_user_dao.list_datasets(user_id)  # [(label, filename_stem), ...]
         st.success("Dataset list refreshed.")
-
 
 # --------------------------- Overall Review Page ---------------------------- #
 elif page == "Overall Review":

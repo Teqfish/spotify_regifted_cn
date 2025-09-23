@@ -5,6 +5,9 @@ from typing import Optional, Dict
 import io
 import os
 import pandas as pd
+import time
+import json
+from pathlib import Path
 
 # -------- Interfaces (DAOs) --------
 class StatusDAO(ABC):
@@ -175,69 +178,44 @@ class CloudflareR2Storage(StorageDAO):
         # TODO: implement with your R2 SDK (get_object)
         raise NotImplementedError
 
-# -------- Local testing implementation --------
-class LocalDAOs(StatusDAO, StorageDAO, InfoTableDAO):
-    """
-    Local-only DAO implementation for testing enrichment end-to-end.
-    Saves CSV files into ./info_test/ instead of uploading to Supabase or Cloudflare.
-    """
-
-    def __init__(self, base_dir: str = "metadata"):
-        self.base_dir = base_dir
-        os.makedirs(self.base_dir, exist_ok=True)
-
-    # ---------- StatusDAO ----------
-    def set_status(self, user_id: str, dataset_label: str, *, phase: str, detail: str = "", total: Optional[int] = None) -> None:
-        print(f"[LocalStatus] {user_id}/{dataset_label} — phase={phase}, detail={detail}, total={total}")
-
-    def inc_status(self, user_id: str, dataset_label: str, *, add_batches: int = 1, detail: Optional[str] = None) -> None:
-        print(f"[LocalStatus] {user_id}/{dataset_label} — +{add_batches} batch(es), detail={detail}")
-
-    def finish_status(self, user_id: str, dataset_label: str, *, ok: bool = True, detail: str = "") -> None:
-        state = "✅ done" if ok else "❌ error"
-        print(f"[LocalStatus] {user_id}/{dataset_label} — {state}, detail={detail}")
-
-    # ---------- StorageDAO ----------
-    def upload_csv(self, df: pd.DataFrame, *, bucket: str, path: str, overwrite: bool = True) -> None:
-        # We ignore bucket (just use base_dir)
-        full_path = os.path.join(self.base_dir, path.replace("/", "_"))
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        df.to_csv(full_path, index=False)
-        print(f"[LocalStorage] Saved {len(df)} rows to {full_path}")
-
-    def download_csv(self, *, bucket: str, path: str) -> pd.DataFrame:
-        full_path = os.path.join(self.base_dir, path.replace("/", "_"))
-        if not os.path.exists(full_path):
-            raise FileNotFoundError(f"Local file not found: {full_path}")
-        print(f"[LocalStorage] Loaded CSV from {full_path}")
-        return pd.read_csv(full_path)
-
-    # ---------- InfoTableDAO (no-op) ----------
-    def upsert_artist_rows(self, records: list[Dict]) -> None:
-        print(f"[LocalInfoTable] Would upsert {len(records)} artist rows (skipped in local mode)")
-
-    def upsert_album_rows(self, records: list[Dict]) -> None:
-        print(f"[LocalInfoTable] Would upsert {len(records)} album rows (skipped in local mode)")
-
-    def upsert_track_rows(self, records: list[Dict]) -> None:
-        print(f"[LocalInfoTable] Would upsert {len(records)} track rows (skipped in local mode)")
-
 # -------- Local UserData Storage (for ETL testing) --------
 class LocalUserDataDAO:
     """
     Saves cleaned listening history locally (userdata/).
-    Used during testing instead of Supabase storage.
+    Also maintains an index.json so dropdowns show only the user’s inputted labels.
     """
     def __init__(self, base_dir: str = "userdata"):
         self.base_dir = base_dir
         os.makedirs(self.base_dir, exist_ok=True)
+        self.index_path = os.path.join(self.base_dir, "index.json")
 
-    def save_user_data(self, user_id: str, dataset_label: str, df: pd.DataFrame, filename: str) -> str:
+        # Initialize empty index if missing
+        if not os.path.exists(self.index_path):
+            with open(self.index_path, "w", encoding="utf-8") as f:
+                json.dump({}, f)
+
+    def _load_index(self) -> dict:
+        with open(self.index_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def _save_index(self, index: dict) -> None:
+        with open(self.index_path, "w", encoding="utf-8") as f:
+            json.dump(index, f, indent=2)
+
+    def save_user_data(self, user_id: str, dataset_label: str, df: pd.DataFrame, filename: str) -> tuple[str, str]:
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
         path = os.path.join(self.base_dir, f"{table_name}.csv")
+
+        # Save CSV
         df.to_csv(path, index=False)
-        print(f"[LocalUserData] Saved {len(df)} rows → {path}")
+
+        # Update index.json with friendly label
+        index = self._load_index()
+        index[table_name] = dataset_label
+        self._save_index(index)
+
+        print(f"[LocalUserData] Saved {len(df)} rows → {path} (label: {dataset_label})")
         return table_name, path
 
     def load_user_data(self, table_name: str) -> pd.DataFrame:
@@ -246,3 +224,96 @@ class LocalUserDataDAO:
             raise FileNotFoundError(f"LocalUserData: no file found at {path}")
         print(f"[LocalUserData] Loading {path}")
         return pd.read_csv(path)
+
+    def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
+        """
+        Returns [(friendly_label, table_name), ...] for this user.
+        """
+        index = self._load_index()
+        return [(label, table) for table, label in index.items() if table.startswith(f"{user_id}_")]
+
+
+class LocalStatusDAO(StatusDAO):
+    """Writes enrichment status to enrichment/status/{user_id}_{dataset_label}.json"""
+    def __init__(self, base_dir: str = "enrichment/status"):
+        self.base_dir = Path(base_dir)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
+    def _status_path(self, user_id: str, dataset_label: str) -> Path:
+        return self.base_dir / f"{user_id}_{dataset_label}.json"
+
+    def set_status(self, user_id: str, dataset_label: str, *, phase: str, detail: str = "", total: Optional[int] = None) -> None:
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "running",
+            "phase": phase,
+            "detail": detail,
+            "total_batches": total,
+            "batches_done": 0,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._status_path(user_id, dataset_label).write_text(json.dumps(payload, indent=2))
+
+    def inc_status(self, user_id: str, dataset_label: str, *, add_batches: int = 1, detail: Optional[str] = None) -> None:
+        path = self._status_path(user_id, dataset_label)
+        if not path.exists():
+            return
+        data = json.loads(path.read_text())
+        data["batches_done"] = (data.get("batches_done", 0) or 0) + add_batches
+        if detail:
+            data["detail"] = detail
+        total = data.get("total_batches")
+        if isinstance(total, int) and total > 0:
+            try:
+                data["percent"] = round(100.0 * data["batches_done"] / total, 1)
+            except ZeroDivisionError:
+                pass
+        data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        path.write_text(json.dumps(data, indent=2))
+
+    def finish_status(self, user_id: str, dataset_label: str, *, ok: bool = True, detail: str = "") -> None:
+        path = self._status_path(user_id, dataset_label)
+        data = {"user_id": user_id, "dataset_label": dataset_label,
+                "status": "done" if ok else "error",
+                "detail": detail,
+                "percent": 100 if ok else None,
+                "updated_at": datetime.now(timezone.utc).isoformat()}
+        path.write_text(json.dumps(data, indent=2))
+
+class LocalMetadataDAO(StorageDAO):
+    """Stores enrichment outputs under enrichment/metadata/"""
+    def __init__(self, base_dir: str = "enrichment/metadata"):
+        self.base_dir = Path(base_dir)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
+    def upload_csv(self, df: pd.DataFrame, *, bucket: str, path: str, overwrite: bool = True) -> None:
+        out_path = self.base_dir / path
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        if out_path.exists() and not overwrite:
+            raise FileExistsError(f"File already exists: {out_path}")
+        df.to_csv(out_path, index=False)
+
+    def download_csv(self, *, bucket: str, path: str) -> pd.DataFrame:
+        file_path = self.base_dir / path
+        if not file_path.exists():
+            raise FileNotFoundError(f"Object not found: {file_path}")
+        return pd.read_csv(file_path)
+
+class LocalLogDAO:
+    """Writes enrichment logs to enrichment/logs/{user_id}_{dataset_label}.log"""
+    def __init__(self, base_dir: str = "enrichment/logs"):
+        self.base_dir = Path(base_dir)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
+    def log(self, user_id: str, dataset_label: str, where: str, msg: str, level: str = "info", data: dict | None = None):
+        log_path = self.base_dir / f"{user_id}_{dataset_label}.log"
+        entry = {
+            "event_time": datetime.now().isoformat(),
+            "where": where,
+            "level": level,
+            "message": msg,
+            "data": data,
+        }
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")

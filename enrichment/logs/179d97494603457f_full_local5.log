@@ -1,0 +1,20 @@
+{"event_time": "2025-09-23T15:41:47.189210", "where": "start_enrichment", "level": "info", "message": "thread spawn", "data": null}
+{"event_time": "2025-09-23T15:41:47.226851", "where": "start_enrichment", "level": "info", "message": "status: running(plan)", "data": null}
+{"event_time": "2025-09-23T15:41:47.226978", "where": "start_enrichment", "level": "info", "message": "df ready", "data": {"rows": 73451}}
+{"event_time": "2025-09-23T15:41:47.227268", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-09-23T15:41:47.854666", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-23T15:41:47.855218", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-09-23T15:41:48.460978", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-23T15:41:48.485084", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-09-23T15:42:21.496368", "where": "enrichment", "level": "error", "message": "Exception in background_enrich: get_tracks() missing 1 required positional argument: 'token'", "data": null}
+{"event_time": "2025-09-23T15:42:21.496617", "where": "start_enrichment", "level": "error", "message": "error: get_tracks() missing 1 required positional argument: 'token'", "data": null}
+{"event_time": "2025-09-23T16:42:04.331791", "where": "start_enrichment", "level": "info", "message": "thread spawn", "data": null}
+{"event_time": "2025-09-23T16:42:04.374291", "where": "start_enrichment", "level": "info", "message": "status: running(plan)", "data": null}
+{"event_time": "2025-09-23T16:42:04.374488", "where": "start_enrichment", "level": "info", "message": "df ready", "data": {"rows": 73451}}
+{"event_time": "2025-09-23T16:42:04.374812", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-09-23T16:42:04.636639", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-23T16:42:04.637019", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-09-23T16:42:04.863042", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-23T16:42:04.871732", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-09-23T17:12:42.158467", "where": "enrichment", "level": "info", "message": "Finished enrichment successfully", "data": null}
+{"event_time": "2025-09-23T17:12:42.158743", "where": "start_enrichment", "level": "info", "message": "cancel seen", "data": null}

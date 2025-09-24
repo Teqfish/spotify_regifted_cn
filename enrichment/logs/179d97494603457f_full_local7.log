@@ -1,0 +1,12 @@
+{"event_time": "2025-09-23T17:54:58.892921", "where": "start_enrichment", "level": "info", "message": "thread spawn", "data": null}
+{"event_time": "2025-09-23T17:54:58.934741", "where": "start_enrichment", "level": "info", "message": "status: running(plan)", "data": null}
+{"event_time": "2025-09-23T17:54:58.934992", "where": "start_enrichment", "level": "info", "message": "df ready", "data": {"rows": 73451}}
+{"event_time": "2025-09-23T17:54:58.935355", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-09-23T17:54:59.257522", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-23T17:54:59.257868", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-09-23T17:54:59.552583", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-23T17:54:59.561962", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-09-23T18:18:00.734652", "where": "enrichment", "level": "error", "message": "Exception in background_enrich: HTTPSConnectionPool(host='api.spotify.com', port=443): Read timed out. (read timeout=30)", "data": null}
+{"event_time": "2025-09-23T18:18:00.735005", "where": "start_enrichment", "level": "error", "message": "error: HTTPSConnectionPool(host='api.spotify.com', port=443): Read timed out. (read timeout=30)", "data": null}
+{"event_time": "2025-09-24T12:26:17.626369", "where": "local_test", "level": "info", "message": "starting run_local_enrichment_test", "data": null}
+{"event_time": "2025-09-24T17:29:59.503795", "where": "local_test", "level": "info", "message": "completed run_local_enrichment_test", "data": null}

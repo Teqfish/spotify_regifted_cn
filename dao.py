@@ -300,6 +300,42 @@ class LocalMetadataDAO(StorageDAO):
             raise FileNotFoundError(f"Object not found: {file_path}")
         return pd.read_csv(file_path)
 
+    # --- Checkpoints (JSON) ---
+    def save_checkpoint(self, user_id: str, label: str, state: dict) -> None:
+        ck_dir = self.base_dir.parent / "checkpoints"  # enrichment/checkpoints
+        ck_dir.mkdir(parents=True, exist_ok=True)
+        (ck_dir / f"{user_id}_{label}.json").write_text(json.dumps(state, indent=2))
+
+    def load_checkpoint(self, user_id: str, label: str) -> dict | None:
+        ck_path = self.base_dir.parent / "checkpoints" / f"{user_id}_{label}.json"
+        if ck_path.exists():
+            try:
+                return json.loads(ck_path.read_text())
+            except Exception:
+                return None
+        return None
+
+    # --- Master info-tables (Append + Dedup by keys) ---
+    def _master_path(self, table_name: str):
+        # Keep masters directly inside enrichment/metadata
+        return self.base_dir / table_name  # self.base_dir == "enrichment/metadata"
+
+    def get_master(self, table_name: str) -> pd.DataFrame:
+        p = self._master_path(table_name)
+        if p.exists():
+            return pd.read_csv(p, low_memory=False)
+        return pd.DataFrame()
+
+    def merge_into_master(self, df: pd.DataFrame, filename: str, keys: list[str]):
+        master_path = self.base_dir / filename
+        if master_path.exists():
+            cur = pd.read_csv(master_path)
+            all_df = pd.concat([cur, df], ignore_index=True)
+            all_df.drop_duplicates(subset=keys, keep="last", inplace=True)
+        else:
+            all_df = df.copy()
+        all_df.to_csv(master_path, index=False)
+
 class LocalLogDAO:
     """Writes enrichment logs to enrichment/logs/{user_id}_{dataset_label}.log"""
     def __init__(self, base_dir: str = "enrichment/logs"):

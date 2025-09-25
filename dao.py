@@ -184,7 +184,7 @@ class LocalUserDataDAO:
     Saves cleaned listening history locally (userdata/).
     Also maintains an index.json so dropdowns show only the user’s inputted labels.
     """
-    def __init__(self, base_dir: str = "userdata"):
+    def __init__(self, base_dir: str = "datasets/userdata"):
         self.base_dir = base_dir
         os.makedirs(self.base_dir, exist_ok=True)
         self.index_path = os.path.join(self.base_dir, "index.json")
@@ -235,7 +235,7 @@ class LocalUserDataDAO:
 
 class LocalStatusDAO(StatusDAO):
     """Writes enrichment status to enrichment/status/{user_id}_{dataset_label}.json"""
-    def __init__(self, base_dir: str = "enrichment/status"):
+    def __init__(self, base_dir: str = "datasets/enrichment/status"):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -283,7 +283,7 @@ class LocalStatusDAO(StatusDAO):
 
 class LocalMetadataDAO(StorageDAO):
     """Stores enrichment outputs under enrichment/metadata/"""
-    def __init__(self, base_dir: str = "enrichment/metadata"):
+    def __init__(self, base_dir: str = "datasets/enrichment/metadata"):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -362,10 +362,10 @@ class LocalMetadataDAO(StorageDAO):
         tmp = master_path.with_suffix(".csv.tmp")
         df_merged.to_csv(tmp, index=False)
         tmp.replace(master_path)
-        
+
 class LocalLogDAO:
     """Writes enrichment logs to enrichment/logs/{user_id}_{dataset_label}.log"""
-    def __init__(self, base_dir: str = "enrichment/logs"):
+    def __init__(self, base_dir: str = "datasets/enrichment/logs"):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
 

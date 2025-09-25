@@ -433,7 +433,7 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
 # --- LOCAL DATA I/O (for testing) ---
 def list_local_datasets(user_id):
     """Return [(label, table_name), ...] for datasets in userdata/."""
-    base = Path("userdata")
+    base = Path("datasets/userdata")
     index_path = base / "index.json"
     if not index_path.exists():
         return []
@@ -506,7 +506,7 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
 
         # Save cleaned data locally (userdata/) for testing
         from dao import LocalUserDataDAO
-        local_user_dao = LocalUserDataDAO(base_dir="userdata")
+        local_user_dao = LocalUserDataDAO(base_dir="datasets/userdata")
         filename = uploaded_file.name
         table_name, path = user_data_dao.save_user_data(user_id, dataset_label, cleaned_df, filename)
 
@@ -921,7 +921,7 @@ def resolve_table_name_for_label(user_id: str, label: str) -> str:
     Find the most recent saved CSV for this user/label in ./userdata and return its filename *stem*
     (the piece without '.csv'), which is what load_user_data expects.
     """
-    base = Path("userdata")
+    base = Path("datasets/userdata")
     matches = sorted(base.glob(f"{user_id}_{label}_*_history.csv"))
     if not matches:
         raise FileNotFoundError(f"No local CSV found for label '{label}'.")
@@ -1049,7 +1049,7 @@ if page == "Home":
     # Header
     h1, h2, h3 = st.columns([3, 3, 3], vertical_alignment="center")
     with h2:
-        st.image("media_images/logo_correct.png", width=400)
+        st.image("media/assets/nu_logo.svg", width=400)
     st.markdown("<h1 style='text-align: center;'>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
 
     # --- Existing datasets ---
@@ -1192,7 +1192,7 @@ elif page == "Overall Review":
     # --- HEADER AND LOGO ---
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
 
     # --- DATE SUMMARY HEADER ---
     st.header("you've been listening since:")
@@ -1392,7 +1392,7 @@ elif page == "Overall Review":
                     artist_image_list.append(dict(
                         text=f'{artist} image not found',
                         title=f"#{idx}",
-                        img='media_images/Image-Coming-Soon_vector.svg'))
+                        img='media/assets/Image-Coming-Soon_vector.svg'))
 
             # Create a carousel of artist images
             if artist_image_list:
@@ -1415,7 +1415,7 @@ elif page == "Overall Review":
                 podcast_image_list.append(dict(
                     text=f'{podcast} image not found',
                     title=f"#{idx}",
-                    img='media_images/Image-Coming-Soon_vector.svg'))
+                    img='media/assets/Image-Coming-Soon_vector.svg'))
 
             if podcast_image_list:
                 carousel(items=podcast_image_list,container_height=550)
@@ -1453,7 +1453,7 @@ elif page == "Overall Review":
                 audiobook_image_list.append(dict(
                     text=f'{audiobook} image not found',
                     title=f"#{idx}",
-                    img='media_images/Image-Coming-Soon_vector.svg'))
+                    img='media/assets/Image-Coming-Soon_vector.svg'))
 
             # Create a carousel of audiobook images
             if audiobook_image_list:
@@ -1544,7 +1544,7 @@ elif page == "Per Year":
 
     col1,col2,col3,col4,col5 = st.columns([1, 0.5, 1.8, 0.6 ,1], vertical_alignment='center')
     with col5:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
 
     with col3:
         st.title("Your Yearly Deep-Dive")
@@ -1619,7 +1619,7 @@ elif page == "Per Year":
             try:
                 image_url = df_artist[df_artist['artist_name'] == name]['artist_image'].values[0]
             except:
-                image_url = 'media_images/Image-Coming-Soon_vector.svg'
+                image_url = 'media/assets/Image-Coming-Soon_vector.svg'
         elif selected_category == 'podcast':
             name = row['episode_show_name']
             try:
@@ -1628,7 +1628,7 @@ elif page == "Per Year":
                     .dropna().values[0]
                 )
             except Exception:
-                image_url = 'media_images/Image-Coming-Soon_vector.svg'
+                image_url = 'media/assets/Image-Coming-Soon_vector.svg'
 
         elif selected_category == 'audiobook':
             name = row['audiobook_title']
@@ -1638,7 +1638,7 @@ elif page == "Per Year":
                     .dropna().values[0]
                 )
             except Exception:
-                image_url = 'media_images/Image-Coming-Soon_vector.svg'
+                image_url = 'mmedia/assets/Image-Coming-Soon_vector.svg'
 
         with col1:
             st.markdown(
@@ -1650,7 +1650,7 @@ elif page == "Per Year":
             try:
                 st.image(image_url, width=150)
             except:
-                st.image('media_images/Image-Coming-Soon_vector.svg')
+                st.image('media/assets/Image-Coming-Soon_vector.svg')
 
         with col3:
             st.markdown(
@@ -1841,7 +1841,7 @@ elif page == "Per Artist":
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
 
     ## start content
     # Load user-specific music data, select relevant columns
@@ -1953,7 +1953,7 @@ elif page == "Per Artist":
     with col2:
         # artist image
         info_artist = INFO_ARTIST_GENRE  # DataFrame
-        placeholder = 'media_images/Image-Coming-Soon_vector.svg'
+        placeholder = 'media/assets/Image-Coming-Soon_vector.svg'
 
         try:
             sub = info_artist.loc[info_artist['artist_name'] == artist_selected]
@@ -1969,7 +1969,7 @@ elif page == "Per Artist":
     with col3:
         # top album image
         info_album = INFO_ALBUM  # DataFrame
-        placeholder = 'media_images/Image-Coming-Soon_vector.svg'
+        placeholder = 'media/assets/Image-Coming-Soon_vector.svg'
 
         # precompute top albums
         top_albums = (
@@ -2145,7 +2145,7 @@ elif page == "Per Album":
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
 
     # Load user-specific data
     df = df# make music df
@@ -2335,7 +2335,7 @@ elif page == "Per Album":
                 album_image_url = info_album[info_album.album_name.str.contains(f"{top_albums.album_name[0]}", case = False, na = False)]["album_artwork"].values[0]
                 st.image(album_image_url, output_format="auto",use_container_width=True)
             except:
-                st.image('media_images/Image-Coming-Soon_vector.svg')
+                st.image('media/assets/Image-Coming-Soon_vector.svg')
 
 
     # top songs graph
@@ -2413,7 +2413,7 @@ elif page == "Per Genre":
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
 
     # >>>>>>>> NESTED SUNBURST
 
@@ -2514,7 +2514,6 @@ elif page == "Per Genre":
 elif page == "The Farm":
 
 # >>>>>>>>>>>>>>>>>>>>> FUNCTION DEFINITIONS
-
     def load_latest_user_pickles(user_selected, folder="datasets/chart_scores"):
         """Load latest chart score pickles for a user"""
         # Pattern to match filenames: Username_YYYYMMDD_HHMMSS_all_points.pkl
@@ -2729,6 +2728,7 @@ elif page == "The Farm":
     df = df.copy()
     df['year'] = pd.to_datetime(df['datetime']).dt.year
     year_list = df['year'].sort_values().unique().tolist()
+    df_info = INFO_ARTIST_GENRE
 
     # Merge info and calculate score early
     df = pd.merge(df, df_info, on=["track_name", "album_name", "artist_name"], how="left", suffixes=["", "_remove"])
@@ -2749,7 +2749,7 @@ elif page == "The Farm":
     # Header with logo
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
 
     # Title section
     c1, c2, c3 = st.columns([1,2,1])
@@ -3013,7 +3013,7 @@ elif page == "FUN":
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
 
     ## random event generator ##
     df = df[df['category'] == 'music']
@@ -3092,7 +3092,7 @@ elif page == "AbOuT uS":
 
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
     st.title("About Us")
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
     st.write("Feel free to reach out for any questions or collaborations.")
@@ -3102,7 +3102,7 @@ elif page == "How To":
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
-        st.image('media_images/logo_correct.png', width=200)
+        st.image('media/assets/nu_logo.svg', width=200)
 
     st.markdown("<h1 style='text-align: center;'>How to request your Spotify data</h1>", unsafe_allow_html=True)
     st.markdown("<h3>In order to request the extended streaming history files, simply press the correct buttons on the Spotify website.</h3>", unsafe_allow_html=True)
@@ -3110,17 +3110,17 @@ elif page == "How To":
     st.markdown('2. Scroll down to the "Download your data" section and Configure the page so it looks like the screenshot below (Unticked the "Account data" and ticked the "Extended streaming history" boxes).', unsafe_allow_html=True)
     col1,col2,col3 = st.columns([1, 3, 1], vertical_alignment='center')
     with col2:
-        st.image('media_images/download_settings.png', width=600)
+        st.image('media/faqs/download_settings.png', width=600)
 
     st.markdown('3. Press the "Request data" button.')
     st.markdown('')
     st.markdown('4. You will receive an email from Spotify with a link to download your data. Click on the link in the email to access your data.')
-    st.image('media_images/confirm_request.png', width=1200)
+    st.image('media/faqs/confirm_request.png', width=1200)
     st.markdown('')
     st.markdown("<h3>5. Wait until you receive your data. (This may take up to 30 days)</h3>", unsafe_allow_html=True)
     st.markdown('6. Once you receive the email, download the ZIP file containing your data.')
     st.markdown('This file will contain personal information, so please be careful with it.')
-    st.image('media_images/Download_json.png', width=1200)
+    st.image('media/faqs/Download_json.png', width=1200)
     st.markdown('')
     st.markdown('')
 

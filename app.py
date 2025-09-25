@@ -7,7 +7,7 @@ Please contact us to give feedback and feature requests.
 
 Built by Charlie Nash, Ben Gee, Jana Hueppe, & Tom Witt (06.2025)
 '''
-# ----------------------------- IMPORTS -------------------------------------- #
+# ------------------------------- IMPORTS ------------------------------------ #
 import bcrypt
 import country_converter as coco
 from datetime import datetime, timedelta, timezone
@@ -39,7 +39,7 @@ from dao import SupabaseDAOs, LocalMetadataDAO, LocalStatusDAO, LocalLogDAO
 from dao_selector import get_daos
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
 
-# --- CONFIG / CLIENTS ---
+# -------------------------- CONFIG / CLIENTS -------------------------------- #
 st.set_page_config(page_title="Regifted", page_icon=":gift:", layout="wide", initial_sidebar_state="expanded")
 
 SPOTIFY_ID = st.secrets["spotify"]["client_id"]
@@ -83,8 +83,36 @@ TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 ENABLE_ENRICHMENT = True  # <— set True later when we re-enable background processing
 
 # ---- METADATA DIRECTORY ----
-INFO_ARTIST_GENRE = pd.read_csv("enrichment/metadata/179d97494603457f/full_local6/20250923-163519/info_artist_genre.csv")
-INFO_ALBUM = pd.read_csv("enrichment/metadata/179d97494603457f/full_local6/20250923-163519/info_album.csv")
+def safe_read_csv(path: str) -> pd.DataFrame:
+    try:
+        return pd.read_csv(path)
+    except FileNotFoundError:
+        return pd.DataFrame()
+
+INFO_ARTIST_GENRE = safe_read_csv("enrichment/metadata/info_artist_genre.csv")
+INFO_ALBUM = safe_read_csv("enrichment/metadata/info_album.csv")
+INFO_TRACKS = safe_read_csv("enrichment/metadata/info_tracks.csv")
+INFO_EVENTS = safe_read_csv("info_events.csv")
+INFO_SHOW = INFO_ALBUM  # placeholder ONLY to keep code shape; will be replaced by real table later
+INFO_AUDIOBOOK = pd.DataFrame(columns=["audiobook_id", "audiobook_title", "audiobook_artwork"])
+
+try:
+    INFO_SHOW = pd.read_csv("enrichment/metadata/info_show.csv")  # created in Part B below
+except Exception:
+    INFO_SHOW = pd.DataFrame(columns=["show_id", "show_name", "show_artwork"])
+
+try:
+    INFO_AUDIOBOOK = pd.read_csv("enrichment/metadata/info_audiobook.csv")  # created in Part B below
+except Exception:
+    INFO_AUDIOBOOK = pd.DataFrame(columns=["audiobook_id", "audiobook_title", "audiobook_artwork"])
+
+@st.cache_resource(show_spinner=False)
+def task_registry() -> dict[str, dict]:
+    """
+    Server-global registry: { key: {"thread": Thread, "cancel": Event} }.
+    Lives across sessions/tabs; cleared only when the server process restarts.
+    """
+    return {}
 
 # --- SESSION INIT ---
 if "user" not in st.session_state:
@@ -220,6 +248,14 @@ def logout():
     # Nudge the client so cookie JS commits before next run
     st.experimental_set_query_params(_=secrets.token_hex(4))
     st.rerun()
+
+def require_current_df():
+    df = st.session_state.get("current_df")
+    label = st.session_state.get("current_dataset_label")
+    if df is None or (hasattr(df, "empty") and df.empty):
+        st.info("No dataset selected")
+        st.stop()
+    return df.copy(), label
 
 # ---- Cookie Manager (singleton) ----
 def get_cookie_manager():
@@ -666,12 +702,16 @@ def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str
     """
     if not ENABLE_ENRICHMENT:
         return
-    if st.session_state.get("_enrichment_autostart_block"):
-        return  # do not respawn after a kill-triggered rerun
 
-    # OPTIONAL: double-check we don't already have a live thread for this label
-    tasks = st.session_state.get("_enrichment_tasks", {})
-    if dataset_label in tasks and tasks[dataset_label]["thread"].is_alive():
+    # Respect autostart block for this label
+    if st.session_state.get("_enrichment_autostart_block") and \
+       st.session_state.get("_enrichment_block_label") == dataset_label:
+        return
+
+    # Avoid double-start via server-global registry
+    key = f"{user_id}:{dataset_label}"
+    tasks = task_registry()
+    if key in tasks and tasks[key]["thread"].is_alive():
         return
 
     start_enrichment(
@@ -843,94 +883,37 @@ def _enrichment_tasks():
     # lives across reruns
     return st.session_state.setdefault("_enrichment_tasks", {})  # {label: {"thread": t, "cancel": Event}}
 
-def start_enrichment(
-    user_id: str,
-    dataset_label: str,
-    table_name: str,
-    cleaned_df: Optional[pd.DataFrame] = None
-):
-    """
-    Spawns the enrichment thread. Uses the active DAO bundle (status_dao/log_dao/user_data_dao)
-    so the status widget & logs work in local/supabase/cloudflare modes.
-    """
-    label_key = (dataset_label or "").strip()
-    tasks = _enrichment_tasks()
+def start_enrichment(*, user_id: str, dataset_label: str, table_name: str, cleaned_df=None):
+    key = f"{user_id}:{dataset_label}".strip()
+    tasks = task_registry()
 
-    # don't double-start for the same label
-    if label_key in tasks and tasks[label_key]["thread"].is_alive():
+    # don't double-start
+    if key in tasks and tasks[key]["thread"].is_alive():
         return
-
-    # Seed status so the widget has something to read immediately
-    try:
-        status_dao.set_status(user_id, label_key, phase="initialising", detail="Queued for enrichment", total=None)
-    except Exception as e:
-        print("[start_enrichment] status seed failed:", e)
-
-    # Safe copy for thread
-    df_copy = None
-    if cleaned_df is not None:
-        try:
-            df_copy = cleaned_df.copy(deep=True)
-        except Exception:
-            df_copy = cleaned_df
 
     cancel = threading.Event()
 
     def run():
         try:
-            log_dao.log(user_id, label_key, "start_enrichment", "thread spawn")
-            status_dao.set_status(user_id, label_key, phase="running", detail="Planning batches…", total=None)
-            log_dao.log(user_id, label_key, "start_enrichment", "status: running(plan)")
-
-            # Prefer in-memory DF; else load via current user_data_dao (local/supabase/cloudflare)
-            df_local = df_copy
-            if df_local is None:
-                if user_data_dao is None:
-                    raise RuntimeError("No user_data_dao available to load dataset.")
-                log_dao.log(user_id, label_key, "start_enrichment", "loading df from user_data_dao",
-                            data={"table": table_name})
-                df_local = user_data_dao.load_user_data(table_name)
-
-            if df_local is None or df_local.empty:
-                log_dao.log(user_id, label_key, "start_enrichment", "df empty after load", level="error")
-                raise RuntimeError("Could not load cleaned data from storage.")
-
-            log_dao.log(user_id, label_key, "start_enrichment", "df ready", data={"rows": int(len(df_local))})
-
-            # Run the worker (background_enrich uses status_dao/metadata_dao globals)
+            # Always require a DataFrame — raise if missing
+            if cleaned_df is None:
+                raise ValueError("No cleaned_df provided to start_enrichment")
             background_enrich(
                 user_id=user_id,
-                dataset_label=label_key,
-                cleaned_df=df_local,
-                cancel_event=cancel,
+                dataset_label=dataset_label,
+                cleaned_df=cleaned_df,
             )
-
-            if cancel.is_set():
-                log_dao.log(user_id, label_key, "start_enrichment", "cancel seen")
-                status_dao.finish_status(user_id, label_key, ok=False, detail="Stopped by user")
-            else:
-                status_dao.set_status(user_id, label_key, phase="done", detail="Wrapping up")
-                status_dao.finish_status(user_id, label_key, ok=True, detail="Complete")
-                log_dao.log(user_id, label_key, "start_enrichment", "finished ok")
-
-        except Exception as e:
-            log_dao.log(user_id, label_key, "start_enrichment", f"error: {e}", level="error")
-            try:
-                status_dao.finish_status(user_id, label_key, ok=False, detail=str(e))
-            except Exception:
-                pass
         finally:
-            # Clean up the task registry to avoid stale kill buttons / lookups
+            # Clean registry entry when thread exits
             try:
-                task_map = st.session_state.get("_enrichment_tasks", {})
-                if label_key in task_map and not task_map[label_key]["thread"].is_alive():
-                    task_map.pop(label_key, None)
-                    st.session_state["_enrichment_tasks"] = task_map
+                reg = task_registry()
+                if key in reg and not reg[key]["thread"].is_alive():
+                    reg.pop(key, None)
             except Exception:
                 pass
 
-    t = threading.Thread(target=run, daemon=True, name=f"enrich:{label_key}")
-    tasks[label_key] = {"thread": t, "cancel": cancel}
+    t = threading.Thread(target=run, daemon=True, name=f"enrich:{key}")
+    tasks[key] = {"thread": t, "cancel": cancel}
     t.start()
 
 def resolve_table_name_for_label(user_id: str, label: str) -> str:
@@ -972,22 +955,30 @@ with st.sidebar:
         if ENABLE_ENRICHMENT:
             # Kill button
             if st.button("🛑 Kill enrichment", key="kill_enrichment_btn"):
-                tasks = st.session_state.get("_enrichment_tasks", {})
-                task = tasks.get(current_label)
+                key = f"{user_id}:{current_label}"
+                tasks = task_registry()
+                task = tasks.get(key)
+
                 if task:
-                    # Set cancel flag so the running thread exits at its next cancel gate
+                    # Signal cancel; the worker should flush partial results on CancelledError
                     task["cancel"].set()
 
-                    # Block autostart for THIS label on the next rerun
-                    _block_autostart_for(current_label)
+                    # Block autostart on the next rerun specifically for this dataset
+                    st.session_state["_enrichment_autostart_block"] = True
+                    st.session_state["_enrichment_block_label"] = current_label
 
-                    # Best-effort status/log
+                    # Best-effort status/log message
                     try:
-                        status_dao.set_status(user_id, current_label, phase="shutdown", detail="Cancelling…", total=None)
+                        status_dao.set_status(
+                            user_id, current_label,
+                            phase="shutdown",
+                            detail="Cancelling…",
+                            total=None
+                        )
                     except Exception:
                         pass
 
-                    st.success("Sent stop signal to enrichment. Autostart is blocked for this dataset until you upload a new one or manually restart.")
+                    st.success("Sent stop signal. Autostart is blocked for this dataset until you manually restart.")
                 else:
                     st.info("No active enrichment task found for this dataset.")
 
@@ -1193,7 +1184,7 @@ elif page == "Overall Review":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
-    df = st.session_state.current_df.copy()
+    df, current_label = require_current_df()
 
     # ✅ Parse date column
     df['date'] = pd.to_datetime(df['datetime']).dt.date
@@ -1542,9 +1533,11 @@ elif page == "Per Year":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
-    df = st.session_state.current_df.copy()
+    df, current_label = require_current_df()
     user_df = df.copy()
     df_artist = INFO_ARTIST_GENRE
+    df_show_meta = INFO_SHOW  # columns: show_name, show_artwork
+    df_audiobook_meta = INFO_AUDIOBOOK  # columns: audiobook_title, audiobook_artwork
 
     # Extract year from datetime
     user_df['year'] = pd.to_datetime(user_df['datetime']).dt.year
@@ -1577,7 +1570,7 @@ elif page == "Per Year":
         selected_category = st.segmented_control('Category', categories, selection_mode="single", default='music')
 
     ##filtering the data##
-    df_filtered = df[df['year'] == selected_year]
+    df_filtered = df.loc[df['year'] == selected_year].copy()
     df_filtered['date'] = pd.to_datetime(df_filtered['datetime']).dt.date
 
     if selected_category == 'music':
@@ -1615,9 +1608,7 @@ elif page == "Per Year":
         st.markdown("<h3 style='color: white;'>Hours Played</h3>", unsafe_allow_html=True)
 
     if selected_category == 'audiobook':
-
-        # Merge with audiobook info to get images
-        df_audiobook_uri = df_grouped.merge(df_audiobook, on='audiobook_uri', how='left')
+        df_audiobook_uri = df_grouped
 
     for i, row in df_top10.iterrows():
         col1, col2, col3, col4 = st.columns(([1, 2.1, 7, 1.75]), vertical_alignment='center')
@@ -1632,15 +1623,21 @@ elif page == "Per Year":
         elif selected_category == 'podcast':
             name = row['episode_show_name']
             try:
-                image_url = df_podcast[df_podcast['podcast_name'] == name]['podcast_artwork'].values[0]
-            except:
+                image_url = (
+                    df_show_meta.loc[df_show_meta['show_name'] == name, 'show_artwork']
+                    .dropna().values[0]
+                )
+            except Exception:
                 image_url = 'media_images/Image-Coming-Soon_vector.svg'
 
         elif selected_category == 'audiobook':
+            name = row['audiobook_title']
             try:
-                name = row['audiobook_title']
-                image_url = df_audiobook_uri[df_audiobook_uri['audiobook_title'] == name]['audiobook_artwork'].values[0]
-            except:
+                image_url = (
+                    df_audiobook_meta.loc[df_audiobook_meta['audiobook_title'] == name, 'audiobook_artwork']
+                    .dropna().values[0]
+                )
+            except Exception:
                 image_url = 'media_images/Image-Coming-Soon_vector.svg'
 
         with col1:
@@ -1711,8 +1708,8 @@ elif page == "Per Year":
     ## top 5 per year breakdowns ##
     ##Split the dataset by category##
     df_music = df_filtered[df_filtered['category'] == 'music']
-    df_podcasts = df_filtered[df_filtered['category'] == 'podcast']
-    df_audiobook = df_filtered[df_filtered['category'] == 'audiobook']
+    df_show_metas = df_filtered[df_filtered['category'] == 'podcast']
+    df_audiobook_meta = df_filtered[df_filtered['category'] == 'audiobook']
 
      ## dropdown to select category ##
     st.title('')
@@ -1734,7 +1731,7 @@ elif page == "Per Year":
 
     elif selected_category == "podcast":
         ## Top 5 artists in podcast category in horizontal bar graph##
-        top_podcasts = df_podcasts.groupby('episode_show_name')['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
+        top_podcasts = df_show_metas.groupby('episode_show_name')['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
         fig_podcast = px.bar(top_podcasts.head(limit) ,x="minutes_played", y ="episode_show_name", title=f"Top {len(top_podcasts.head(limit))} podcast episodes of {selected_year}", color_discrete_sequence=["#32CD32"], hover_data='episode_show_name', labels={'episode_name': 'Episode Name', 'episode_show_name': 'Podcast Show Name', "minutes_played": "Minutes Played"})
         fig_podcast.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
         fig_podcast.update_yaxes(categoryorder='total ascending')
@@ -1742,7 +1739,7 @@ elif page == "Per Year":
 
     elif selected_category == "audiobook":
         ## Top 5 artists in audiobook category in horizontal bar graph##
-        top_audiobooks = df_audiobook.groupby('audiobook_title')['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
+        top_audiobooks = df_audiobook_meta.groupby('audiobook_title')['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
         fig_audiobook = px.bar(top_audiobooks.head(limit) ,x="minutes_played", y ="audiobook_title", title=f"Top {len(top_audiobooks.head(limit))} audiobooks of {selected_year}", color_discrete_sequence=["#32CD32"], labels={'audiobook_title': 'Audiobook Title', 'minutes_played': 'Minutes Played'})
         fig_audiobook.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
         fig_audiobook.update_yaxes(categoryorder='total ascending')
@@ -1761,7 +1758,7 @@ elif page == "Per Year":
    # st.plotly_chart(fig5, use_container_width=True)
 
        # Load user-specific data
-    df = df
+    df = df.copy()
 
     # Convert datetime and extract year
     df['datetime'] = pd.to_datetime(df['datetime'])
@@ -1793,41 +1790,41 @@ elif page == "Per Year":
     df_top10 = df_filtered[df_filtered[title_field].isin(top_titles)]
 
     # Group for chart
-    sunburst_data = df_top10.groupby(['year', title_field])['minutes_played'].sum().reset_index()
-    sunburst_data['hours_played'] = sunburst_data['minutes_played'] / 60
+#     sunburst_data = df_top10.groupby(['year', title_field])['minutes_played'].sum().reset_index()
+#     sunburst_data['hours_played'] = sunburst_data['minutes_played'] / 60
 
-    # Sunburst chart: Year → Title
-    fig = px.sunburst(
-        sunburst_data,
-        path=['year', title_field],
-        values='hours_played',
-        title=' ',
-        color='hours_played',
-        color_continuous_scale=[
-            # '#181E05',  # black
-            #'#0F521A',
-            '#0c4d1f',
-            '#17823A',
-            '#1DB954',  # Spotify green
-             #'#1ED999',   # neon green
-            # '#E1D856',
-            "#CEF0B8",
-            '#E6F5C7']
-    )
-    fig.update_layout(
-        title_font_size=10,
-        title_x=0,  # Center the title
-        title_y=0,  # Adjust vertical position
-        margin=dict(t=50, l=0, r=0, b=0),
-        height=800,  # Adjust margins
-    )
-    fig.update_coloraxes(showscale=False)
-    # Show chart
-   # st.header(f"Top 10 in {selected_category} by most listened to (Year → {title_field.replace('_', ' ').title()})")
-    st.title('')
-    st.title('')
-    st.header("CLICK THE WHEEL!!")
-    st.plotly_chart(fig, use_container_width=True)
+#     # Sunburst chart: Year → Title
+#     fig = px.sunburst(
+#         sunburst_data,
+#         path=['year', title_field],
+#         values='hours_played',
+#         title=' ',
+#         color='hours_played',
+#         color_continuous_scale=[
+#             # '#181E05',  # black
+#             #'#0F521A',
+#             '#0c4d1f',
+#             '#17823A',
+#             '#1DB954',  # Spotify green
+#              #'#1ED999',   # neon green
+#             # '#E1D856',
+#             "#CEF0B8",
+#             '#E6F5C7']
+#     )
+#     fig.update_layout(
+#         title_font_size=10,
+#         title_x=0,  # Center the title
+#         title_y=0,  # Adjust vertical position
+#         margin=dict(t=50, l=0, r=0, b=0),
+#         height=800,  # Adjust margins
+#     )
+#     fig.update_coloraxes(showscale=False)
+#     # Show chart
+#    # st.header(f"Top 10 in {selected_category} by most listened to (Year → {title_field.replace('_', ' ').title()})")
+#     st.title('')
+#     st.title('')
+#     st.header("CLICK THE WHEEL!!")
+#     st.plotly_chart(fig, use_container_width=True)
 
 # ----------------------------- Per Artist Page ------------------------------ #
 elif page == "Per Artist":
@@ -1839,7 +1836,7 @@ elif page == "Per Artist":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
-    df = st.session_state.current_df.copy()
+    df, current_label = require_current_df()
 
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -2143,7 +2140,7 @@ elif page == "Per Album":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
-    df = st.session_state.current_df.copy()
+    df, current_label = require_current_df()
 
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -2408,9 +2405,10 @@ elif page == "Per Genre":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
-    df = st.session_state.current_df.copy()
+    df, current_label = require_current_df()
     user_df = df.copy()
     df = df.copy()
+    df_info = INFO_TRACKS
 
     # project titel
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -2727,8 +2725,8 @@ elif page == "The Farm":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
-    df = st.session_state.current_df.copy()
-    df = df.copy
+    df, current_label = require_current_df()
+    df = df.copy()
     df['year'] = pd.to_datetime(df['datetime']).dt.year
     year_list = df['year'].sort_values().unique().tolist()
 
@@ -3009,7 +3007,8 @@ elif page == "FUN":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
-    df = st.session_state.current_df.copy()
+    df, current_label = require_current_df()
+    df_event = INFO_EVENTS
 
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')

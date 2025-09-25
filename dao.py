@@ -288,6 +288,7 @@ class LocalMetadataDAO(StorageDAO):
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def upload_csv(self, df: pd.DataFrame, *, bucket: str, path: str, overwrite: bool = True) -> None:
+        """Per-run/snapshot outputs (user/label/ts/...). Always under base_dir."""
         out_path = self.base_dir / path
         out_path.parent.mkdir(parents=True, exist_ok=True)
         if out_path.exists() and not overwrite:
@@ -326,16 +327,42 @@ class LocalMetadataDAO(StorageDAO):
             return pd.read_csv(p, low_memory=False)
         return pd.DataFrame()
 
-    def merge_into_master(self, df: pd.DataFrame, filename: str, keys: list[str]):
-        master_path = self.base_dir / filename
-        if master_path.exists():
-            cur = pd.read_csv(master_path)
-            all_df = pd.concat([cur, df], ignore_index=True)
-            all_df.drop_duplicates(subset=keys, keep="last", inplace=True)
-        else:
-            all_df = df.copy()
-        all_df.to_csv(master_path, index=False)
+    # ---- Master merge lives STRICTLY under enrichment/metadata ----
+    def merge_into_master(self, df_new: pd.DataFrame, filename: str, *, keys: list[str]) -> None:
+        """
+        Merge df_new into the master CSV (enrichment/metadata/<filename>) using `keys` as de-dupe keys.
+        Creates the file if missing. Writes atomically via temp file.
+        """
+        master_path = self.base_dir / filename  # <--- stays inside enrichment/metadata
+        master_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Load existing master if present
+        if master_path.exists():
+            try:
+                df_old = pd.read_csv(master_path)
+            except Exception:
+                df_old = pd.DataFrame(columns=df_new.columns)
+        else:
+            df_old = pd.DataFrame(columns=df_new.columns)
+
+        # Align columns (in case shapes drift)
+        cols = list({*df_old.columns.tolist(), *df_new.columns.tolist()})
+        df_old = df_old.reindex(columns=cols)
+        df_new = df_new.reindex(columns=cols)
+
+        # Concatenate and drop duplicates by key(s)
+        if keys:
+            df_merged = pd.concat([df_old, df_new], ignore_index=True)
+            df_merged = df_merged.drop_duplicates(subset=keys, keep="last")
+        else:
+            # Fallback: drop exact duplicate rows
+            df_merged = pd.concat([df_old, df_new], ignore_index=True).drop_duplicates(keep="last")
+
+        # Atomic write
+        tmp = master_path.with_suffix(".csv.tmp")
+        df_merged.to_csv(tmp, index=False)
+        tmp.replace(master_path)
+        
 class LocalLogDAO:
     """Writes enrichment logs to enrichment/logs/{user_id}_{dataset_label}.log"""
     def __init__(self, base_dir: str = "enrichment/logs"):

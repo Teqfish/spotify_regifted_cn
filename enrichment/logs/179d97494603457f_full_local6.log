@@ -6,3 +6,5 @@
 {"event_time": "2025-09-23T17:06:27.483435", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
 {"event_time": "2025-09-23T17:06:27.689004", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
 {"event_time": "2025-09-23T17:06:27.711840", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-09-23T17:35:19.404012", "where": "enrichment", "level": "info", "message": "Finished enrichment successfully", "data": null}
+{"event_time": "2025-09-23T17:35:19.404212", "where": "start_enrichment", "level": "info", "message": "finished ok", "data": null}

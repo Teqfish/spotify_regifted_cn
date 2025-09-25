@@ -288,6 +288,7 @@ class LocalMetadataDAO(StorageDAO):
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def upload_csv(self, df: pd.DataFrame, *, bucket: str, path: str, overwrite: bool = True) -> None:
+        """Per-run/snapshot outputs (user/label/ts/...). Always under base_dir."""
         out_path = self.base_dir / path
         out_path.parent.mkdir(parents=True, exist_ok=True)
         if out_path.exists() and not overwrite:
@@ -300,6 +301,68 @@ class LocalMetadataDAO(StorageDAO):
             raise FileNotFoundError(f"Object not found: {file_path}")
         return pd.read_csv(file_path)
 
+    # --- Checkpoints (JSON) ---
+    def save_checkpoint(self, user_id: str, label: str, state: dict) -> None:
+        ck_dir = self.base_dir.parent / "checkpoints"  # enrichment/checkpoints
+        ck_dir.mkdir(parents=True, exist_ok=True)
+        (ck_dir / f"{user_id}_{label}.json").write_text(json.dumps(state, indent=2))
+
+    def load_checkpoint(self, user_id: str, label: str) -> dict | None:
+        ck_path = self.base_dir.parent / "checkpoints" / f"{user_id}_{label}.json"
+        if ck_path.exists():
+            try:
+                return json.loads(ck_path.read_text())
+            except Exception:
+                return None
+        return None
+
+    # --- Master info-tables (Append + Dedup by keys) ---
+    def _master_path(self, table_name: str):
+        # Keep masters directly inside enrichment/metadata
+        return self.base_dir / table_name  # self.base_dir == "enrichment/metadata"
+
+    def get_master(self, table_name: str) -> pd.DataFrame:
+        p = self._master_path(table_name)
+        if p.exists():
+            return pd.read_csv(p, low_memory=False)
+        return pd.DataFrame()
+
+    # ---- Master merge lives STRICTLY under enrichment/metadata ----
+    def merge_into_master(self, df_new: pd.DataFrame, filename: str, *, keys: list[str]) -> None:
+        """
+        Merge df_new into the master CSV (enrichment/metadata/<filename>) using `keys` as de-dupe keys.
+        Creates the file if missing. Writes atomically via temp file.
+        """
+        master_path = self.base_dir / filename  # <--- stays inside enrichment/metadata
+        master_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing master if present
+        if master_path.exists():
+            try:
+                df_old = pd.read_csv(master_path)
+            except Exception:
+                df_old = pd.DataFrame(columns=df_new.columns)
+        else:
+            df_old = pd.DataFrame(columns=df_new.columns)
+
+        # Align columns (in case shapes drift)
+        cols = list({*df_old.columns.tolist(), *df_new.columns.tolist()})
+        df_old = df_old.reindex(columns=cols)
+        df_new = df_new.reindex(columns=cols)
+
+        # Concatenate and drop duplicates by key(s)
+        if keys:
+            df_merged = pd.concat([df_old, df_new], ignore_index=True)
+            df_merged = df_merged.drop_duplicates(subset=keys, keep="last")
+        else:
+            # Fallback: drop exact duplicate rows
+            df_merged = pd.concat([df_old, df_new], ignore_index=True).drop_duplicates(keep="last")
+
+        # Atomic write
+        tmp = master_path.with_suffix(".csv.tmp")
+        df_merged.to_csv(tmp, index=False)
+        tmp.replace(master_path)
+        
 class LocalLogDAO:
     """Writes enrichment logs to enrichment/logs/{user_id}_{dataset_label}.log"""
     def __init__(self, base_dir: str = "enrichment/logs"):

@@ -1,0 +1,8 @@
+{"event_time": "2025-09-24T21:59:23.694414", "where": "start_enrichment", "level": "info", "message": "thread spawn", "data": null}
+{"event_time": "2025-09-24T21:59:23.738118", "where": "start_enrichment", "level": "info", "message": "status: running(plan)", "data": null}
+{"event_time": "2025-09-24T21:59:23.738278", "where": "start_enrichment", "level": "info", "message": "df ready", "data": {"rows": 73451}}
+{"event_time": "2025-09-24T21:59:23.738417", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-09-24T21:59:24.510318", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-24T21:59:24.511104", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-09-24T21:59:24.726618", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-09-24T21:59:24.749070", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}

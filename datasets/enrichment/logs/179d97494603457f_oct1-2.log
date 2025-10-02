@@ -1,0 +1,10 @@
+{"event_time": "2025-10-01T12:56:28.633430", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-01T12:56:29.086149", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-01T12:56:29.086350", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-01T12:56:29.450388", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-01T12:56:29.471929", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-01T13:36:59.279579", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-01T13:37:02.612317", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-01T13:37:02.612692", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-01T13:37:02.895624", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-01T13:37:02.916883", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}

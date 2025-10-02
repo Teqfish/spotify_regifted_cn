@@ -26,16 +26,16 @@ set up functions for calling the spotify api:
     search_for_artist(token, artist_name) - use the search api to search artist name
     search_for_track(token, track_uri) - single track API based on uri
     search_for_tracks(token, track_uris) - multi track API based on multiple URIs
-    
+
 """
 
 
 def get_token():
     auth_string = f"{client_id}:{client_secret}"
     auth_bytes = auth_string.encode("utf-8")
-    
+
     auth_base64 = str(base64.b64encode(auth_bytes), "utf-8")
-        
+
     url = "https://accounts.spotify.com/api/token"
     headers = {
         "Authorization" : "Basic " + auth_base64,
@@ -52,7 +52,7 @@ token = get_token()
 
 #%% define functions: search, single track, multi track and multi artist
 
-# make header for api call    
+# make header for api call
 def get_auth_header(token):
     return {"Authorization": "Bearer " + token}
 
@@ -61,49 +61,49 @@ def search_for_artist(token, artist_name):
     url = "https://api.spotify.com/v1/search"
     headers = get_auth_header(token)
     query = f"?q={artist_name}&type=artist&limit1"
-    
+
     query_url = url + query
     result = requests.get(query_url,headers = headers)
     print(result.status_code)
     json_result = json.loads(result.content)
-    
+
     return json_result
 
 # single track
 def search_for_track(token, track_uri):
     url = f"https://api.spotify.com/v1/tracks/{track_uri}"
     headers = get_auth_header(token)
-    
+
     result = requests.get(url,headers = headers)
     print(result.status_code)
     json_result = json.loads(result.content)
-    
+
     return json_result
 
 # multi track
 def search_for_tracks(token, track_uris):
     url = "https://api.spotify.com/v1/tracks"
     headers = get_auth_header(token)
-    
+
     query = f"?ids={track_uris}"
     query_url = url + query
     result = requests.get(query_url,headers = headers)
     print(result.status_code)
     json_result = json.loads(result.content)
-    
+
     return json_result
 
 # multi artist
 def search_for_artists(token, artist_uris):
     url = "https://api.spotify.com/v1/artists"
     headers = get_auth_header(token)
-    
+
     query = f"?ids={artist_uris}"
     query_url = url + query
     result = requests.get(query_url,headers = headers)
     print(result.status_code)
     json_result = json.loads(result.content)
-    
+
     return json_result
 
 #%% once functions are defined api calls start from here - this code expects a "music only" df_mega
@@ -128,7 +128,7 @@ while counter < len(df_tracks):
     counter += 50
     time.sleep(0.1)
     print(f"{len(tracks_data_batch)}/{(len(df_tracks)//50)+1} requests done")
-    
+
 #%% unpack track_batch data
 
 spotify_album_info = []
@@ -155,7 +155,7 @@ for batch in tracks_data_batch:
         # gather artist uri and add to list
         uri = tracks["artists"][0]["id"]
         artist_uri.append(uri)
-        
+
         # gather tracks info
         track_id = tracks["id"]
         track_name = tracks["name"]
@@ -169,7 +169,7 @@ for batch in tracks_data_batch:
                                    "artist_name" : artist_name,
                                    "album_name" : album_name})
 
-# save into respective dataframes    
+# save into respective dataframes
 df_album = pd.DataFrame(spotify_album_info)
 df_album = df_album.drop_duplicates(keep = "first") #removes duplicates
 df_album["release_date"] = pd.to_datetime(df_album["release_date"], format='ISO8601', errors='coerce') # change release date to datetime
@@ -192,7 +192,7 @@ while counter < len(artist_uri_unique):
     counter += 50
     time.sleep(0.1)
     print(f"{len(artist_data_batch)}/{(len(artist_uri_unique)//50)+1} requests done")
-    
+
 #%% unpack artist batch data
 
 spotify_artist_info = []
@@ -207,7 +207,7 @@ for batch in artist_data_batch:
             artist_image = artist["images"][0]["url"]
         except:
             artist_image = None
-            
+
         spotify_artist_info.append({"artist_id" : artist_id,
                                     "artist_name" : artist_name,
                                     "genre" : genre,
@@ -221,8 +221,8 @@ df_artist = pd.DataFrame(spotify_artist_info)
 df_artist = df_artist.sort_values(["artist_name", "artist_popularity"], ascending = False).groupby("artist_name").first()
 df_artist = df_artist.reset_index()
 
-#%% missing artist data from discogs - 
-### ENTER DISCOGS TOKEN BELOW ### 
+#%% missing artist data from discogs -
+### ENTER DISCOGS TOKEN BELOW ###
 ### - DO NO PUSH VERSIONS WITH YOUR TOKEN TO GIT HUB -###
 discogs_token = ""
 
@@ -231,13 +231,13 @@ missing_genre = []
 for index, row in df_artist.iterrows():
     if len(row["genre"]) == 0:
         missing_genre.append(row["artist_name"])
-        
+
 # pull missing genres from discogs
 extra_genres=[]
 for artist in missing_genre:
-    
+
     time.sleep(1)
-    
+
     try:
         api_request = requests.get(url='https://api.discogs.com/database/search',params = {'artist': f"{artist}",'token':f"{discogs_token}"})
         api = api_request.json()
@@ -266,4 +266,3 @@ df_genre_merge = df_genre_merge.drop(["genre_x", "genre_y"], axis = 1)
 
 # update df_artist
 df_artist = df_genre_merge
-    

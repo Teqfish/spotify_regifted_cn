@@ -79,10 +79,10 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
     if mode == "local":
         # Use only local directories
         return {
-            "user_data": LocalUserDataDAO(base_dir="userdata"),
-            "status":    LocalStatusDAO(base_dir="enrichment/status"),
-            "metadata":  LocalMetadataDAO(base_dir="enrichment/metadata"),
-            "logs":      LocalLogDAO(base_dir="enrichment/logs"),
+            "user_data": LocalUserDataDAO(base_dir="datasets/userdata"),
+            "status":    LocalStatusDAO(base_dir="datasets/enrichment/status"),
+            "metadata":  LocalMetadataDAO(base_dir="datasets/enrichment/metadata"),
+            "logs":      LocalLogDAO(base_dir="datasets/enrichment/logs"),
             # "main": None  # not needed in local mode
         }
 

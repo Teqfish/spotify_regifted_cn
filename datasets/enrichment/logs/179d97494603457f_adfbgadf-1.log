@@ -1,0 +1,6 @@
+{"event_time": "2025-10-01T13:04:42.830596", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-01T13:04:43.266626", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-01T13:04:43.267075", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-01T13:04:43.518792", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-01T13:04:43.539135", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-01T13:34:19.564267", "where": "local_test", "level": "info", "message": "starting run_local_enrichment_test", "data": null}

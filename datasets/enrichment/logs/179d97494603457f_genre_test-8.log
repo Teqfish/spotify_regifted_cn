@@ -1,0 +1,5 @@
+{"event_time": "2025-10-01T00:38:05.333036", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-01T00:38:08.753469", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-01T00:38:08.754152", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-01T00:38:09.001682", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-01T00:38:09.022516", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}

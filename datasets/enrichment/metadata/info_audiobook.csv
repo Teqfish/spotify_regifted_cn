@@ -1,19 +1,19 @@
-audiobook_id,audiobook_artwork,audiobook_title
-13y7enEVlzeLAScftJjMb0,https://i.scdn.co/image/ab676663000022a85ac808f4bbafc0ef95e1e648,The BFG
-3P4NRvzTh1gv9t6yZwPMm0,https://i.scdn.co/image/ab676663000022a818a92fe07c7c76a3195e3094,Charlie and the Chocolate Factory
-0jxdq4qCA7q6o86PLPNPBA,https://i.scdn.co/image/ab676663000022a8e327382936409b7fb9670c9a,Fireman Sam - A Great Rescue Dog
-4ouHNePEb0pz9A18jdrASn,https://i.scdn.co/image/ab676663000022a812ba324cf90edb53f76bb152,The Magic Faraway Tree: Book 2
-1cWZimTEQi7cA2teEhkjMx,https://i.scdn.co/image/ab676663000022a8df50f52f4cc4d8611631abd5,Fireman Sam - Saving a Horse
-7zYqi0bBz7caMY3uwRwpuz,https://i.scdn.co/image/ab676663000022a844c7e9f65abb09ebe8da7af2,Fireman Sam - Competition in Danger
-0vL8tq02UqTY1ApnhG2kzK,https://i.scdn.co/image/ab676663000022a8d8986d40462a7d63929ff0d2,Fireman Sam - A Fiery Concert
-0ac5EVc42XyYaIQIfc2pXL,https://i.scdn.co/image/ab676663000022a8844dbd2c777e2fe1846e2b79,Fireman Sam - A Magic Rescue
-7BQ2z8MZtOrjVryva6Qhtd,https://i.scdn.co/image/ab676663000022a8c8d7dbcb235f9d90edba2eb7,Winnie The Pooh
-5Welq2uLsi00V512TY6sTm,https://i.scdn.co/image/ab676663000022a8b4903d5998354afdb31cb34e,The Boy Who Grew Dragons (The Boy Who Grew Dragons 1)
-6PaeGb9d6fzFhQCAjUnm3d,https://i.scdn.co/image/ab676663000022a85fb403b3c211096d4881e3b6,The Hotel Avocado
-1ojmF3WbW6m2ntjE4gDFM4,https://i.scdn.co/image/ab676663000022a8e9d958561027153c736550f1,The Secret Island: Book 1
-5XKnqgaE4Wow4Rmrzu5UHN,https://i.scdn.co/image/ab676663000022a8f676a8425444864e882999f9,Want: Sexual Fantasies by Anonymous
-4ed0ke1eXnyR5uPcVBpLRu,https://i.scdn.co/image/ab676663000022a806dc5e6052889e7bdd4f039b,Kitchen Confidential: 25th Anniversary Edition
-1t2BqlrVt9W207SiWxNIeH,https://i.scdn.co/image/ab676663000022a8811edf9898fb537f0f1d3aa6,Danny the Champion of the World
-22ssNVceJEloArFaNMMA1k,https://i.scdn.co/image/ab676663000022a81f562e1fbfa1a3064d6de201,A Short History of Nearly Everything
-2WbzV1xR3Gah1VhdzQjHPW,https://i.scdn.co/image/ab676663000022a83045b32a8e4c099d6801562f,"The Fellowship of the Ring: Discover Middle-earth in the Bestselling Classic Fantasy Novels read by the voice of Gollum (The Lord of the Rings, Book 1)"
-4VKvwf9B0xTtri43uNJh9k,https://i.scdn.co/image/ab676663000022a89d7558f07541236ff4c06af9,The Power of Now
+publisher,audiobook_id,authors,audiobook_image,audiobook_title,audiobook_artwork
+Roald Dahl,13y7enEVlzeLAScftJjMb0,['Roald Dahl'],https://i.scdn.co/image/ab676663000022a85ac808f4bbafc0ef95e1e648,The BFG,
+Roald Dahl,3P4NRvzTh1gv9t6yZwPMm0,['Roald Dahl'],https://i.scdn.co/image/ab676663000022a818a92fe07c7c76a3195e3094,Charlie and the Chocolate Factory,
+Mattel,0jxdq4qCA7q6o86PLPNPBA,['Mattel'],https://i.scdn.co/image/ab676663000022a8e327382936409b7fb9670c9a,Fireman Sam - A Great Rescue Dog,
+Enid Blyton,4ouHNePEb0pz9A18jdrASn,['Enid Blyton'],https://i.scdn.co/image/ab676663000022a812ba324cf90edb53f76bb152,The Magic Faraway Tree: Book 2,
+Mattel,1cWZimTEQi7cA2teEhkjMx,['Mattel'],https://i.scdn.co/image/ab676663000022a8df50f52f4cc4d8611631abd5,Fireman Sam - Saving a Horse,
+Mattel,7zYqi0bBz7caMY3uwRwpuz,['Mattel'],https://i.scdn.co/image/ab676663000022a844c7e9f65abb09ebe8da7af2,Fireman Sam - Competition in Danger,
+Mattel,0vL8tq02UqTY1ApnhG2kzK,['Mattel'],https://i.scdn.co/image/ab676663000022a8d8986d40462a7d63929ff0d2,Fireman Sam - A Fiery Concert,
+Mattel,0ac5EVc42XyYaIQIfc2pXL,['Mattel'],https://i.scdn.co/image/ab676663000022a8844dbd2c777e2fe1846e2b79,Fireman Sam - A Magic Rescue,
+A. A. Milne,7BQ2z8MZtOrjVryva6Qhtd,['A. A. Milne'],https://i.scdn.co/image/ab676663000022a8c8d7dbcb235f9d90edba2eb7,Winnie The Pooh,
+Andy Shepherd,5Welq2uLsi00V512TY6sTm,['Andy Shepherd'],https://i.scdn.co/image/ab676663000022a8b4903d5998354afdb31cb34e,The Boy Who Grew Dragons (The Boy Who Grew Dragons 1),
+Bob Mortimer,6PaeGb9d6fzFhQCAjUnm3d,['Bob Mortimer'],https://i.scdn.co/image/ab676663000022a85fb403b3c211096d4881e3b6,The Hotel Avocado,
+Enid Blyton,1ojmF3WbW6m2ntjE4gDFM4,['Enid Blyton'],https://i.scdn.co/image/ab676663000022a8e9d958561027153c736550f1,The Secret Island: Book 1,
+Gillian Anderson,5XKnqgaE4Wow4Rmrzu5UHN,['Gillian Anderson'],https://i.scdn.co/image/ab676663000022a8f676a8425444864e882999f9,Want: Sexual Fantasies by Anonymous,
+Anthony Bourdain,4ed0ke1eXnyR5uPcVBpLRu,['Anthony Bourdain'],https://i.scdn.co/image/ab676663000022a806dc5e6052889e7bdd4f039b,Kitchen Confidential: 25th Anniversary Edition,
+Roald Dahl,1t2BqlrVt9W207SiWxNIeH,['Roald Dahl'],https://i.scdn.co/image/ab676663000022a8811edf9898fb537f0f1d3aa6,Danny the Champion of the World,
+Bill Bryson,22ssNVceJEloArFaNMMA1k,['Bill Bryson'],https://i.scdn.co/image/ab676663000022a81f562e1fbfa1a3064d6de201,A Short History of Nearly Everything,
+J.R.R. Tolkien,2WbzV1xR3Gah1VhdzQjHPW,['J.R.R. Tolkien'],https://i.scdn.co/image/ab676663000022a83045b32a8e4c099d6801562f,"The Fellowship of the Ring: Discover Middle-earth in the Bestselling Classic Fantasy Novels read by the voice of Gollum (The Lord of the Rings, Book 1)",
+Eckhart Tolle,4VKvwf9B0xTtri43uNJh9k,['Eckhart Tolle'],https://i.scdn.co/image/ab676663000022a89d7558f07541236ff4c06af9,The Power of Now,

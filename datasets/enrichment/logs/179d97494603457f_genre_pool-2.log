@@ -1,0 +1,6 @@
+{"event_time": "2025-10-02T21:34:53.888273", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-02T21:34:54.141943", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-02T21:34:54.142094", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-02T21:34:54.535209", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-02T21:34:54.558657", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-02T21:35:18.190414", "where": "enrichment", "level": "error", "message": "Exception in background_enrich: 'MetadataEnricher' object has no attribute 'log_dao'", "data": null}

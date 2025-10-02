@@ -1,16 +1,16 @@
 [theme]
 base="dark"
-backgroundColor="#080d08ff"
+backgroundColor="#0b110bff"
 primaryColor="#1DB954"
 secondaryBackgroundColor="#457e59"
-# dataframeHeaderBackgroundColor="#32CD32"
+#dataframeHeaderBackgroundColor="#32CD32"
 codeBackgroundColor="#457e59"
 textColor="#e1ece3"
 font="sans-serif"
 
 [theme.sidebar]
 primaryColor="#32CD32"
-backgroundColor="#457e59"
+backgroundColor="#17271bff"
 secondaryBackgroundColor="#2a4f34ff"
 textColor="#e1ece3"
 
@@ -18,6 +18,7 @@ textColor="#e1ece3"
 runOnSave = true
 
 # black="#0f1f0fff"
+# blackgreen="#002918ff"
 # lightgrey="#a8b2a8"
 # offwhite="#e1ece3"
 # darkgreen="#0d5637ff"

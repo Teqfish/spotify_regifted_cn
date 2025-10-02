@@ -410,6 +410,7 @@ class MetadataEnricher:
         discogs_secret: str,
         status_dao: StatusDAO,
         storage_dao: StorageDAO,
+        log_dao,   # <-- NEW
         info_table_dao: Optional[InfoTableDAO] = None,
         verbose: bool = True,
     ):
@@ -427,6 +428,7 @@ class MetadataEnricher:
 
         self.status = status_dao
         self.storage = storage_dao
+        self.log_dao = log_dao          # <-- NEW
         self.info_tables = info_table_dao
         self.verbose = verbose
 
@@ -1171,9 +1173,9 @@ class MetadataEnricher:
 
         self.seen_shows.update(names)
 
-
+    def fetch_and_save_audiobooks(self, audiobook_titles: List[str], cancel_event: Optional[threading.Event] = None):
         ce = cancel_event or getattr(self, "cancel_event", None)
-        titles = [t for t in unique_keep_order(titles) if isinstance(t, str) and t.strip()]
+        titles = [t for t in unique_keep_order(audiobook_titles) if isinstance(t, str) and t.strip()]
         if not titles:
             return
 
@@ -1215,38 +1217,55 @@ class MetadataEnricher:
     def run_phase_overall_first50(self, top_art: pd.DataFrame, top_shows: pd.DataFrame, top_books: pd.DataFrame):
         """
         First 50 batch: up to 10 artists + 10 shows + 10 audiobooks -> fire immediately.
+        Applies master/seen filters before enrichment.
         """
         self.log(f"[overall_first50] Top counts: artists={len(top_art)}, shows={len(top_shows)}, books={len(top_books)}")
 
-        # Artists
+        # ---------- Artists ----------
         if len(top_art):
             todo = self._filter_known_artists(top_art["artist_name"].tolist())
             if todo:
                 self.log(f"[overall_first50] Fetching artists: {len(todo)}")
                 self.fetch_and_save_artists(todo, cancel_event=self.cancel_event)
-                self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Saved artists • n={len(todo)}")
+                self.status.inc_status(
+                    self.user_id, self.label,
+                    add_batches=1,
+                    detail=f"Saved artists • n={len(todo)}"
+                )
                 self._done_batches += 1
                 self._maybe_autosave(self._done_batches, self._total_batches)
 
-        # Shows
+        # ---------- Shows ----------
         if len(top_shows):
-            self.log(f"[overall_first50] Fetching shows: {len(top_shows)}")
-            self.fetch_and_save_shows(top_shows["show_name"].tolist(), cancel_event=self.cancel_event)
-            self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Resolved shows • n={len(top_shows)}")
-            self._done_batches += 1
-            self._maybe_autosave(self._done_batches, self._total_batches)
+            todo = self._filter_known_shows(top_shows["show_name"].tolist())
+            if todo:
+                self.log(f"[overall_first50] Fetching shows: {len(todo)}")
+                self.fetch_and_save_shows(todo, cancel_event=self.cancel_event)
+                self.status.inc_status(
+                    self.user_id, self.label,
+                    add_batches=1,
+                    detail=f"Resolved shows • n={len(todo)}"
+                )
+                self._done_batches += 1
+                self._maybe_autosave(self._done_batches, self._total_batches)
 
-        # Audiobooks
+        # ---------- Audiobooks ----------
         if len(top_books):
-            self.log(f"[overall_first50] Fetching audiobooks: {len(top_books)}")
-            self.fetch_and_save_audiobooks(top_books["audiobook_title"].tolist(), cancel_event=self.cancel_event)
-            self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Resolved audiobooks • n={len(top_books)}")
-            self._done_batches += 1
-            self._maybe_autosave(self._done_batches, self._total_batches)
+            todo = self._filter_known_audiobooks(top_books["audiobook_title"].tolist())
+            if todo:
+                self.log(f"[overall_first50] Fetching audiobooks: {len(todo)}")
+                self.fetch_and_save_audiobooks(todo, cancel_event=self.cancel_event)
+                self.status.inc_status(
+                    self.user_id, self.label,
+                    add_batches=1,
+                    detail=f"Resolved audiobooks • n={len(todo)}"
+                )
+                self._done_batches += 1
+                self._maybe_autosave(self._done_batches, self._total_batches)
 
     def run_phase_per_year(self, per_art: pd.DataFrame, per_show: pd.DataFrame, per_book: pd.DataFrame):
         """
-        Per-year top 10 (descending years), excluding already-seen.
+        Per-year top 10 (descending years), excluding already-seen and already in master tables.
         Batch by 50 per content type; fire each batch as it fills.
         """
         # ---------- Artists ----------
@@ -1262,7 +1281,8 @@ class MetadataEnricher:
                     self.log(f"[per_year] Artist batch of {len(todo)} → calling fetch_and_save_artists")
                     self.fetch_and_save_artists(todo, cancel_event=self.cancel_event)
                     fired += 1
-                    self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Per-year artists batch • +{len(todo)}")
+                    self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                        detail=f"Per-year artists batch • +{len(todo)}")
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
                 batch = []
@@ -1272,7 +1292,8 @@ class MetadataEnricher:
                 self.log(f"[per_year] Final artist batch of {len(todo)}")
                 self.fetch_and_save_artists(todo, cancel_event=self.cancel_event)
                 fired += 1
-                self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Per-year artists final batch • +{len(todo)}")
+                self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                    detail=f"Per-year artists final batch • +{len(todo)}")
                 self._done_batches += 1
                 self._maybe_autosave(self._done_batches, self._total_batches)
 
@@ -1284,20 +1305,26 @@ class MetadataEnricher:
                 continue
             batch.append(name)
             if len(batch) == 50:
-                self.log(f"[per_year] Show batch of {len(batch)}")
-                self.fetch_and_save_shows(batch, cancel_event=self.cancel_event)
-                fired += 1
-                self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Per-year shows batch • +{len(batch)}")
-                self._done_batches += 1
-                self._maybe_autosave(self._done_batches, self._total_batches)
+                todo = self._filter_known_shows(batch)
+                if todo:
+                    self.log(f"[per_year] Show batch of {len(todo)}")
+                    self.fetch_and_save_shows(todo, cancel_event=self.cancel_event)
+                    fired += 1
+                    self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                        detail=f"Per-year shows batch • +{len(todo)}")
+                    self._done_batches += 1
+                    self._maybe_autosave(self._done_batches, self._total_batches)
                 batch = []
         if batch:
-            self.log(f"[per_year] Final show batch of {len(batch)}")
-            self.fetch_and_save_shows(batch, cancel_event=self.cancel_event)
-            fired += 1
-            self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Per-year shows final batch • +{len(batch)}")
-            self._done_batches += 1
-            self._maybe_autosave(self._done_batches, self._total_batches)
+            todo = self._filter_known_shows(batch)
+            if todo:
+                self.log(f"[per_year] Final show batch of {len(todo)}")
+                self.fetch_and_save_shows(todo, cancel_event=self.cancel_event)
+                fired += 1
+                self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                    detail=f"Per-year shows final batch • +{len(todo)}")
+                self._done_batches += 1
+                self._maybe_autosave(self._done_batches, self._total_batches)
 
         # ---------- Audiobooks ----------
         batch, fired = [], 0
@@ -1307,20 +1334,26 @@ class MetadataEnricher:
                 continue
             batch.append(title)
             if len(batch) == 50:
-                self.log(f"[per_year] Audiobook batch of {len(batch)}")
-                self.fetch_and_save_audiobooks(batch, cancel_event=self.cancel_event)
-                fired += 1
-                self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Per-year audiobooks batch • +{len(batch)}")
-                self._done_batches += 1
-                self._maybe_autosave(self._done_batches, self._total_batches)
+                todo = self._filter_known_audiobooks(batch)
+                if todo:
+                    self.log(f"[per_year] Audiobook batch of {len(todo)}")
+                    self.fetch_and_save_audiobooks(todo, cancel_event=self.cancel_event)
+                    fired += 1
+                    self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                        detail=f"Per-year audiobooks batch • +{len(todo)}")
+                    self._done_batches += 1
+                    self._maybe_autosave(self._done_batches, self._total_batches)
                 batch = []
         if batch:
-            self.log(f"[per_year] Final audiobook batch of {len(batch)}")
-            self.fetch_and_save_audiobooks(batch, cancel_event=self.cancel_event)
-            fired += 1
-            self.status.inc_status(self.user_id, self.label, add_batches=1, detail=f"Per-year audiobooks final batch • +{len(batch)}")
-            self._done_batches += 1
-            self._maybe_autosave(self._done_batches, self._total_batches)
+            todo = self._filter_known_audiobooks(batch)
+            if todo:
+                self.log(f"[per_year] Final audiobook batch of {len(todo)}")
+                self.fetch_and_save_audiobooks(todo, cancel_event=self.cancel_event)
+                fired += 1
+                self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                    detail=f"Per-year audiobooks final batch • +{len(todo)}")
+                self._done_batches += 1
+                self._maybe_autosave(self._done_batches, self._total_batches)
 
     def run_phase_per_artist_albums_of_year(self):
         """
@@ -1353,6 +1386,7 @@ class MetadataEnricher:
                 if pair not in self.seen_albums:
                     pairs.append(pair)
 
+        # ✅ Already applies album filter
         if hasattr(self, "_filter_known_album_pairs"):
             pairs = self._filter_known_album_pairs(pairs)
 
@@ -1388,6 +1422,8 @@ class MetadataEnricher:
         )
 
         pairs = [(r["artist_name"], r["album_name"]) for _, r in all_pairs.iterrows() if (r["artist_name"], r["album_name"]) not in self.seen_albums]
+
+        # ✅ Already applies album filter
         if hasattr(self, "_filter_known_album_pairs"):
             pairs = self._filter_known_album_pairs(pairs)
 
@@ -1419,17 +1455,30 @@ class MetadataEnricher:
         # --- MUSIC (artists) ---
         music = df[df["category"] == "music"].copy()
         years_music = sorted(music["year"].dropna().unique().tolist(), reverse=True)
-        per_year_art = music.groupby(["year", "artist_name"])["minutes_played"].sum().reset_index()
+        per_year_art = (
+            music.groupby(["year", "artist_name"])["minutes_played"]
+            .sum()
+            .reset_index()
+        )
 
         # --- PODCASTS (shows) ---
         podcast = df[df["category"] == "podcast"].copy()
         years_show = sorted(podcast["year"].dropna().unique().tolist(), reverse=True)
-        per_year_show = podcast.groupby(["year", "episode_show_name"])["minutes_played"].sum().reset_index().rename(columns={"episode_show_name": "show_name"})
+        per_year_show = (
+            podcast.groupby(["year", "episode_show_name"])["minutes_played"]
+            .sum()
+            .reset_index()
+            .rename(columns={"episode_show_name": "show_name"})
+        )
 
         # --- AUDIOBOOKS ---
         audiobooks = df[df["category"] == "audiobook"].copy()
         years_book = sorted(audiobooks["year"].dropna().unique().tolist(), reverse=True)
-        per_year_book = audiobooks.groupby(["year", "audiobook_title"])["minutes_played"].sum().reset_index()
+        per_year_book = (
+            audiobooks.groupby(["year", "audiobook_title"])["minutes_played"]
+            .sum()
+            .reset_index()
+        )
 
         max_cycles = max(1, len(set(years_music + years_show + years_book)))
         self.log(f"[breadth_first] Max cycles = {max_cycles}")
@@ -1466,6 +1515,7 @@ class MetadataEnricher:
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
 
+            titles = []
             for y in years_book:
                 self._check_cancel(self.cancel_event)
                 sub = per_year_book[per_year_book["year"] == y].sort_values("minutes_played", ascending=False)
@@ -1565,6 +1615,27 @@ class MetadataEnricher:
                 total=total
             )
 
+            # 🆕 Bail out early if nothing to do
+            if total == 0:
+                self.log("[run_all] Nothing new to enrich (all entities already in masters)")
+                self.status.finish_status(
+                    self.user_id, self.label,
+                    ok=True,
+                    detail="✅ All enrichment already up to date"
+                )
+                return
+
+            # Helper: log phase completion + update status
+            def _end_phase(name: str, before: int):
+                added = self._done_batches - before
+                self.log(f"[run_all] Completed phase: {name} (batches +{added})")
+                self.status.set_status(
+                    self.user_id, self.label,
+                    phase=name,
+                    detail=f"Phase '{name}' finished • {added} new batches",
+                    total=total
+                )
+
             # 2) Build priority sets
             self._check_cancel(self.cancel_event)
             self.log("[run_all] Building priority sets…")
@@ -1576,7 +1647,8 @@ class MetadataEnricher:
             # 3) Overall
             self._check_cancel(self.cancel_event)
             self.current_phase = "overall"
-            self.log(f"[run_all] >>> Starting phase: overall ({len(top_art)} artists, {len(top_shows)} shows, {len(top_books)} books)")
+            self.log("[run_all] Starting phase: overall")
+            before = self._done_batches
             self.status.set_status(
                 self.user_id, self.label,
                 phase="overall",
@@ -1584,12 +1656,13 @@ class MetadataEnricher:
                 total=total
             )
             self.run_phase_overall_first50(top_art, top_shows, top_books)
-            self.log("[run_all] <<< Completed phase: overall")
+            _end_phase("overall", before)
 
             # 4) Per-year
             self._check_cancel(self.cancel_event)
             self.current_phase = "per_year"
-            self.log(f"[run_all] >>> Starting phase: per_year ({len(per_art)} artists, {len(per_show)} shows, {len(per_book)} books)")
+            self.log("[run_all] Starting phase: per_year")
+            before = self._done_batches
             self.status.set_status(
                 self.user_id, self.label,
                 phase="per_year",
@@ -1597,12 +1670,13 @@ class MetadataEnricher:
                 total=total
             )
             self.run_phase_per_year(per_art, per_show, per_book)
-            self.log("[run_all] <<< Completed phase: per_year")
+            _end_phase("per_year", before)
 
             # 5) Per-artist albums of year
             self._check_cancel(self.cancel_event)
             self.current_phase = "albums_of_year"
-            self.log("[run_all] >>> Starting phase: albums_of_year")
+            self.log("[run_all] Starting phase: albums_of_year")
+            before = self._done_batches
             self.status.set_status(
                 self.user_id, self.label,
                 phase="albums_of_year",
@@ -1610,12 +1684,13 @@ class MetadataEnricher:
                 total=total
             )
             self.run_phase_per_artist_albums_of_year()
-            self.log("[run_all] <<< Completed phase: albums_of_year")
+            _end_phase("albums_of_year", before)
 
             # 6) Per-album for top artists
             self._check_cancel(self.cancel_event)
             self.current_phase = "per_album"
-            self.log("[run_all] >>> Starting phase: per_album")
+            self.log("[run_all] Starting phase: per_album")
+            before = self._done_batches
             self.status.set_status(
                 self.user_id, self.label,
                 phase="per_album",
@@ -1623,12 +1698,13 @@ class MetadataEnricher:
                 total=total
             )
             self.run_phase_per_album_all_albums_for_top_artists()
-            self.log("[run_all] <<< Completed phase: per_album")
+            _end_phase("per_album", before)
 
             # 7) Breadth-first remaining
             self._check_cancel(self.cancel_event)
             self.current_phase = "breadth_first"
-            self.log("[run_all] >>> Starting phase: breadth_first")
+            self.log("[run_all] Starting phase: breadth_first")
+            before = self._done_batches
             self.status.set_status(
                 self.user_id, self.label,
                 phase="breadth_first",
@@ -1636,12 +1712,12 @@ class MetadataEnricher:
                 total=total
             )
             self.run_phase_breadth_first_years_remaining()
-            self.log("[run_all] <<< Completed phase: breadth_first")
+            _end_phase("breadth_first", before)
 
             # 8) Final flush
             self._check_cancel(self.cancel_event)
             self.current_phase = "flush"
-            self.log("[run_all] >>> Starting final flush")
+            self.log("[run_all] Starting final flush")
             self.status.set_status(
                 self.user_id, self.label,
                 phase="flush",
@@ -1649,15 +1725,16 @@ class MetadataEnricher:
                 total=total
             )
             self.flush_all()
-            self.log("[run_all] <<< Flush complete")
+            self.log("[run_all] Flush complete")
 
             # 9) Done
+            added_total = self._done_batches
             self.status.finish_status(
                 self.user_id, self.label,
                 ok=True,
-                detail="✅ Enrichment completed (CSV flushed)"
+                detail=f"✅ Enrichment completed (CSV flushed) • {added_total} new batches"
             )
-            self.log("[run_all] Enrichment finished OK")
+            self.log(f"[run_all] Enrichment finished OK — {added_total} new batches enriched")
 
         except CancelledError:
             self.log("[run_all] CancelledError caught, flushing partial results")
@@ -1807,21 +1884,38 @@ class MetadataEnricher:
             self.master_albums  = pd.DataFrame()
 
     def _filter_known_artists(self, names: list[str]) -> list[str]:
-        """Skip artists already present in master by name (best-effort)."""
-        if self.master_artists.empty or "artist_name" not in self.master_artists.columns:
-            return names
-        known = set(self.master_artists["artist_name"].dropna().astype(str))
-        return [n for n in names if isinstance(n, str) and n and n not in known]
+        """Skip artists already present in master or already seen in this run."""
+        known = set(n.lower() for n in self.seen_artists if isinstance(n, str))
+        if not self.master_artists.empty and "artist_name" in self.master_artists.columns:
+            known |= set(self.master_artists["artist_name"].dropna().astype(str).str.lower())
+        return [n for n in names if isinstance(n, str) and n.strip() and n.lower() not in known]
 
     def _filter_known_album_pairs(self, pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
-        """Skip (artist, album) pairs already present in master (best-effort)."""
-        if self.master_albums.empty or not {"artist_name","album_name"}.issubset(self.master_albums.columns):
-            return pairs
-        known_pairs = set(
-            (str(a), str(b))
-            for a, b in self.master_albums[["artist_name","album_name"]].dropna().astype(str).itertuples(index=False, name=None)
-        )
-        return [p for p in pairs if (str(p[0]), str(p[1])) not in known_pairs]
+        """Skip (artist, album) pairs already present in master or already seen in this run."""
+        known_pairs = set((a.lower(), b.lower()) for a, b in self.seen_albums)
+        if not self.master_albums.empty and {"artist_name", "album_name"}.issubset(self.master_albums.columns):
+            known_pairs |= set(
+                (str(a).lower(), str(b).lower())
+                for a, b in self.master_albums[["artist_name", "album_name"]]
+                .dropna()
+                .astype(str)
+                .itertuples(index=False, name=None)
+            )
+        return [(a, b) for a, b in pairs if (a.lower(), b.lower()) not in known_pairs]
+
+    def _filter_known_shows(self, names: list[str]) -> list[str]:
+        """Skip shows already present in master or already seen in this run."""
+        known = set(n.lower() for n in self.seen_shows if isinstance(n, str))
+        if hasattr(self, "master_shows") and not self.master_shows.empty and "show_name" in self.master_shows.columns:
+            known |= set(self.master_shows["show_name"].dropna().astype(str).str.lower())
+        return [n for n in names if isinstance(n, str) and n.strip() and n.lower() not in known]
+
+    def _filter_known_audiobooks(self, titles: list[str]) -> list[str]:
+        """Skip audiobooks already present in master or already seen in this run."""
+        known = set(t.lower() for t in self.seen_audiobooks if isinstance(t, str))
+        if hasattr(self, "master_audiobooks") and not self.master_audiobooks.empty and "audiobook_title" in self.master_audiobooks.columns:
+            known |= set(self.master_audiobooks["audiobook_title"].dropna().astype(str).str.lower())
+        return [t for t in titles if isinstance(t, str) and t.strip() and t.lower() not in known]
 
 class DiscogsWorkerPool:
     def __init__(self, num_workers: int = 5):

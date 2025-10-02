@@ -384,6 +384,10 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
             except Exception as e:
                 print(f"[etl_process_zip] Warning: could not persist ETL status: {e}")
 
+            # 🔑 Also mark it in session state so widget will render
+            import streamlit as st
+            st.session_state.etl_done = True
+
         return table_name, cleaned_df
 
     except Exception as e:
@@ -553,7 +557,14 @@ def run_cleaning_pipeline(df, username_label):
 
     return cleaned_df
 
-def background_enrich(*, user_id: str, dataset_label: str, cleaned_df: pd.DataFrame, cancel_event: Optional[threading.Event] = None):
+def background_enrich(
+    *,
+    user_id: str,
+    dataset_label: str,
+    cleaned_df: pd.DataFrame,
+    log_dao: LocalLogDAO,   # <-- added explicit
+    cancel_event: Optional[threading.Event] = None
+):
     """
     Background enrichment runner that:
       - writes ALL status via status_dao (so the widget reads it)
@@ -584,16 +595,16 @@ def background_enrich(*, user_id: str, dataset_label: str, cleaned_df: pd.DataFr
             discogs_secret=DISCOGS_SECRET,
             status_dao=status_dao,
             storage_dao=metadata_dao,
+            log_dao=log_dao,   # <-- pass explicitly into the enricher too
             info_table_dao=None,
             verbose=True,
         )
 
         log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
         status_dao.set_status(user_id, dataset_label, phase="running", detail="Calling run_all()")
-        enricher.run_all(cancel_event=cancel_event)   # <-- pass it here
+        enricher.run_all(cancel_event=cancel_event)
 
     except CancelledError:
-        # run_all already flushed + set status; just log and re-raise
         log_dao.log(user_id, dataset_label, "enrichment", "CancelledError bubbled (partial saved)", level="info")
         raise
     except Exception as e:
@@ -607,9 +618,9 @@ def run_local_enrichment_test(cleaned_df: pd.DataFrame, user_id: str, dataset_la
     if status_dao is None or metadata_dao is None:
         raise RuntimeError("status_dao/metadata_dao not configured for this SERVER_MODE.")
 
-    # Optional: log start
-    if log_dao:
-        log_dao.log(user_id, dataset_label, "local_test", "starting run_local_enrichment_test")
+    local_log_dao = LocalLogDAO()   # <-- new
+
+    local_log_dao.log(user_id, dataset_label, "local_test", "starting run_local_enrichment_test")
 
     enricher = MetadataEnricher(
         user_id=user_id,
@@ -620,14 +631,14 @@ def run_local_enrichment_test(cleaned_df: pd.DataFrame, user_id: str, dataset_la
         discogs_secret=DISCOGS_SECRET,
         status_dao=status_dao,
         storage_dao=metadata_dao,
+        log_dao=local_log_dao,   # <-- pass explicitly here too
         info_table_dao=None,
         verbose=True,
     )
 
     enricher.run_all(cancel_event=None)
 
-    if log_dao:
-        log_dao.log(user_id, dataset_label, "local_test", "completed run_local_enrichment_test")
+    local_log_dao.log(user_id, dataset_label, "local_test", "completed run_local_enrichment_test")
 
 def spawn_enrichment_thread(user_id, label, cleaned_df):
     t = threading.Thread(target=background_enrich, kwargs={
@@ -653,12 +664,24 @@ def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str
         return
 
     print(f"[DEBUG] Starting enrichment for {key}")
-    start_enrichment(
-        user_id=user_id,
-        dataset_label=dataset_label,
-        table_name=table_name,
-        cleaned_df=cleaned_df,
+
+    # 🔑 create a dedicated log DAO for this run
+    local_log_dao = LocalLogDAO()
+
+    t = threading.Thread(
+        target=background_enrich,
+        kwargs={
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "cleaned_df": cleaned_df,
+            "log_dao": local_log_dao,   # <-- passed explicitly
+            "cancel_event": None,
+        },
+        daemon=True
     )
+    t.start()
+    tasks[key] = {"thread": t, "cancel": threading.Event()}
+    st.session_state["_enrichment_tasks"] = tasks
 
 def info_tables_update(user_id, table_name):
     try:
@@ -2633,13 +2656,13 @@ elif page == "The Farm":
 
 # >>>>>>>>>>>>>>>>>>>>> DATA PREP
 
-    # Show current user info
-        # ✅ Make sure dataset is loaded
+    # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
     df, current_label = require_current_df()
+    user_selected = current_label
     df = df.copy()
     df['year'] = pd.to_datetime(df['datetime']).dt.year
     year_list = df['year'].sort_values().unique().tolist()

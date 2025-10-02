@@ -984,6 +984,7 @@ with st.sidebar:
 # -------------------------------- Home Page --------------------------------- #
 if page == "Home":
     user_id = st.session_state.user["user_id"]
+
     # --- Autostart enrichment on rerun ---
     if st.session_state.get("_enrichment_autostart_pending"):
         st.session_state["_enrichment_autostart_pending"] = False
@@ -1007,7 +1008,7 @@ if page == "Home":
     label_to_table = dict(dataset_options) if dataset_options else {}
     labels = [label for label, _ in dataset_options] if dataset_options else []
 
-    # Default to the last-used dataset if available
+    # Default to last-used dataset if available
     default_index = 0
     if labels and st.session_state.get("current_dataset_label") in labels:
         default_index = labels.index(st.session_state["current_dataset_label"])
@@ -1029,10 +1030,10 @@ if page == "Home":
         df = df.dropna(subset=["datetime"])
         df["date"] = df["datetime"].dt.date
 
-        # 🔑 Rehydrate session state so sidebar buttons work even after app refresh
+        # 🔑 Rehydrate session state so sidebar + widget buttons work after refresh
         st.session_state.current_df = df
         st.session_state.current_dataset_label = selected_label
-        st.session_state.last_table_name = selected_table  # <-- add this line
+        st.session_state.last_table_name = selected_table
 
         total_listened_hours = (df["minutes_played"].sum() / 60.0) if "minutes_played" in df.columns else 0.0
         st.markdown(f"🗓️ From **{df['datetime'].min().date()}** to **{df['datetime'].max().date()}**")
@@ -1043,8 +1044,7 @@ if page == "Home":
     else:
         st.info("You haven’t uploaded any datasets yet.")
 
-
-    # --- Upload new dataset (ETL only; enrichment disabled during testing) ---
+    # --- Upload new dataset ---
     st.markdown("### Upload a new dataset")
 
     # Ensure session flags exist
@@ -1052,7 +1052,6 @@ if page == "Home":
     st.session_state.setdefault("current_df", None)
     st.session_state.setdefault("current_dataset_label", None)
     st.session_state.setdefault("last_table_name", None)
-    # at top-level (session init)
     st.session_state.setdefault("_enrichment_autostart_block", False)
 
     with st.form("upload_form", clear_on_submit=False):
@@ -1070,7 +1069,6 @@ if page == "Home":
         submitted = st.form_submit_button("Process Upload")
 
         if submitted:
-            # Safeguards
             if uploaded is None:
                 st.error("Please select a ZIP file before uploading.")
             elif not dataset_label.strip():
@@ -1078,9 +1076,7 @@ if page == "Home":
             else:
                 try:
                     with st.spinner("Processing your data (ETL only)…"):
-                        # Reset one-time flag for a new run
                         st.session_state.etl_done = False
-
                         table_name, cleaned_df = _etl_process_zip(
                             uploaded, dataset_label.strip(), user_id
                         )
@@ -1088,11 +1084,20 @@ if page == "Home":
                     if cleaned_df is None or cleaned_df.empty:
                         st.error("ETL produced no rows. Please check your ZIP export.")
                     else:
-                        # Persist for exploration and navigation
+                        # Persist into session state
                         st.session_state["current_dataset_label"] = dataset_label.strip()
                         st.session_state["current_df"] = cleaned_df
                         st.session_state["last_table_name"] = table_name
                         st.session_state.etl_done = True
+
+                        # 🔑 Log ETL completion to status.json (for widget to resume after refresh)
+                        status_dao.set_status(
+                            user_id,
+                            dataset_label.strip(),
+                            phase="etl",
+                            detail="✅ ETL completed, dataset is ready.",
+                            total=len(cleaned_df),
+                        )
 
                         st.success(
                             "✅ Dataset uploaded & cleaned. Preparing enrichment..."
@@ -1100,14 +1105,14 @@ if page == "Home":
                             "✅ Dataset uploaded & cleaned. You can now explore your data."
                         )
 
-                        # Allow autostart for this (new) label even if a previous label was killed
+                        # Allow autostart for this (new) label even if a previous was killed
                         _clear_autostart_if_new_label(dataset_label.strip())
-
                         st.session_state["_enrichment_autostart_block"] = False
-                        # 🔑 Mark enrichment to start automatically on the *next* rerun
+
+                        # 🔑 Signal autostart enrichment on *next* rerun
                         st.session_state["_enrichment_autostart_pending"] = True
 
-                        # Trigger rerun so sidebar + enrichment widget reload properly
+                        # Trigger rerun so sidebar + widget reload properly
                         st.rerun()
 
                 except zipfile.BadZipFile:
@@ -1115,10 +1120,9 @@ if page == "Home":
                 except Exception as e:
                     st.error(f"ETL failed: {e}")
 
-    # --- Refresh list (safe; no rerun) ---
+    # --- Refresh list button ---
     if st.button("Refresh list of uploaded datasets", key="btn_refresh_datasets"):
-        # Re-query and re-render in-place (no st.rerun to avoid loops)
-        dataset_options = local_user_dao.list_datasets(user_id)  # [(label, filename_stem), ...]
+        dataset_options = local_user_dao.list_datasets(user_id)
         st.success("Dataset list refreshed.")
 
 # --------------------------- Overall Review Page ---------------------------- #

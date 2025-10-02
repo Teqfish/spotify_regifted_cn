@@ -1,60 +1,560 @@
-artist_id,artist_popularity,artist_image,artist_name,primary_genre
-6s1SjCXRjeNAa3aRNiYROK,25,https://i.scdn.co/image/ab6761610000e5eb91bc18ece360bee56573115e,SHXCXCHCXSH,dub techno
-37IAmIFuCYtwhxQRlQisDg,33,https://i.scdn.co/image/ab6761610000e5ebbdcef92fa9ad2f50587f7b93,Rezzett,jungle
-3WrFJ7ztbogyGnTHbHJFl2,87,https://i.scdn.co/image/ab6761610000e5ebe9348cc01ff5d55971b22433,The Beatles,classic rock
-47tuSUJMhsa3twW6wgKdIW,71,https://i.scdn.co/image/ab6761610000e5eb09566cd2ce988a550b7b40e8,Nursery Rhymes 123,lullaby
-6P7H3ai06vU1sGvdpBwDmE,71,https://i.scdn.co/image/9d01e4e9aac39b891d684d3d1a5b3a451d7c72bd,Steely Dan,yacht rock
-4mtHSXwIHihO6MWNq5Qoko,44,https://i.scdn.co/image/ab6761610000e5eb39d046b747ad13d7fbf6f041,Squarepusher,idm
-0C8DyEeKMAOHPCLck0hwk0,17,https://i.scdn.co/image/3073ab7e15e6520f5d06c614ca7f7ae9bb542786,Architectural,dub techno
-68i1l0GWQ5dwzAy1UVNHNw,26,https://i.scdn.co/image/ab6761610000e5eb9122ffb7f5927600efb4e5a7,Martyn,uk funky
-7MhMgCo0Bl0Kukl93PZbYS,72,https://i.scdn.co/image/ab6761610000e5eb00620d736644d2359ce99430,Blur,britpop
-2vJObElaIZWYDLpiXiJMo9,55,https://i.scdn.co/image/ab6761610000e5ebdd24386203ce97cd25e97496,Cornelius,shibuya-kei
-1t8gwZFUoJEM9nhSJxT7ks,59,https://i.scdn.co/image/ab67616d0000b2732996bfa298c918fe241392f5,Vicky Arlidge,lullaby
-7mEIug7XUlQHikrFxjTWes,70,https://i.scdn.co/image/f4d0fb18cb338eddee6b482779d946183a743b12,Neil Diamond,Rock
-48hZklIMPklae2Mssfp8Cx,28,https://i.scdn.co/image/ab6761610000e5eb5c385ecd497969da1e25c5ec,Scuba,dub techno
-0HfxCluo7N2dhr4oRM0wBv,35,https://i.scdn.co/image/ab6772690000c46cb6b06ad747c6d92a63f7a511,Luke Vibert,idm
-7FEUkVfaBCIk5HQ6176Pnw,21,https://i.scdn.co/image/ab6761610000e5ebde7d242efba80dccd0066f57,L.B. Dub Corp,dub techno
-4erwZm1JybuSPTUg5Bu7nT,26,https://i.scdn.co/image/30431961fe70b3a404c8cb90052cba1783bede91,Regis,minimal techno
-4jfwVcXoNnfnU8xQBlSWn0,32,https://i.scdn.co/image/ab6761610000e5eb71169f759c8806e49153501f,Martin Carthy,traditional folk
-7Ln80lUS6He07XvHI8qqHH,88,https://i.scdn.co/image/ab6761610000e5eb7da39dea0a72f581535fb11f,Arctic Monkeys,indie
-4oCcCzMjKNCjQTzxtVlOJT,41,https://i.scdn.co/image/ab6761610000e5eb158a526ebbf80361d2872616,Loma,Rock
-4F7Q5NV6h5TSwCainz8S5A,61,https://i.scdn.co/image/1e24691a352233bbe989a311d921f17e7892a87e,Duke Ellington,jazz
-4Z8W4fKeB5YxbusRsdQVPb,89,https://i.scdn.co/image/ab6761610000e5eb4104fbd80f1f795728abbd59,Radiohead,art rock
-7kWwQAe9JnYNMk4kuEe73S,43,https://i.scdn.co/image/ab6761610000e5eb032d8d3f06bc8d200f4c5eb2,The Cactus Blossoms,americana
-0khLXts50OJxtR5eNOEjnj,14,https://i.scdn.co/image/ab6761610000e5eb85ac311d8d687364505bda8c,A Mountain Of One,Electronic
-3iJJD5v7oIFUevW4N5w5cj,48,https://i.scdn.co/image/ab6761610000e5eb3cfb09a7764e1ad77e323c18,Arthur Russell,art pop
-3H24Sx4OTtMrkpQlcpGLtu,27,https://i.scdn.co/image/ab67616d0000b273b165e01b90417f18fd7cecba,Hexstatic,trip hop
-46Ce0QmI1mE2bl5VQ4P9N8,40,https://i.scdn.co/image/ab6761610000e5eb63bc6a4cb7c6c38705acab3b,Lapalux,idm
-6kBDZFXuLrZgHnvmPu9NsG,67,https://i.scdn.co/image/ab6761610000e5ebaa3c91d792eb520a5d58daa5,Aphex Twin,idm
-483bBNsBBCvjAnx2Sc8BHc,17,https://i.scdn.co/image/ab6761610000e5eb5df59edbfd66bdedc25457d5,Gently Tender,Rock
-7wDfZhaCORLgP3K62R3MJK,42,https://i.scdn.co/image/ab6761610000e5ebf12209577c38ece10694c454,Mark Pritchard,idm
-0Y5tJX1MQlPlqiwlOH1tJY,94,https://i.scdn.co/image/ab6761610000e5eb19c2790744c792d05570bb71,Travis Scott,rap
-2eRdPaLHWAL4d1WcNUO9Vz,44,https://i.scdn.co/image/ab6761610000e5eb888dd74cbfd6fbadc55468db,The Modern Lovers,proto-punk
-33HLOae9rhJfw6Mh0e8g5r,25,https://i.scdn.co/image/ab6772690000c46cd80104a844665f292c1c0eb4,Girls Against Boys,noise rock
-530Sdm7eqqzWBdDmILMgnu,61,https://i.scdn.co/image/d0f9136003814386988d37964be13b1da0b1c6e1,Robert Palmer,yacht rock
-0cyEKEh8fQkksmpwLBlZV4,47,https://i.scdn.co/image/ab6761610000e5eb6b833f493e2da9f6eb7df476,The Fisherman’s Friends,sea shanties
-5ahuBhk9Urv0iYLrNSbPRK,13,https://i.scdn.co/image/2508955aebc5043d449a2f33927e00824f3af7a1,Grischa Lichtenberger,idm
-08F3Y3SctIlsOEmKd6dnH8,72,https://i.scdn.co/image/ab6761610000e5ebf11e1fa06726774b742528ee,Yusuf / Cat Stevens,folk rock
-4EVpmkEwrLYEg6jIsiPMIb,66,https://i.scdn.co/image/ab6761610000e5eb7d2e812e63d6df77ee087b47,Fleet Foxes,indie folk
-37YzpfBeFju8QRZ3g0Ha1Q,53,https://i.scdn.co/image/ab6761610000e5ebce087a46152d40b1049e0238,DJ Seinfeld,lo-fi house
-5c3GLXai8YOMid29ZEuR9y,64,https://i.scdn.co/image/d364b498f85ae764cd278fbba9a8ed7f00c3e434,Nick Drake,folk
-5E3H2KyR31E2Dj3K6vIUe9,25,https://i.scdn.co/image/a8f47addcc6d9b7c3d95346ca26146737f104e39,Vladislav Delay,dub techno
-1R84VlXnFFULOsWWV8IrCQ,58,https://i.scdn.co/image/ab6761610000e5ebab1e305a3a59fe4c918828c6,Panda Bear,neo-psychedelic
-0VeQgI9lzgoOMszAOq0iml,30,https://i.scdn.co/image/ab6761610000e5ebf08fcb657b41c021f46ce4a9,Richard Dawson,art rock
-5aAjDF4uS2ft9fy9vjXWYv,28,https://i.scdn.co/image/ab67616d0000b27372bf04c352abad42affa2f3b,Wax,dub techno
-5MGxwE9JG5IA6uqswrgNL6,34,https://i.scdn.co/image/ab6761610000e5eb0dd34ec8f956be0904d8717f,Beak>,krautrock
-7Fo8TAyGJr4VmhE68QamMf,62,https://i.scdn.co/image/ab6761610000e5eb8adaa3bb54439327dbdde765,Talk Talk,new wave
-3XHvzfKFZkSXEUiZE4WrIz,42,https://i.scdn.co/image/62116e668f48de61dfaa9d12e63e31876197a18e,Michael Hurley,anti-folk
-6XYvaoDGE0VmRt83Jss9Sn,47,https://i.scdn.co/image/ab6761610000e5ebce4d5d32d9cea72f886ddf88,King Gizzard & The Lizard Wizard,neo-psychedelic
-7x83XhcMbOTl1UdYsPTuZM,60,https://i.scdn.co/image/ab6761610000e5eb4679f0c1c8f862730c0b5109,Tom Waits,singer-songwriter
-71th4FPdhGaAHVeng0LfRt,23,https://i.scdn.co/image/ab6761610000e5eb074ec37660609a56319046a1,Cavern of Anti-Matter,krautrock
-3Rj0tDHoX7C5NFq5DKIpHt,56,https://i.scdn.co/image/ab6761610000e5ebe5aecb2a4e2bff9782f9e2f2,Stereolab,art pop
-2iUVQjheBnvOt8vaBrxXJz,49,https://i.scdn.co/image/ab6761610000e5eb1f7cd35c8b776712253cfe09,Cass McCombs,baroque pop
-0Cioop2zjxXxtcPUme7R46,45,https://i.scdn.co/image/ab6761610000e5eb187aa328ce74db49e1b28576,Matthew Halsall,jazz
-3dmSPhg0tdao8ePj4pySJ5,46,https://i.scdn.co/image/ab6761610000e5ebda14e9addaecc34837650cf8,Tindersticks,baroque pop
-6ZoRg8NnEtVmtUhgCTSCrn,43,https://i.scdn.co/image/ab6761610000e5eb3672ae91ca0ff121dfab823d,Nadia Reid,indie folk
-1qiwaJwjKod5WhcYZ76O1B,45,https://i.scdn.co/image/ab6761610000e5ebcd1bb3562720521214eb29d1,Tim Hecker,drone
-4IDoKaZIEacb3QncU8RQMp,35,https://i.scdn.co/image/38bb974dcf1093e28db0e8a5185b1c574d74d3ee,I Am Kloot,Rock
-6kACVPfCOnqzgfEF5ryl0x,77,https://i.scdn.co/image/ab6761610000e5eb94a8326675bfcafb20f0a235,Johnny Cash,classic country
-6FfC7T2cxMj6H7Q5mmqAYe,48,https://i.scdn.co/image/ab6772690000c46c28b7f5e027e8e22f29324509,C.W. Stoneking,blues
-710FHFQeXKC6dZGCxt7kQh,40,https://i.scdn.co/image/ab6761610000e5ebdc2ab0bb7fdaf3acb103d505,Yussef Kamaal,nu jazz
+artist_popularity,artist_name,supergenre,artist_id,primary_genre,artist_image
+25,SHXCXCHCXSH,Techno & Trance,6s1SjCXRjeNAa3aRNiYROK,dub techno,https://i.scdn.co/image/ab6761610000e5eb91bc18ece360bee56573115e
+33,Rezzett,Bass Music,37IAmIFuCYtwhxQRlQisDg,jungle,https://i.scdn.co/image/ab6761610000e5ebbdcef92fa9ad2f50587f7b93
+87,The Beatles,Rock,3WrFJ7ztbogyGnTHbHJFl2,classic rock,https://i.scdn.co/image/ab6761610000e5ebe9348cc01ff5d55971b22433
+72,Nursery Rhymes 123,Novelty/Spoken Word,47tuSUJMhsa3twW6wgKdIW,lullaby,https://i.scdn.co/image/ab6761610000e5eb09566cd2ce988a550b7b40e8
+71,Steely Dan,Rock,6P7H3ai06vU1sGvdpBwDmE,yacht rock,https://i.scdn.co/image/9d01e4e9aac39b891d684d3d1a5b3a451d7c72bd
+44,Squarepusher,Ambient & Experimental Electronic,4mtHSXwIHihO6MWNq5Qoko,idm,https://i.scdn.co/image/ab6761610000e5eb39d046b747ad13d7fbf6f041
+17,Architectural,Techno & Trance,0C8DyEeKMAOHPCLck0hwk0,dub techno,https://i.scdn.co/image/3073ab7e15e6520f5d06c614ca7f7ae9bb542786
+26,Martyn,Bass Music,68i1l0GWQ5dwzAy1UVNHNw,uk funky,https://i.scdn.co/image/ab6761610000e5eb9122ffb7f5927600efb4e5a7
+72,Blur,Rock,7MhMgCo0Bl0Kukl93PZbYS,britpop,https://i.scdn.co/image/ab6761610000e5eb00620d736644d2359ce99430
+55,Cornelius,Pop,2vJObElaIZWYDLpiXiJMo9,shibuya-kei,https://i.scdn.co/image/ab6761610000e5ebdd24386203ce97cd25e97496
+59,Vicky Arlidge,Novelty/Spoken Word,1t8gwZFUoJEM9nhSJxT7ks,lullaby,https://i.scdn.co/image/ab67616d0000b2732996bfa298c918fe241392f5
+70,Neil Diamond,Rock,7mEIug7XUlQHikrFxjTWes,Rock,https://i.scdn.co/image/f4d0fb18cb338eddee6b482779d946183a743b12
+29,Scuba,Techno & Trance,48hZklIMPklae2Mssfp8Cx,dub techno,https://i.scdn.co/image/ab6761610000e5eb5c385ecd497969da1e25c5ec
+36,Luke Vibert,Ambient & Experimental Electronic,0HfxCluo7N2dhr4oRM0wBv,idm,https://i.scdn.co/image/ab6772690000c46cb6b06ad747c6d92a63f7a511
+21,L.B. Dub Corp,Techno & Trance,7FEUkVfaBCIk5HQ6176Pnw,dub techno,https://i.scdn.co/image/ab6761610000e5ebde7d242efba80dccd0066f57
+26,Regis,Techno & Trance,4erwZm1JybuSPTUg5Bu7nT,minimal techno,https://i.scdn.co/image/30431961fe70b3a404c8cb90052cba1783bede91
+32,Martin Carthy,Folk/Acoustic,4jfwVcXoNnfnU8xQBlSWn0,traditional folk,https://i.scdn.co/image/ab6761610000e5eb71169f759c8806e49153501f
+89,Arctic Monkeys,Other,7Ln80lUS6He07XvHI8qqHH,indie,https://i.scdn.co/image/ab6761610000e5eb7da39dea0a72f581535fb11f
+40,Loma,Rock,4oCcCzMjKNCjQTzxtVlOJT,Rock,https://i.scdn.co/image/ab6761610000e5eb158a526ebbf80361d2872616
+61,Duke Ellington,Jazz,4F7Q5NV6h5TSwCainz8S5A,jazz,https://i.scdn.co/image/1e24691a352233bbe989a311d921f17e7892a87e
+89,Radiohead,Alternative/Indie,4Z8W4fKeB5YxbusRsdQVPb,art rock,https://i.scdn.co/image/ab6761610000e5eb4104fbd80f1f795728abbd59
+43,The Cactus Blossoms,Other,7kWwQAe9JnYNMk4kuEe73S,americana,https://i.scdn.co/image/ab6761610000e5eb032d8d3f06bc8d200f4c5eb2
+14,A Mountain Of One,House & EDM,0khLXts50OJxtR5eNOEjnj,Electronic,https://i.scdn.co/image/ab6761610000e5eb85ac311d8d687364505bda8c
+48,Arthur Russell,Pop,3iJJD5v7oIFUevW4N5w5cj,art pop,https://i.scdn.co/image/ab6761610000e5eb3cfb09a7764e1ad77e323c18
+27,Hexstatic,Ambient & Experimental Electronic,3H24Sx4OTtMrkpQlcpGLtu,trip hop,https://i.scdn.co/image/ab67616d0000b273b165e01b90417f18fd7cecba
+40,Lapalux,Ambient & Experimental Electronic,46Ce0QmI1mE2bl5VQ4P9N8,idm,https://i.scdn.co/image/ab6761610000e5eb63bc6a4cb7c6c38705acab3b
+68,Aphex Twin,Ambient & Experimental Electronic,6kBDZFXuLrZgHnvmPu9NsG,idm,https://i.scdn.co/image/ab6761610000e5ebaa3c91d792eb520a5d58daa5
+16,Gently Tender,Rock,483bBNsBBCvjAnx2Sc8BHc,Rock,https://i.scdn.co/image/ab6761610000e5eb5df59edbfd66bdedc25457d5
+42,Mark Pritchard,Ambient & Experimental Electronic,7wDfZhaCORLgP3K62R3MJK,idm,https://i.scdn.co/image/ab6761610000e5ebf12209577c38ece10694c454
+94,Travis Scott,Hip Hop/Rap,0Y5tJX1MQlPlqiwlOH1tJY,rap,https://i.scdn.co/image/ab6761610000e5eb19c2790744c792d05570bb71
+44,The Modern Lovers,Other,2eRdPaLHWAL4d1WcNUO9Vz,proto-punk,https://i.scdn.co/image/ab6761610000e5eb888dd74cbfd6fbadc55468db
+25,Girls Against Boys,Alternative/Indie,33HLOae9rhJfw6Mh0e8g5r,noise rock,https://i.scdn.co/image/ab6772690000c46cd80104a844665f292c1c0eb4
+61,Robert Palmer,Rock,530Sdm7eqqzWBdDmILMgnu,yacht rock,https://i.scdn.co/image/d0f9136003814386988d37964be13b1da0b1c6e1
+47,The Fisherman’s Friends,Folk/Acoustic,0cyEKEh8fQkksmpwLBlZV4,sea shanties,https://i.scdn.co/image/ab6761610000e5eb6b833f493e2da9f6eb7df476
+13,Grischa Lichtenberger,Ambient & Experimental Electronic,5ahuBhk9Urv0iYLrNSbPRK,idm,https://i.scdn.co/image/2508955aebc5043d449a2f33927e00824f3af7a1
+72,Yusuf / Cat Stevens,Folk/Acoustic,08F3Y3SctIlsOEmKd6dnH8,folk rock,https://i.scdn.co/image/ab6761610000e5ebf11e1fa06726774b742528ee
+66,Fleet Foxes,Folk/Acoustic,4EVpmkEwrLYEg6jIsiPMIb,indie folk,https://i.scdn.co/image/ab6761610000e5eb7d2e812e63d6df77ee087b47
+53,DJ Seinfeld,House & EDM,37YzpfBeFju8QRZ3g0Ha1Q,lo-fi house,https://i.scdn.co/image/ab6761610000e5ebce087a46152d40b1049e0238
+64,Nick Drake,Folk/Acoustic,5c3GLXai8YOMid29ZEuR9y,folk,https://i.scdn.co/image/d364b498f85ae764cd278fbba9a8ed7f00c3e434
+25,Vladislav Delay,Techno & Trance,5E3H2KyR31E2Dj3K6vIUe9,dub techno,https://i.scdn.co/image/a8f47addcc6d9b7c3d95346ca26146737f104e39
+59,Panda Bear,Rock,1R84VlXnFFULOsWWV8IrCQ,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5ebab1e305a3a59fe4c918828c6
+29,Richard Dawson,Alternative/Indie,0VeQgI9lzgoOMszAOq0iml,art rock,https://i.scdn.co/image/ab6761610000e5ebf08fcb657b41c021f46ce4a9
+27,Wax,Techno & Trance,5aAjDF4uS2ft9fy9vjXWYv,dub techno,https://i.scdn.co/image/ab67616d0000b27372bf04c352abad42affa2f3b
+34,Beak>,Alternative/Indie,5MGxwE9JG5IA6uqswrgNL6,krautrock,https://i.scdn.co/image/ab6761610000e5eb0dd34ec8f956be0904d8717f
+62,Talk Talk,Pop,7Fo8TAyGJr4VmhE68QamMf,new wave,https://i.scdn.co/image/ab6761610000e5eb8adaa3bb54439327dbdde765
+42,Michael Hurley,Folk/Acoustic,3XHvzfKFZkSXEUiZE4WrIz,anti-folk,https://i.scdn.co/image/62116e668f48de61dfaa9d12e63e31876197a18e
+45,King Gizzard & The Lizard Wizard,Rock,6XYvaoDGE0VmRt83Jss9Sn,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5ebce4d5d32d9cea72f886ddf88
+61,Tom Waits,Folk/Acoustic,7x83XhcMbOTl1UdYsPTuZM,singer-songwriter,https://i.scdn.co/image/ab6761610000e5eb4679f0c1c8f862730c0b5109
+24,Cavern of Anti-Matter,Alternative/Indie,71th4FPdhGaAHVeng0LfRt,krautrock,https://i.scdn.co/image/ab6761610000e5eb074ec37660609a56319046a1
+56,Stereolab,Pop,3Rj0tDHoX7C5NFq5DKIpHt,art pop,https://i.scdn.co/image/ab6761610000e5ebe5aecb2a4e2bff9782f9e2f2
+49,Cass McCombs,Pop,2iUVQjheBnvOt8vaBrxXJz,baroque pop,https://i.scdn.co/image/ab6761610000e5eb1f7cd35c8b776712253cfe09
+46,Matthew Halsall,Jazz,0Cioop2zjxXxtcPUme7R46,jazz,https://i.scdn.co/image/ab6761610000e5eb187aa328ce74db49e1b28576
+46,Tindersticks,Pop,3dmSPhg0tdao8ePj4pySJ5,baroque pop,https://i.scdn.co/image/ab6761610000e5ebda14e9addaecc34837650cf8
+43,Nadia Reid,Folk/Acoustic,6ZoRg8NnEtVmtUhgCTSCrn,indie folk,https://i.scdn.co/image/ab6761610000e5eb3672ae91ca0ff121dfab823d
+45,Tim Hecker,Ambient & Experimental Electronic,1qiwaJwjKod5WhcYZ76O1B,drone,https://i.scdn.co/image/ab6761610000e5ebcd1bb3562720521214eb29d1
+35,I Am Kloot,Rock,4IDoKaZIEacb3QncU8RQMp,Rock,https://i.scdn.co/image/38bb974dcf1093e28db0e8a5185b1c574d74d3ee
+77,Johnny Cash,Other,6kACVPfCOnqzgfEF5ryl0x,classic country,https://i.scdn.co/image/ab6761610000e5eb94a8326675bfcafb20f0a235
+48,C.W. Stoneking,Blues,6FfC7T2cxMj6H7Q5mmqAYe,blues,https://i.scdn.co/image/ab6772690000c46c28b7f5e027e8e22f29324509
+40,Yussef Kamaal,Jazz,710FHFQeXKC6dZGCxt7kQh,nu jazz,https://i.scdn.co/image/ab6761610000e5ebdc2ab0bb7fdaf3acb103d505
+31,Monolake,Techno & Trance,4XvKzACpcdk5iiZbWNvfbq,dub techno,https://i.scdn.co/image/6d664586ecdc88d561356cc14fc42c56db65590c
+27,Nørbak,Techno & Trance,0TwXWZcwzGVVOa1Vdu3UEj,techno,https://i.scdn.co/image/ab6761610000e5ebe79c313239d9a3df8c9aabac
+50,Albert Collins,Blues,1uFixbBAduJkFAeRKznkvW,blues,https://i.scdn.co/image/9cc76fbf0436d94a80a2bd1dab2bd9d3329d4a5c
+47,Woody Guthrie,Folk/Acoustic,4rAgFKtlTr66ic18YZZyF1,folk,https://i.scdn.co/image/cf3ab17e21b7cd3c5776c4d2046be2a3683bcc87
+58,Boards of Canada,Ambient & Experimental Electronic,2VAvhf61GgLYmC6C8anyX1,idm,https://i.scdn.co/image/c533bf6f08a42119065d8c2171cdfa8e96720b4c
+26,Yoshika Colwell,Pop,3UjZDptt2aZDIw2gKixdkM,Pop,https://i.scdn.co/image/ab6761610000e5eb8484b9541089cacd67fdc733
+20,British Murder Boys,Alternative/Indie,2GHvHovCwFqoSUmIR8l16q,industrial,https://i.scdn.co/image/f2e8830d60da4660b14c97bdc4570cfbd79ef573
+63,Brian Eno,Ambient & Experimental Electronic,7MSUfLeTdDEoZiJPDSBXgi,ambient,https://i.scdn.co/image/ab6761610000e5eb5533ce5711f95f0c436b30fe
+71,Jimi Hendrix,Rock,776Uo845nYHJpNaStv1Ds4,psychedelic rock,https://i.scdn.co/image/ab6761610000e5eb31f6ab67e6025de876475814
+61,The Magnetic Fields,Folk/Acoustic,6RWjTQqILL7a1tQ0VapyLK,anti-folk,https://i.scdn.co/image/ab6761610000e5eb965e16bd95a0e8085d1bd065
+59,El Guincho,Hip Hop/Rap,1oMiDFyAgmIzw9ZBQYHOJI,drill,https://i.scdn.co/image/ab6761610000e5ebbb7b34620040b2deefef3d3a
+30,George Formby,Pop,4Oj1cFCMX4LgHuNsgQJBr8,Pop,https://i.scdn.co/image/ab67616d0000b273697597dfd9b4cae71b990757
+8,Post War Years,Alternative/Indie,0saF9MYmdZpH0xNprFZcR9,indie,https://i.scdn.co/image/ab67616d0000b2735d44ddcc63ba5ed89951d909
+69,The Stranglers,Other,0RUEHcBiENFEqxgicqS2ig,proto-punk,https://i.scdn.co/image/ab6761610000e5ebf53947fccc7f9ace4d07a43f
+39,Finnegan Tui,House & EDM,5eTBCaRETnQ9fthJD0gfzp,Electronic,https://i.scdn.co/image/ab6761610000e5eb6d2cac8a263f65434b3a71e0
+61,Supergrass,Rock,0sHeX8oQ6o7xic3wMf4NBU,britpop,https://i.scdn.co/image/ab6761610000e5eb07cb4c66b99dffbd82328366
+30,Vril,Techno & Trance,1nOi03kPUAMbOCl4lX9Avp,dub techno,https://i.scdn.co/image/ab6761610000e5eb3eda7dfad1a38d40fa666790
+32,Ben Frost,Ambient & Experimental Electronic,6qEM4txXHvfMbOUOK9L7pl,drone,https://i.scdn.co/image/ab6761610000e5eb34337c6e2c7674b7d9e63459
+33,Valgeir Sigurðsson,Other,5AVGx9Dhw7OLeJ5at3Y19f,neoclassical,https://i.scdn.co/image/ab6761610000e5eb6beec774288ec6211667e165
+48,Parquet Courts,Rock,23NIwARd4vPbxt3wwNnJ6k,post-punk,https://i.scdn.co/image/ab6761610000e5eba968b1bb3c46e65911d8bb8c
+53,Albert King,Blues,5aygfDCEaX5KTZOxSCpT9o,blues,https://i.scdn.co/image/bfb61e8da152782920e42784c2a72eed8620afc1
+26,Bodhi,House & EDM,1C545778m57qWQwISWGAHD,Electronic,https://i.scdn.co/image/ab6761610000e5eb5df8d71871a4cdd0f0edb7dc
+17,Jean Redpath,Folk/Acoustic,30ksgkjxAtOsW0Hixcx857,traditional folk,https://i.scdn.co/image/ab67616d0000b273e004044546799dca95105991
+59,David Byrne,Alternative/Indie,20vuBdFblWUo2FCOvUzusB,art rock,https://i.scdn.co/image/ab6761610000e5ebda1661b56190449e92327438
+29,Surgeon,Techno & Trance,1PSylklb2w06BAAHEtepqM,minimal techno,https://i.scdn.co/image/ab6761610000e5eb8ae4656aec07cd8d43364630
+30,Mark Hollis,Alternative/Indie,1dKzjmxVJw8SSE0LVxW2Dp,post-rock,https://i.scdn.co/image/ab67616d0000b2730a55711006e7b6a91c39b887
+29,Late of the Pier,House & EDM,5ZBQea34QfBgEDkcGEKK2b,new rave,https://i.scdn.co/image/153e0b9c0cd76cd151427bf919b9262252aec3d5
+66,Iron & Wine,Folk/Acoustic,4M5nCE77Qaxayuhp3fVn4V,indie folk,https://i.scdn.co/image/ab6761610000e5eb6554f29133d7e27979e009d7
+68,The Cars,Rock,6DCIj8jNaNpBz8e5oKFPtp,power pop,https://i.scdn.co/image/ccef506dcc1eafa2f44270918b3ba962e67ea3ad
+28,Makadem,Other,0mbhGA9S4pADQEqouZqqgL,"Folk, World, & Country",https://i.scdn.co/image/ab6761610000e5eb173452262db6699f636e47ed
+45,The Black Dog,Ambient & Experimental Electronic,7qdsk0UXx2jCX7jbp6rxeq,idm,https://i.scdn.co/image/ab6761610000e5ebd78e5687c34374d0e53fb436
+59,Edward Elgar,Classical/Orchestral,430byzy0c5bPn5opiu0SRd,classical,https://i.scdn.co/image/8691898841248ffbc5e984334879337c81a268fd
+56,The Caretaker,House & EDM,2uQn9OFibYuvEMqMuH1zaP,Electronic,https://i.scdn.co/image/ab6761610000e5ebc4942edcbc0cbfd915ea4e75
+18,Glenn Branca,Alternative/Indie,0eiyrB0ET8AbrR5s6rrLJr,noise rock,https://i.scdn.co/image/22e04c92ba1cd4fe5fd07657b0999d88d3104663
+0,Zyggurat,Jazz,45xTmGxZwjTjf4hTshz27I,nu jazz,https://i.scdn.co/image/ab6761610000e5eb7fef5bdae9cf2d63b2a3cfef
+45,Tom Vek,House & EDM,4dGVRIf2xj0JhawVheLiOI,new rave,https://i.scdn.co/image/ab6761610000e5eba33df21b20428ec26f36fe61
+42,The Bug Club,Rock,7eiTMbuHYUPjrAMjIhAVDB,garage rock,https://i.scdn.co/image/ab6761610000e5eb4beed77650c8af0405a716ab
+22,Sandwell District,Techno & Trance,51CANyDEIfgYt0mwLKCpZ6,dub techno,https://i.scdn.co/image/ab6761610000e5eb78cd228d6fa1e379f0055111
+5,Geto Mark,House & EDM,19l0LTWOOkajQfbeCgps4F,chicago house,https://i.scdn.co/image/ab6761610000e5eb8730d411428fa1355d783ab9
+73,Simply Red,House & EDM,1fa0cOhromAZdq2xRA4vv8,Electronic,https://i.scdn.co/image/ab6761610000e5ebdf126340c69932e9c9ff27de
+43,Aphrodite's Child,Rock,2XhhAWeUOlrZnGOB7aKEI8,progressive rock,https://i.scdn.co/image/ab67616d0000b273a0292c98efda007877b76d04
+59,Louis Prima,Other,52lBOxCxbJg0ttXEW9CQpW,swing music,https://i.scdn.co/image/85e8343b215c98ad063417ac2f6b63919557721a
+46,Bill Callahan,Other,7gqsi6aBSkRMJoL9psKqMr,alt country,https://i.scdn.co/image/ab6761610000e5ebdfd3677dd40acf3c86ad5eda
+32,Dave Clarke,Techno & Trance,6Fr9aJBxyMOkTFF0b9JZrQ,techno,https://i.scdn.co/image/ab6761610000e5ebccfefff59d5ce6b22e3bd4e2
+24,Gracie Fields,Pop,3Ld1hAQ5LWFw46Pv8VS5tP,Pop,https://i.scdn.co/image/ab67616d0000b273279e2b6df3d6275b82da77c7
+55,The Durutti Column,Alternative/Indie,7fh7bwX9qV60tLxxsp9bTe,art rock,https://i.scdn.co/image/ab6761610000e5ebfcc1279f26b23c8b9663e7c7
+28,Objekt,Ambient & Experimental Electronic,44z1nVVXZE8d4njcQmQLWc,idm,https://i.scdn.co/image/ab6761610000e5ebe2d77385e1d818300405421c
+79,The Notorious B.I.G.,Hip Hop/Rap,5me0Irg2ANcsgc93uaYrpb,old school hip hop,https://i.scdn.co/image/1b4858fbd24046a81cace5ee18d19c868262b91f
+33,TAXI KEBAB,House & EDM,47sKkybVg9NVz7IWvTezzy,Electronic,https://i.scdn.co/image/ab6761610000e5eb3115c824384dfedd8e4ee8a1
+46,Piccolo Music,Novelty/Spoken Word,1JYuWmfI1YsWKxb050RxRI,lullaby,https://i.scdn.co/image/ab6761610000e5ebbf8cc966a555ae62a85ba60d
+47,Songs: Ohia,Alternative/Indie,3uQ5cxFHxXddqPL58egs1z,slowcore,https://i.scdn.co/image/9522ef7cf99a1e848a6e3ae715b6a75472ca3d63
+67,George Frideric Handel,Classical/Orchestral,1QL7yTHrdahRMpvNtn6rI2,classical,https://i.scdn.co/image/6391390229a5fb88e8e0d71e3e942b427d12d9a8
+45,Badly Drawn Boy,House & EDM,244fcyNSuyhbRlMGfMbYrO,Electronic,https://i.scdn.co/image/ab6761610000e5eb0de568f024be254e54dc4142
+20,1morning,Techno & Trance,5ZcSizTG3mmhVdlvEau3TS,techno,https://i.scdn.co/image/ab67616d0000b273b838dec103df2ed031fd1347
+35,Ricardo Villalobos,Techno & Trance,0s2YIpNnjdf0FY4tNrF8Y4,minimal techno,https://i.scdn.co/image/ab6772690000c46c3b055bc9f942f2ea1caf078b
+74,Neil Young,Rock,6v8FB84lnmJs434UJf2Mrm,classic rock,https://i.scdn.co/image/ab6761610000e5ebbae8276dffd864ebac759b76
+33,Lonnie Donegan,Other,6dIOTeSQDBSR6gwsL0WB2n,"Folk, World, & Country",https://i.scdn.co/image/ab67616d0000b273da788959926695cb1c562424
+50,Art Blakey & The Jazz Messengers,Jazz,6ykfXAed2KOLOMI3R0TZdz,hard bop,https://i.scdn.co/image/ab6761610000e5eb9b3c987329c5ae6f4c586bb0
+50,Tractor Ted,Novelty/Spoken Word,271yrFHlYsmEypN8j7oHbA,children's music,https://i.scdn.co/image/ab67616d0000b273a8487f2e604a00e9fa4a68c8
+72,Claude Debussy,Classical/Orchestral,1Uff91EOsvd99rtAupatMP,classical,https://i.scdn.co/image/5e1155c852578ddf5d2cfea94ccb3a8a65efa882
+37,Fat White Family,Rock,5ztBFCBEL7OtjdAt98RnD4,space rock,https://i.scdn.co/image/ab6761610000e5eb9cd1336e9c6eb382444c0aa2
+56,Grizzly Bear,Other,2Jv5eshHtLycR6R8KQCdc4,indie,https://i.scdn.co/image/ab6761610000e5ebd8cce56443e12b12abd46344
+46,Spiritualized,Rock,6DKmuXxXASTF6xaJwcTfjv,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5eb6e3962de81015dd7e5a22931
+62,The War On Drugs,Alternative/Indie,6g0mn3tzAds6aVeUYRsryU,indie rock,https://i.scdn.co/image/ab6761610000e5eb03ef469bbf290d048e6c521d
+35,Jonny L,Bass Music,1mNcpWcrGRZUvSPgJDVCpS,jungle,https://i.scdn.co/image/b46a9ed709fc3b8052cd3c45c429b30cecbc6141
+57,The Flaming Lips,Rock,16eRpMNXSQ15wuJoeqguaB,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5eb81fb61484553c2a921f8a8c6
+57,The Avalanches,House & EDM,3C8RpaI3Go0yFF9whvKoED,Electronic,https://i.scdn.co/image/ab6761610000e5eb348fb7d638c8f86c675122e2
+27,Imitator Tots,Novelty/Spoken Word,6GV2xsgXl785KIfT2Vov6I,children's music,https://i.scdn.co/image/ab6761610000e5ebca7b43a04db5d054b34b2430
+18,Lee Gamble,Ambient & Experimental Electronic,7rAD9Ws0ihREeDmgPS2ZL8,idm,https://i.scdn.co/image/ab6761610000e5eb5dda8aebf5c62ac352fec1ac
+80,Frank Sinatra,Other,1Mxqyy3pSjf8kZZL4QVxS0,christmas,https://i.scdn.co/image/fc4e0f474fb4c4cb83617aa884dc9fd9822d4411
+59,Nathan Lane,Pop,0P0do9GwiSgweSF6Ui3mrv,Pop,https://i.scdn.co/image/ab67616d0000b273ce1fc502ac6683d5d36e3f20
+31,Wings of Desire,Rock,1M684BN2C8BO9WwB0xeXJo,Rock,https://i.scdn.co/image/ab6761610000e5ebea6013bc5ac7ddbc6a6b1487
+13,Steve Murphy,House & EDM,5mRwX0K1H5QmzEEGtvpHrG,lo-fi house,https://i.scdn.co/image/ab67616d0000b273b50a4b794ae8e5e611fafebd
+60,The Growlers,Other,2RhgnQNC74QoBlaUvT4MEe,surf rock,https://i.scdn.co/image/ab6761610000e5eba5a2314afecf8af008298b80
+31,Du Blonde,Rock,46MOKAqmDsUILZl3iXyPmw,Rock,https://i.scdn.co/image/ab6761610000e5ebe76d1827002476064584ca6e
+55,Toddler Fun Learning,Novelty/Spoken Word,6J7tunc4bHIFmzTevQ2J6Q,lullaby,https://i.scdn.co/image/ab6761610000e5eb78fe475b08691280726d1ac2
+85,Oasis,Rock,2DaxqgrOhkeH0fpeiQq2f4,britpop,https://i.scdn.co/image/ab6761610000e5ebb4ddbc39706ef0f2ae0f7c9b
+41,Dirty Projectors,Pop,5VF0YkVLeVD4ytyiyVSIiF,art pop,https://i.scdn.co/image/ab6761610000e5eb5a1ed286c90e264ea77a0c61
+44,Wes Montgomery Trio,Jazz,6WbUlW1uuChmQumXueDmgp,jazz blues,https://i.scdn.co/image/ab67616d0000b27316527ecf2808e6268f431422
+50,Richard Hawley,Folk/Acoustic,1ZsnHGOLYFg8CAHQQBc1ut,singer-songwriter,https://i.scdn.co/image/ab6761610000e5eb145821caf17f98dfd9592b97
+27,Ought,Rock,2VhVBXSB8n2KxuzKVZNxTY,post-punk,https://i.scdn.co/image/ab6761610000e5ebb6dd67b20cbb1d16fbbf6403
+25,Underground Resistance,Techno & Trance,0tbuVFxbrGx2oiNbpetUGc,techno,https://i.scdn.co/image/ab67616d0000b2732f07b57e2b4a3760a2d2faa1
+72,The Doobie Brothers,Rock,39T6qqI0jDtSWWioX8eGJz,yacht rock,https://i.scdn.co/image/ab6761610000e5eb28f5622994674caec36fd95c
+40,Actress,Ambient & Experimental Electronic,3bg5rmICvmA8dmYVAdKGYH,idm,https://i.scdn.co/image/ab6761610000e5eb23103c4c9519854178be08e8
+21,Alexander 'Skip' Spence,Rock,25e8CxfStX7gVfGIQL2qMd,acid rock,https://i.scdn.co/image/ab67616d0000b273ff39e1c459aa3900ccb9de21
+33,LFO,Ambient & Experimental Electronic,2M0T4a1pkOC5nifN9W6e9e,idm,https://i.scdn.co/image/b542192f4b32e380822bad75ec0faed56916ce04
+64,Geek Music,Soundtrack/Instrumental,4TkCMPznXOjlsYLfzIU1rw,anime,https://i.scdn.co/image/ab6761610000e5eb7c3e821249e3b4455323cc6d
+41,alva noto,Ambient & Experimental Electronic,1zrqDVuh55auIRthalFdXp,drone,https://i.scdn.co/image/d836d13cf7949b67c97010805b4a258e747e967f
+50,Gang Of Four,Rock,3AmWjMXXtBJOmNGpUFSOAl,post-punk,https://i.scdn.co/image/ab6761610000e5ebe425a8cbd1fd88d26cc542a9
+37,The Wurzels,Pop,3MOw1ev3YQ8liIGmHT3eH6,Pop,https://i.scdn.co/image/ab67616d0000b2732caa4efe84a0c92d726ec40e
+50,Surprise Chef,Jazz,2Ks1Z1scmEDZfaYaCS7Osj,jazz funk,https://i.scdn.co/image/ab6761610000e5eb3780daf28f22ed585d60a08c
+58,Samuel E. Wright,Funk/Disco,6Id8rcDNyBXPcgKQVfQ8rX,Funk / Soul,
+61,Bing Crosby,Other,6ZjFtWeHP9XN7FeKSUe80S,christmas,https://i.scdn.co/image/ab6761610000e5ebc3cc7f45922b9adade39ef19
+33,DJ Food,Ambient & Experimental Electronic,4NZM5xKuDpGc4vEHDwGO1Q,trip hop,https://i.scdn.co/image/ab6772690000c46c40d0480c9de69b9ece466e87
+45,Monty Python,Novelty/Spoken Word,5IxfhXIHjAOAqibxl90NZO,comedy,https://i.scdn.co/image/ab6761610000e5eb9bed9dd9939efc8842d1de29
+39,Sons of the Pioneers,Country/Americana,1gfIkFZ4hIs2gETkRVaY68,traditional country,https://i.scdn.co/image/ab6761610000e5ebd3c972dcebb8939e9095e934
+65,The Cinematic Orchestra,Jazz,32ogthv0BdaSMPml02X9YB,nu jazz,https://i.scdn.co/image/ab6761610000e5eb9e2576943e27fcddc3bb3646
+68,Jim Croce,Folk/Acoustic,1R6Hx1tJ2VOUyodEpC12xM,folk rock,https://i.scdn.co/image/9f9b40704e3361c93ea8a8b7a86a5d9ee755466e
+30,Bari Koral,Novelty/Spoken Word,40GTTHyDAFn0HJ1vsk7CYZ,children's music,https://i.scdn.co/image/dc3adee7fb091629778dfe814414c382b9e75644
+27,Luke Slater,House & EDM,5BJa6TIqtoWm8QRRbfRmyt,acid house,https://i.scdn.co/image/0e774218850a3aafe46d27be91badece6b665a44
+42,The Lemon Twigs,Pop,7eYZSXnQVCODCVmTV8Hk2T,baroque pop,https://i.scdn.co/image/ab6761610000e5eb8004d3184eb89db0618772ed
+33,Luke Abbott,Ambient & Experimental Electronic,3rVAnydRNnaQr24T3reJZg,idm,https://i.scdn.co/image/ab6761610000e5eb8293ef63a5f666df243db068
+11,Will Sheff,Other,0JUTh3GM8SoFZTEyqPCRl5,"Folk, World, & Country",https://i.scdn.co/image/ab6761610000e5eb84617a7dcc678fcab1590fd5
+80,Led Zeppelin,Rock,36QJpDe2go2KgaRleHCDTp,classic rock,https://i.scdn.co/image/207803ce008388d3427a685254f9de6a8f61dc2e
+21,Silvertwin,Rock,7aqjHeupqqWY9tPApz26Mf,power pop,https://i.scdn.co/image/ab6761610000e5eb0260b3499a99bad92a139c49
+28,Rrose,Techno & Trance,5naKaYAyzzuPDsh4H2dwyT,dub techno,https://i.scdn.co/image/c4c4c7443921a184b94743c6841af16eb0d9c5b3
+45,Blake Mills,Rock,4LhV33vJvXmFGSM3m5RzUR,Rock,https://i.scdn.co/image/ab6761610000e5ebde3689a40f0288f48d73c5ac
+20,Lanark Artefax,Ambient & Experimental Electronic,02fDf7HEPtBZLtPzCyxSR2,idm,https://i.scdn.co/image/ab6761610000e5ebe456c0e91da965f7bfb90b60
+60,Billie Marten,Pop,02YLJJnWC7YQVixkjEBRn7,Pop,https://i.scdn.co/image/ab6761610000e5eb471e47818223e2beca75e7c7
+56,The Handsome Family,Other,72PnPUc1qv9UjRPaGVZ1jq,southern gothic,https://i.scdn.co/image/ab6772690000c46c15bb58a1f8637c91dd384618
+26,Soccer96,Rock,5CPQQs8WGfYZjEyRu3mkij,space rock,https://i.scdn.co/image/ab6761610000e5ebdf035e44ebd9ec9dbd2d8697
+16,Lakker,Ambient & Experimental Electronic,6LZGB6IfaSWrHqzIGJktBC,idm,https://i.scdn.co/image/6544e0228cb0d330f49b3af58d306f4bc7241a29
+58,Overmono,Garage & Breaks,01PnN11ovfen6xUOHfNpn3,uk garage,https://i.scdn.co/image/ab6761610000e5ebddeeadc7793743f12a7a3959
+39,FJAAK,Techno & Trance,4qG1qjeHfkASTdyRGbLWbV,techno,https://i.scdn.co/image/ab6761610000e5ebb399c0fb7440577afe194eb5
+18,Sic Alps,Rock,3R2PskrehkwlPyDmz8OGq1,garage rock,https://i.scdn.co/image/e9d9b15654d3e95f09c723bab1deb041422160ac
+64,The Velvet Underground,Other,1nJvji2KIlWSseXRSlNYsC,proto-punk,https://i.scdn.co/image/d69c2cf10323bf08443c7d122f3a1824a760ab57
+42,Rolling Blackouts Coastal Fever,Pop,65mMkD9WW39U9Yadv0dWUF,jangle pop,https://i.scdn.co/image/ab6761610000e5ebe53304a3369f80f337e16e07
+83,Bob Marley & The Wailers,Reggae/Caribbean,2QsynagSdAqZj3U9HgDzjD,reggae,https://i.scdn.co/image/b5aae2067db80f694a980e596e7f49618c1206c9
+66,The Chemical Brothers,House & EDM,1GhPHrq36VKCY3ucVaZCfo,big beat,https://i.scdn.co/image/ab6761610000e5ebae05213e52565bfd7e7489b3
+32,Pangaea,Garage & Breaks,08Z0yhWGksNk3wceqlCeGE,breakbeat,https://i.scdn.co/image/ab6761610000e5eb44f7fa6d53b7e9dec2b5e34b
+6,Nkisi,World/Traditional,06egMm0xwc1DYUaApCCKiH,singeli,https://i.scdn.co/image/11764844d1f4c66e266661ea9dce3e64285c8036
+59,Neutral Milk Hotel,Folk/Acoustic,2ooIqOf4X2uz4mMptXCtie,anti-folk,https://i.scdn.co/image/ab6761610000e5eb3c0a3cafde53be39a91f373e
+32,Ultimate Painting,Pop,1PPpmEpuN1KrWNOBqrHeMj,jangle pop,https://i.scdn.co/image/ab6761610000e5eb893b0f45ee2362b0805a4cdc
+40,Hohnen Ford,Other,34c3b95E9ZQPMPapPOv8RW,"Folk, World, & Country",https://i.scdn.co/image/ab6761610000e5eb92d55a7be59ea560c90d73a1
+33,Ducktails,Ambient & Experimental Electronic,5FQbU5Lrb4pFcW45ZgZzMx,chillwave,https://i.scdn.co/image/ab6761610000e5eb2222d60ba23f6b3bfaa9445b
+33,James Holden,World/Traditional,15e0X6NuMsVuHi7AZhcfyI,gnawa,https://i.scdn.co/image/ab6761610000e5ebde28918be5176b9fbea8f471
+51,Hurray For The Riff Raff,Other,2xLEV2jDreAOcpJXFNoXyt,americana,https://i.scdn.co/image/ab6761610000e5eb057068ad79970a943dc50686
+77,Super Simple Songs,Novelty/Spoken Word,7CdGfkCRgPhElnqy3HPJ4a,children's music,https://i.scdn.co/image/ab6761610000e5eb47e877323b9ed3e02aad1499
+31,Alberta Cross,Rock,1hPgyZ5YatVFXQBhsXKTpq,Rock,https://i.scdn.co/image/ab6761610000e5eb9de4dcb020e966903b64db0f
+62,Sister Sledge,Funk/Disco,6gkWznnJkdkwRPVcmnrays,disco,https://i.scdn.co/image/ab6761610000e5eb3e3e634435f477df50760eae
+70,Father John Misty,Rock,2kGBy2WHvF0VdZyqiVCkDT,Rock,https://i.scdn.co/image/ab6761610000e5eb8a78e4e37d117b9cc90a6363
+73,Jamiroquai,Jazz,6J7biCazzYhU3gM9j1wfid,acid jazz,https://i.scdn.co/image/ab6761610000e5eb7e6dca959714339b69e9718d
+61,The Zombies,Pop,2jgPkn6LuUazBoBk6vvjh5,baroque pop,https://i.scdn.co/image/ab6761610000e5eb4bbeb54a562d3de858825979
+16,Mark b,House & EDM,6XFi04N1Xd2SA208vd3AGU,Electronic,https://i.scdn.co/image/ab67616d0000b273462cf0fc1ffa954cb8acf27d
+40,µ-Ziq,Ambient & Experimental Electronic,7AiamoV760pPGGM5PbOC6X,idm,https://i.scdn.co/image/ab6761610000e5ebd4b7f8e8b63977b63a3adb32
+37,Blawan,Techno & Trance,64kN9EkSTHYhda2FupL0KI,techno,https://i.scdn.co/image/ab6761610000e5eb57e2509b54b2d8273fecdeac
+41,Norman Blake,Country/Americana,5kA86jQnoaPaM57DUsQOWG,bluegrass,https://i.scdn.co/image/494e91e7f1e8c24a4acf3fa10d507822ae714517
+64,Pulp,Rock,36E7oYfz3LLRto6l2WmDcD,britpop,https://i.scdn.co/image/ab6761610000e5eb2a7e3dfda16364548dfdc915
+43,Clark,Ambient & Experimental Electronic,6kic5bCjlohhDn9KzXbOta,idm,https://i.scdn.co/image/ab6761610000e5eb19bc84f187e453c6b7db680a
+26,Emptyset,Ambient & Experimental Electronic,6iVzn7VOmHkhFAnB8XAGZ4,experimental,https://i.scdn.co/image/ab6761610000e5eba2db85ff3773054b26dc05b4
+48,Low,Alternative/Indie,0wz0jO9anccPzH04N7FLBH,slowcore,https://i.scdn.co/image/ab6761610000e5eb4aaac870e3a8f1a8e5529dff
+78,Stevie Wonder,R&B/Soul,7guDJrEfX3qb6FEbdPA5qi,motown,https://i.scdn.co/image/c59faacbed7aa770266bad048660810eca204108
+28,Christopher Owens,Pop,0ukgSx1gUt5rUihbNh46qy,Pop,https://i.scdn.co/image/ab6761610000e5eb4baec88d8b637d87f734d85e
+67,Raffi,Novelty/Spoken Word,7oWSqrgMuIEyH9qp5nu2e5,children's music,https://i.scdn.co/image/5d19c42b3e0e8ff8a29d248c5d494ed5ac0f9f5a
+72,Nursery Rhymes ABC,Novelty/Spoken Word,26UV9EKIInWeV0jJysGZum,lullaby,https://i.scdn.co/image/ab6761610000e5eb7976e1d0c2b67a03aa625e85
+34,Shed,Techno & Trance,3dds88EVSeBgkPCJ47ZzRZ,dub techno,https://i.scdn.co/image/e41153762cc0a3e33cd6059c5370077d0b72fdfc
+40,Teebs,Ambient & Experimental Electronic,2L2unNFaPbDxjg3NqzpqhJ,idm,https://i.scdn.co/image/ab6761610000e5eb75d1644d614715c551d7debf
+80,Elvis Presley,Rock,43ZHCT0cAZBISjO8DG9PnE,rockabilly,https://i.scdn.co/image/ab6761610000e5eb9a93e273380982dff84c0d7c
+28,Source Direct,Bass Music,0fo0tocXO4ZkkVn3L0VZzB,jungle,https://i.scdn.co/image/ab6761610000e5eb61d7b363e757d3d9984bcaab
+7,Longheads,Rock,4nKufcFgxKCQrIq53A6O0L,stoner rock,https://i.scdn.co/image/ab6761610000e5ebd4cd5c13219c6a5ce8897b68
+79,Bon Iver,Rock,4LEiUm1SRbFMgfqnQTwUbQ,Rock,https://i.scdn.co/image/ab6761610000e5eb1a0c1f04c95539fd55ef0ebb
+40,The Clean,Pop,6LRmgzRManplPQghd2BMqz,jangle pop,https://i.scdn.co/image/ab6772690000c46c56210f37ea10341db282d680
+66,Gerry Rafferty,Rock,7tjbDPvrdvDshcpEMXKRVb,yacht rock,https://i.scdn.co/image/ab6761610000e5eb458dd0cbffc2b84311f5aa7d
+52,XTC,Pop,2qT62DYO8Ajb276vUJmvhz,new wave,https://i.scdn.co/image/e6540622c946b42edd4c461f86fac6c3ca0ac61d
+48,Damon Albarn,House & EDM,0O98jlCaPzvsoei6U5jfEL,Electronic,https://i.scdn.co/image/ab6761610000e5eb6f9abbd1438714c5105e2a57
+36,Ornette Coleman,Jazz,47odibUtrN3lnWx0p0pk2P,free jazz,https://i.scdn.co/image/ac30c28c9ba640db9c901cf45b5d429ca1ca0ead
+53,Elvis Costello & The Attractions,Pop,4qmHkMxr6pTWh5Zo74odpH,new wave,https://i.scdn.co/image/ab67616d0000b273c39aa62b10cea6cd2c2c1ed8
+71,George Harrison,Rock,7FIoB5PHdrMZVC3q2HE5MS,Rock,https://i.scdn.co/image/ab6761610000e5eb0d50c5a88d44de4a2dc60dc1
+26,Loefah,Bass Music,1ICQEDALtLouPV8yEaJXVb,dubstep,https://i.scdn.co/image/ab6761610000e5eb7d3b15aecc286fe0ca73c1b8
+80,David Bowie,Rock,0oSGxfWSnnOXhD2fKuz2Gy,glam rock,https://i.scdn.co/image/ab6761610000e5ebb78f77c5583ae99472dd4a49
+71,Talking Heads,Pop,2x9SpqnPi8rlE9pjHBwmSC,new wave,https://i.scdn.co/image/e4c5b04fce8706c87663357b1f78522a3a5c641b
+35,Coki,Bass Music,4WvwRJA3YhUn5J2caHXoAG,dubstep,https://i.scdn.co/image/ab67616d0000b2732874c9c2f0ec7d3a28102bf8
+57,Tommy James & The Shondells,Rock,01hRNr3yF5bYnPq4wZ88iI,Rock,https://i.scdn.co/image/ab6761610000e5eb510f182fe0230dc7beacaee0
+25,Carpainter,Other,5ac1qjsr4dSDWsfYY6YvBa,j-dance,https://i.scdn.co/image/ab6761610000e5eb1823079699d7551a3bb2ff36
+70,Dean Martin,Other,49e4v89VmlDcFCMyDv9wQ9,christmas,https://i.scdn.co/image/ab6761610000e5eb63066e18f9af780b2bc73b4f
+35,Robert Wyatt,Alternative/Indie,5iksmHDN2qZQcgFfXqIXtT,art rock,https://i.scdn.co/image/e8fc5c927b24a4b9db3e595e57ead0ac7a2d3a98
+6,Quirke,Ambient & Experimental Electronic,1NXzXbnhZpAPW9I8JBs3A2,idm,https://i.scdn.co/image/ab6761610000e5ebc3e63d6e0e1bc3eeb0c2917e
+27,The Advent,Techno & Trance,2viciQWa7lV7FrogoaDvk8,techno,https://i.scdn.co/image/ab6761610000e5eb6cb5d7ce3c632e88b38ecfe0
+48,Ty Segall,Rock,58XGUNsRNu3cVOIOYk5chx,garage rock,https://i.scdn.co/image/ab6761610000e5ebf68457ccb2a56c9f2ad76a73
+72,The Verve,Rock,2cGwlqi3k18jFpUyTrsR84,britpop,https://i.scdn.co/image/ab6772690000c46c2fb11ff7658def8d8a52957c
+10,Ritzi Lee,Techno & Trance,48wMni3Jw152PqRVt9qWV4,techno,https://i.scdn.co/image/ab6761610000e5eb960a22e8b3f50d389dbfca23
+23,Cleric,Techno & Trance,4KT7MVScl2ZwwX6uDUJIEL,techno,https://i.scdn.co/image/ab67616d0000b273d098b784e8144f53f8623d6b
+58,Fugazi,Punk/Hardcore,62sC6lUEWRjbFqXpMmOk4G,post-hardcore,https://i.scdn.co/image/0234b34b265a6ec22de6b4ebb52abc4d6c9d7371
+33,Randomer,Techno & Trance,7K0WJzyqUNRhraNcsvJp1h,techno,https://i.scdn.co/image/ab6761610000e5eb463e72725723fdd61c515c9c
+17,John Roberts,House & EDM,1khAA8VuCVfObL4xdfcft6,lo-fi house,https://i.scdn.co/image/ab6761610000e5eb55dbf58460286e4e5ffb912a
+27,Addison Groove,Bass Music,6LG1BzyImz45pwMF6ft7Yr,footwork,https://i.scdn.co/image/ab6761610000e5ebe212287389221a156d5e0d15
+29,Ben Sims,Techno & Trance,5wW4dvR027rdRFG0mtvckt,techno,https://i.scdn.co/image/ab6761610000e5eb13aacd97725fe758ae0d246c
+49,The Yardbirds,Rock,2lxX1ivRYp26soIavdG9bX,psychedelic rock,https://i.scdn.co/image/ab6761610000e5eb4a237d4c8a075c2afd8d7f99
+32,Ewan MacColl,Folk/Acoustic,3tetInyzmPXATzLBTzl125,traditional folk,https://i.scdn.co/image/ab6761610000e5ebd0e794a6f060b897a77e8847
+40,Bobby Charles,Country/Americana,1B8vzl6kObOf1cxN4myLS1,cajun,https://i.scdn.co/image/6a28cf9e87bbcb2b75a0f06764a61d6084c37b5b
+28,Deerhoof,Alternative/Indie,7AZwAitWq1KcFoIJhRWb6V,noise rock,https://i.scdn.co/image/ab6761610000e5eb33f530124c3170529abd1a7b
+38,Jazz At Lincoln Center Orchestra,Jazz,6MnWA8xVW1sEzV9s7wXpQb,latin jazz,https://i.scdn.co/image/ab6761610000e5ebe89d1a3d2714d38cd902f9e8
+28,Max Bygraves,Pop,7Cm4VBm1trDn5A3CWbzDVl,Pop,https://i.scdn.co/image/ab67616d0000b2733897fda29ea30648cc5dc17b
+64,Stevie Ray Vaughan,Blues,5fsDcuclIe8ZiBD5P787K1,blues,https://i.scdn.co/image/1de60c936683320769a1bfb6fba7f75902859085
+20,Tim Burgess,Rock,1goerABWhGQPWKhMCZeJ68,madchester,https://i.scdn.co/image/ab6761610000e5ebb5341a99b09ece642725f10a
+21,Ivor Cutler,Novelty/Spoken Word,60SKMJ5AgD6DuxTNbVrrSQ,spoken word,https://i.scdn.co/image/ab67616d0000b27353fbd89e084cb9187f493a8b
+54,The Jesus and Mary Chain,Alternative/Indie,4rjlerN21ygkIhmUv55irs,shoegaze,https://i.scdn.co/image/ab6761610000e5ebf598fce956e0bd62981cb202
+68,A Tribe Called Quest,Hip Hop/Rap,09hVIj6vWgoCDtT03h8ZCa,jazz rap,https://i.scdn.co/image/ab6761610000e5eb774d73ae6796b6f437d89db9
+61,"Crosby, Stills & Nash",Folk/Acoustic,2pdvghEHZJtgSXZ7cvNLou,folk rock,https://i.scdn.co/image/b9c086901cca94cab20e8fcdc35bd79c7b39526a
+17,Stanislav Tolkachev,Techno & Trance,1tEQJQE1PCcfNVpQlM6I0X,techno,https://i.scdn.co/image/ab67616d0000b27332f5fa96b037bd783c6e6fdd
+60,Bahamas,Rock,4C50EbCS11M0VbGyH3OfLt,Rock,https://i.scdn.co/image/ab6761610000e5ebdab93a525f5a0a39ee1df01b
+84,Daft Punk,House & EDM,4tZwfgrHOc3mvqYlEYSvVi,french house,https://i.scdn.co/image/ab6761610000e5ebd3aa7cc0e419b6c459b08e8e
+56,Digital Underground,Other,7jocoSCuCtpCxCI6IbP8ye,west coast hip hop,https://i.scdn.co/image/ab6761610000e5eb4c9bcd0a95b265ca2f464b0e
+37,James Yorkston,Novelty/Spoken Word,53aQwuzlyn4vxxUs6Edlqw,spoken word,https://i.scdn.co/image/ab6761610000e5ebbb0b3791d23445f947593da1
+55,Edwyn Collins,Rock,5Qlt3zQ63Z99mNhuun0JAT,britpop,https://i.scdn.co/image/ab6761610000e5ebfdbd9299d7899c86cb1e0a3a
+18,The Matthew Herbert Big Band,Jazz,6Fm7OR07TB4vJ3xdbChvY7,big band,https://i.scdn.co/image/ab6761610000e5eb39bf7ce13cbcf44c36e68dc1
+17,Aardvarck,Ambient & Experimental Electronic,3JR7NAWvzkrZR3pKwrixS3,idm,https://i.scdn.co/image/ab67616d0000b273c6996feb987635a62000a405
+74,Ludwig van Beethoven,Classical/Orchestral,2wOqMjp9TyABvtHdOSOTUS,classical,https://i.scdn.co/image/ab6761610000e5eba636b0b244253f602a629796
+21,The Almighty Defenders,Rock,4VRBYAzCvjuiqKGdjDWdSj,garage rock,https://i.scdn.co/image/11aa306a800c7a7abd85e3285680c9142be580bf
+42,The Stanley Brothers,Country/Americana,0qqGnmHBX2yVvCITRAvuRD,bluegrass,https://i.scdn.co/image/915f0df6337f9d65b58cf00f44af14d140a526fc
+32,Rebekah,Techno & Trance,7rmuxvt1D8dIU920lNcR67,hard techno,https://i.scdn.co/image/ab6761610000e5eb09dcc41dd5fbceefe795ce59
+40,Emitt Rhodes,Pop,1yap1SgRPMxgyfrrDlQ95y,baroque pop,https://i.scdn.co/image/ab6761610000e5eb8025d02e0d3b522aa1f99841
+62,Maurice Ravel,Classical/Orchestral,17hR0sYHpx7VYTMRfFUOmY,classical,https://i.scdn.co/image/0d8f2b3e9ab748e7767fd31ff9386e06e5834e2b
+41,Jonathan Wilson,Rock,6KJIIOCWsWtNc7ICINtPEw,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5eb2b4dbdcb6bfb658b3134c873
+36,Floorplan,House & EDM,0RBnTX5xoVa1bDYt9Qbies,disco house,https://i.scdn.co/image/ab6761610000e5eb4be3196f0bc12c7d8070d89a
+47,Daniel Avery,Ambient & Experimental Electronic,1EULJuDFWpZ9xg4YwtUGGt,idm,https://i.scdn.co/image/ab6761610000e5eb3a57e2a6ad7c7325c07c81f0
+20,Ansome,Alternative/Indie,14gRo11WOeTXBDcgFr8Ejb,industrial,https://i.scdn.co/image/9a245625cdbe63178b6813c8310833c624aa0d46
+0,Arno Vancolen,Alternative/Indie,6l7kpMU6vrvpM901UnNuTi,krautrock,https://i.scdn.co/image/ab67616d0000b2735ff7bbc5d77aca95f12ee2f8
+65,Marty Robbins,Other,0Xi59sEw38vRvwleSAVqoo,classic country,https://i.scdn.co/image/55992126e2a79d6dad67c4e9508811ba19abc586
+17,Hookworms,Rock,7c5Qvy0cv7VGzRnUSwnSnj,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5eb0516f2e009cad1bf4724136f
+18,UVB,Techno & Trance,1LiE3TKOyCds5GgIaBRRRs,techno,https://i.scdn.co/image/ab6761610000e5eb8f4826171894f54f40056726
+0,Alan Wass and the Tourniquet,Rock,7snFSn4FnZ4EGcFb3KdpSV,rock,
+51,Thee Oh Sees,Rock,3qYfqdVwX0fil71onLpLkh,garage rock,https://i.scdn.co/image/ab6761610000e5eb5df4cbb47f552f5418cac9d7
+42,Tropical Fuck Storm,Alternative/Indie,0mL6LBSQ4bHe6hWq90KzHL,noise rock,https://i.scdn.co/image/ab6761610000e5ebcf5cc6186d2dc575e8591db0
+30,Cool Ghouls,Rock,5bhOQZFgsHOuAiJ0WJXNHW,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5eb5733e9a96bd1a9cd5f6c1da1
+57,My Morning Jacket,Rock,43O3c6wewpzPKwVaGEEtBM,jam band,https://i.scdn.co/image/ab6761610000e5ebeaaa18ce5578767a30348673
+26,Kansas Smitty's,Other,7t02NhXZ77sXywJ3XghI7C,christmas,https://i.scdn.co/image/ab6761610000e5ebd232124b99dbc0e35d600dec
+40,Dave Van Ronk,Folk/Acoustic,6QmHysWvckkQR74oxmLmtz,folk,https://i.scdn.co/image/597076f75354ba32f12d3377ac40bf160fc3774f
+35,White Fence,Rock,5gH9MJvoI7pN9bohESzYaA,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5eba8da466be77cf1f09c9d3006
+44,Captain Beefheart & His Magic Band,Other,2k8kY9zHUWxuTtwV4UutHw,proto-punk,https://i.scdn.co/image/37972dff9b07d6132a0742b74ef42f00952eff9c
+78,Wolfgang Amadeus Mozart,Classical/Orchestral,4NJhFmfw43RLBLjQvxDuRS,classical,https://i.scdn.co/image/ab6761610000e5eb7fa9108c6dadb8c3ec21da88
+37,BC Camplight,Pop,3cePP77CX6XY9b0aigzrqh,Pop,https://i.scdn.co/image/ab6761610000e5eb64a52b61e3ee5f67b96fa8cf
+57,Bill Evans Trio,Jazz,3VEG6gxFIMfl4Cdog26avS,jazz,https://i.scdn.co/image/9ac6d198565813f217ef6ae116f7eee5ce5b67ef
+0,Chicago Jim,House & EDM,6aifImaPHSwOWiY96v5oR4,chicago house,https://i.scdn.co/image/ab67616d0000b273ca60f4c75eff34a17e8793f4
+56,The Libertines,Rock,4fSPtBgFPZzygkY6MehwQ7,britpop,https://i.scdn.co/image/ab6761610000e5eb8c9ebe40fb416ca7ec5ae8e9
+45,This Mortal Coil,Alternative/Indie,5OK8j1JnhoBlivN32G7yOO,dream pop,https://i.scdn.co/image/ab6761610000e5eb1f73a6995c8f5c3530460696
+21,Demdike Stare,Techno & Trance,4waYjUUd6ydX8OJwsr54iE,dub techno,https://i.scdn.co/image/59db91ebd3e6f19d8a0bffb985e08a428603f448
+67,Nancy Sinatra,Pop,3IZrrNonYELubLPJmqOci2,Pop,https://i.scdn.co/image/ab6761610000e5eb4fcd6f21e60024ae48c3d244
+65,White Noise for Babies,Other,4ZfEELHfyKd4odAb6YfDFw,,https://i.scdn.co/image/ab6761610000e5ebeecdaa477da666dc9222d0ea
+1,PDP III,Ambient & Experimental Electronic,2Esvw7cg26pnkY21vbFuos,drone,https://i.scdn.co/image/ab67616d0000b2734bc23b6ef9d540a3410b3dc3
+50,Mark Lanegan,Other,1fpXM23IoNckJ7NDAm8YJQ,southern gothic,https://i.scdn.co/image/b03b246fcca2c3bdff607f2befa18ac16f546c6a
+22,The Fresh & Onlys,Rock,6Ri83BLqlgaqIc9jwSgAn1,garage rock,https://i.scdn.co/image/ab6761610000e5eb57c697e5bb9eacaef6625fee
+8,Case Studies,Other,1PmRKCMrPoAz1uuVO8XLii,alt country,https://i.scdn.co/image/ab67616d0000b27321aa9a3b5a84e3a54c44a7f0
+53,John Martyn,Folk/Acoustic,3JulrApLVT81sb2HkfwMks,folk,https://i.scdn.co/image/e5f386cce7a82573474d5332dbdfb9be1ffc4465
+27,Manni Dee,Techno & Trance,3WKDW1ASiWSa1T1nX01dUr,acid techno,https://i.scdn.co/image/ab6761610000e5eb778b4cb5c892d7457de3068d
+70,Erik Satie,Classical/Orchestral,459INk8vcC0ebEef82WjIK,classical,https://i.scdn.co/image/dd55078caac8105a3799c9d29f5172410da0c904
+39,Andy Stott,Techno & Trance,6BuDxEE5rfuYeyhxQsl53K,dub techno,https://i.scdn.co/image/ab6772690000c46caa78b9e7cd09e56458c62c54
+59,Jamie Cullum,Jazz,3XxxEq6BREC57nCWXbQZ7o,vocal jazz,https://i.scdn.co/image/ab6761610000e5eb5ea05545f2d4f1d5135da9df
+44,DjRUM,Ambient & Experimental Electronic,4HwlolvniI44ETSg5tajeZ,idm,https://i.scdn.co/image/ab6761610000e5eb294dd02739944e1c481d0410
+58,Jon Hopkins,Ambient & Experimental Electronic,7yxi31szvlbwvKq9dYOmFI,idm,https://i.scdn.co/image/ab6761610000e5eb1c0c0e567366e8b528e7c6b7
+35,Julian Cope,Rock,5sMku8iI6FH3ypZTErz4kv,neo-psychedelic,https://i.scdn.co/image/86b91494ed4e5ff3637128c8e4ff35a6ffdea2de
+33,Pigs Pigs Pigs Pigs Pigs Pigs Pigs,Rock,1F7QDWyZTLGzkyGLgFjEhU,stoner rock,https://i.scdn.co/image/ab6761610000e5ebb68e9206a26f0f2937e227b4
+26,Ø [Phase],Techno & Trance,0mMCjSZUnt7dQBzZdCd2ez,techno,https://i.scdn.co/image/ab6761610000e5eb4c4c132064e9265295fb3f23
+32,AFX,Ambient & Experimental Electronic,6ULjGlnhcCwHIJigN47K5U,idm,https://i.scdn.co/image/c82e5ab616103c3f58ad3b1b154753ace7137d6c
+36,Flamin' Groovies,Rock,3yesh1QeNXucaDFw8ZPKxd,power pop,https://i.scdn.co/image/ab6761610000e5eb22b8f48478f5cd58e6ddb914
+21,James Blackshaw,Folk/Acoustic,0v3A74qYtkL8Wjj1rzLe9Z,indie folk,https://i.scdn.co/image/d0d08bfd757433e521bf23fdf2c8c187f91d3884
+45,Kangding Ray,Ambient & Experimental Electronic,20UWNE4rEU7YMO0GHq4F26,idm,https://i.scdn.co/image/ab6761610000e5eb7b5551fc5038934d592b3dd4
+47,ANNA,Techno & Trance,3wkaDi2HJV3eCaBJ4iH6om,techno,https://i.scdn.co/image/ab6761610000e5eb66e999bb4e313477f9206085
+67,The Kinks,Other,1SQRv42e4PjEYfPhS0Tk9E,proto-punk,https://i.scdn.co/image/ab6761610000e5eb81f4e878e8b959fa68f15322
+40,Bonnie Prince Billy,Other,2zAvisjImPICTNsRgagqlV,alt country,https://i.scdn.co/image/ab6761610000e5eb6572dc876c7faa89dc398b20
+16,A Made Up Sound,Techno & Trance,77bG3jpmWXOxpmZcVjPayy,dub techno,https://i.scdn.co/image/6c2a159aebbcee44d5245147edaaa84e904c939f
+18,2562,Bass Music,2leze82lbuNUn3K4c7nS1B,dubstep,https://i.scdn.co/image/2f5e42dfdf965ae8fc2715253ea1f99df9449c12
+30,Pearson Sound,Garage & Breaks,3lN70MoiO9u6b95CsTeB1J,breakbeat,https://i.scdn.co/image/ab6761610000e5eba20df74de6f26d3ca70bcecc
+34,Huerco S.,Ambient & Experimental Electronic,0Wy3xgOTkgtDlT9wJsOQjy,ambient,https://i.scdn.co/image/ab6761610000e5ebcec90ec79e4091a53aef9e8c
+37,Special Request,Bass Music,59xdAObFYuaKO2phzzz07H,jungle,https://i.scdn.co/image/ab6761610000e5eb3db52fb9903967410a0079b1
+9,Helm,Ambient & Experimental Electronic,4vgGgW0EX7CeEU7WZzhbsx,experimental,https://i.scdn.co/image/ab6761610000e5ebe8a08a28de5526d780f05421
+46,Autechre,Ambient & Experimental Electronic,6WH1V41LwGDGmlPUhSZLHO,idm,https://i.scdn.co/image/ab6761610000e5ebcc2ac6a72239bf358e794d47
+52,Floating Points,Ambient & Experimental Electronic,2AR42Ur9PcchQDtEdwkv4L,idm,https://i.scdn.co/image/ab6761610000e5eb5843f638712f9f0ac1491e4a
+33,T Bone Burnett,Rock,4zMX9gWf1DKhvsYHUCbBF7,roots rock,https://i.scdn.co/image/ab6761610000e5ebda462e7d3d39592ebf9d51a5
+20,Polar Inertia,Techno & Trance,0WStQnW9WLEG01RKPDB0oy,dub techno,https://i.scdn.co/image/ab67616d0000b2736b7f5021917af5fc74c28ae3
+41,Barker,Techno & Trance,3LEGPWdr7sarYtf2u0ETWN,dub techno,https://i.scdn.co/image/ab6761610000e5eb736e228b7cf81c1cb8f52971
+52,Mount Kimbie,House & EDM,3NUtpWpGDoffm3RCGhSHtl,Electronic,https://i.scdn.co/image/ab6761610000e5ebbd861e99a069e3a054c58fa7
+52,Joy Orbison,Garage & Breaks,0aIpJqqTLf683ojWREc5lg,uk garage,https://i.scdn.co/image/ab6761610000e5eb2987a128276c87b2f944b167
+29,Skee Mask,Ambient & Experimental Electronic,2qwi0hBvI2GrbkurOnw3hZ,idm,https://i.scdn.co/image/9e3ec6ed6ca781a89d2bed75eaa123f7fc8f94f0
+36,DJ Python,Techno & Trance,1LoZxxInSyuVFKSMAB4BPl,dub techno,https://i.scdn.co/image/ab6761610000e5eb158da9891e116a55ea93834f
+40,1200 Micrograms,Other,2opB8qXyAmLYSGEZxp7X3U,psytrance,https://i.scdn.co/image/ab67616d0000b273ae38351eebabe58535525b4d
+58,Caribou,Ambient & Experimental Electronic,4aEnNH9PuU1HF3TsZTru54,idm,https://i.scdn.co/image/ab6761610000e5ebd25c967e7df50abe5581d4f5
+45,Deerhunter,Rock,38zTZcuN7nFvVJ6auhc6V3,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5eb9e2ec521b797dfccae2110d9
+3,Vektroid,Ambient & Experimental Electronic,0aHFAt3c3C648WXJP7GCRc,vaporwave,https://i.scdn.co/image/ab67616d0000b2737f7e0e1823de67575eae06c8
+16,Byetone,Ambient & Experimental Electronic,6ysohaI3qDxQ5qDVAq7Vbd,glitch,https://i.scdn.co/image/ab6761610000e5eb073634bf00b7ebc9f517602b
+51,Animal Collective,Rock,4kwxTgCKMipBKhSnEstNKj,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5eb18820542e3e60a677899c7dd
+0,Land Trance,Ambient & Experimental Electronic,6doKGXTNTJaTTYjqX2zWEt,drone,https://i.scdn.co/image/ab6761610000e5eb48ff3ce7dca630c6c7afd988
+47,The Beta Band,Rock,2LMR8u7DOMF0FBseDpTsRa,Rock,https://i.scdn.co/image/95c0f1f6c272e824b48cf242b16a913b5bcbe37a
+36,The Jesus Lizard,Alternative/Indie,6r26MaDr8bqNALjXgYPXMa,noise rock,https://i.scdn.co/image/ab6761610000e5eb4823e741090493215c6ae4a6
+60,Dion,R&B/Soul,15FyiY3ChN0QRspHIQYq0W,doo-wop,https://i.scdn.co/image/ab6772690000c46c3153219c77600d2d6d302cff
+34,The Bees,Rock,6XiSck3QPuXk7ho6zlDz3P,Rock,https://i.scdn.co/image/ab6761610000e5eb6bab56bf1addac6c6f4347a5
+67,Tom Misch,R&B/Soul,1uiEZYehlNivdK3iQyAbye,indie soul,https://i.scdn.co/image/ab6761610000e5ebb52fc43462304eb6ae5bba5f
+76,Beach House,Alternative/Indie,56ZTgzPBDge0OvCGgMO3OY,dream pop,https://i.scdn.co/image/ab6761610000e5ebb3e38a46a56a423d8f741c09
+38,"Kitty, Daisy & Lewis",Rock,2fMfDd005o8VTkgsVzHOjG,rockabilly,https://i.scdn.co/image/ab6761610000e5eb02d746e7a1542143d6a8360b
+77,Bob Dylan,Folk/Acoustic,74ASZWbe4lXaubB36ztrGX,folk rock,https://i.scdn.co/image/ab6761610000e5eb791742524609864273747ef5
+46,The Fall,Rock,6WoTvA9qinpHtSRJuldYh6,post-punk,https://i.scdn.co/image/ab6761610000e5eba271b66efd699ba556b32cd5
+39,Jeff Mills,Techno & Trance,2eIDAcLKnWc4D350YyzvgS,techno,https://i.scdn.co/image/ab6772690000c46c845ce16f4bb6686023eb3250
+42,Turin Brakes,Rock,1zrBQvkTNhFFby4V5UiK2L,Rock,https://i.scdn.co/image/ab6761610000e5eb643b6e87e52cb1a31d2ec18c
+16,Bruce,Novelty/Spoken Word,538TUK3KiHnDNHkHLF2yrK,Non-Music,https://i.scdn.co/image/ab6761610000e5eb61ff7e3364105bc8c14a716e
+22,Minor Science,Ambient & Experimental Electronic,7xkfvmfvOfMBZmIGKaLtzi,idm,https://i.scdn.co/image/ab6761610000e5eb4f32d22fc1acd374ee250dc3
+37,Boris Grebenshikov,Rock,2rnZ3TYlGce0bg2ogrtShe,russian pop,https://i.scdn.co/image/ab6761610000e5ebccb21db2456cf83087fd4b95
+39,Avalon Emerson,Pop,4yrO1N273PlTaixa4BNwBz,Pop,https://i.scdn.co/image/ab6761610000e5eb4ad7695f58dfb6272d0633e5
+19,Naina,Pop,67Toy6IllSGsNPAetQFFz2,bhojpuri pop,https://i.scdn.co/image/ab67616d0000b273137b9c0b2558ab51056a1e4c
+55,Baxter Dury,Rock,0EgHhNmWcjusA7F2heSD0O,Rock,https://i.scdn.co/image/ab6761610000e5eb11ba207f3f083a4788417d25
+63,Lou Reed,Rock,42TFhl7WlMRXiNqzSrnzPL,glam rock,https://i.scdn.co/image/2e1e9a6fe696b536a1f9e6a27fc1ed23d2c97099
+48,Love,Rock,3Q6OOkfssqoMSTtl11J5Uk,psychedelic rock,https://i.scdn.co/image/ab6761610000e5eb951e409476bb413c3d50a01d
+25,Jlin,Bass Music,23QKqAkKwti9zBiac6RFBA,footwork,https://i.scdn.co/image/ab6761610000e5ebff2eee5d6eb0fd9f2c8d0039
+36,Sonny & The Sunsets,Rock,67zR9a98QqWJwpO7wBrGog,Rock,https://i.scdn.co/image/ab6761610000e5eb1756304376d658cefe7a52a0
+72,The Clash,Punk/Hardcore,3RGLhK1IP9jnYFH4BRFJBS,punk,https://i.scdn.co/image/ab6761610000e5eb2fc4d22f2e060511db2ae971
+39,Richard Spaven,Jazz,1vPmwfwytzhoK1cXXWzQWI,nu jazz,https://i.scdn.co/image/ab6761610000e5eb068c31b46e5047a804105a7a
+26,Maurizio,Techno & Trance,7wuxcFzhQIFmPdZAOAZRro,dub techno,https://i.scdn.co/image/ab67616d0000b273c323d71608ab007e6686ad4f
+36,Wild Beasts,Rock,4zrFO6P7G6EZry0pfxMfKT,Rock,https://i.scdn.co/image/ab6761610000e5eb87607b826497b1e83c1a4c87
+53,Dr. John,Country/Americana,320TrJub4arztwXRm7kqVO,cajun,https://i.scdn.co/image/ab6761610000e5ebfed5626c008ba961a81dd218
+9,Raspberry Bulbs,Alternative/Indie,7st6kYFePugdzAT0ZLPztH,noise rock,https://i.scdn.co/image/ab6772690000c46ce9cfdb2b298e07b3a78823ac
+43,Black Moth Super Rainbow,Rock,4UHzJP2iKVf0RhKIv7ZE2l,neo-psychedelic,https://i.scdn.co/image/93c08191710fa5175a399db942c8fd62e538391a
+34,Autolux,Alternative/Indie,7HizNYe1mSfmvbXlx3la3m,shoegaze,https://i.scdn.co/image/976a63060475e07bbd27f8a0eadc1dadcbfdc214
+24,Milk Music,Punk/Hardcore,1KRT2Zu8OMCJuK1ls3kpwz,egg punk,https://i.scdn.co/image/ab67616d0000b273d9538081fd73032365e2505a
+49,CAN,Alternative/Indie,4l8xPGtl6DHR2uvunqrl8r,krautrock,https://i.scdn.co/image/ab6761610000e5eb5cf2f3f47eceb202e7166078
+58,Jessica Pratt,Folk/Acoustic,5KTykbPcDB4GYS49jcHbWh,ambient folk,https://i.scdn.co/image/ab6761610000e5eb98685f8a4f1d712010a566e9
+48,Pond,Rock,4skJp5OKvcc9eKokiuhi2s,neo-psychedelic,https://i.scdn.co/image/ab6761610000e5ebfeacc4fe5eb5046f077a998e
+40,!!!,House & EDM,1mmehjf7eHA10uHMisZGJg,alternative dance,https://i.scdn.co/image/ab6761610000e5eb2bdea219d709156177f4896c
+42,Scott Walker,Pop,04tBaW21jyUfeP5iqiKBVq,baroque pop,https://i.scdn.co/image/90b31afd8391b7a8339474fe36cdc570a5003ea2
+57,Jacques Brel,Pop,4RN2vlFWepLa46qQIU2PHs,chanson,https://i.scdn.co/image/ab6761610000e5eb4dfecaf883652dc5600ba055
+61,Bonnie Raitt,Blues,4KDyYWR7IpxZ7xrdYbKrqY,blues,https://i.scdn.co/image/ab6761610000e5ebe86f788af4e127154da1257f
+2,Dead Rider,Alternative/Indie,1bX78IZISmk0l30EwELgKh,noise rock,https://i.scdn.co/image/ab67616d0000b273178f318cfd378e49e8cc136b
+36,Motor City Drum Ensemble,House & EDM,4TlzX7s6kuZDtiBpsopcBf,jazz house,https://i.scdn.co/image/ab6761610000e5ebf78db90c9a2727a8d298cc47
+19,Roly Porter,Ambient & Experimental Electronic,4RN8pUdphaky5GRL8rUL6P,drone,https://i.scdn.co/image/ab6772690000c46c4aab11a4696817dde1e0eb4a
+52,Doves,Rock,0LVrQUinPUBFvVD5pLqmWY,britpop,https://i.scdn.co/image/ab6761610000e5eb1ee04e502faa55c4accf4fe8
+64,LCD Soundsystem,House & EDM,066X20Nz7iquqkkCW6Jxy6,alternative dance,https://i.scdn.co/image/ab6761610000e5eb6a0838a408f8c9cf82915ac8
+31,Jerkcurb,Jazz,2We7vKruiEweV984BdrxGA,Jazz,https://i.scdn.co/image/ab6761610000e5eb4a6ec4e9f74fa2e92430a454
+39,Snapped Ankles,Rock,4iWOyexPqcvgycdx7mLUcl,post-punk,https://i.scdn.co/image/ab6761610000e5eb99524b9a8b16d5e84a70d05c
+15,Shobaleader One,Ambient & Experimental Electronic,6P96rauZLFigC7v5MI2IEo,idm,https://i.scdn.co/image/ab6761610000e5ebc59986c709bde935582c7437
+51,Angel Olsen,Rock,6mKqFxGMS5TGDZI3XkT5Rt,Rock,https://i.scdn.co/image/ab6761610000e5ebc2529fa7223c4a6190f07820
+32,Faust,Alternative/Indie,4yBBNmdvVaoPEnr2lt14q7,krautrock,https://i.scdn.co/image/ab6761610000e5eba9f2f058947c2a3942c6f4ff
+45,Mary Lattimore,Ambient & Experimental Electronic,38MKhZmMRHAZRz8LqtKIBw,ambient,https://i.scdn.co/image/ab6761610000e5ebac25fe0fcf3f10a44baee162
+63,King Krule,House & EDM,4wyNyxs74Ux8UIDopNjIai,Electronic,https://i.scdn.co/image/ab6761610000e5eba15b75a2ee429509f547c3af
+45,Daphni,House & EDM,4nhvb6x9ZhPiYCzrHDNia9,Electronic,https://i.scdn.co/image/ab6761610000e5eb1d59484ab819e372232f467c
+57,Sharon Van Etten,Rock,2wJ4vsxWd7df7dRU4KcoDe,Rock,https://i.scdn.co/image/ab6761610000e5eb44bf77f28461ee5d6e10cabe
+47,Moodymann,House & EDM,6pohviZSNRueSX7uNu63ZX,jazz house,https://i.scdn.co/image/849e40b627748ad8daeb95c18e227fc605d1c9fb
+25,The Cooper Temple Clause,Rock,0DEgoO9OsoL2jW9Orh3TNT,Rock,https://i.scdn.co/image/8615e85ae985fcc0934bb7a09cd61f865d66404a
+54,Bibio,Folk/Acoustic,0qzzGu8qpbXYpzgV52wOFT,ambient folk,https://i.scdn.co/image/ab6761610000e5ebc6f8c3e1e5db20e02a26bcf2
+62,Wilco,Other,2QoU3awHVdcHS8LrZEKvSM,alt country,https://i.scdn.co/image/ab6761610000e5ebb990b82996651d23ab4df7e8
+31,Josephine Foster,Other,1fVyf1LbeIEE4DUT4dZhHL,"Folk, World, & Country",https://i.scdn.co/image/ab6761610000e5eb571cde1325b52c24c47ff589
+42,The Walker Brothers,Pop,49WlsIvcUYj7Awo93hDKgf,baroque pop,https://i.scdn.co/image/ab6761610000e5eb33ea9b701f4058be2dbfa2d3
+29,Gonjasufi,Hip Hop/Rap,6pdYN3jOHWteVALy9sKGEf,experimental hip hop,https://i.scdn.co/image/ab6761610000e5eb2fa1b850ed65703953260dab
+65,Glen Campbell,Other,59hLmB5DrdihCYtNeFeW1U,classic country,https://i.scdn.co/image/ab6761610000e5eb64f0f928da3d4ff7746a2df1
+12,Vex'd,Bass Music,7367B0qtTtTTGorscfxrqm,dubstep,https://i.scdn.co/image/ab67616d0000b2739a4f02f555fc4905c32a5839
+49,Wye Oak,Rock,5SjNVG3L9mgWQPsfp1sFDB,Rock,https://i.scdn.co/image/ab6761610000e5eb09d3a19718a94938681c1beb
+35,Battles,Alternative/Indie,3EMSpwRtkvUTxfB4aS5xnA,math rock,https://i.scdn.co/image/ab6761610000e5ebb83b1843369a3e33b6c28834
+63,The Shins,Other,4LG4Bs1Gadht7TCrMytQUO,indie,https://i.scdn.co/image/ab6761610000e5eb6c87e9e995eedad42e73dcc4
+36,SUUNS,Rock,3UkN1XeK2D4wD4uhtJx4vb,space rock,https://i.scdn.co/image/ab6761610000e5eb8c198752495dfcc469d00fd2
+37,Nerina Pallot,Rock,4aFx7q4WkiTWPLJNW5mkKK,Rock,https://i.scdn.co/image/ab6761610000e5eb1a4955be3b680f82434483cd
+31,Truncate,Techno & Trance,1JxLnEvBPdm9baryEFzE50,techno,https://i.scdn.co/image/ab6761610000e5eb384ca3cf22a48969e283325c
+6,DIE VERBOTEN,Alternative/Indie,3dHNduEqqeZGIjcF8p7wgl,krautrock,https://i.scdn.co/image/ab67616d0000b273692e9262345e67f8804525ff
+41,Wipers,Rock,0sTTw3dw3EA0c7NaZnrJd2,post-punk,https://i.scdn.co/image/1d2fe9b986eae49aa37c45acd240ff6499971b10
+59,Echo & the Bunnymen,Pop,0fgYKF9Avljex0L9Wt5b8Z,new wave,https://i.scdn.co/image/397489fba8899aa52cadb0f62662603f96065446
+42,TOBACCO,Hip Hop/Rap,3ikKyCOrsMeANi0d5u8BCR,experimental hip hop,https://i.scdn.co/image/ab6761610000e5ebb20bf85584c0ac131307fda6
+64,Metronomy,House & EDM,54QMjE4toDfiCryzYWCpXX,new rave,https://i.scdn.co/image/ab6761610000e5ebceff4142bf102931cd3cd61d
+37,Amen Dunes,Rock,1jwOuEBcOKq0BeudSarbEM,Rock,https://i.scdn.co/image/ab6761610000e5eb53022d9a3df671aa4fdf8afb
+6,Sophia Loizou,Ambient & Experimental Electronic,35wH6kN89Vy5MeYwTKHQ9Q,experimental,https://i.scdn.co/image/ab6761610000e5ebe5ec459728268b21e82df41f
+3,Blueprint Blue,Rock,2t20OEGMQ88YYSM22lKe5j,Rock,https://i.scdn.co/image/ab6761610000e5ebdc9b0bf845280060efcb6993
+60,Thom Yorke,House & EDM,4CvTDPKA6W06DRfBnZKrau,Electronic,https://i.scdn.co/image/ab6761610000e5ebbe918e48bee898ae236c06a1
+39,Venetian Snares,Bass Music,7eKIP3IoPoUAZgZuvMM6hf,breakcore,https://i.scdn.co/image/ab6761610000e5ebf5ea7fe5822b33f0d6f1cf19
+38,Fennesz,Ambient & Experimental Electronic,2DoQBgPsB9AdmWpIa2hUSz,drone,https://i.scdn.co/image/ab6761610000e5eb1b80dcb0fe9de066bc28130e
+35,Donato Dozzy,Techno & Trance,2LmP2eHIAmprDBQfi4jiBC,dub techno,https://i.scdn.co/image/ab6761610000e5eb5429b7add38a1002b9181bfa
+49,Moses Boyd,Jazz,1otDUlTEBjcyDQg6CkHRaV,nu jazz,https://i.scdn.co/image/ab6761610000e5eb8f9b85a429a6db150d33a0b0
+6,The Cookers,Jazz,1Bm874bqWpHgjCor0mqsaw,hard bop,https://i.scdn.co/image/ab6761610000e5eb71d13b9ae88592542b875ab2
+53,Alfa Mist,Jazz,2i1CPudyCUjL50Wqjv8AMI,nu jazz,https://i.scdn.co/image/ab6761610000e5ebe247a1683a0b42005d35d414
+50,Dexter Gordon,Jazz,3NUsiT2JSyaWAnWaXxDzhQ,hard bop,https://i.scdn.co/image/ab6761610000e5eb7e357392ac4637109f24e459
+57,Yazmin Lacey,R&B/Soul,2datC2OML2YxykP6vnDRmg,indie soul,https://i.scdn.co/image/ab6761610000e5ebe7df942d4911b6cbd14d474e
+68,John Coltrane,Jazz,2hGh5VOeeqimQFxqXvfCUf,jazz,https://i.scdn.co/image/ab6761610000e5eb73c7f7505c1af82929ec41df
+43,Joe Armon-Jones,Jazz,5mUcc8OOP4RuzrupeGYwW5,nu jazz,https://i.scdn.co/image/ab6761610000e5eb9c110694cc6dcc6cb89d8bc2
+37,Kamaal Williams,Jazz,01mXk9IDlVczWwZvVHAiIS,nu jazz,https://i.scdn.co/image/ab6761610000e5eb79a51d7f3b48771f12780399
+41,Nubya Garcia,Jazz,6O5k8LLRfDK8v9jj1GazAQ,nu jazz,https://i.scdn.co/image/ab6761610000e5ebcc54044c371ab617c1b625bb
+53,Soulwax,House & EDM,43mWhBXSflupNLuNjM5vff,electroclash,https://i.scdn.co/image/ab6761610000e5ebca556b991df304bb6835dc58
+33,Vels Trio,Jazz,68ZVpxiS12BeN3EgBgXW0l,nu jazz,https://i.scdn.co/image/ab6761610000e5eb0fc174650e10e24998fa04e4
+23,Nina Nastasia,Alternative/Indie,1llUGXhBESnmaCxpBV4zwe,slowcore,https://i.scdn.co/image/ab6761610000e5eb54a7025bb687d062826510de
+37,Anthony Naples,Techno & Trance,20bB5IFRjHw1EIAHvZ3tgd,dub techno,https://i.scdn.co/image/ab6761610000e5eb30efb8c3e4bddb3ef3f38d26
+7,Rick Simpson,Jazz,3FKhFIysDUOzJwTMNIFjpf,Jazz,https://i.scdn.co/image/ab6761610000e5ebfa5ee67c56d71da3f717cfcb
+44,65daysofstatic,Alternative/Indie,6DVVsQAnpHdJjb1nYuOQ6g,post-rock,https://i.scdn.co/image/ab6772690000c46cabeceb21c1d174433777c678
+48,Aldous Harding,Folk/Acoustic,3lmR0qMiGuoIF9UC54egcG,ambient folk,https://i.scdn.co/image/ab6761610000e5eb642f1b437166dec05ad41729
+68,Stan Getz,Latin,0FMucZsEnCxs5pqBjHjIc8,bossa nova,https://i.scdn.co/image/ab6761610000e5eb45dd470659deedf47618968e
+44,Oscar Jerome,R&B/Soul,39cDMNnxwjrKJE1dyt47jh,indie soul,https://i.scdn.co/image/ab6761610000e5ebecb1cb995db03c89e48ce9da
+66,Miles Davis,Jazz,0kbYTNQb4Pb1rPbbaF0pT4,jazz,https://i.scdn.co/image/423e826b3c1b23930a255d7cbc2daf733f795507
+60,Cannonball Adderley,Jazz,5v74mT11KGJqadf9sLw4dA,hard bop,https://i.scdn.co/image/c9ac5f2db563d4c6635882e09ab6373b871a7c7a
+19,Tariverdiev,World/Traditional,6YYL5NTuYQMefKMYEPVE6K,russian pop,https://i.scdn.co/image/ab67616d0000b273da536d07cb044083bb75eac5
+30,Thomas P. Heckmann,Techno & Trance,4QLCqJ3RSF3y6DdvboPk9m,acid techno,https://i.scdn.co/image/ab67616d0000b27309949e2590da778b71575bdb
+43,Bud Powell,Jazz,570vCzcespB48HIQyTbDO6,bebop,https://i.scdn.co/image/ab6761610000e5eb4fe8a62f9e7c2a0c48a3b9ac
+46,Poppy Ajudha,R&B/Soul,6oPQiSj92N4mk5jXLtX1bl,indie soul,https://i.scdn.co/image/ab6761610000e5eb40f746705c8fb35b6d175e52
+54,Charlie Parker,Jazz,4Ww5mwS7BWYjoZTUIrMHfC,bebop,https://i.scdn.co/image/ab6761610000e5eb5642427a0fb3988948c9bec4
+51,Dizzy Gillespie,Jazz,5RzjqfPS0Bu4bUMkyNNDpn,bebop,https://i.scdn.co/image/896485317ae7153ad421012f2f7cb90cf3fbfbff
+35,Ruby Rushton,Jazz,6DO2Eyazl6ToBSvp7OGLuF,nu jazz,https://i.scdn.co/image/ab6761610000e5ebcb3f8e1724473fe882d02b98
+32,Two Lone Swordsmen,Ambient & Experimental Electronic,33Ztukerf3He8FeKk5acn8,idm,https://i.scdn.co/image/ab67616d0000b27392f9a000a881a5496fa62b6d
+48,Destroyer,Pop,22ojy4H4ZVpowC4lRRC8In,art pop,https://i.scdn.co/image/ab6761610000e5eb7d44c1e587342cd8487ccd60
+49,Jason Molina,Alternative/Indie,4tBNwdhdWAXGzzaPTp9dRE,slowcore,https://i.scdn.co/image/d8b4430ca3e96215ef4c2c833c345d2e66d97ea1
+1,James Brandon Lewis Trio,Jazz,0qc65RJ8CVXpvxOAOvPLzV,free jazz,https://i.scdn.co/image/ab6772690000c46c8d74ad0ee4fd0faf415c3667
+49,Tim Buckley,Folk/Acoustic,6zHRqvws8dVeqL8D31ponr,folk rock,https://i.scdn.co/image/1db862c4ca5ca8dfc98c149e79f1777942c82d87
+18,Dizzy Gillespie Quintet,Jazz,4pOjIcQ4PGk52L8aGsrO5A,bebop,https://i.scdn.co/image/ab67616d0000b2738167cd951fa856668dedb933
+59,Joris Voorn,Techno & Trance,4jGpKAmwvU263l0tUh4xKU,melodic techno,https://i.scdn.co/image/ab6761610000e5eb28062f7e20ae5df7950a56ec
+48,Oneohtrix Point Never,Ambient & Experimental Electronic,2wPDbhaGXCqROrVmwDdCrK,idm,https://i.scdn.co/image/ab6761610000e5ebf15e61d103deb9077b2c9ed8
+51,Wayne Shorter,Jazz,0ZqhrTXYPA9DZR527ZnFdO,hard bop,https://i.scdn.co/image/ab6761610000e5eb33353db693257f465be09860
+43,Blue Lab Beats,Jazz,4YLUMAgNyttwx4hUHgtBtR,nu jazz,https://i.scdn.co/image/ab6761610000e5eb60251d9664bcad416a580f76
+50,Lee Morgan,Jazz,38C3okxv3fyyOIQUVPCdGX,hard bop,https://i.scdn.co/image/ab6761610000e5ebe214842fe87630b113bd8df6
+25,Barker & Baumecker,Techno & Trance,6Fg9F10CbylhQPMLd4EqLy,dub techno,https://i.scdn.co/image/ab6761610000e5eb9e4c147cdbe16e9480b08585
+54,Neko Case,Other,4Cedjq5BQL3MhapRvDpFED,alt country,https://i.scdn.co/image/ab6761610000e5eb07b1a967d9743d13f7c08606
+56,Kurt Vile,Rock,5gspAQIAH8nJUrMYgXjCJ2,Rock,https://i.scdn.co/image/ab6761610000e5eb887166f654d7d277ec55aec0
+32,Dense & Pika,Techno & Trance,3tlt5onLwIKTuaOAyI6ytC,techno,https://i.scdn.co/image/ab6761610000e5eb5372bb460cc46c8cf10be27b
+47,The Horrors,Alternative/Indie,7EFB09NxZrMi9pGlOnuBpd,shoegaze,https://i.scdn.co/image/ab6761610000e5eb101b41755c1fa96a2967eab5
+86,Gorillaz,House & EDM,3AA28KZvwAUcZuOKwyblJQ,Electronic,https://i.scdn.co/image/ab6761610000e5ebdd5b57b40cf2aaeccd07835e
+86,Red Hot Chili Peppers,Rock,0L8ExT028jH3ddEcZwqJJ5,funk rock,https://i.scdn.co/image/ab6761610000e5ebc33cc15260b767ddec982ce8
+0,Yisrael Trio,Jazz,3nEjuIPTCFh3LJl1kXA6nb,nu jazz,https://i.scdn.co/image/ab67616d0000b273ba5f47c302b2bb924beeec55
+28,Perc,Techno & Trance,4iyqyvWXO734GUNLTTnrPQ,techno,https://i.scdn.co/image/05d990aacd90d7936c828e5d721e1eaa5d1e25c4
+57,Kokoroko,Jazz,3u9rbdcmA6CxjxOAkjaeFr,Jazz,https://i.scdn.co/image/ab6761610000e5eb4195eb7322a35b79fee7d169
+62,Ezra Collective,Hip Hop/Rap,5BRAUN0yN8557PLRZIr02W,jazz rap,https://i.scdn.co/image/ab6761610000e5eba38669cf5ce055735f7829e6
+26,Shabaka and the Ancestors,Jazz,5RSOkfm0B0WR4IBbVUtYXk,nu jazz,https://i.scdn.co/image/ab6761610000e5eb870ec7070a7bfb099dcd7470
+5,Tim Exile,Ambient & Experimental Electronic,6cWjMKw7gjwnX1nRAInsjn,idm,https://i.scdn.co/image/0addefa45843512c0afc6afa692d538f8476d4a1
+55,Nova Twins,Hip Hop/Rap,7I95CM75shzCjHuTzrepjM,Hip Hop,https://i.scdn.co/image/ab6761610000e5ebf363f15fd70f3e3e5c8a8e3c
+57,Devendra Banhart,Rock,1YZEoYFXx4AxVv13OiOPvZ,Rock,https://i.scdn.co/image/ab6761610000e5eb7d079249b30567c81b006ba8
+17,Webster Lewis,Jazz,2ye3IGvPbagPIPsto6LYlO,jazz funk,https://i.scdn.co/image/ab67616d0000b273ff20bffd0e43183aa9da2170
+37,Flaer,Other,0PiMvUJDkqg4AAfl8CP1Di,"Folk, World, & Country",https://i.scdn.co/image/ab6761610000e5eb55d5abeb344b12f9c07f2835
+60,Bounce Patrol,Novelty/Spoken Word,1S9SPfRo9eyxOcyfUGC2Tm,children's music,https://i.scdn.co/image/ab6761610000e5ebf54ff9f31e7686f6683c4f62
+56,The Little Sunshine Kids,Novelty/Spoken Word,1RvroR5di6EndZNcfNNL0d,children's music,https://i.scdn.co/image/ab6761610000e5eb83d3c2a4d0f3b79efc26e415
+26,Morecambe & Wise,Novelty/Spoken Word,2tBhWqKkavzMihQWh3ktA7,comedy,https://i.scdn.co/image/ab67616d0000b2730ebf9cddaaa60038dc5549f7
+1,Mikikí with his Brothers,Latin,1IWjdMKAyw0fckre3jo1ob,son cubano,
+33,Buttechno,Techno & Trance,4XbQUkFYWthjpAPp96lHWt,dub techno,https://i.scdn.co/image/ab6761610000e5eba019f720de6d4fda19043c9a
+19,Kirk Barley,Ambient & Experimental Electronic,35yKqbBahxH38GhRc0vFrg,ambient,https://i.scdn.co/image/ab6761610000e5eb11ff5374e92f7e3a500a6dc8
+74,Rage Against The Machine,Metal,2d0hyoQ5ynDBnkvAbJKORj,rap metal,https://i.scdn.co/image/ab6761610000e5ebda4bd2b213cae330e2a4a901
+49,Johnny Flynn,Folk/Acoustic,1UQRtt7eHW6Bt4INNTUtb3,folk,https://i.scdn.co/image/ab6761610000e5eb7331feab713a11f709c0f356
+41,Cassandra Jenkins,Rock,1WVGbBnzZ5WLZ2PfesIHik,Rock,https://i.scdn.co/image/ab6761610000e5ebd341eb41ddc7e7315320e955
+22,Vinicius Honorio,Techno & Trance,22HcjzDlePLqK05zIlyn3L,techno,https://i.scdn.co/image/ab6761610000e5eb4ec9489991676693e42a4d75
+26,The Watersons,Folk/Acoustic,59w4wGMXlt4HULBSTVxRAY,traditional folk,https://i.scdn.co/image/bb8e2f36fa9b0f216acaf99acdf972459a2a7954
+24,Mermaid Chunky,House & EDM,5IVLihKRLMZ5RHzSPa7cAI,Electronic,https://i.scdn.co/image/ab6761610000e5ebb4253d66d994918bec5e5ade
+31,Pony Bravo,House & EDM,2e1wMFU6VpZkcLil2g7MrF,Electronic,https://i.scdn.co/image/ab6761610000e5eb55859e8af1fe28ebc27fe06b
+13,Toasty,Bass Music,5xD3piymhCUyYezMeJX2h5,dubstep,https://i.scdn.co/image/ab67616d0000b2732b4e1103171b3356dd586ca1
+34,Noel Coward,Jazz,0qsb6mnN5e7ut4axY4wofX,Jazz,https://i.scdn.co/image/ab6761610000e5eb08e428f65a5656cfebb39ff9
+16,Container,Ambient & Experimental Electronic,0uCqiRh7CzBXxmD1Cddf77,experimental,https://i.scdn.co/image/ab6761610000e5eb078fe34b9df4f85c2ba86a9a
+32,Pavel Milyakov,Ambient & Experimental Electronic,5E8J16XR1FuqmFNkL65CKo,ambient,https://i.scdn.co/image/ab6761610000e5ebad679bde8b23b9a24388f738
+7,Grupo Estrellas Campesinas,Latin,57Uk8lmpqDsu1ULyRPslG2,son cubano,
+67,Tom Jones,Rock,1T0wRBO0CK0vK8ouUMqEl5,Rock,https://i.scdn.co/image/ab6761610000e5eb03dc1982d985027835b2ef60
+31,Keeley Forsyth,Rock,3b0YRaadaoMwK4STNVeHGF,Rock,https://i.scdn.co/image/ab6761610000e5eb3368e4fc0712ca30d19e2998
+23,Ricardo Garduno,Techno & Trance,1zXUOPRLFBFG3YUHoYvuN9,techno,https://i.scdn.co/image/ab67616d0000b273cda7461e30e910c8b4d79a74
+41,Martin Denny,Pop,3D9J9nPNW1cBktx5apJq4V,exotica,https://i.scdn.co/image/ab6761610000e5eb22dc4100063f54a5238b7888
+32,Voice Actor,Novelty/Spoken Word,6PsuUa5ijopH2T8rVzHSZc,spoken word,https://i.scdn.co/image/ab6761610000e5ebb2fd15ea07b1afdcf5f04e21
+24,Bernard Cribbins,Novelty/Spoken Word,6XAyJtffF6kyT6wybicn1d,comedy,https://i.scdn.co/image/ab67616d0000b273f1c83d0391c3b5a87b0857d0
+63,"Crosby, Stills, Nash & Young",Folk/Acoustic,1CYsQCypByMVgnv17qsSbQ,folk rock,https://i.scdn.co/image/ab6761610000e5eb4e5018dad07ee004f171d7d3
+77,Outkast,Hip Hop/Rap,1G9G7WwrXka3Z1r7aIDjI7,southern hip hop,https://i.scdn.co/image/ab6761610000e5eb0cb3f95b9f8f7337e135a925
+72,Massive Attack,Ambient & Experimental Electronic,6FXMGgJwohJLUSr5nVlf9X,trip hop,https://i.scdn.co/image/c8bbeedb05f38ae5cb982a7daf4bf7129cca892c
+63,Vangelis,New Age/Meditation,4P70aqttdpJ9vuYFDmf7f6,new age,https://i.scdn.co/image/ab6761610000e5eb4eb15436c35fface06216543
+65,Cream,Rock,74oJ4qxwOZvX6oSsu1DGnw,classic rock,https://i.scdn.co/image/aab6a0a0e9ca2ab17460b0451e59ba507cc5802a
+39,Ben Klock,Techno & Trance,1vJHfCreWAS46V8RZ67ojo,techno,https://i.scdn.co/image/ab6761610000e5eb8d5e3d28f34a18f83d3ae81d
+44,Ora Cogan,House & EDM,0zZHy0tQvwi4L5HNvNq0QY,Electronic,https://i.scdn.co/image/ab6761610000e5eb884c9fa973f5e988790b8c05
+34,Tunng,Rock,6k8oBFzievbIn6XJK0pDpa,Rock,https://i.scdn.co/image/ab6761610000e5eb7a144507a46569f89a0459fb
+29,WAR TECH,Techno & Trance,6Tq3FiTmCxEfA2iEFX8mNi,techno,https://i.scdn.co/image/ab67616d0000b273c7aceb910aeacda67e990a66
+2,HSXCHCXCXHS,Ambient & Experimental Electronic,4vba4WcSuvKbgYr772jD0t,experimental,https://i.scdn.co/image/ab67616d0000b273846864de50966dd62bde1f2c
+46,Loco Mía,House & EDM,1T8NnxA0fnU3TQ6aiTNNtw,Electronic,https://i.scdn.co/image/ab6761610000e5ebf857ae5ca0431dfd3ccfc299
+63,T. Rex,Rock,3dBVyJ7JuOMt4GE9607Qin,glam rock,https://i.scdn.co/image/ab6761610000e5ebf62b3bc8013ebf6e99b255ce
+65,Mother Goose Club,Novelty/Spoken Word,6h76MLMaPUoWVPC7VnEw86,children's music,https://i.scdn.co/image/ab6761610000e5eb5f18754304aba19e14838240
+51,The Congos,Reggae/Caribbean,0nGxKkhmIzyu6bvuXrko1e,roots reggae,https://i.scdn.co/image/ab67616d0000b273fd06f36445d716e501ec4836
+16,Billy Cotton & His Band,Jazz,573wZt3JX0wg63d3I8OlZk,big band,https://i.scdn.co/image/ab67616d0000b273101292b2feb2118d59c4824d
+36,Mr Yipadee,Novelty/Spoken Word,2EDBzZNew0M639G7RKCTsS,children's music,https://i.scdn.co/image/ab6761610000e5eb03106f3e7c48164aa308b003
+1,Las Flores del Changüi,Latin,6pghWru7nlajp4hu6izxEE,son cubano,https://i.scdn.co/image/ab67616d0000b273a0d5d9542ae8332eb98af9af
+17,Jez Lowe,Folk/Acoustic,7m7M1TZdjufvYnpa5HnENr,traditional folk,https://i.scdn.co/image/ab67616d0000b273cf9044a7420fca5ccd8e0c22
+0,Melquíades y su Changüí,Latin,4JJDQ84XaPTjarhSact0wr,son cubano,
+47,Mexican Institute Of Sound,Other,4TPTW3cTwUtiihgOMSQfmy,electrocumbia,https://i.scdn.co/image/ab6761610000e5eb1561734cc5bf93599d70ffaf
+50,Susumu Yokota,Ambient & Experimental Electronic,3ND5NWoKzlelYDDyWqSQpQ,ambient,https://i.scdn.co/image/f39230585c8556eb40b2275b31f4b821c0d92953
+48,Robin Williams,Novelty/Spoken Word,4OrieSJUghNfNx5UuPCgxF,comedy,https://i.scdn.co/image/71f1d9f48ea0176ccb1e4bea3925c39b4af9b3b5
+68,Franz Liszt,Classical/Orchestral,1385hLNbrnbCJGokfH2ac2,classical piano,https://i.scdn.co/image/9ec531e3712e68c72ae3cf06f17e4055a615c4bf
+34,The Field,Techno & Trance,23MIhFHpoOuhtEHZDrrnCS,minimal techno,https://i.scdn.co/image/ab6761610000e5eb6da6a8d7465f09eff0da3a58
+56,The Dubliners,Folk/Acoustic,72RvmgEg2omdlMV9aExO6a,celtic,https://i.scdn.co/image/ab6761610000e5eb5baed597ef53b124af8ffd9a
+38,Mari Kvien Brunvoll,House & EDM,0OTZiDBitc9zVFG5hwLBQD,Electronic,https://i.scdn.co/image/ab6761610000e5eb96896a2a63ff2d74af7275d0
+42,Friendly Fires,House & EDM,3mZqziCJj4pq3P2VBpmK6p,new rave,https://i.scdn.co/image/ab6761610000e5eb0dc9b2da8529ee1bda8fe04b
+51,The Learning Station,Novelty/Spoken Word,0qIXXh38Do2fvBqiUjiHbm,children's music,https://i.scdn.co/image/ab6761610000e5eb35a20cc8b2758ad61efd8ac1
+40,G Jones,Bass Music,0gXx2aQ2mfovDfqCw10MQC,bass music,https://i.scdn.co/image/ab6761610000e5ebd9e124b7cdb3eba6fe21e209
+11,The Earlies,Rock,5TDKWyd5aI3qGguJ8mtrWw,neo-psychedelic,https://i.scdn.co/image/ab67616d0000b273f3a3c1b2b5128d9fb396cab1
+57,Angela Lansbury,Pop,0LtVJXnPR8msCJiE2DjHxy,Pop,https://i.scdn.co/image/ab67616d0000b273a6d80e2ed079cf1183ade19a
+18,Holy Tongue,Reggae/Caribbean,261n3GnAgoCgSmqan7OL7o,dub,https://i.scdn.co/image/ab67616d0000b27367459cc2cd9ddd7602548d50
+63,Randy Newman,Jazz,3HQyFCFFfJO3KKBlUfZsyW,Jazz,https://i.scdn.co/image/ab6772690000c46cd15e8094f197e96f0ec8bc02
+42,Funki Porcini,Ambient & Experimental Electronic,2RNUVT2Tl938bULcNzDRNw,trip hop,https://i.scdn.co/image/ab6772690000c46c592c0b7b6f98f995db5f7aa2
+73,America,Rock,35U9lQaRWSQISxQAB94Meo,yacht rock,https://i.scdn.co/image/ab6761610000e5eb1918619d3b26c6cb16084997
+25,Lorenzo Senni,Ambient & Experimental Electronic,7mKwhB3UiepqzM946jBOyi,idm,https://i.scdn.co/image/ab6761610000e5eb5e510199da69929c6e6cae73
+31,Bjarki,Techno & Trance,6FtSCON62H1CEJtN39y9yI,techno,https://i.scdn.co/image/ab6761610000e5eb8985e82c4e6f1d8fde8924c0
+26,SW.,Techno & Trance,6lDaViWraJYpkI6nRq29vp,dub techno,https://i.scdn.co/image/ab67616d0000b2730cb8db3257ce1fead212e029
+59,The Pogues,Punk/Hardcore,2wzMOQwNT6ZvVB4amvhFAH,celtic punk,https://i.scdn.co/image/636a1b47b11d0d512b4153c9d1b0625eea39f885
+68,DJ Shadow,Ambient & Experimental Electronic,5CE2IfdYZEQGIDsfiRm8SI,trip hop,https://i.scdn.co/image/ab6761610000e5eb745460b0ffdbf5144c34498d
+47,Television,Other,0S7Zur2g8YhqlzqtlYStli,proto-punk,https://i.scdn.co/image/26da5a74d4273e0e9116ac7cbb4443def62fa3be
+46,Patty Shukla,Novelty/Spoken Word,6lQcPZtrhQfbSkXafngUYc,children's music,https://i.scdn.co/image/ab6761610000e5ebb03a003e3ef063229a401923
+21,Wink,House & EDM,7L3cctnz9MFugFaH6JNj3D,acid house,https://i.scdn.co/image/fd7f8f0ba8c9263c70eea6721a4f2c456498f970
+58,Belle and Sebastian,Pop,4I2BJf80C0skQpp1sQmA0h,baroque pop,https://i.scdn.co/image/ab6761610000e5eb6a456088b3e6c53b6501502c
+38,Marcel Dettmann,Techno & Trance,1sxHp39RqBEE01pgVqsdyP,minimal techno,https://i.scdn.co/image/ab6761610000e5ebc7306896f667b528a221ed2f
+2,Fe'Male,House & EDM,0THW14iGdJ8iDza1prq1WX,Electronic,https://i.scdn.co/image/ab67616d0000b27303917dcf6f2a20e1bef101b4
+70,Ella Fitzgerald,Jazz,5V0MlUE1Bft0mbLlND7FJz,vocal jazz,https://i.scdn.co/image/3c1d23141059785c8a863137d176319329dc17ef
+53,The Smile,Alternative/Indie,6styCzc1Ej4NxISL0LiigM,art rock,https://i.scdn.co/image/ab6761610000e5ebb43db49ce029948457972352
+1,Snow Bone,House & EDM,1aqJAeWLZmUZJ15mvLGZHx,lo-fi house,https://i.scdn.co/image/ab67616d0000b27379a0ae990d3c99b5fb82ca56
+8,LICE,Alternative/Indie,4JC8PfKoENbnkxLB2k3ZGo,noise rock,https://i.scdn.co/image/ab6761610000e5eb4051b60766e207af91479936
+73,Paul McCartney,House & EDM,4STHEaNw4mPZ2tzheohgXB,Electronic,https://i.scdn.co/image/ab6761610000e5eb03bf2fe26e397122faa3d323
+33,Pigeonhed,House & EDM,7C5dkQXLoTE3OFE5qBTrBB,big beat,https://i.scdn.co/image/737c230c424a989b951e03ff80fbdc383a5079ae
+31,Fracture,Bass Music,5imJlmURJJk9wicePHiqvo,jungle,https://i.scdn.co/image/ab6761610000e5ebd50ab39ca2b218323114e72b
+8,Automatic Tasty,Ambient & Experimental Electronic,20zk0q0gvO55fx1yapc3A0,idm,https://i.scdn.co/image/ab6761610000e5ebdc23df16199c622d97ed1ad8
+70,Cults,Rock,3Oim8XBPbznAa8Jj8QzNc8,Rock,https://i.scdn.co/image/ab6761610000e5eb92ec52fb43fbd4d2511a9d1d
+4,FIS,Ambient & Experimental Electronic,0wV2j914cQINtB4jSkLIgT,experimental,https://i.scdn.co/image/abac326eb00c4a0b165062157466dda3b0971291
+54,Musical Youth,Reggae/Caribbean,2CuzDPkRD6BJBvdWqCrt2I,reggae,https://i.scdn.co/image/fca0c7f6230d9a303a484223c32246aa4e480b72
+36,Plastikman,Techno & Trance,7GoFQNOTX0suC6Tn59qx8n,minimal techno,https://i.scdn.co/image/ab6761610000e5ebc4f73ec57135027305d9ae67
+0,Doubt,Alternative/Indie,7xfPh8vGVQo1YFD3i1oIdr,noise rock,https://i.scdn.co/image/ab67616d0000b273fa8062eeae27261a5a85a01d
+35,Palms Trax,House & EDM,52XSRQqTAfZ8ZrIqkQvQyA,lo-fi house,https://i.scdn.co/image/ab6761610000e5eb014cf3f08ec1fe239f3f643b
+40,9 Lazy 9,Ambient & Experimental Electronic,3rQwLE64J8IhEMWnZm8ZmH,trip hop,https://i.scdn.co/image/ab67616d0000b2730d245c8a25276a6d6bb461be
+48,The Rapture,House & EDM,166Dz1GX3xonSQ3Z6CQW26,new rave,https://i.scdn.co/image/ab6761610000e5eb9f184452ed39346bc5e0849a
+49,Mylo,House & EDM,5YjEVrNMrIRw2xGbjTN6Ti,disco house,https://i.scdn.co/image/ab6761610000e5eb71c2ad98179affb122bb54dc
+64,Buffalo Springfield,Folk/Acoustic,3eskO5m0H4yiF64vRySBjr,folk rock,https://i.scdn.co/image/b701ba75981d0b9aeef036b9fab4e3c96609e364
+26,The Topp Twins,Novelty/Spoken Word,5rL68NkpsV9KyV23R4k3II,children's music,https://i.scdn.co/image/ab6761610000e5ebddbb767d7e0822d9bd803826
+37,John Archambault and David Plummer,Novelty/Spoken Word,2R1aNdEPdzkU1va9WM4H3O,children's music,https://i.scdn.co/image/ab67616d0000b27303052d72fae966566b086f87
+42,The Toy Dolls,Punk/Hardcore,747P2pvOwW22iRcFS9zQDv,punk,https://i.scdn.co/image/ab6761610000e5eb92a08f6c55aef3a7510c2e98
+29,Route 8,House & EDM,6gkHVRYMMXviNI4DglaLrr,lo-fi house,https://i.scdn.co/image/ab6761610000e5ebed044fa704f30fbc74c3131e
+31,Hardfloor,House & EDM,6z9JhbmcTrVKITp9ah4mJk,acid house,https://i.scdn.co/image/ab6761610000e5ebbc92934cf93c39648609244d
+0,We Call It Voight-Kampff,House & EDM,3Nqgz62gAUM5pUkd5ms9GL,Electronic,https://i.scdn.co/image/ab67616d0000b2735df77bb9872b0d5b99504fbb
+64,Kasabian,Rock,11wRdbnoYqRddKBrpHt4Ue,britpop,https://i.scdn.co/image/ab6761610000e5eb9adf40411756ca7c9d92bbf2

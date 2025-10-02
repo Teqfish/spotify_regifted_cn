@@ -234,7 +234,7 @@ class LocalUserDataDAO:
 
 
 class LocalStatusDAO(StatusDAO):
-    """Writes enrichment status to enrichment/status/{user_id}_{dataset_label}.json"""
+    """Writes enrichment status to datasets/enrichment/status/{user_id}_{dataset_label}.json"""
     def __init__(self, base_dir: str = "datasets/enrichment/status"):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -282,7 +282,7 @@ class LocalStatusDAO(StatusDAO):
         path.write_text(json.dumps(data, indent=2))
 
 class LocalMetadataDAO(StorageDAO):
-    """Stores enrichment outputs under enrichment/metadata/"""
+    """Stores enrichment outputs under datasets/enrichment/metadata/"""
     def __init__(self, base_dir: str = "datasets/enrichment/metadata"):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -303,7 +303,7 @@ class LocalMetadataDAO(StorageDAO):
 
     # --- Checkpoints (JSON) ---
     def save_checkpoint(self, user_id: str, label: str, state: dict) -> None:
-        ck_dir = self.base_dir.parent / "checkpoints"  # enrichment/checkpoints
+        ck_dir = self.base_dir.parent / "checkpoints"  # echcheckpoints
         ck_dir.mkdir(parents=True, exist_ok=True)
         (ck_dir / f"{user_id}_{label}.json").write_text(json.dumps(state, indent=2))
 
@@ -318,8 +318,8 @@ class LocalMetadataDAO(StorageDAO):
 
     # --- Master info-tables (Append + Dedup by keys) ---
     def _master_path(self, table_name: str):
-        # Keep masters directly inside enrichment/metadata
-        return self.base_dir / table_name  # self.base_dir == "enrichment/metadata"
+        # Keep masters directly inside datasets/enrichment/metadata
+        return self.base_dir / table_name  # self.base_dir == "datasets/enrichment/metadata"
 
     def get_master(self, table_name: str) -> pd.DataFrame:
         p = self._master_path(table_name)
@@ -327,13 +327,13 @@ class LocalMetadataDAO(StorageDAO):
             return pd.read_csv(p, low_memory=False)
         return pd.DataFrame()
 
-    # ---- Master merge lives STRICTLY under enrichment/metadata ----
+    # ---- Master merge lives STRICTLY under datasets/enrichment/metadata ----
     def merge_into_master(self, df_new: pd.DataFrame, filename: str, *, keys: list[str]) -> None:
         """
-        Merge df_new into the master CSV (enrichment/metadata/<filename>) using `keys` as de-dupe keys.
+        Merge df_new into the master CSV (datasets/enrichment/metadata/<filename>) using `keys` as de-dupe keys.
         Creates the file if missing. Writes atomically via temp file.
         """
-        master_path = self.base_dir / filename  # <--- stays inside enrichment/metadata
+        master_path = self.base_dir / filename  # <--- stays inside datasets/enrichment/metadata
         master_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Load existing master if present
@@ -364,7 +364,7 @@ class LocalMetadataDAO(StorageDAO):
         tmp.replace(master_path)
 
 class LocalLogDAO:
-    """Writes enrichment logs to enrichment/logs/{user_id}_{dataset_label}.log"""
+    """Writes enrichment logs to datasets/enrichment/logs/{user_id}_{dataset_label}.log"""
     def __init__(self, base_dir: str = "datasets/enrichment/logs"):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)

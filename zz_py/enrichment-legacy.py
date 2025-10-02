@@ -66,6 +66,8 @@ class SpotifyToken:
     def get(self) -> str:
         if not self.access_token or datetime.utcnow() >= self.expires_at:
             self._fetch()
+        if self.access_token is None:
+            raise RuntimeError("Spotify access token unavailable after fetch")
         return self.access_token
 
 SPOTIFY = SpotifyToken(SPOTIFY_ID, SPOTIFY_SECRET)

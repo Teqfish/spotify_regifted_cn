@@ -1636,10 +1636,153 @@ class MetadataEnricher:
         self._load_master_tables()
 
         try:
-            # --- All your existing logic here ---
-            # (planning, phases, flush, finish_status, etc.)
-            # unchanged...
-            pass
+            # 1) Plan
+            total = int(self.estimate_total_batches())
+            self._total_batches = total
+            self._done_batches = 0
+            self._batches_since_save = 0
+            self.current_phase = "planning"
+
+            self.log(f"[run_all] Planning complete. Estimated total batches = {total}")
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="planning",
+                detail=f"Estimating batches… (~{total})",
+                total=total
+            )
+
+            if total == 0:
+                self.log("[run_all] Nothing new to enrich (all entities already in masters)")
+                self.status.finish_status(
+                    self.user_id, self.label,
+                    ok=True,
+                    detail="✅ All enrichment already up to date"
+                )
+                return
+
+            def _end_phase(name: str, before: int):
+                added = self._done_batches - before
+                self.log(f"[run_all] Completed phase: {name} (batches +{added})")
+                self.status.set_status(
+                    self.user_id, self.label,
+                    phase=name,
+                    detail=f"Phase '{name}' finished • {added} new batches",
+                    total=total
+                )
+
+            # 2) Build priority sets
+            self._check_cancel(self.cancel_event)
+            self.log("[run_all] Building priority sets…")
+            top_art, top_shows, top_books = self.top_overall()
+            self.log(f"[run_all] Top overall counts: artists={len(top_art)}, shows={len(top_shows)}, books={len(top_books)}")
+            per_art, per_show, per_book = self.top_per_year(set(), set(), set())
+            self.log(f"[run_all] Per-year counts: artists={len(per_art)}, shows={len(per_show)}, books={len(per_book)}")
+
+            # 3) Overall
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "overall"
+            self.log("[run_all] Starting phase: overall")
+            before = self._done_batches
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="overall",
+                detail="Processing overall top…",
+                total=total
+            )
+            self.run_phase_overall_first50(top_art, top_shows, top_books)
+            _end_phase("overall", before)
+
+            # 4) Per-year
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_year"
+            self.log("[run_all] Starting phase: per_year")
+            before = self._done_batches
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="per_year",
+                detail="Processing per-year top…",
+                total=total
+            )
+            self.run_phase_per_year(per_art, per_show, per_book)
+            _end_phase("per_year", before)
+
+            # 5) Per-artist albums of year
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "albums_of_year"
+            self.log("[run_all] Starting phase: albums_of_year")
+            before = self._done_batches
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="albums_of_year",
+                detail="Top albums per artist-year…",
+                total=total
+            )
+            self.run_phase_per_artist_albums_of_year()
+            _end_phase("albums_of_year", before)
+
+            # 6) Per-album for top artists
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_album"
+            self.log("[run_all] Starting phase: per_album")
+            before = self._done_batches
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="per_album",
+                detail="All albums for top artists…",
+                total=total
+            )
+            self.run_phase_per_album_all_albums_for_top_artists()
+            _end_phase("per_album", before)
+
+            # 7) Top tracks per year
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "top_tracks_per_year"
+            self.log("[run_all] Starting phase: top_tracks_per_year")
+            before = self._done_batches
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="top_tracks_per_year",
+                detail="Fetching top 100 tracks per year…",
+                total=total
+            )
+            self.run_phase_top_tracks_per_year()
+            _end_phase("top_tracks_per_year", before)
+
+            # 8) Breadth-first remaining
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "breadth_first"
+            self.log("[run_all] Starting phase: breadth_first")
+            before = self._done_batches
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="breadth_first",
+                detail="Filling remaining artists by year…",
+                total=total
+            )
+            self.run_phase_breadth_first_years_remaining(per_art, per_show, per_book)
+            _end_phase("breadth_first", before)
+
+            # 9) Final flush
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "flush"
+            self.log("[run_all] Starting final flush")
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="flush",
+                detail="Writing final CSV snapshots…",
+                total=total
+            )
+            self.flush_all()
+            self.log("[run_all] Flush complete")
+
+            # 10) Done
+            added_total = self._done_batches
+            self.status.finish_status(
+                self.user_id, self.label,
+                ok=True,
+                detail=f"✅ Enrichment completed (CSV flushed) • {added_total} new batches"
+            )
+            self.log(f"[run_all] Enrichment finished OK — {added_total} new batches enriched")
 
         except CancelledError:
             self.log("[run_all] CancelledError caught, flushing partial results")
@@ -1668,7 +1811,7 @@ class MetadataEnricher:
             raise
 
         finally:
-            # --- Ensure background worker threads are always shut down ---
+            # ✅ Always shut down worker pool at very end of run
             if hasattr(self, "discogs_pool"):
                 try:
                     self.log("[run_all] Cleaning up Discogs worker pool…")
@@ -1722,66 +1865,62 @@ class MetadataEnricher:
         Autosave: dump current buffers into master CSVs so pages can use data immediately.
         Optionally write per-run autosave snapshots under {user}/{label}/_autosave/{ts}/...
         """
-        try:
-            artists_df     = pd.DataFrame(self.buf_artists)     if self.buf_artists else pd.DataFrame()
-            albums_df      = pd.DataFrame(self.buf_albums)      if self.buf_albums else pd.DataFrame()
-            tracks_df      = pd.DataFrame(self.buf_tracks)      if self.buf_tracks else pd.DataFrame()
-            shows_df       = pd.DataFrame(self.buf_shows)       if self.buf_shows else pd.DataFrame()
-            audiobooks_df  = pd.DataFrame(self.buf_audiobooks)  if self.buf_audiobooks else pd.DataFrame()
+        artists_df     = pd.DataFrame(self.buf_artists)     if self.buf_artists else pd.DataFrame()
+        albums_df      = pd.DataFrame(self.buf_albums)      if self.buf_albums else pd.DataFrame()
+        tracks_df      = pd.DataFrame(self.buf_tracks)      if self.buf_tracks else pd.DataFrame()
+        shows_df       = pd.DataFrame(self.buf_shows)       if self.buf_shows else pd.DataFrame()
+        audiobooks_df  = pd.DataFrame(self.buf_audiobooks)  if self.buf_audiobooks else pd.DataFrame()
 
-            if not tracks_df.empty:
-                if "user_id" not in tracks_df.columns:
-                    tracks_df["user_id"] = self.user_id
-                tracks_df = tracks_df.drop_duplicates(subset=["track_id", "user_id"])
+        # Ensure track snapshots always include user_id + dedupe
+        if not tracks_df.empty:
+            if "user_id" not in tracks_df.columns:
+                tracks_df["user_id"] = self.user_id
+            tracks_df = tracks_df.drop_duplicates(subset=["track_id", "user_id"])
 
-            if all(df.empty for df in [artists_df, albums_df, tracks_df, shows_df, audiobooks_df]):
-                return
+        # Bail if nothing to write
+        if all(df.empty for df in [artists_df, albums_df, tracks_df, shows_df, audiobooks_df]):
+            return
 
-            if getattr(self, "save_snapshots", False):
-                try:
-                    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-                    base = f"{self.user_id}/{self.label}/_autosave/{ts}"
-                    if not artists_df.empty:
-                        self.storage.upload_csv(artists_df, bucket="metadata", path=f"{base}/info_artist_genre.csv", overwrite=True)
-                    if not albums_df.empty:
-                        self.storage.upload_csv(albums_df, bucket="metadata", path=f"{base}/info_album.csv", overwrite=True)
-                    if not tracks_df.empty:
-                        self.storage.upload_csv(tracks_df, bucket="metadata", path=f"{base}/info_track.csv", overwrite=True)
-                    if not shows_df.empty:
-                        self.storage.upload_csv(shows_df, bucket="metadata", path=f"{base}/info_show.csv", overwrite=True)
-                    if not audiobooks_df.empty:
-                        self.storage.upload_csv(audiobooks_df, bucket="metadata", path=f"{base}/info_audiobook.csv", overwrite=True)
-                except Exception as e:
-                    print("[autosave] snapshot write failed:", e)
-
+        # Optional snapshots
+        if getattr(self, "save_snapshots", False):
             try:
+                ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                base = f"{self.user_id}/{self.label}/_autosave/{ts}"
                 if not artists_df.empty:
-                    self.storage.merge_into_master(artists_df, "info_artist_genre.csv", keys=["artist_id"])
+                    self.storage.upload_csv(artists_df, bucket="metadata", path=f"{base}/info_artist_genre.csv", overwrite=True)
                 if not albums_df.empty:
-                    self.storage.merge_into_master(albums_df, "info_album.csv", keys=["album_id"])
+                    self.storage.upload_csv(albums_df, bucket="metadata", path=f"{base}/info_album.csv", overwrite=True)
                 if not tracks_df.empty:
-                    self.storage.merge_into_master(tracks_df, "info_track.csv", keys=["track_id", "user_id"])
+                    self.storage.upload_csv(tracks_df, bucket="metadata", path=f"{base}/info_track.csv", overwrite=True)
                 if not shows_df.empty:
-                    self.storage.merge_into_master(shows_df, "info_show.csv", keys=["show_id"])
+                    self.storage.upload_csv(shows_df, bucket="metadata", path=f"{base}/info_show.csv", overwrite=True)
                 if not audiobooks_df.empty:
-                    self.storage.merge_into_master(audiobooks_df, "info_audiobook.csv", keys=["audiobook_id"])
+                    self.storage.upload_csv(audiobooks_df, bucket="metadata", path=f"{base}/info_audiobook.csv", overwrite=True)
             except Exception as e:
-                print("[autosave][master] merge failed:", e)
-                return
+                print("[autosave] snapshot write failed:", e)
 
-            self.buf_artists.clear()
-            self.buf_albums.clear()
-            self.buf_tracks.clear()
-            self.buf_shows.clear()
-            self.buf_audiobooks.clear()
+        # Merge into masters
+        try:
+            if not artists_df.empty:
+                self.storage.merge_into_master(artists_df, "info_artist_genre.csv", keys=["artist_id"])
+            if not albums_df.empty:
+                self.storage.merge_into_master(albums_df, "info_album.csv", keys=["album_id"])
+            if not tracks_df.empty:
+                self.storage.merge_into_master(tracks_df, "info_track.csv", keys=["track_id", "user_id"])
+            if not shows_df.empty:
+                self.storage.merge_into_master(shows_df, "info_show.csv", keys=["show_id"])
+            if not audiobooks_df.empty:
+                self.storage.merge_into_master(audiobooks_df, "info_audiobook.csv", keys=["audiobook_id"])
+        except Exception as e:
+            print("[autosave][master] merge failed:", e)
+            return
 
-        finally:
-            if hasattr(self, "discogs_pool"):
-                try:
-                    self.log("[flush_partial] Cleaning up Discogs worker pool…")
-                    self.discogs_pool.shutdown()
-                except Exception as e:
-                    self.log(f"[flush_partial] Discogs pool shutdown failed: {e}")
+        # Clear buffers after successful merge
+        self.buf_artists.clear()
+        self.buf_albums.clear()
+        self.buf_tracks.clear()
+        self.buf_shows.clear()
+        self.buf_audiobooks.clear()
 
     def flush_all(self, suffix: str = ""):
         """
@@ -1838,11 +1977,12 @@ class MetadataEnricher:
                 print("[master] merge failed:", e)
 
         finally:
-            # Always shut down background workers
+            # ✅ End of run → shut down background workers
             if hasattr(self, "discogs_pool"):
                 try:
                     self.log("[flush_all] Cleaning up Discogs worker pool…")
                     self.discogs_pool.shutdown()
+                    self.log("[flush_all] Discogs pool shut down successfully")
                 except Exception as e:
                     self.log(f"[flush_all] Discogs pool shutdown failed: {e}")
 

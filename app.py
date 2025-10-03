@@ -2587,64 +2587,70 @@ elif page == "FUN":
     df['date'] = pd.to_datetime(df['datetime']).dt.date
 
     if st.button("Pick a Random Day"):
-        # Choose a random date from the user's listening history
-        random_date = df['date'].sample(n=1).iloc[0]
+        valid_date = None
 
-        # Get top news headline for that date
-        news_row = headlines_df[headlines_df['date'] == random_date]
+        # Keep trying until we find a day with both news and listening history
+        attempts = 0
+        while valid_date is None and attempts < 1000:  # safety cap to prevent infinite loop
+            attempts += 1
+            random_date = df['date'].sample(n=1).iloc[0]  # sample from listening history only
 
-        # Display the news story
-        if not news_row.empty:
-            news = news_row.iloc[0]
-            st.subheader(f"📰 Top News on {random_date.strftime('%d %B %Y')}")
-            if isinstance(news['imageUrl'], str) and news['imageUrl'].startswith("http"):
-                st.image(news['imageUrl'], width=400)
-            st.markdown(f"**{news['webTitle']}**")
-            st.write(news['short_description'])
-            st.markdown(f"[Read more here]({news['webUrl']}) — *{news['section']}*")
-        else:
-            st.warning("No news available for this date.")
+            has_news = not headlines_df[headlines_df['date'] == random_date].empty
+            has_listening = not df[df['date'] == random_date].empty
 
-        # Find the most listened-to item that day
-        daily_df = df[df['date'] == random_date]
-        if daily_df.empty:
-            st.info("No listening history found for this date.")
-        else:
-            top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
-            category = top_item['category']
+            if has_news and has_listening:
+                valid_date = random_date
 
-            st.subheader(f"🎧 Your Top {category.capitalize()} on {random_date.strftime('%d %B %Y')}")
+        if valid_date is None:
+            st.error("Couldn't find a valid day with both news and listening history.")
+            st.stop()
 
-            if category == "music":
-                album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
-                artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                else:
-                    st.image(PLACEHOLDER, width=300)
-                st.write(f"**Track:** {top_item['track_name']}")
-                st.write(f"**Artist:** {top_item['artist_name']}")
-                st.write(f"**Album:** {top_item['album_name']}")
+        # --- News Section ---
+        news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
+        st.subheader(f"📰 Top News on {valid_date.strftime('%d %B %Y')}")
+        if isinstance(news['imageUrl'], str) and news['imageUrl'].startswith("http"):
+            st.image(news['imageUrl'], width=400)
+        st.markdown(f"**{news['webTitle']}**")
+        st.write(news['short_description'])
+        st.markdown(f"[Read more here]({news['webUrl']}) — *{news['section']}*")
 
-            elif category == "podcast":
-                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
-                artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                else:
-                    st.image(PLACEHOLDER, width=300)
-                st.write(f"**Episode:** {top_item['episode_name']}")
-                st.write(f"**Show:** {top_item['episode_show_name']}")
+        # --- Listening Section ---
+        daily_df = df[df['date'] == valid_date]
+        top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
+        category = top_item['category']
 
-            elif category == "audiobook":
-                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
-                artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                else:
-                    st.image(PLACEHOLDER, width=300)
-                st.write(f"**Book:** {top_item['audiobook_title']}")
-                st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
+        st.subheader(f"🎧 Your Top {category.capitalize()} on {random_date.strftime('%d %B %Y')}")
+
+        if category == "music":
+            album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
+            artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
+            if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                st.image(artwork_url, width=300)
+            else:
+                st.image(PLACEHOLDER, width=300)
+            st.write(f"**Track:** {top_item['track_name']}")
+            st.write(f"**Artist:** {top_item['artist_name']}")
+            st.write(f"**Album:** {top_item['album_name']}")
+
+        elif category == "podcast":
+            show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
+            artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
+            if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                st.image(artwork_url, width=300)
+            else:
+                st.image(PLACEHOLDER, width=300)
+            st.write(f"**Episode:** {top_item['episode_name']}")
+            st.write(f"**Show:** {top_item['episode_show_name']}")
+
+        elif category == "audiobook":
+            book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
+            artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
+            if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                st.image(artwork_url, width=300)
+            else:
+                st.image(PLACEHOLDER, width=300)
+            st.write(f"**Book:** {top_item['audiobook_title']}")
+            st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
 
     # ##most skipped song Scorecard##
     # st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)

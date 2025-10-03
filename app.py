@@ -83,15 +83,41 @@ TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 ENABLE_ENRICHMENT = True  # <— set True later when we re-enable background processing
 
 # ---- METADATA DIRECTORY ----
-def safe_read_csv(path: str) -> pd.DataFrame:
+def safe_read_csv(path: str, required_cols: list[str] = None) -> pd.DataFrame:
+    """
+    Safely read a CSV file. If not found, return empty DataFrame.
+    If required_cols is given, ensure they exist (create empty ones if missing).
+    """
     try:
-        return pd.read_csv(path)
+        df = pd.read_csv(path)
     except FileNotFoundError:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=required_cols or [])
 
-INFO_ARTIST_GENRE = safe_read_csv("datasets/enrichment/metadata/info_artist_genre.csv")
-INFO_ALBUM = safe_read_csv("datasets/enrichment/metadata/info_album.csv")
-INFO_TRACK = safe_read_csv("datasets/enrichment/metadata/info_track.csv")
+    # Add missing required columns if not present
+    if required_cols:
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = pd.Series(dtype="object")
+
+    return df
+
+INFO_TRACK = safe_read_csv(
+    "datasets/enrichment/metadata/info_track.csv",
+    required_cols=["track_id", "artist_name", "explicit", "track_popularity",
+                   "release_date", "track_name", "album_name", "user_id"]
+)
+
+INFO_ARTIST_GENRE = safe_read_csv(
+    "datasets/enrichment/metadata/info_artist_genre.csv",
+    required_cols=["artist_name", "supergenre", "primary_genre",
+                   "artist_image", "artist_id", "artist_popularity"]
+)
+
+INFO_ALBUM = safe_read_csv(
+    "datasets/enrichment/metadata/info_album.csv",
+    required_cols=["album_id", "artist_name", "release_date",
+                   "album_name", "album_artwork"]
+)
 INFO_EVENT = safe_read_csv("datasets/info_event.csv")
 INFO_SHOW = safe_read_csv("datasets/enrichment/metadata/info_show.csv")
 INFO_AUDIOBOOK = safe_read_csv("datasets/enrichment/metadata/info_audiobook.csv")
@@ -1601,7 +1627,6 @@ elif page == "Per Year":
                 )
             except Exception:
                 image_url = 'media/assets/Image-Coming-Soon_vector.svg'
-
         elif selected_category == 'audiobook':
             name = row['audiobook_title']
             try:
@@ -1623,14 +1648,12 @@ elif page == "Per Year":
                 st.image(image_url, width=150)
             except:
                 st.image('media/assets/Image-Coming-Soon_vector.svg')
-
         with col3:
             st.markdown(
                 f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
                 f"{name}</div>",
                 unsafe_allow_html=True
             )
-
         with col4:
             if selected_category == 'music':
                 hours_played = df_top10.loc[df_top10['artist_name'] == name, 'hours_played'].values[0]
@@ -1986,9 +2009,11 @@ elif page == "Per Artist":
             ## listening streak
             # consecutive listening days
             band_streak = df_music[df_music.artist_name == artist_selected].sort_values("datetime")
+            band_streak["datetime"] = pd.to_datetime(band_streak["datetime"], errors="coerce")
             band_streak = band_streak["datetime"].dt.date.drop_duplicates().sort_values().diff().dt.days.fillna(1)
             streak_ids = (band_streak != 1).cumsum()
             max_streak = streak_ids.value_counts().max()
+
             ## box stolen from the internet
             st.markdown("<h4>Longest streak</h4>", unsafe_allow_html=True)
             wch_colour_box = (64, 64, 64)
@@ -2451,138 +2476,67 @@ elif page == "Per Genre":
 # --------------------------------- The Farm --------------------------------- #
 elif page == "The Farm":
 
-# >>>>>>>>>>>>>>>>>>>>> FUNCTION DEFINITIONS
-    def load_latest_user_pickles(user_selected, folder="datasets/chart_scores"):
-        """Load latest chart score pickles for a user"""
-        # Pattern to match filenames: Username_YYYYMMDD_HHMMSS_all_points.pkl
-        points_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_all_points\.pkl$")
-        summary_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_summary_stats\.pkl$")
+    # -------------------- Helper Functions -------------------- #
+    @st.cache_data
+    def load_info_data():
+        """Load enriched metadata tables safely."""
+        tracks = INFO_TRACK if 'INFO_TRACK' in globals() else pd.DataFrame()
+        artists = INFO_ARTIST_GENRE if 'INFO_ARTIST_GENRE' in globals() else pd.DataFrame()
 
-        # Find matching files and timestamps
-        timestamps = []
-        for f in os.listdir(folder):
-            match = points_pattern.match(f)
-            if match:
-                timestamps.append(match.group(1))  # Extract timestamp string
+        # Ensure schema safety
+        if not tracks.empty and 'user_id' not in tracks.columns:
+            tracks['user_id'] = None
+        if not tracks.empty and 'release_date' not in tracks.columns:
+            tracks['release_date'] = None
+        if not tracks.empty and 'track_popularity' not in tracks.columns:
+            tracks['track_popularity'] = None
+        if not artists.empty and 'artist_popularity' not in artists.columns:
+            artists['artist_popularity'] = None
 
-        if not timestamps:
-            st.error(f"No chart data found for user '{user_selected}'.")
-            return None, None
+        return tracks, artists
 
-        # Sort timestamps to get the latest one
-        latest_ts = sorted(timestamps)[-1]
+    def get_user_popularity(user_id, tracks, artists):
+        if tracks.empty or "user_id" not in tracks.columns:
+            st.warning("⚠️ No track data available for this user.")
+            return pd.DataFrame(columns=["year", "track_popularity", "artist_popularity"])
 
-        # Build final filepaths
-        points_file = f"{user_selected}_{latest_ts}_all_points.pkl"
-        summary_file = f"{user_selected}_{latest_ts}_summary_stats.pkl"
+        df = tracks[tracks["user_id"] == user_id].copy()
+        if df.empty:
+            st.info(f"No tracks found for user {user_id}.")
+            return pd.DataFrame(columns=["year", "track_popularity", "artist_popularity"])
 
-        points_path = os.path.join(folder, points_file)
-        summary_path = os.path.join(folder, summary_file)
+        if 'release_date' not in df.columns:
+            st.warning("⚠️ Missing release_date field in track data.")
+            return pd.DataFrame(columns=["year", "track_popularity", "artist_popularity"])
 
-        # Load both pickle files
-        with open(points_path, "rb") as f:
-            all_points_dfs = pickle.load(f)
+        # Parse release year
+        df['year'] = pd.to_datetime(df['release_date'], errors="coerce").dt.year
 
-        with open(summary_path, "rb") as f:
-            summary_stats = pickle.load(f)
+        # Merge with artist popularity if possible
+        if not artists.empty and 'artist_popularity' in artists.columns:
+            df = df.merge(
+                artists[['artist_name', 'artist_popularity']],
+                on="artist_name",
+                how="left"
+            )
+        else:
+            df['artist_popularity'] = None
 
-        return all_points_dfs, summary_stats
+        return df
 
-    def display_popularity_comparison(user_id, user_weekly_df, smoothing_window, show_all_years, selected_year):
-        popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
+    def calculate_popularity_scores(df: pd.DataFrame) -> pd.DataFrame:
+        """Average track + artist popularity per year."""
+        if df.empty or 'year' not in df.columns:
+            return pd.DataFrame(columns=["year", "track_popularity", "artist_popularity"])
 
-        # Load reference
-        if not Path(popularity_ref_pickle).exists():
-            st.warning("No reference data available yet.")
-            return
+        scores = df.groupby("year").agg(
+            track_popularity=("track_popularity", "mean"),
+            artist_popularity=("artist_popularity", "mean")
+        ).reset_index()
+        return scores
 
-        with open(popularity_ref_pickle, "rb") as f:
-            reference_df = pickle.load(f)
-
-        # Filter by selected year
-        user_weekly_df['year'] = user_weekly_df['year_week'].astype(str).str[:4].astype(int)
-        reference_df['year'] = reference_df['year_week'].astype(str).str[:4].astype(int)
-
-        if not show_all_years:
-            user_weekly_df = user_weekly_df[user_weekly_df['year'] == selected_year]
-            reference_df = reference_df[reference_df['year'] == selected_year]
-
-        user_min_week = user_weekly_df['year_week'].min()
-        user_max_week = user_weekly_df['year_week'].max()
-
-        # Filter out current user
-        others_df = reference_df[reference_df['user_id'] != user_id]
-        avg_ref = others_df.groupby('year_week')[['artist_popularity', 'track_popularity']].mean().reset_index()
-        avg_ref = avg_ref[(avg_ref['year_week'] >= user_min_week) & (avg_ref['year_week'] <= user_max_week)]
-
-        # Reference averages
-        ref_track_pop = round(avg_ref['track_popularity'].mean(), 2)
-        ref_art_pop = round(avg_ref['artist_popularity'].mean(), 2)
-
-        # Deltas
-        track_delta = round(track_pop_filtered - ref_track_pop, 2)
-        art_delta = round(art_pop_filtered - ref_art_pop, 2)
-
-        # Convert deltas to string format for Streamlit (signed)
-        track_delta_str = f"{'+' if track_delta >= 0 else ''}{track_delta}"
-        art_delta_str = f"{'+' if art_delta >= 0 else ''}{art_delta}"
-
-        # Sort for consistency
-        user_weekly_df = user_weekly_df.sort_values("year_week")
-        avg_ref = avg_ref.sort_values("year_week")
-
-        # Apply rolling smoothing
-        user_weekly_df['artist_popularity_smooth'] = user_weekly_df['artist_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
-        user_weekly_df['track_popularity_smooth'] = user_weekly_df['track_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
-
-        avg_ref['artist_popularity_smooth'] = avg_ref['artist_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
-        avg_ref['track_popularity_smooth'] = avg_ref['track_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
-
-        fig = go.Figure()
-
-        # User lines
-        fig.add_trace(go.Scatter(
-            x=user_weekly_df['year_week'],
-            y=user_weekly_df['artist_popularity_smooth'],
-            mode='lines',
-            name=f"{user_id} Artist",
-            line=dict(color='#fd6bff') #0082d9
-        ))
-        fig.add_trace(go.Scatter(
-            x=user_weekly_df['year_week'],
-            y=user_weekly_df['track_popularity_smooth'],
-            mode='lines',
-            name=f"{user_id} Track",
-            line=dict(color='#b800bb') #2c2991
-        ))
-
-        # Reference average
-        fig.add_trace(go.Scatter(
-            x=avg_ref['year_week'],
-            y=avg_ref['artist_popularity_smooth'],
-            mode='lines',
-            name="Avg Artist",
-            line=dict(color='#19ab19')
-        ))
-        fig.add_trace(go.Scatter(
-            x=avg_ref['year_week'],
-            y=avg_ref['track_popularity_smooth'],
-            mode='lines',
-            name="Avg Track",
-            line=dict(color='#199144')
-        ))
-
-        fig.update_layout(
-            title=f"{user_id} vs Sampleset Average Listening Popularity",
-            xaxis_title="Week",
-            yaxis_title="Popularity",
-            hovermode="x unified",
-            hoverlabel=dict(bgcolor="#2d5730", font=dict(color="white"))
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-    def display_gauge_chart(basic_score, fixed_delta_str="±0.08"):
+    def display_gauge_chart(basic_score: float, delta_str: str = ""):
+        """Draw the Sheeple-O-Meter gauge."""
         gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=basic_score,
@@ -2603,340 +2557,180 @@ elif page == "The Farm":
                 dict(
                     x=0.5,
                     y=-0.1,
-                    text=f"{fixed_delta_str}",
+                    text=delta_str,
                     showarrow=False,
                     font=dict(size=20)
                 )
             ]
         )
-
         st.plotly_chart(gauge, use_container_width=True)
 
-    def display_artist_points_chart(chart_hits):
-        artist_points = chart_hits.groupby('artist_name')['points_awarded'].sum().sort_values(ascending=True).tail(10)
-        fig_artists = px.bar(
-            x=artist_points.values,
-            y=artist_points.index,
-            orientation='h',
-            title='Top 10 Artists by Points',
-            labels={'x': 'Total Points', 'y': 'Artist'},
-            color_discrete_sequence =['#19ab19']*len(artist_points),
+    def display_popularity_comparison(user_id, user_scores, global_scores, show_all_years, selected_year):
+        """Line chart comparing user vs global averages."""
+        if user_scores.empty or global_scores.empty:
+            st.warning("⚠️ Not enough data to display comparison.")
+            return
+
+        if not show_all_years:
+            user_scores = user_scores[user_scores['year'] == selected_year]
+            global_scores = global_scores[global_scores['year'] == selected_year]
+
+        if user_scores.empty or global_scores.empty:
+            st.info("No matching data for the selected filters.")
+            return
+
+        fig = go.Figure()
+
+        # User lines
+        fig.add_trace(go.Scatter(
+            x=user_scores['year'],
+            y=user_scores['track_popularity'],
+            mode='lines+markers',
+            name=f"{user_id} - Track Popularity",
+            line=dict(color='#b800bb')
+        ))
+        fig.add_trace(go.Scatter(
+            x=user_scores['year'],
+            y=user_scores['artist_popularity'],
+            mode='lines+markers',
+            name=f"{user_id} - Artist Popularity",
+            line=dict(color='#fd6bff')
+        ))
+
+        # Global averages
+        fig.add_trace(go.Scatter(
+            x=global_scores['year'],
+            y=global_scores['track_popularity'],
+            mode='lines',
+            name="Avg Track Popularity",
+            line=dict(color='#199144')
+        ))
+        fig.add_trace(go.Scatter(
+            x=global_scores['year'],
+            y=global_scores['artist_popularity'],
+            mode='lines',
+            name="Avg Artist Popularity",
+            line=dict(color='#19ab19')
+        ))
+
+        fig.update_layout(
+            title=f"{user_id} vs Global Average Listening Popularity",
+            xaxis_title="Year",
+            yaxis_title="Popularity (0–100)",
+            hovermode="x unified"
         )
-        st.plotly_chart(fig_artists, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-    def display_timeline_chart(chart_hits, plot_df, years, latest_year, points_method):
-        fig_timeline = go.Figure()
+    # -------------------- Data Prep -------------------- #
+    tracks, artists = load_info_data()
 
-        for year in years:
-            year_data = plot_df[plot_df['year'] == year]
-            y_data = year_data['points_awarded'] if points_method == "Discrete" else year_data['cumulative_points']
-
-            fig_timeline.add_trace(go.Scatter(
-                x=year_data['month_day'],
-                y=y_data,
-                mode='lines',
-                name=str(year),
-                visible=True if year == latest_year else 'legendonly'
-            ))
-
-        fig_timeline.update_layout(
-            title='Points Earned Over the Year (Toggle Years via Legend)',
-            xaxis=dict(
-                title='Date (Jan–Dec)',
-                tickformat='%b',
-                dtick='M1'
-            ),
-            yaxis_title='Cumulative Points' if points_method == "Cumulative" else 'Daily Points',
-            legend_title='Year',
-            legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)', font=dict(color='white')),
-            hovermode="x",
-            hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white"))
-        )
-        st.plotly_chart(fig_timeline, use_container_width=True)
-
-# >>>>>>>>>>>>>>>>>>>>> DATA PREP
-
-    # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
     df, current_label = require_current_df()
     user_selected = current_label
-    df = df.copy()
-    df['year'] = pd.to_datetime(df['datetime']).dt.year
-    year_list = df['year'].sort_values().unique().tolist()
-    df_info = INFO_ARTIST_GENRE
 
-    # Merge info and calculate score early
-    df = pd.merge(df, df_info, on=["track_name", "album_name", "artist_name"], how="left", suffixes=["", "_remove"])
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df['year_month'] = df['datetime'].dt.to_period('M').dt.to_timestamp()
+    # Get user-specific data
+    user_df = get_user_popularity(user_selected, tracks, artists)
+    user_scores = calculate_popularity_scores(user_df)
 
-    # Load chart data
-    all_points_dfs, summary_stats = load_latest_user_pickles(user_selected)
+    # Global averages (exclude current user)
+    if not tracks.empty and 'user_id' in tracks.columns:
+        global_df = tracks[tracks['user_id'] != user_selected].copy()
+    else:
+        global_df = pd.DataFrame(columns=['year','track_popularity','artist_popularity'])
 
-# >>>>>>>>>>>>>>>>>>>>> STREAMLIT
+    if not global_df.empty and 'release_date' in global_df.columns:
+        global_df['year'] = pd.to_datetime(global_df['release_date'], errors="coerce").dt.year
+        if not artists.empty and 'artist_popularity' in artists.columns:
+            global_df = global_df.merge(
+                artists[['artist_name', 'artist_popularity']],
+                on="artist_name",
+                how="left"
+            )
+        else:
+            global_df['artist_popularity'] = None
 
-    # Initialize session state for filters
+    global_scores = calculate_popularity_scores(global_df)
+
+    if user_scores.empty or global_scores.empty:
+        st.warning("Not enough popularity data available for this user.")
+        st.stop()
+
+    year_list = sorted(user_scores['year'].dropna().unique().tolist())
+    if not year_list:
+        st.warning("⚠️ No valid years found in data.")
+        st.stop()
+
+    # -------------------- UI -------------------- #
+    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col3:
+        st.image(LOGO_SPOTGREEN, width=200)
+
+    c1, c2, c3 = st.columns([1,2,1])
+    with c2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The Farm</b></em></p>")
+        st.html("<p style='text-align: center; font-size: 30px;'>Are you a chart-following sheep or a lone-listening wolf?</p>")
+
     if 'selected_year' not in st.session_state:
         st.session_state.selected_year = max(year_list)
     if 'show_all_years' not in st.session_state:
         st.session_state.show_all_years = False
 
-    # Header with logo
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
-
-    # Title section
-    c1, c2, c3 = st.columns([1,2,1])
-    with c2:
-        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The Farm</b></em></p>")
-        st.html("<p style='text-align: center; font-size: 30px;'>Here we try to determine if you are a chart-following sheep or a lone-listening wolf</p>")
-    # Filter data based on current session state
+    # Filter
     if st.session_state.show_all_years:
-        filtered_df = df
+        filtered_user = user_scores
+        filtered_global = global_scores
     else:
-        filtered_df = df[df['year'] == st.session_state.selected_year]
+        filtered_user = user_scores[user_scores['year'] == st.session_state.selected_year]
+        filtered_global = global_scores[global_scores['year'] == st.session_state.selected_year]
 
-    # Calculate metrics based on filtered data
-    track_pop_filtered = round((filtered_df.groupby("track_name")["track_popularity"].mean()).mean(), 2)
-    art_pop_filtered = round((filtered_df.groupby("artist_name")["artist_popularity"].mean()).mean(), 2)
+    if filtered_user.empty or filtered_global.empty:
+        st.warning("⚠️ No data available for selected filters.")
+        st.stop()
 
+    # Metrics
+    track_pop_user = round(filtered_user['track_popularity'].mean(), 2)
+    art_pop_user = round(filtered_user['artist_popularity'].mean(), 2)
+    track_pop_global = round(filtered_global['track_popularity'].mean(), 2)
+    art_pop_global = round(filtered_global['artist_popularity'].mean(), 2)
 
-    # >>>>>>>>>>> DUPLICITY - can this be called from a function?
-    # Load reference data for comparison
-    popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
-    if Path(popularity_ref_pickle).exists():
-        with open(popularity_ref_pickle, "rb") as f:
-            reference_df = pickle.load(f)
+    track_delta = track_pop_user - track_pop_global
+    art_delta = art_pop_user - art_pop_global
 
-        reference_df['year'] = reference_df['year_week'].astype(str).str[:4].astype(int)
+    # Gauge score
+    basic_score = round((track_pop_user + art_pop_user) / 200, 2)
+    delta_text = f"Track Δ {track_delta:+.1f}, Artist Δ {art_delta:+.1f}"
+    display_gauge_chart(basic_score, delta_text)
 
-        if st.session_state.show_all_years:
-            relevant_ref = reference_df[reference_df['user_id'] != user_selected]
-        else:
-            relevant_ref = reference_df[(reference_df['user_id'] != user_selected) & (reference_df['year'] == st.session_state.selected_year)]
-
-        ref_track_pop = round(relevant_ref['track_popularity'].mean(), 2)
-        ref_art_pop = round(relevant_ref['artist_popularity'].mean(), 2)
-
-        track_delta = round(track_pop_filtered - ref_track_pop, 2)
-        art_delta = round(art_pop_filtered - ref_art_pop, 2)
-
-        track_delta_str = f"{'+' if track_delta >= 0 else ''}{track_delta}"
-        art_delta_str = f"{'+' if art_delta >= 0 else ''}{art_delta}"
-    else:
-        ref_track_pop = ref_art_pop = None
-        track_delta_str = art_delta_str = "N/A"
-
-    # Calculate chart-based metrics from filtered data
-    if summary_stats and all_points_dfs:
-        # Get the 7-day points data and filter by selected timeframe
-        points_df_7 = all_points_dfs[f'points_df_7']
-        points_df_7['year'] = pd.to_datetime(points_df_7['datetime']).dt.year
-
-        # Filter points data based on year selection
-        if st.session_state.show_all_years:
-            filtered_points = points_df_7
-        else:
-            filtered_points = points_df_7[points_df_7['year'] == st.session_state.selected_year]
-
-        # Calculate filtered chart metrics
-        chart_hits_filtered = filtered_points[filtered_points['points_awarded'] > 0]
-        total_listens_filtered = len(filtered_points)
-        chart_listens_filtered = len(chart_hits_filtered)
-
-        if total_listens_filtered > 0:
-            chart_hit_rate_filtered = chart_listens_filtered / total_listens_filtered
-            avg_points_filtered = filtered_points['points_awarded'].mean()
-            total_points_filtered = filtered_points['points_awarded'].sum()
-            avg_points_per_year_filtered = total_points_filtered / total_listens_filtered * 365 if total_listens_filtered > 0 else 0
-        else:
-            chart_hit_rate_filtered = 0
-            avg_points_filtered = 0
-            avg_points_per_year_filtered = 0
-            chart_listens_filtered = 0
-    else:
-        chart_hit_rate_filtered = 0
-        avg_points_filtered = 0
-        avg_points_per_year_filtered = 0
-        chart_listens_filtered = 0
-
-    basic_score = round((track_pop_filtered + chart_hit_rate_filtered)/200,2)
-
-    # Display gauge
-    display_gauge_chart(basic_score)
-
-    # Display all 6 scorecards
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    # Metrics row
+    col1, col2 = st.columns(2)
     with col1:
-        st.metric("Average track popularity", value=f'{track_pop_filtered}%', delta=f'{track_delta_str}%')
+        st.metric("Track Popularity", f"{track_pop_user}", delta=f"{track_delta:+.1f}")
     with col2:
-        st.metric("Average artist popularity", value=f'{art_pop_filtered}%', delta=f'{art_delta_str}%')
-
-    # Chart-based metrics (now filtered by year)
-    with col3:
-        st.metric("# Chart Song Listens", f"{chart_listens_filtered:,}")
-    with col4:
-        st.metric("Avg Points/Year", f"{avg_points_per_year_filtered:,.0f}")
-    with col5:
-        st.metric("Avg Points/Listen", f"{avg_points_filtered:.1f}")
-    with col6:
-        st.metric("Chart Hit Rate", f"{chart_hit_rate_filtered:.1%}")
+        st.metric("Artist Popularity", f"{art_pop_user}", delta=f"{art_delta:+.1f}")
 
     # Deep dive toggle
-    if st.checkbox("Need statistical validation?  Let's deep-dive..."):
+    if st.checkbox("Show yearly comparison"):
+        new_selected_year = st.selectbox("Select year", year_list, index=len(year_list)-1)
+        new_show_all_years = st.toggle("Show all years", value=st.session_state.show_all_years)
 
-        # Year selector controls (first thing after deep dive toggle)
-        c1, c2, c3 = st.columns([3, 1, 1], vertical_alignment='center')
-        with c1:
-            # Update session state when controls change
-            new_selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=st.session_state.selected_year)
-            new_show_all_years = st.toggle("Show all years", value=st.session_state.show_all_years)
+        if new_selected_year != st.session_state.selected_year:
+            st.session_state.selected_year = new_selected_year
+            st.rerun()
+        if new_show_all_years != st.session_state.show_all_years:
+            st.session_state.show_all_years = new_show_all_years
+            st.rerun()
 
-            # Update session state if values changed
-            if new_selected_year != st.session_state.selected_year:
-                st.session_state.selected_year = new_selected_year
-                st.rerun()
-            if new_show_all_years != st.session_state.show_all_years:
-                st.session_state.show_all_years = new_show_all_years
-                st.rerun()
-
-        # Use the same filtered_df that was used for top metrics
-
-        # CHART OF POPULISM ACROSS TIME
-        st.subheader(f"How _populist_ is your music taste (according to Spotify)?")
-
-        # Generate weekly stats and display comparison
-        weekly_df = get_user_weekly_popularity(filtered_df, user_selected)
-        smoothing_window = 10 if st.session_state.show_all_years else 4
-        display_popularity_comparison(user_selected, weekly_df, smoothing_window, st.session_state.show_all_years, st.session_state.selected_year)
-
-        # Chart scorer section
-        if all_points_dfs is None or summary_stats is None:
-            st.stop()  # don't break me if none found
-
-        window_sizes = [7, 30, 61, 91, 182, 365]
-
-        # Create label-to-value mapping, e.g., "7 days" → 7
-        window_label_map = {f"{w} days": w for w in window_sizes}
-        label_list = list(window_label_map.keys())
-
-        # Default to the shortest window (or whatever you prefer)
-        default_label = f"{min(window_sizes)} days"
-
-        st.subheader("How long does it take you to listen to a charting song?")
-        # Show segmented control
-        selected_label = st.segmented_control(
-            "Chart Match Window",
-            label_list,
-            selection_mode="single",
-            default=default_label)
-
-        # Get corresponding numeric window size
-        selected_window = window_label_map[selected_label]
-
-        # These now correctly match the dict keys
-        points_df = all_points_dfs[f'points_df_{selected_window}']
-        stats = summary_stats[f'summary_{selected_window}']
-
-        # Compute fresh metrics for the selected window
-        points_df['year'] = pd.to_datetime(points_df['datetime']).dt.year
-
-        if st.session_state.show_all_years:
-            filtered_points_window = points_df
-        else:
-            filtered_points_window = points_df[points_df['year'] == st.session_state.selected_year]
-
-        chart_hits_window = filtered_points_window[filtered_points_window['points_awarded'] > 0]
-        total_listens_window = len(filtered_points_window)
-        chart_listens_window = len(chart_hits_window)
-
-        if total_listens_window > 0:
-            chart_hit_rate_window = chart_listens_window / total_listens_window
-            avg_points_window = filtered_points_window['points_awarded'].mean()
-            total_points_window = filtered_points_window['points_awarded'].sum()
-            avg_points_per_year_window = total_points_window / total_listens_window * 365
-        else:
-            chart_hit_rate_window = 0
-            avg_points_window = 0
-            avg_points_per_year_window = 0
-            chart_listens_window = 0
-
-        # Display updated metrics
-        col3, col4, col5, col6 = st.columns(4)
-        with col3:
-            st.metric("# Chart Song Listens", f"{chart_listens_window:,}")
-        with col4:
-            st.metric("Avg Chart Points/Year", f"{avg_points_per_year_window:,.0f}")
-        with col5:
-            st.metric("Avg Chart Points/Listen", f"{avg_points_window:.1f}")
-        with col6:
-            st.metric("Chart Listen Rate", f"{chart_hit_rate_window:.1%}")
-
-        # Top-performing songs
-        chart_hits = points_df[points_df['points_awarded'] > 0]
-        if not chart_hits.empty:
-
-            # Display artist points chart
-            display_artist_points_chart(chart_hits)
-
-            top_songs = chart_hits.groupby(['artist_name', 'track_name']).agg({
-                'points_awarded': 'sum',
-                'chart_weeks_matched': 'mean',
-                'datetime': 'count'
-            }).reset_index()
-            top_songs.columns = ['Artist', 'Track', 'Total Points', 'Avg Chart Weeks', 'Listen Count']
-            top_songs = top_songs.sort_values('Total Points', ascending=False).head(10)
-
-            st.dataframe(top_songs, use_container_width=True, hide_index=True)
-
-            # >>>>>>>>>>>>>>>>>>>>>>>>>> Points scored throughout the year chart
-            # # Prepare daily summary for timeline
-            # daily_points = chart_hits.copy()
-            # daily_points['date'] = daily_points['datetime'].dt.date
-            # daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
-
-            # # Add year and "day-of-year" style plotting column (preserves month/day but ignores actual year)
-            # daily_summary['year'] = pd.to_datetime(daily_summary['date']).dt.year
-            # daily_summary['month_day'] = pd.to_datetime(daily_summary['date']).apply(lambda x: x.replace(year=2000))
-
-            # # Create full Jan–Dec date range to reindex against
-            # full_md_range = pd.date_range('2000-01-01', '2000-12-31', freq='D')
-
-            # # Generate zero-filled data for each year
-            # all_years = []
-
-            # for year, group in daily_summary.groupby('year'):
-            #     group = group.set_index('month_day').reindex(full_md_range, fill_value=0).reset_index()
-            #     group['year'] = year
-            #     group.rename(columns={'index': 'month_day'}, inplace=True)
-            #     all_years.append(group)
-
-            # # Concatenate into one DataFrame
-            # plot_df = pd.concat(all_years, ignore_index=True)
-
-            # # Prepare cumulative data per year
-            # plot_df['cumulative_points'] = plot_df.sort_values(['year', 'month_day']) \
-            #     .groupby('year')['points_awarded'].cumsum()
-
-            # # Filter only the selected years (or include all for setup)
-            # years = sorted(plot_df['year'].unique())
-            # latest_year = max(years)
-
-            # c1, c2 = st.columns([3, 1], vertical_alignment='center')
-            # with c1:
-            #     points_method = st.segmented_control(
-            #         "View Mode",
-            #         options=["Discrete", "Cumulative"],
-            #         selection_mode="single"
-            #     )
-
-            # # Display timeline chart
-            # display_timeline_chart(chart_hits, plot_df, years, latest_year, points_method)
-
+        display_popularity_comparison(
+            user_selected,
+            user_scores,
+            global_scores,
+            st.session_state.show_all_years,
+            st.session_state.selected_year
+        )
+        
 # --------------------------------- FUN Page --------------------------------- #
 elif page == "FUN":
     # Show current user info
@@ -3057,3 +2851,493 @@ elif page == "FAQs":
     st.markdown('')
 
     st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
+
+
+# OLD FARM
+# elif page == "The Farm":
+
+# # >>>>>>>>>>>>>>>>>>>>> FUNCTION DEFINITIONS
+#     def load_latest_user_pickles(user_selected, folder="datasets/chart_scores"):
+#         """Load latest chart score pickles for a user"""
+#         # Pattern to match filenames: Username_YYYYMMDD_HHMMSS_all_points.pkl
+#         points_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_all_points\.pkl$")
+#         summary_pattern = re.compile(rf"^{re.escape(user_selected)}_(\d{{8}}_\d{{6}})_summary_stats\.pkl$")
+
+#         # Find matching files and timestamps
+#         timestamps = []
+#         for f in os.listdir(folder):
+#             match = points_pattern.match(f)
+#             if match:
+#                 timestamps.append(match.group(1))  # Extract timestamp string
+
+#         if not timestamps:
+#             st.error(f"No chart data found for user '{user_selected}'.")
+#             return None, None
+
+#         # Sort timestamps to get the latest one
+#         latest_ts = sorted(timestamps)[-1]
+
+#         # Build final filepaths
+#         points_file = f"{user_selected}_{latest_ts}_all_points.pkl"
+#         summary_file = f"{user_selected}_{latest_ts}_summary_stats.pkl"
+
+#         points_path = os.path.join(folder, points_file)
+#         summary_path = os.path.join(folder, summary_file)
+
+#         # Load both pickle files
+#         with open(points_path, "rb") as f:
+#             all_points_dfs = pickle.load(f)
+
+#         with open(summary_path, "rb") as f:
+#             summary_stats = pickle.load(f)
+
+#         return all_points_dfs, summary_stats
+
+#     def display_popularity_comparison(user_id, user_weekly_df, smoothing_window, show_all_years, selected_year):
+#         popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
+
+#         # Load reference
+#         if not Path(popularity_ref_pickle).exists():
+#             st.warning("No reference data available yet.")
+#             return
+
+#         with open(popularity_ref_pickle, "rb") as f:
+#             reference_df = pickle.load(f)
+
+#         # Filter by selected year
+#         user_weekly_df['year'] = user_weekly_df['year_week'].astype(str).str[:4].astype(int)
+#         reference_df['year'] = reference_df['year_week'].astype(str).str[:4].astype(int)
+
+#         if not show_all_years:
+#             user_weekly_df = user_weekly_df[user_weekly_df['year'] == selected_year]
+#             reference_df = reference_df[reference_df['year'] == selected_year]
+
+#         user_min_week = user_weekly_df['year_week'].min()
+#         user_max_week = user_weekly_df['year_week'].max()
+
+#         # Filter out current user
+#         others_df = reference_df[reference_df['user_id'] != user_id]
+#         avg_ref = others_df.groupby('year_week')[['artist_popularity', 'track_popularity']].mean().reset_index()
+#         avg_ref = avg_ref[(avg_ref['year_week'] >= user_min_week) & (avg_ref['year_week'] <= user_max_week)]
+
+#         # Reference averages
+#         ref_track_pop = round(avg_ref['track_popularity'].mean(), 2)
+#         ref_art_pop = round(avg_ref['artist_popularity'].mean(), 2)
+
+#         # Deltas
+#         track_delta = round(track_pop_filtered - ref_track_pop, 2)
+#         art_delta = round(art_pop_filtered - ref_art_pop, 2)
+
+#         # Convert deltas to string format for Streamlit (signed)
+#         track_delta_str = f"{'+' if track_delta >= 0 else ''}{track_delta}"
+#         art_delta_str = f"{'+' if art_delta >= 0 else ''}{art_delta}"
+
+#         # Sort for consistency
+#         user_weekly_df = user_weekly_df.sort_values("year_week")
+#         avg_ref = avg_ref.sort_values("year_week")
+
+#         # Apply rolling smoothing
+#         user_weekly_df['artist_popularity_smooth'] = user_weekly_df['artist_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
+#         user_weekly_df['track_popularity_smooth'] = user_weekly_df['track_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
+
+#         avg_ref['artist_popularity_smooth'] = avg_ref['artist_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
+#         avg_ref['track_popularity_smooth'] = avg_ref['track_popularity'].rolling(window=smoothing_window, min_periods=1).mean()
+
+#         fig = go.Figure()
+
+#         # User lines
+#         fig.add_trace(go.Scatter(
+#             x=user_weekly_df['year_week'],
+#             y=user_weekly_df['artist_popularity_smooth'],
+#             mode='lines',
+#             name=f"{user_id} Artist",
+#             line=dict(color='#fd6bff') #0082d9
+#         ))
+#         fig.add_trace(go.Scatter(
+#             x=user_weekly_df['year_week'],
+#             y=user_weekly_df['track_popularity_smooth'],
+#             mode='lines',
+#             name=f"{user_id} Track",
+#             line=dict(color='#b800bb') #2c2991
+#         ))
+
+#         # Reference average
+#         fig.add_trace(go.Scatter(
+#             x=avg_ref['year_week'],
+#             y=avg_ref['artist_popularity_smooth'],
+#             mode='lines',
+#             name="Avg Artist",
+#             line=dict(color='#19ab19')
+#         ))
+#         fig.add_trace(go.Scatter(
+#             x=avg_ref['year_week'],
+#             y=avg_ref['track_popularity_smooth'],
+#             mode='lines',
+#             name="Avg Track",
+#             line=dict(color='#199144')
+#         ))
+
+#         fig.update_layout(
+#             title=f"{user_id} vs Sampleset Average Listening Popularity",
+#             xaxis_title="Week",
+#             yaxis_title="Popularity",
+#             hovermode="x unified",
+#             hoverlabel=dict(bgcolor="#2d5730", font=dict(color="white"))
+#         )
+
+#         st.plotly_chart(fig, use_container_width=True)
+
+#     def display_gauge_chart(basic_score, fixed_delta_str="±0.08"):
+#         gauge = go.Figure(go.Indicator(
+#             mode="gauge+number",
+#             value=basic_score,
+#             domain={'x': [0, 1], 'y': [0, 1]},
+#             gauge={'axis': {'range': [0, 1]}}
+#         ))
+
+#         gauge.update_layout(
+#             title=dict(
+#                 text="Sheeple-O-Meter",
+#                 font=dict(size=30),
+#                 x=0.5,
+#                 xanchor='center',
+#                 y=0.9,
+#                 yanchor='top'
+#             ),
+#             annotations=[
+#                 dict(
+#                     x=0.5,
+#                     y=-0.1,
+#                     text=f"{fixed_delta_str}",
+#                     showarrow=False,
+#                     font=dict(size=20)
+#                 )
+#             ]
+#         )
+
+#         st.plotly_chart(gauge, use_container_width=True)
+
+#     def display_artist_points_chart(chart_hits):
+#         artist_points = chart_hits.groupby('artist_name')['points_awarded'].sum().sort_values(ascending=True).tail(10)
+#         fig_artists = px.bar(
+#             x=artist_points.values,
+#             y=artist_points.index,
+#             orientation='h',
+#             title='Top 10 Artists by Points',
+#             labels={'x': 'Total Points', 'y': 'Artist'},
+#             color_discrete_sequence =['#19ab19']*len(artist_points),
+#         )
+#         st.plotly_chart(fig_artists, use_container_width=True)
+
+#     def display_timeline_chart(chart_hits, plot_df, years, latest_year, points_method):
+#         fig_timeline = go.Figure()
+
+#         for year in years:
+#             year_data = plot_df[plot_df['year'] == year]
+#             y_data = year_data['points_awarded'] if points_method == "Discrete" else year_data['cumulative_points']
+
+#             fig_timeline.add_trace(go.Scatter(
+#                 x=year_data['month_day'],
+#                 y=y_data,
+#                 mode='lines',
+#                 name=str(year),
+#                 visible=True if year == latest_year else 'legendonly'
+#             ))
+
+#         fig_timeline.update_layout(
+#             title='Points Earned Over the Year (Toggle Years via Legend)',
+#             xaxis=dict(
+#                 title='Date (Jan–Dec)',
+#                 tickformat='%b',
+#                 dtick='M1'
+#             ),
+#             yaxis_title='Cumulative Points' if points_method == "Cumulative" else 'Daily Points',
+#             legend_title='Year',
+#             legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)', font=dict(color='white')),
+#             hovermode="x",
+#             hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white"))
+#         )
+#         st.plotly_chart(fig_timeline, use_container_width=True)
+
+# # >>>>>>>>>>>>>>>>>>>>> DATA PREP
+
+#     # ✅ Make sure dataset is loaded
+#     if "current_df" not in st.session_state:
+#         st.error("No dataset selected. Please go to the Home page and select a dataset.")
+#         st.stop()
+
+#     df, current_label = require_current_df()
+#     user_selected = current_label
+#     df = df.copy()
+#     df['year'] = pd.to_datetime(df['datetime']).dt.year
+#     year_list = df['year'].sort_values().unique().tolist()
+#     df_info = INFO_ARTIST_GENRE
+
+#     # Merge info and calculate score early
+#     df = pd.merge(df, df_info, on=["track_name", "album_name", "artist_name"], how="left", suffixes=["", "_remove"])
+#     df['datetime'] = pd.to_datetime(df['datetime'])
+#     df['year_month'] = df['datetime'].dt.to_period('M').dt.to_timestamp()
+
+#     # Load chart data
+#     all_points_dfs, summary_stats = load_latest_user_pickles(user_selected)
+
+# # >>>>>>>>>>>>>>>>>>>>> STREAMLIT
+
+#     # Initialize session state for filters
+#     if 'selected_year' not in st.session_state:
+#         st.session_state.selected_year = max(year_list)
+#     if 'show_all_years' not in st.session_state:
+#         st.session_state.show_all_years = False
+
+#     # Header with logo
+#     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
+#     with col3:
+#         st.image(LOGO_SPOTGREEN, width=200)
+
+#     # Title section
+#     c1, c2, c3 = st.columns([1,2,1])
+#     with c2:
+#         st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The Farm</b></em></p>")
+#         st.html("<p style='text-align: center; font-size: 30px;'>Here we try to determine if you are a chart-following sheep or a lone-listening wolf</p>")
+#     # Filter data based on current session state
+#     if st.session_state.show_all_years:
+#         filtered_df = df
+#     else:
+#         filtered_df = df[df['year'] == st.session_state.selected_year]
+
+#     # Calculate metrics based on filtered data
+#     track_pop_filtered = round((filtered_df.groupby("track_name")["track_popularity"].mean()).mean(), 2)
+#     art_pop_filtered = round((filtered_df.groupby("artist_name")["artist_popularity"].mean()).mean(), 2)
+
+
+#     # >>>>>>>>>>> DUPLICITY - can this be called from a function?
+#     # Load reference data for comparison
+#     popularity_ref_pickle = "datasets/chart_scores/popularity_reference.pkl"
+#     if Path(popularity_ref_pickle).exists():
+#         with open(popularity_ref_pickle, "rb") as f:
+#             reference_df = pickle.load(f)
+
+#         reference_df['year'] = reference_df['year_week'].astype(str).str[:4].astype(int)
+
+#         if st.session_state.show_all_years:
+#             relevant_ref = reference_df[reference_df['user_id'] != user_selected]
+#         else:
+#             relevant_ref = reference_df[(reference_df['user_id'] != user_selected) & (reference_df['year'] == st.session_state.selected_year)]
+
+#         ref_track_pop = round(relevant_ref['track_popularity'].mean(), 2)
+#         ref_art_pop = round(relevant_ref['artist_popularity'].mean(), 2)
+
+#         track_delta = round(track_pop_filtered - ref_track_pop, 2)
+#         art_delta = round(art_pop_filtered - ref_art_pop, 2)
+
+#         track_delta_str = f"{'+' if track_delta >= 0 else ''}{track_delta}"
+#         art_delta_str = f"{'+' if art_delta >= 0 else ''}{art_delta}"
+#     else:
+#         ref_track_pop = ref_art_pop = None
+#         track_delta_str = art_delta_str = "N/A"
+
+#     # Calculate chart-based metrics from filtered data
+#     if summary_stats and all_points_dfs:
+#         # Get the 7-day points data and filter by selected timeframe
+#         points_df_7 = all_points_dfs[f'points_df_7']
+#         points_df_7['year'] = pd.to_datetime(points_df_7['datetime']).dt.year
+
+#         # Filter points data based on year selection
+#         if st.session_state.show_all_years:
+#             filtered_points = points_df_7
+#         else:
+#             filtered_points = points_df_7[points_df_7['year'] == st.session_state.selected_year]
+
+#         # Calculate filtered chart metrics
+#         chart_hits_filtered = filtered_points[filtered_points['points_awarded'] > 0]
+#         total_listens_filtered = len(filtered_points)
+#         chart_listens_filtered = len(chart_hits_filtered)
+
+#         if total_listens_filtered > 0:
+#             chart_hit_rate_filtered = chart_listens_filtered / total_listens_filtered
+#             avg_points_filtered = filtered_points['points_awarded'].mean()
+#             total_points_filtered = filtered_points['points_awarded'].sum()
+#             avg_points_per_year_filtered = total_points_filtered / total_listens_filtered * 365 if total_listens_filtered > 0 else 0
+#         else:
+#             chart_hit_rate_filtered = 0
+#             avg_points_filtered = 0
+#             avg_points_per_year_filtered = 0
+#             chart_listens_filtered = 0
+#     else:
+#         chart_hit_rate_filtered = 0
+#         avg_points_filtered = 0
+#         avg_points_per_year_filtered = 0
+#         chart_listens_filtered = 0
+
+#     basic_score = round((track_pop_filtered + chart_hit_rate_filtered)/200,2)
+
+#     # Display gauge
+#     display_gauge_chart(basic_score)
+
+#     # Display all 6 scorecards
+#     col1, col2, col3, col4, col5, col6 = st.columns(6)
+#     with col1:
+#         st.metric("Average track popularity", value=f'{track_pop_filtered}%', delta=f'{track_delta_str}%')
+#     with col2:
+#         st.metric("Average artist popularity", value=f'{art_pop_filtered}%', delta=f'{art_delta_str}%')
+
+#     # Chart-based metrics (now filtered by year)
+#     with col3:
+#         st.metric("# Chart Song Listens", f"{chart_listens_filtered:,}")
+#     with col4:
+#         st.metric("Avg Points/Year", f"{avg_points_per_year_filtered:,.0f}")
+#     with col5:
+#         st.metric("Avg Points/Listen", f"{avg_points_filtered:.1f}")
+#     with col6:
+#         st.metric("Chart Hit Rate", f"{chart_hit_rate_filtered:.1%}")
+
+#     # Deep dive toggle
+#     if st.checkbox("Need statistical validation?  Let's deep-dive..."):
+
+#         # Year selector controls (first thing after deep dive toggle)
+#         c1, c2, c3 = st.columns([3, 1, 1], vertical_alignment='center')
+#         with c1:
+#             # Update session state when controls change
+#             new_selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=st.session_state.selected_year)
+#             new_show_all_years = st.toggle("Show all years", value=st.session_state.show_all_years)
+
+#             # Update session state if values changed
+#             if new_selected_year != st.session_state.selected_year:
+#                 st.session_state.selected_year = new_selected_year
+#                 st.rerun()
+#             if new_show_all_years != st.session_state.show_all_years:
+#                 st.session_state.show_all_years = new_show_all_years
+#                 st.rerun()
+
+#         # Use the same filtered_df that was used for top metrics
+
+#         # CHART OF POPULISM ACROSS TIME
+#         st.subheader(f"How _populist_ is your music taste (according to Spotify)?")
+
+#         # Generate weekly stats and display comparison
+#         weekly_df = get_user_weekly_popularity(filtered_df, user_selected)
+#         smoothing_window = 10 if st.session_state.show_all_years else 4
+#         display_popularity_comparison(user_selected, weekly_df, smoothing_window, st.session_state.show_all_years, st.session_state.selected_year)
+
+#         # Chart scorer section
+#         if all_points_dfs is None or summary_stats is None:
+#             st.stop()  # don't break me if none found
+
+#         window_sizes = [7, 30, 61, 91, 182, 365]
+
+#         # Create label-to-value mapping, e.g., "7 days" → 7
+#         window_label_map = {f"{w} days": w for w in window_sizes}
+#         label_list = list(window_label_map.keys())
+
+#         # Default to the shortest window (or whatever you prefer)
+#         default_label = f"{min(window_sizes)} days"
+
+#         st.subheader("How long does it take you to listen to a charting song?")
+#         # Show segmented control
+#         selected_label = st.segmented_control(
+#             "Chart Match Window",
+#             label_list,
+#             selection_mode="single",
+#             default=default_label)
+
+#         # Get corresponding numeric window size
+#         selected_window = window_label_map[selected_label]
+
+#         # These now correctly match the dict keys
+#         points_df = all_points_dfs[f'points_df_{selected_window}']
+#         stats = summary_stats[f'summary_{selected_window}']
+
+#         # Compute fresh metrics for the selected window
+#         points_df['year'] = pd.to_datetime(points_df['datetime']).dt.year
+
+#         if st.session_state.show_all_years:
+#             filtered_points_window = points_df
+#         else:
+#             filtered_points_window = points_df[points_df['year'] == st.session_state.selected_year]
+
+#         chart_hits_window = filtered_points_window[filtered_points_window['points_awarded'] > 0]
+#         total_listens_window = len(filtered_points_window)
+#         chart_listens_window = len(chart_hits_window)
+
+#         if total_listens_window > 0:
+#             chart_hit_rate_window = chart_listens_window / total_listens_window
+#             avg_points_window = filtered_points_window['points_awarded'].mean()
+#             total_points_window = filtered_points_window['points_awarded'].sum()
+#             avg_points_per_year_window = total_points_window / total_listens_window * 365
+#         else:
+#             chart_hit_rate_window = 0
+#             avg_points_window = 0
+#             avg_points_per_year_window = 0
+#             chart_listens_window = 0
+
+#         # Display updated metrics
+#         col3, col4, col5, col6 = st.columns(4)
+#         with col3:
+#             st.metric("# Chart Song Listens", f"{chart_listens_window:,}")
+#         with col4:
+#             st.metric("Avg Chart Points/Year", f"{avg_points_per_year_window:,.0f}")
+#         with col5:
+#             st.metric("Avg Chart Points/Listen", f"{avg_points_window:.1f}")
+#         with col6:
+#             st.metric("Chart Listen Rate", f"{chart_hit_rate_window:.1%}")
+
+#         # Top-performing songs
+#         chart_hits = points_df[points_df['points_awarded'] > 0]
+#         if not chart_hits.empty:
+
+#             # Display artist points chart
+#             display_artist_points_chart(chart_hits)
+
+#             top_songs = chart_hits.groupby(['artist_name', 'track_name']).agg({
+#                 'points_awarded': 'sum',
+#                 'chart_weeks_matched': 'mean',
+#                 'datetime': 'count'
+#             }).reset_index()
+#             top_songs.columns = ['Artist', 'Track', 'Total Points', 'Avg Chart Weeks', 'Listen Count']
+#             top_songs = top_songs.sort_values('Total Points', ascending=False).head(10)
+
+#             st.dataframe(top_songs, use_container_width=True, hide_index=True)
+
+#             >>>>>>>>>>>>>>>>>>>>>>>>>> Points scored throughout the year chart
+#             # Prepare daily summary for timeline
+#             daily_points = chart_hits.copy()
+#             daily_points['date'] = daily_points['datetime'].dt.date
+#             daily_summary = daily_points.groupby('date')['points_awarded'].sum().reset_index()
+
+#             # Add year and "day-of-year" style plotting column (preserves month/day but ignores actual year)
+#             daily_summary['year'] = pd.to_datetime(daily_summary['date']).dt.year
+#             daily_summary['month_day'] = pd.to_datetime(daily_summary['date']).apply(lambda x: x.replace(year=2000))
+
+#             # Create full Jan–Dec date range to reindex against
+#             full_md_range = pd.date_range('2000-01-01', '2000-12-31', freq='D')
+
+#             # Generate zero-filled data for each year
+#             all_years = []
+
+#             for year, group in daily_summary.groupby('year'):
+#                 group = group.set_index('month_day').reindex(full_md_range, fill_value=0).reset_index()
+#                 group['year'] = year
+#                 group.rename(columns={'index': 'month_day'}, inplace=True)
+#                 all_years.append(group)
+
+#             # Concatenate into one DataFrame
+#             plot_df = pd.concat(all_years, ignore_index=True)
+
+#             # Prepare cumulative data per year
+#             plot_df['cumulative_points'] = plot_df.sort_values(['year', 'month_day']) \
+#                 .groupby('year')['points_awarded'].cumsum()
+
+#             # Filter only the selected years (or include all for setup)
+#             years = sorted(plot_df['year'].unique())
+#             latest_year = max(years)
+
+#             c1, c2 = st.columns([3, 1], vertical_alignment='center')
+#             with c1:
+#                 points_method = st.segmented_control(
+#                     "View Mode",
+#                     options=["Discrete", "Cumulative"],
+#                     selection_mode="single"
+#                 )
+
+#             # Display timeline chart
+#             display_timeline_chart(chart_hits, plot_df, years, latest_year, points_method)

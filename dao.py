@@ -223,7 +223,16 @@ class LocalUserDataDAO:
         if not os.path.exists(path):
             raise FileNotFoundError(f"LocalUserData: no file found at {path}")
         print(f"[LocalUserData] Loading {path}")
-        return pd.read_csv(path)
+
+        # Explicit dtypes for mixed/null-heavy columns
+        dtype_map = {
+            "spotify_episode_uri": "string",
+            "audiobook_title": "string",
+            "audiobook_uri": "string",
+            "audiobook_chapter_uri": "string",
+        }
+
+        return pd.read_csv(path, dtype=dtype_map, low_memory=False)
 
     def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
         """
@@ -231,7 +240,6 @@ class LocalUserDataDAO:
         """
         index = self._load_index()
         return [(label, table) for table, label in index.items() if table.startswith(f"{user_id}_")]
-
 
 class LocalStatusDAO(StatusDAO):
     """Writes enrichment status to datasets/enrichment/status/{user_id}_{dataset_label}.json"""
@@ -331,36 +339,47 @@ class LocalMetadataDAO(StorageDAO):
     def merge_into_master(self, df_new: pd.DataFrame, filename: str, *, keys: list[str]) -> None:
         """
         Merge df_new into the master CSV (datasets/enrichment/metadata/<filename>) using `keys` as de-dupe keys.
-        Creates the file if missing. Writes atomically via temp file.
+        - Creates the file if missing.
+        - For duplicates: keeps the most recent non-null value per column.
+        - Writes atomically via temp file.
         """
-        master_path = self.base_dir / filename  # <--- stays inside datasets/enrichment/metadata
+        master_path = self.base_dir / filename
         master_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Load existing master if present
         if master_path.exists():
             try:
-                df_old = pd.read_csv(master_path)
+                df_old = pd.read_csv(master_path, low_memory=False)
             except Exception:
                 df_old = pd.DataFrame(columns=df_new.columns)
         else:
             df_old = pd.DataFrame(columns=df_new.columns)
 
-        # Align columns (in case shapes drift)
         cols = list({*df_old.columns.tolist(), *df_new.columns.tolist()})
         df_old = df_old.reindex(columns=cols)
         df_new = df_new.reindex(columns=cols)
 
-        # Concatenate and drop duplicates by key(s)
-        if keys:
-            df_merged = pd.concat([df_old, df_new], ignore_index=True)
-            df_merged = df_merged.drop_duplicates(subset=keys, keep="last")
-        else:
-            # Fallback: drop exact duplicate rows
-            df_merged = pd.concat([df_old, df_new], ignore_index=True).drop_duplicates(keep="last")
+        df_combined = pd.concat([df_old, df_new], ignore_index=True)
 
-        # Atomic write
+        if keys:
+            df_combined["_is_new"] = 0
+            df_combined.loc[df_combined.index[-len(df_new):], "_is_new"] = 1
+
+            # ✅ Preserve 0 and False; only treat NaN/NA as missing
+            def last_valid(series: pd.Series):
+                not_nulls = series[~series.isna()]
+                return not_nulls.iloc[-1] if not not_nulls.empty else None
+
+            df_combined = (
+                df_combined.sort_values(keys + ["_is_new"])
+                .groupby(keys, as_index=False)
+                .agg(last_valid)
+            )
+            df_combined = df_combined.drop(columns=["_is_new"], errors="ignore")
+        else:
+            df_combined = df_combined.drop_duplicates(keep="last")
+
         tmp = master_path.with_suffix(".csv.tmp")
-        df_merged.to_csv(tmp, index=False)
+        df_combined.to_csv(tmp, index=False)
         tmp.replace(master_path)
 
 class LocalLogDAO:

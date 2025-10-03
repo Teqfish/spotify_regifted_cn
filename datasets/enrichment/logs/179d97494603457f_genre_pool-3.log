@@ -2534,3 +2534,295 @@
 {"event_time": "2025-10-03T15:45:38.045686", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
 {"event_time": "2025-10-03T15:45:38.355274", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
 {"event_time": "2025-10-03T15:45:38.392148", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-03T15:58:38.500519", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-03T15:58:38.769587", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T15:58:38.769831", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-03T15:58:39.027059", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T15:58:39.063032", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-03T15:58:55.055341", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-03T15:58:55.349516", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T15:58:55.349732", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-03T15:58:55.556439", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T15:58:55.579416", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-03T16:02:27.790994", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-03T16:02:28.287007", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T16:02:28.287576", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-03T16:02:28.675539", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T16:02:28.714333", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-03T16:02:46.248404", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-03T16:02:46.604384", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T16:02:46.604603", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-03T16:02:46.821599", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T16:02:46.858319", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-03T16:19:02.870264", "where": "sanity", "level": "info", "message": "Starting spotify_sanity_check", "data": null}
+{"event_time": "2025-10-03T16:19:03.181749", "where": "sanity", "level": "info", "message": "spotify_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T16:19:03.182010", "where": "sanity", "level": "info", "message": "Starting discogs_sanity_check", "data": null}
+{"event_time": "2025-10-03T16:19:03.398706", "where": "sanity", "level": "info", "message": "discogs_sanity_check result: ok=True, msg=ok", "data": null}
+{"event_time": "2025-10-03T16:19:03.432955", "where": "enrichment", "level": "info", "message": "Starting run_all()", "data": null}
+{"event_time": "2025-10-03T16:19:24.893879", "where": "spotify:shows", "level": "info", "message": "Fetched 3 shows", "data": null}
+{"event_time": "2025-10-03T16:19:25.657058", "where": "spotify:audiobooks", "level": "info", "message": "Fetched 1 audiobooks", "data": null}
+{"event_time": "2025-10-03T16:19:26.884694", "where": "spotify:shows", "level": "info", "message": "Fetched 2 shows", "data": null}
+{"event_time": "2025-10-03T16:19:28.071569", "where": "spotify:audiobooks", "level": "info", "message": "Fetched 2 audiobooks", "data": null}
+{"event_time": "2025-10-03T16:19:28.897581", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:29.826839", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:30.641305", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:31.054550", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:19:31.465697", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:32.286203", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:33.132085", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:33.888388", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:19:34.365879", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:35.363903", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:36.379879", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:36.963524", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:19:37.365438", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:38.224268", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:39.255016", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:39.856976", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:19:40.357762", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:40.549826", "where": "spotify:tracks", "level": "info", "message": "Fetched 2 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:41.713505", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:42.731472", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:43.017099", "where": "spotify:albums", "level": "info", "message": "Fetched 3 albums", "data": null}
+{"event_time": "2025-10-03T16:19:43.401074", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:43.615388", "where": "spotify:tracks", "level": "info", "message": "Fetched 1 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:44.378204", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:45.373372", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:46.101341", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:19:46.543806", "where": "spotify:tracks", "level": "info", "message": "Fetched 49 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:47.643137", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:49.295076", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:49.891694", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:19:50.364570", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:51.124971", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:52.361716", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:53.169528", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:19:53.783699", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:54.818655", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:56.051739", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:56.754459", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:19:57.263066", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:19:58.129967", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:59.046633", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:19:59.679606", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:20:00.246887", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:00.424148", "where": "spotify:tracks", "level": "info", "message": "Fetched 1 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:01.463646", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:02.289705", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:02.688657", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:20:03.096388", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:04.009261", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:04.637862", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:05.185724", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:06.475311", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:07.310590", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:07.805660", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:08.301058", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:09.365261", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:10.434239", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:10.983380", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:11.495650", "where": "spotify:tracks", "level": "info", "message": "Fetched 49 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:12.734082", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:13.761758", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:14.260357", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:14.821828", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:15.015303", "where": "spotify:tracks", "level": "info", "message": "Fetched 1 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:16.227169", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:17.570025", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:18.155300", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:20:18.554907", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:19.694167", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:21.153686", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:21.727975", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:22.254312", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:23.700070", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:24.552264", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:25.205308", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:20:25.759837", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:26.551346", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:27.485966", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:27.962139", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:20:28.484480", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:28.677060", "where": "spotify:tracks", "level": "info", "message": "Fetched 1 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:29.674233", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:30.773137", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:31.455025", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:31.965455", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:33.197212", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:34.481068", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:35.355385", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:36.064637", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:37.212984", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:38.133784", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:38.436208", "where": "spotify:albums", "level": "info", "message": "Fetched 6 albums", "data": null}
+{"event_time": "2025-10-03T16:20:38.819294", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:39.576431", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:40.290265", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:41.089553", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:41.460385", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:42.225033", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:43.152523", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:43.648230", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:20:44.261094", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:45.221185", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:46.098162", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:46.724549", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:20:47.335715", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:48.505875", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:49.452895", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:50.205663", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:20:50.716708", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:52.063812", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:53.699264", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:54.354092", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:20:54.783493", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:55.586791", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:56.979736", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:57.383735", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:20:57.782120", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:20:58.677187", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:20:59.954886", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:00.393302", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:21:00.854017", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:01.678592", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:02.392308", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:03.075416", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:21:03.560043", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:04.371373", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:05.375599", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:05.975787", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:21:06.370111", "where": "spotify:tracks", "level": "info", "message": "Fetched 49 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:07.566897", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:08.360057", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:08.947148", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:21:09.361764", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:10.439538", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:11.311652", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:11.920290", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:21:12.364489", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:13.314896", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:14.530450", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:15.368678", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:21:16.010557", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:16.783709", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:17.596570", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:18.123684", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:21:18.469031", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:19.292875", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:20.009641", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:20.287166", "where": "spotify:albums", "level": "info", "message": "Fetched 6 albums", "data": null}
+{"event_time": "2025-10-03T16:21:20.824511", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:21.655142", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:22.535696", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:22.960820", "where": "spotify:albums", "level": "info", "message": "Fetched 6 albums", "data": null}
+{"event_time": "2025-10-03T16:21:23.376078", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:24.566088", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:25.557299", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:26.093116", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:21:26.532408", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:26.731467", "where": "spotify:tracks", "level": "info", "message": "Fetched 1 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:27.696056", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:28.819813", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:29.376536", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:21:29.932376", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:31.155467", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:32.025696", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:32.840738", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:21:33.312990", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:34.433487", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:35.542775", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:36.187821", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:21:37.099891", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:37.937802", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:38.852586", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:39.382597", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:21:39.869752", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:41.010020", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:42.116931", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:42.736546", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:21:43.350650", "where": "spotify:tracks", "level": "info", "message": "Fetched 49 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:44.429308", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:45.465600", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:45.911634", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:21:46.321446", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:46.502909", "where": "spotify:tracks", "level": "info", "message": "Fetched 1 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:47.244201", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:48.553520", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:49.085881", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:21:49.700746", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:49.938363", "where": "spotify:tracks", "level": "info", "message": "Fetched 1 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:50.728969", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:51.865425", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:52.384408", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:21:56.044566", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:57.153950", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:57.899458", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:21:58.531392", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:21:59.030621", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:21:59.846341", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:00.872495", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:01.275929", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:22:01.835626", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:02.096764", "where": "spotify:tracks", "level": "info", "message": "Fetched 1 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:02.818151", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:03.738522", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:04.425293", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:22:04.826708", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:06.095443", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:07.375469", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:07.931698", "where": "spotify:albums", "level": "info", "message": "Fetched 7 albums", "data": null}
+{"event_time": "2025-10-03T16:22:08.362431", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:09.378696", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:10.527159", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:10.842934", "where": "spotify:albums", "level": "info", "message": "Fetched 5 albums", "data": null}
+{"event_time": "2025-10-03T16:22:11.359756", "where": "spotify:tracks", "level": "info", "message": "Fetched 49 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:12.510763", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:14.195044", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:14.894805", "where": "spotify:albums", "level": "info", "message": "Fetched 9 albums", "data": null}
+{"event_time": "2025-10-03T16:22:15.381430", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:16.748598", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:17.876044", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:18.541332", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:22:19.089380", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:20.448955", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:21.585073", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:21.983273", "where": "spotify:albums", "level": "info", "message": "Fetched 5 albums", "data": null}
+{"event_time": "2025-10-03T16:22:22.385152", "where": "spotify:tracks", "level": "info", "message": "Fetched 49 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:24.018652", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:24.899661", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:25.468768", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:22:25.893342", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:26.683458", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:27.707581", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:28.203990", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:22:28.710354", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:29.335181", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:30.264811", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:30.763485", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:22:31.182539", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:32.077059", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:33.467779", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:34.245051", "where": "spotify:albums", "level": "info", "message": "Fetched 8 albums", "data": null}
+{"event_time": "2025-10-03T16:22:34.759572", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:35.795901", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:36.810246", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:37.177960", "where": "spotify:albums", "level": "info", "message": "Fetched 10 albums", "data": null}
+{"event_time": "2025-10-03T16:22:37.540188", "where": "spotify:tracks", "level": "info", "message": "Fetched 38 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:38.242904", "where": "spotify:albums", "level": "info", "message": "Fetched 20 albums", "data": null}
+{"event_time": "2025-10-03T16:22:39.178705", "where": "spotify:albums", "level": "info", "message": "Fetched 18 albums", "data": null}
+{"event_time": "2025-10-03T16:22:39.874697", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:40.414502", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:40.905033", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:41.476182", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:42.136797", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:42.841933", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:43.364411", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:44.009344", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:44.643652", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:45.304853", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:45.819925", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:46.268210", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:46.864319", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:47.257104", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:47.866244", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}
+{"event_time": "2025-10-03T16:22:48.354875", "where": "spotify:tracks", "level": "info", "message": "Fetched 50 tracks", "data": null}

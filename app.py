@@ -118,7 +118,7 @@ INFO_ALBUM = safe_read_csv(
     required_cols=["album_id", "artist_name", "release_date",
                    "album_name", "album_artwork"]
 )
-INFO_EVENT = safe_read_csv("datasets/info_event.csv")
+INFO_HEADLINE = safe_read_csv("datasets/reference/info_headline.csv")
 INFO_SHOW = safe_read_csv("datasets/enrichment/metadata/info_show.csv")
 INFO_AUDIOBOOK = safe_read_csv("datasets/enrichment/metadata/info_audiobook.csv")
 
@@ -129,6 +129,7 @@ LOGO_DARKGREEN = "media/assets/logo_darkgreen.svg"
 LOGO_MIDGREEN = "media/assets/logo_midgreen.svg"
 LOGO_LIGHTGREEN = "media/assets/logo_lightgreen.svg"
 LOGO_SPOTGREEN = "media/assets/logo_spotgreen.svg"
+PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
 
 @st.cache_resource(show_spinner=False)
 def task_registry() -> dict[str, dict]:
@@ -2568,7 +2569,6 @@ elif page == "FUN":
         st.stop()
 
     df, current_label = require_current_df()
-    df_event = INFO_EVENT
 
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -2576,76 +2576,118 @@ elif page == "FUN":
         st.image(LOGO_SPOTGREEN, width=200)
 
     ## random event generator ##
-    df = df[df['category'] == 'music']
-    df_event['datetime'] = pd.to_datetime(df_event['Datetime'], format='%Y-%m-%d')
-    df['date'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S+00:00').dt.normalize()
+    st.markdown("## Random News & Listening Day")
 
-    st.markdown("## Random Event Selector")
+    # Load news headlines dataset
+    headlines_df = INFO_HEADLINE.copy()
+    headlines_df.columns = headlines_df.columns.str.strip()
+    headlines_df['date'] = pd.to_datetime(headlines_df['date (dd-mm-yyyy)'], format='%d-%m-%Y').dt.date
 
-    if st.button("Pick a Random Event"):
-      # Selecting random event
-      random_event = df_event.sample(n=1)
-      # Extracting event details
-      event_date = random_event.iloc[0]['datetime']
-      event_year = random_event.iloc[0]['Year']
-      event_name = random_event.iloc[0]['Event']
-      display_date = event_date.strftime('%d %B %Y')
-
-      # Display the selected event
-      st.write(f"**On {display_date}, {event_name}, you listened to:**")
-
-      # Match random event date to user's music listening history
-      df_music_event = df[df['date'] == event_date]
-
-      # Display matched music history
-      if  len(df_music_event) == 0 :
-          st.write("No matching music history found for this date.")
-      else:
-          st.dataframe(df_music_event[['track_name', 'artist_name', 'album_name', 'minutes_played']].sort_values(by='minutes_played', ascending=False))
-    ## end of random event generator ##
-
-    ##most skipped song Scorecard##
-    st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)
-    ## df grouped by year
+    # Normalize listening dataframe to daily level
     df['date'] = pd.to_datetime(df['datetime']).dt.date
-    df['year'] = pd.to_datetime(df['datetime']).dt.year
-    year_list = df['year'].sort_values().unique().tolist()
-    selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=df['year'].max())
-    df_filtered = df[df['year'] == selected_year]
-    df_music = df_filtered[df_filtered['category'] == 'music']
-    most_skipped = (df_music[df_music['skipped'] > 0].groupby(['track_name', 'artist_name'])['skipped'].sum().reset_index().sort_values(by='skipped', ascending=False).head(1))
 
-    ## box stolen from the internet
-    wch_colour_box = (64, 64, 64)
-    wch_colour_font = (255, 255, 255)
-    #wch_colour_font = (50, 205, 50)
-    fontsize = 38
-    valign = "left"
-    iconname = "fas fa-star"
-    i = (most_skipped['track_name'].values[0] + ' by ' + most_skipped['artist_name'].values[0] if not most_skipped.empty else "No skipped tracks")
+    if st.button("Pick a Random Day"):
+        # Choose a random date from the user's listening history
+        random_date = df['date'].sample(n=1).iloc[0]
 
-    htmlstr = f"""
-          <p style='background-color: rgb(
-              {wch_colour_box[0]},
-              {wch_colour_box[1]},
-              {wch_colour_box[2]}, 0.75
-          );
-          color: rgb(
-              {wch_colour_font[0]},
-              {wch_colour_font[1]},
-              {wch_colour_font[2]}, 0.75
-          );
-          font-size: {fontsize}px;
-          border-radius: 7px;
-          padding-top: 40px;
-          padding-bottom: 40px;
-          line-height:25px;
-          display: flex;
-          align-items: center;
-          justify-content: center;'>
-          <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-      """
-    st.markdown(htmlstr, unsafe_allow_html=True)
+        # Get top news headline for that date
+        news_row = headlines_df[headlines_df['date'] == random_date]
+
+        # Display the news story
+        if not news_row.empty:
+            news = news_row.iloc[0]
+            st.subheader(f"📰 Top News on {random_date.strftime('%d %B %Y')}")
+            if isinstance(news['imageUrl'], str) and news['imageUrl'].startswith("http"):
+                st.image(news['imageUrl'], width=400)
+            st.markdown(f"**{news['webTitle']}**")
+            st.write(news['short_description'])
+            st.markdown(f"[Read more here]({news['webUrl']}) — *{news['section']}*")
+        else:
+            st.warning("No news available for this date.")
+
+        # Find the most listened-to item that day
+        daily_df = df[df['date'] == random_date]
+        if daily_df.empty:
+            st.info("No listening history found for this date.")
+        else:
+            top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
+            category = top_item['category']
+
+            st.subheader(f"🎧 Your Top {category.capitalize()} on {random_date.strftime('%d %B %Y')}")
+
+            if category == "music":
+                album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
+                artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width=300)
+                else:
+                    st.image(PLACEHOLDER, width=300)
+                st.write(f"**Track:** {top_item['track_name']}")
+                st.write(f"**Artist:** {top_item['artist_name']}")
+                st.write(f"**Album:** {top_item['album_name']}")
+
+            elif category == "podcast":
+                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
+                artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width=300)
+                else:
+                    st.image(PLACEHOLDER, width=300)
+                st.write(f"**Episode:** {top_item['episode_name']}")
+                st.write(f"**Show:** {top_item['episode_show_name']}")
+
+            elif category == "audiobook":
+                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
+                artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width=300)
+                else:
+                    st.image(PLACEHOLDER, width=300)
+                st.write(f"**Book:** {top_item['audiobook_title']}")
+                st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
+
+    # ##most skipped song Scorecard##
+    # st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)
+    # ## df grouped by year
+    # df['date'] = pd.to_datetime(df['datetime']).dt.date
+    # df['year'] = pd.to_datetime(df['datetime']).dt.year
+    # year_list = df['year'].sort_values().unique().tolist()
+    # selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=df['year'].max())
+    # df_filtered = df[df['year'] == selected_year]
+    # df_music = df_filtered[df_filtered['category'] == 'music']
+    # most_skipped = (df_music[df_music['skipped'] > 0].groupby(['track_name', 'artist_name'])['skipped'].sum().reset_index().sort_values(by='skipped', ascending=False).head(1))
+
+    # ## box stolen from the internet
+    # wch_colour_box = (64, 64, 64)
+    # wch_colour_font = (255, 255, 255)
+    # #wch_colour_font = (50, 205, 50)
+    # fontsize = 38
+    # valign = "left"
+    # iconname = "fas fa-star"
+    # i = (most_skipped['track_name'].values[0] + ' by ' + most_skipped['artist_name'].values[0] if not most_skipped.empty else "No skipped tracks")
+
+    # htmlstr = f"""
+    #       <p style='background-color: rgb(
+    #           {wch_colour_box[0]},
+    #           {wch_colour_box[1]},
+    #           {wch_colour_box[2]}, 0.75
+    #       );
+    #       color: rgb(
+    #           {wch_colour_font[0]},
+    #           {wch_colour_font[1]},
+    #           {wch_colour_font[2]}, 0.75
+    #       );
+    #       font-size: {fontsize}px;
+    #       border-radius: 7px;
+    #       padding-top: 40px;
+    #       padding-bottom: 40px;
+    #       line-height:25px;
+    #       display: flex;
+    #       align-items: center;
+    #       justify-content: center;'>
+    #       <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
+    #   """
+    # st.markdown(htmlstr, unsafe_allow_html=True)
 
 # ------------------------------- FAQs -------------------------------- #
 elif page == "FAQs":

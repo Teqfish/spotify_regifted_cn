@@ -572,6 +572,9 @@ class MetadataEnricher:
         Build top 10 per-year entities (artists, shows, audiobooks), excluding already-seen.
         Returns DataFrames with columns: year, <entity_name>, minutes_played.
         """
+        print("[DEBUG] Categories summary in self.df:")
+        print(self.df["category"].value_counts(dropna=False))
+        print(self.df[self.df["category"] == "audiobook"])
         years = sorted(self.df["year"].dropna().unique().tolist(), reverse=True)
 
         music = self.df[self.df["category"] == "music"]
@@ -629,9 +632,9 @@ class MetadataEnricher:
                 })
 
         return (
-            pd.DataFrame(rows_art),
-            pd.DataFrame(rows_show),
-            pd.DataFrame(rows_book),
+            pd.DataFrame(rows_art, columns=["year", "artist_name", "minutes_played"]),
+            pd.DataFrame(rows_show, columns=["year", "show_name", "minutes_played"]),
+            pd.DataFrame(rows_book, columns=["year", "audiobook_title", "minutes_played"]),
         )
 
     def _build_top_track_ids_per_year(self) -> list[str]:
@@ -1380,6 +1383,12 @@ class MetadataEnricher:
 
         # ---------- Audiobooks ----------
         batch, fired = [], 0
+        # 👇 INSERT THIS DEBUGGING BLOCK HERE
+        print("[DEBUG] per_book before sorting:")
+        print("  shape:", per_book.shape)
+        print("  columns:", per_book.columns.tolist())
+        print("  head:\n", per_book.head())
+        # 👆 This will tell us whether per_book has a 'year' column or if it's empty.
         for _, r in per_book.sort_values(["year"], ascending=False).iterrows():
             title = r["audiobook_title"]
             if title in self.seen_audiobooks:

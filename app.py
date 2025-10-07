@@ -85,19 +85,31 @@ ENABLE_ENRICHMENT = True  # <— set True later when we re-enable background pro
 # ---- METADATA DIRECTORY ----
 def safe_read_csv(path: str, required_cols: list[str] = None) -> pd.DataFrame:
     """
-    Safely read a CSV file. If not found, return empty DataFrame.
-    If required_cols is given, ensure they exist (create empty ones if missing).
+    Safely read a CSV file while normalizing column names.
+    Ensures required columns exist and strips any hidden or inconsistent characters.
     """
     try:
-        df = pd.read_csv(path)
+        df = pd.read_csv(path, encoding="utf-8-sig", low_memory=False)
     except FileNotFoundError:
-        return pd.DataFrame(columns=required_cols or [])
+        return pd.DataFrame(columns=[c.lower() for c in (required_cols or [])])
+    except Exception as e:
+        st.warning(f"⚠️ Could not read {path}: {e}")
+        return pd.DataFrame(columns=[c.lower() for c in (required_cols or [])])
 
-    # Add missing required columns if not present
+    # Normalize column names
+    df.columns = (
+        df.columns.astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace(r"[\u200b\xa0]", "", regex=True)  # remove hidden Unicode spaces
+    )
+
+    # Ensure all required columns exist
     if required_cols:
         for col in required_cols:
-            if col not in df.columns:
-                df[col] = pd.Series(dtype="object")
+            col_lower = col.lower()
+            if col_lower not in df.columns:
+                df[col_lower] = pd.Series(dtype="object")
 
     return df
 
@@ -1089,7 +1101,7 @@ if page == "Home":
         st.markdown(f"🗓️ From **{df['datetime'].min().date()}** to **{df['datetime'].max().date()}**")
         st.markdown(f"🎧 Total listening time: **{total_listened_hours:.2f} hours**")
 
-        st.dataframe(df.sample(min(50, len(df))) if len(df) > 0 else df)
+        st.dataframe(df.sample(min(50, len(df))) if len(df) > 0 else df, height=600)
 
     else:
         st.info("You haven’t uploaded any datasets yet.")
@@ -2189,6 +2201,7 @@ elif page == "Per Album":
 
 # -------------------------------- Per Genre --------------------------------- #
 elif page == "Per Genre":
+
     # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
@@ -2304,65 +2317,164 @@ elif page == "Per Genre":
 
 # --------------------------------- The Farm --------------------------------- #
 elif page == "The Farm":
-
     # -------------------- Helper Functions -------------------- #
-    @st.cache_data
-    def load_info_data():
-        """Load enriched metadata tables safely."""
-        tracks = INFO_TRACK if 'INFO_TRACK' in globals() else pd.DataFrame()
-        artists = INFO_ARTIST_GENRE if 'INFO_ARTIST_GENRE' in globals() else pd.DataFrame()
+    @st.cache_data(show_spinner=False)
 
-        # Ensure schema safety
-        if not tracks.empty and 'user_id' not in tracks.columns:
-            tracks['user_id'] = None
-        if not tracks.empty and 'release_date' not in tracks.columns:
-            tracks['release_date'] = None
-        if not tracks.empty and 'track_popularity' not in tracks.columns:
-            tracks['track_popularity'] = None
-        if not artists.empty and 'artist_popularity' not in artists.columns:
-            artists['artist_popularity'] = None
+    def load_info_data_uncached():
+        """Direct load of metadata tables — always up to date."""
+        return INFO_TRACK.copy(), INFO_ARTIST_GENRE.copy(), INFO_ALBUM.copy()
+
+    def load_info_data():
+        """Load enriched metadata tables safely (re-caches if empty)."""
+        tracks, artists, album = load_info_data_uncached()
+
+        # If cache returned empties, reload fresh
+        if tracks.empty and "INFO_TRACK" in globals():
+            tracks = INFO_TRACK.copy()
+        if artists.empty and "INFO_ARTIST_GENRE" in globals():
+            artists = INFO_ARTIST_GENRE.copy()
+        if album.empty and "INFO_ALBUM" in globals():
+            album = INFO_ALBUM.copy()
+
+        # Safety: verify critical columns exist
+        for df, name, required in [
+            (tracks, "tracks", ["track_id", "artist_name", "track_popularity"]),
+            (artists, "artists", ["artist_name", "artist_popularity"]),
+            (album, "album", ["album_id", "artist_name"])
+        ]:
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                st.warning(f"⚠️ {name} table missing columns: {missing}")
 
         return tracks, artists
 
-    def get_user_popularity(user_id, tracks, artists):
-        if tracks.empty or "user_id" not in tracks.columns:
-            st.warning("⚠️ No track data available for this user.")
-            return pd.DataFrame(columns=["year", "track_popularity", "artist_popularity"])
+    def get_monthly_user_popularity(
+        user_history: pd.DataFrame,
+        info_tracks: pd.DataFrame,
+        info_artists: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        Compute monthly averages of track & artist popularity based on listening activity.
 
-        df = tracks[tracks["user_id"] == user_id].copy()
-        if df.empty:
-            st.info(f"No tracks found for user {user_id}.")
-            return pd.DataFrame(columns=["year", "track_popularity", "artist_popularity"])
+        - Groups by month of listening (from `datetime` column in user history)
+        - Merges track popularity from `info_tracks` using track_id
+        - Merges artist popularity from `info_artists` using artist_name
+        - Handles column collisions gracefully
+        """
+        if user_history.empty:
+            st.warning("⚠️ User history is empty.")
+            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
 
-        if 'release_date' not in df.columns:
-            st.warning("⚠️ Missing release_date field in track data.")
-            return pd.DataFrame(columns=["year", "track_popularity", "artist_popularity"])
+        # --- Step 1. Normalize column names ---
+        for df in [user_history, info_tracks, info_artists]:
+            df.columns = df.columns.str.strip().str.lower()
 
-        # Parse release year
-        df['year'] = pd.to_datetime(df['release_date'], errors="coerce").dt.year
+        # --- Step 2. Parse datetime & month ---
+        if "datetime" not in user_history.columns:
+            st.warning("⚠️ No 'datetime' column found in user history.")
+            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
 
-        # Merge with artist popularity if possible
-        if not artists.empty and 'artist_popularity' in artists.columns:
-            df = df.merge(
-                artists[['artist_name', 'artist_popularity']],
-                on="artist_name",
-                how="left"
+        user_history["datetime"] = pd.to_datetime(user_history["datetime"], errors="coerce", utc=True)
+        user_history["month"] = user_history["datetime"].dt.to_period("M").dt.to_timestamp()
+
+        # --- Step 3. Extract track_id from Spotify URI if needed ---
+        if "spotify_track_uri" in user_history.columns and "track_id" not in user_history.columns:
+            user_history["track_id"] = (
+                user_history["spotify_track_uri"]
+                .astype(str)
+                .str.replace("spotify:track:", "", regex=False)
+                .str.strip()
             )
+
+        if "track_id" not in user_history.columns:
+            st.warning("⚠️ No 'track_id' or 'spotify_track_uri' column found in user history.")
+            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+
+        # --- Step 4. Merge with track metadata (keeping track_popularity + artist_name) ---
+        if not {"track_id", "artist_name", "track_popularity"}.issubset(info_tracks.columns):
+            st.warning("⚠️ Track metadata missing required columns.")
+            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+
+        merged = user_history.merge(
+            info_tracks[["track_id", "artist_name", "track_popularity"]],
+            on="track_id",
+            how="left",
+            suffixes=("", "_trackmeta")  # prevent duplicate naming
+        )
+
+        # Choose the correct artist_name source
+        if "artist_name_trackmeta" in merged.columns:
+            merged["artist_name"] = merged["artist_name_trackmeta"]
+            merged = merged.drop(columns=["artist_name_trackmeta"], errors="ignore")
+        elif "artist_name_x" in merged.columns and "artist_name_y" in merged.columns:
+            merged["artist_name"] = merged["artist_name_y"].combine_first(merged["artist_name_x"])
+            merged = merged.drop(columns=["artist_name_x", "artist_name_y"], errors="ignore")
+
+        # --- Step 5. Merge with artist popularity metadata ---
+        if not {"artist_name", "artist_popularity"}.issubset(info_artists.columns):
+            st.warning("⚠️ Artist metadata missing required columns.")
+            merged["artist_popularity"] = pd.NA
         else:
-            df['artist_popularity'] = None
+            merged = merged.merge(
+                info_artists[["artist_name", "artist_popularity"]],
+                on="artist_name",
+                how="left",
+                suffixes=("", "_artistmeta")
+            )
 
-        return df
+            # Handle possible suffix duplication again
+            if "artist_popularity_artistmeta" in merged.columns:
+                merged["artist_popularity"] = merged["artist_popularity_artistmeta"]
+                merged = merged.drop(columns=["artist_popularity_artistmeta"], errors="ignore")
 
-    def calculate_popularity_scores(df: pd.DataFrame) -> pd.DataFrame:
-        """Average track + artist popularity per year."""
-        if df.empty or 'year' not in df.columns:
-            return pd.DataFrame(columns=["year", "track_popularity", "artist_popularity"])
+        # --- Step 6. Compute monthly averages ---
+        monthly = (
+            merged.groupby("month")[["track_popularity", "artist_popularity"]]
+            .mean(numeric_only=True)
+            .reset_index()
+            .rename(columns={
+                "track_popularity": "avg_track_popularity",
+                "artist_popularity": "avg_artist_popularity"
+            })
+        )
 
-        scores = df.groupby("year").agg(
-            track_popularity=("track_popularity", "mean"),
-            artist_popularity=("artist_popularity", "mean")
-        ).reset_index()
-        return scores
+        # --- Step 7. Diagnostics ---
+        st.caption(
+            f"Matched {merged['track_id'].notna().sum()} tracks "
+            f"and {merged['artist_name'].notna().sum()} artists "
+            f"across {len(monthly)} months."
+        )
+
+        return monthly
+
+    def get_global_monthly_popularity(info_tracks: pd.DataFrame, info_artists: pd.DataFrame, exclude_user: str) -> pd.DataFrame:
+        """Compute monthly popularity trend across all users except the selected one."""
+        if info_tracks.empty:
+            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+
+        df = info_tracks.copy()
+        if "user_id" in df.columns:
+            df = df[df["user_id"] != exclude_user]
+
+        df["release_date"] = pd.to_datetime(df["release_date"], errors="coerce")
+        df["month"] = df["release_date"].dt.to_period("M").dt.to_timestamp()
+
+        df = df.merge(
+            info_artists[["artist_name", "artist_popularity"]],
+            on="artist_name",
+            how="left"
+        )
+
+        monthly = (
+            df.groupby("month")[["track_popularity", "artist_popularity"]]
+            .mean()
+            .reset_index()
+            .rename(columns={
+                "track_popularity": "avg_track_popularity",
+                "artist_popularity": "avg_artist_popularity"
+            })
+        )
+        return monthly
 
     def display_gauge_chart(basic_score: float, delta_str: str = ""):
         """Draw the Sheeple-O-Meter gauge."""
@@ -2372,7 +2484,6 @@ elif page == "The Farm":
             domain={'x': [0, 1], 'y': [0, 1]},
             gauge={'axis': {'range': [0, 1]}}
         ))
-
         gauge.update_layout(
             title=dict(
                 text="Sheeple-O-Meter",
@@ -2394,59 +2505,52 @@ elif page == "The Farm":
         )
         st.plotly_chart(gauge, use_container_width=True)
 
-    def display_popularity_comparison(user_id, user_scores, global_scores, show_all_years, selected_year):
-        """Line chart comparing user vs global averages."""
-        if user_scores.empty or global_scores.empty:
-            st.warning("⚠️ Not enough data to display comparison.")
-            return
-
-        if not show_all_years:
-            user_scores = user_scores[user_scores['year'] == selected_year]
-            global_scores = global_scores[global_scores['year'] == selected_year]
-
-        if user_scores.empty or global_scores.empty:
-            st.info("No matching data for the selected filters.")
+    def display_popularity_trend(user_name: str, user_monthly: pd.DataFrame, global_monthly: pd.DataFrame):
+        """Plot monthly average popularity over time (user vs global)."""
+        if user_monthly.empty or global_monthly.empty:
+            st.warning("⚠️ Not enough data to plot popularity trend.")
             return
 
         fig = go.Figure()
 
-        # User lines
+        # User
         fig.add_trace(go.Scatter(
-            x=user_scores['year'],
-            y=user_scores['track_popularity'],
-            mode='lines+markers',
-            name=f"{user_id} - Track Popularity",
-            line=dict(color='#b800bb')
+            x=user_monthly["month"],
+            y=user_monthly["avg_track_popularity"],
+            mode="lines+markers",
+            name=f"{user_name} – Track Popularity",
+            line=dict(color="#b800bb")
         ))
         fig.add_trace(go.Scatter(
-            x=user_scores['year'],
-            y=user_scores['artist_popularity'],
-            mode='lines+markers',
-            name=f"{user_id} - Artist Popularity",
-            line=dict(color='#fd6bff')
+            x=user_monthly["month"],
+            y=user_monthly["avg_artist_popularity"],
+            mode="lines+markers",
+            name=f"{user_name} – Artist Popularity",
+            line=dict(color="#fd6bff")
         ))
 
-        # Global averages
+        # Global
         fig.add_trace(go.Scatter(
-            x=global_scores['year'],
-            y=global_scores['track_popularity'],
-            mode='lines',
-            name="Avg Track Popularity",
-            line=dict(color='#199144')
+            x=global_monthly["month"],
+            y=global_monthly["avg_track_popularity"],
+            mode="lines",
+            name="Global Avg – Track Popularity",
+            line=dict(color="#199144", dash="dot")
         ))
         fig.add_trace(go.Scatter(
-            x=global_scores['year'],
-            y=global_scores['artist_popularity'],
-            mode='lines',
-            name="Avg Artist Popularity",
-            line=dict(color='#19ab19')
+            x=global_monthly["month"],
+            y=global_monthly["avg_artist_popularity"],
+            mode="lines",
+            name="Global Avg – Artist Popularity",
+            line=dict(color="#19ab19", dash="dot")
         ))
 
         fig.update_layout(
-            title=f"{user_id} vs Global Average Listening Popularity",
-            xaxis_title="Year",
-            yaxis_title="Popularity (0–100)",
-            hovermode="x unified"
+            title=f"{user_name} vs Global Average — Monthly Popularity Trend",
+            xaxis_title="Month",
+            yaxis_title="Average Popularity (0–100)",
+            hovermode="x unified",
+            legend_title="Metric",
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -2460,77 +2564,40 @@ elif page == "The Farm":
     df, current_label = require_current_df()
     user_selected = current_label
 
-    # Get user-specific data
-    user_df = get_user_popularity(user_selected, tracks, artists)
-    user_scores = calculate_popularity_scores(user_df)
+    user = st.session_state.get("user") or {}
+    user_id = user.get("user_id")
+    user_name = user.get("user_name", user_selected)
 
-    # Global averages (exclude current user)
-    if not tracks.empty and 'user_id' in tracks.columns:
-        global_df = tracks[tracks['user_id'] != user_selected].copy()
-    else:
-        global_df = pd.DataFrame(columns=['year','track_popularity','artist_popularity'])
+    # Compute monthly popularity trends
+    user_monthly = get_monthly_user_popularity(df.copy(), tracks, artists)
+    global_monthly = get_global_monthly_popularity(tracks, artists, user_id)
 
-    if not global_df.empty and 'release_date' in global_df.columns:
-        global_df['year'] = pd.to_datetime(global_df['release_date'], errors="coerce").dt.year
-        if not artists.empty and 'artist_popularity' in artists.columns:
-            global_df = global_df.merge(
-                artists[['artist_name', 'artist_popularity']],
-                on="artist_name",
-                how="left"
-            )
-        else:
-            global_df['artist_popularity'] = None
-
-    global_scores = calculate_popularity_scores(global_df)
-
-    if user_scores.empty or global_scores.empty:
-        st.warning("Not enough popularity data available for this user.")
+    if user_monthly.empty or global_monthly.empty:
+        st.warning("⚠️ Not enough listening data available for this user.")
         st.stop()
 
-    year_list = sorted(user_scores['year'].dropna().unique().tolist())
-    if not year_list:
-        st.warning("⚠️ No valid years found in data.")
-        st.stop()
+    # Calculate metrics for gauge
+    track_pop_user = round(user_monthly["avg_track_popularity"].mean(), 2)
+    art_pop_user = round(user_monthly["avg_artist_popularity"].mean(), 2)
+    track_pop_global = round(global_monthly["avg_track_popularity"].mean(), 2)
+    art_pop_global = round(global_monthly["avg_artist_popularity"].mean(), 2)
+
+    track_delta = track_pop_user - track_pop_global
+    art_delta = art_pop_user - art_pop_global
+    basic_score = round((track_pop_user + art_pop_user) / 200, 2)
+    delta_text = f"Track Δ {track_delta:+.1f}, Artist Δ {art_delta:+.1f}"
 
     # -------------------- UI -------------------- #
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
         st.image(LOGO_SPOTGREEN, width=200)
 
-    c1, c2, c3 = st.columns([1,2,1])
+    c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
         st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The Farm</b></em></p>")
         st.html("<p style='text-align: center; font-size: 30px;'>Are you a chart-following sheep or a lone-listening wolf?</p>")
 
-    if 'selected_year' not in st.session_state:
-        st.session_state.selected_year = max(year_list)
-    if 'show_all_years' not in st.session_state:
-        st.session_state.show_all_years = False
-
-    # Filter
-    if st.session_state.show_all_years:
-        filtered_user = user_scores
-        filtered_global = global_scores
-    else:
-        filtered_user = user_scores[user_scores['year'] == st.session_state.selected_year]
-        filtered_global = global_scores[global_scores['year'] == st.session_state.selected_year]
-
-    if filtered_user.empty or filtered_global.empty:
-        st.warning("⚠️ No data available for selected filters.")
-        st.stop()
-
-    # Metrics
-    track_pop_user = round(filtered_user['track_popularity'].mean(), 2)
-    art_pop_user = round(filtered_user['artist_popularity'].mean(), 2)
-    track_pop_global = round(filtered_global['track_popularity'].mean(), 2)
-    art_pop_global = round(filtered_global['artist_popularity'].mean(), 2)
-
-    track_delta = track_pop_user - track_pop_global
-    art_delta = art_pop_user - art_pop_global
-
-    # Gauge score
-    basic_score = round((track_pop_user + art_pop_user) / 200, 2)
-    delta_text = f"Track Δ {track_delta:+.1f}, Artist Δ {art_delta:+.1f}"
+    # Gauge
     display_gauge_chart(basic_score, delta_text)
 
     # Metrics row
@@ -2540,26 +2607,9 @@ elif page == "The Farm":
     with col2:
         st.metric("Artist Popularity", f"{art_pop_user}", delta=f"{art_delta:+.1f}")
 
-    # Deep dive toggle
-    if st.checkbox("Show yearly comparison"):
-        new_selected_year = st.selectbox("Select year", year_list, index=len(year_list)-1)
-        new_show_all_years = st.toggle("Show all years", value=st.session_state.show_all_years)
-
-        if new_selected_year != st.session_state.selected_year:
-            st.session_state.selected_year = new_selected_year
-            st.rerun()
-        if new_show_all_years != st.session_state.show_all_years:
-            st.session_state.show_all_years = new_show_all_years
-            st.rerun()
-
-        display_popularity_comparison(
-            user_selected,
-            user_scores,
-            global_scores,
-            st.session_state.show_all_years,
-            st.session_state.selected_year
-        )
-
+    # Trend chart
+    st.subheader("Popularity Trend Over Time")
+    display_popularity_trend(user_name, user_monthly, global_monthly)
 # --------------------------------- FUN Page --------------------------------- #
 elif page == "FUN":
     # Show current user info
@@ -2605,52 +2655,59 @@ elif page == "FUN":
             st.error("Couldn't find a valid day with both news and listening history.")
             st.stop()
 
-        # --- News Section ---
-        news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
-        st.subheader(f"📰 Top News on {valid_date.strftime('%d %B %Y')}")
-        if isinstance(news['imageUrl'], str) and news['imageUrl'].startswith("http"):
-            st.image(news['imageUrl'], width=400)
-        st.markdown(f"**{news['webTitle']}**")
-        st.write(news['short_description'])
-        st.markdown(f"[Read more here]({news['webUrl']}) — *{news['section']}*")
+        st.subheader(f"**{valid_date.strftime('%d %B %Y')}**")
+        col1, col2 = st.columns([1,1],vertical_alignment='center')
 
-        # --- Listening Section ---
-        daily_df = df[df['date'] == valid_date]
-        top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
-        category = top_item['category']
+        with col1:
+            # --- News Section ---
+            news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
 
-        st.subheader(f"🎧 Your Top {category.capitalize()} on {random_date.strftime('%d %B %Y')}")
+            st.subheader(f"📰 News Headline")
 
-        if category == "music":
-            album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
-            artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
-            if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                st.image(artwork_url, width=300)
-            else:
-                st.image(PLACEHOLDER, width=300)
-            st.write(f"**Track:** {top_item['track_name']}")
-            st.write(f"**Artist:** {top_item['artist_name']}")
-            st.write(f"**Album:** {top_item['album_name']}")
+            if isinstance(news['imageUrl'], str) and news['imageUrl'].startswith("http"):
+                st.image(news['imageUrl'], width=300)
+            st.markdown(f"**{news['webTitle']}**")
+            st.write(news['short_description'])
+            st.markdown(f"[Read more here]({news['webUrl']}) — *{news['section']}*")
 
-        elif category == "podcast":
-            show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
-            artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
-            if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                st.image(artwork_url, width=300)
-            else:
-                st.image(PLACEHOLDER, width=300)
-            st.write(f"**Episode:** {top_item['episode_name']}")
-            st.write(f"**Show:** {top_item['episode_show_name']}")
+        with col2:
+            # --- Listening Section ---
+            daily_df = df[df['date'] == valid_date]
+            top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
+            category = top_item['category']
 
-        elif category == "audiobook":
-            book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
-            artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
-            if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                st.image(artwork_url, width=300)
-            else:
-                st.image(PLACEHOLDER, width=300)
-            st.write(f"**Book:** {top_item['audiobook_title']}")
-            st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
+            st.subheader(f"🎧 Top {category.capitalize()}")
+
+            if category == "music":
+                album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
+                artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width=300)
+                else:
+                    st.image(PLACEHOLDER, width=300)
+                st.write(f"**Track:** {top_item['track_name']}")
+                st.write(f"**Artist:** {top_item['artist_name']}")
+                st.write(f"**Album:** {top_item['album_name']}")
+
+            elif category == "podcast":
+                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
+                artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width=300)
+                else:
+                    st.image(PLACEHOLDER, width=300)
+                st.write(f"**Episode:** {top_item['episode_name']}")
+                st.write(f"**Show:** {top_item['episode_show_name']}")
+
+            elif category == "audiobook":
+                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
+                artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width=300)
+                else:
+                    st.image(PLACEHOLDER, width=300)
+                st.write(f"**Book:** {top_item['audiobook_title']}")
+                st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
 
     # ##most skipped song Scorecard##
     # st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)

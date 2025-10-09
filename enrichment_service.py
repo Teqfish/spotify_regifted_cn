@@ -1,11 +1,10 @@
-import base64
-from datetime import datetime, timedelta
-import time, math, base64, queue, threading, random
+import base64, math, os, queue, random, requests, time, threading
 import pandas as pd
-import requests
 import streamlit as st
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Iterable, Set
 
+# from chart_scorer import compute_chart_scorer_if_missing
 from dao import StatusDAO, StorageDAO, InfoTableDAO
 
 DISCOGS_KEY = st.secrets["discogs"]["key"]
@@ -291,6 +290,105 @@ def get_chapters(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[
         spin_sleep(0.1)
     return out
 
+def get_monthly_user_popularity(
+    user_history: pd.DataFrame,
+    info_tracks: pd.DataFrame,
+    info_artists: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Compute monthly averages of track & artist popularity based on listening activity.
+
+    - Groups by month of listening (from `datetime` column in user history)
+    - Merges track popularity from `info_tracks` using track_id
+    - Merges artist popularity from `info_artists` using artist_name
+    - Handles column collisions gracefully
+    """
+    if user_history.empty:
+        st.warning("⚠️ User history is empty.")
+        return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+
+    # --- Step 1. Normalize column names ---
+    for df in [user_history, info_tracks, info_artists]:
+        df.columns = df.columns.str.strip().str.lower()
+
+    # --- Step 2. Parse datetime & month ---
+    if "datetime" not in user_history.columns:
+        st.warning("⚠️ No 'datetime' column found in user history.")
+        return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+
+    user_history["datetime"] = pd.to_datetime(user_history["datetime"], errors="coerce", utc=True)
+    user_history["month"] = user_history["datetime"].dt.to_period("M").dt.to_timestamp()
+
+    # --- Step 3. Extract track_id from Spotify URI if needed ---
+    if "spotify_track_uri" in user_history.columns and "track_id" not in user_history.columns:
+        user_history["track_id"] = (
+            user_history["spotify_track_uri"]
+            .astype(str)
+            .str.replace("spotify:track:", "", regex=False)
+            .str.strip()
+        )
+
+    if "track_id" not in user_history.columns:
+        st.warning("⚠️ No 'track_id' or 'spotify_track_uri' column found in user history.")
+        return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+
+    # --- Step 4. Merge with track metadata (keeping track_popularity + artist_name) ---
+    if not {"track_id", "artist_name", "track_popularity"}.issubset(info_tracks.columns):
+        st.warning("⚠️ Track metadata missing required columns.")
+        return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+
+    merged = user_history.merge(
+        info_tracks[["track_id", "artist_name", "track_popularity"]],
+        on="track_id",
+        how="left",
+        suffixes=("", "_trackmeta")  # prevent duplicate naming
+    )
+
+    # Choose the correct artist_name source
+    if "artist_name_trackmeta" in merged.columns:
+        merged["artist_name"] = merged["artist_name_trackmeta"]
+        merged = merged.drop(columns=["artist_name_trackmeta"], errors="ignore")
+    elif "artist_name_x" in merged.columns and "artist_name_y" in merged.columns:
+        merged["artist_name"] = merged["artist_name_y"].combine_first(merged["artist_name_x"])
+        merged = merged.drop(columns=["artist_name_x", "artist_name_y"], errors="ignore")
+
+    # --- Step 5. Merge with artist popularity metadata ---
+    if not {"artist_name", "artist_popularity"}.issubset(info_artists.columns):
+        st.warning("⚠️ Artist metadata missing required columns.")
+        merged["artist_popularity"] = pd.NA
+    else:
+        merged = merged.merge(
+            info_artists[["artist_name", "artist_popularity"]],
+            on="artist_name",
+            how="left",
+            suffixes=("", "_artistmeta")
+        )
+
+        # Handle possible suffix duplication again
+        if "artist_popularity_artistmeta" in merged.columns:
+            merged["artist_popularity"] = merged["artist_popularity_artistmeta"]
+            merged = merged.drop(columns=["artist_popularity_artistmeta"], errors="ignore")
+
+    # --- Step 6. Compute monthly averages ---
+    monthly = (
+        merged.groupby("month")[["track_popularity", "artist_popularity"]]
+        .mean(numeric_only=True)
+        .reset_index()
+        .rename(columns={
+            "track_popularity": "avg_track_popularity",
+            "artist_popularity": "avg_artist_popularity"
+        })
+    )
+
+    # --- Step 7. Diagnostics ---
+    st.caption(
+        f"Matched {merged['track_id'].notna().sum()} tracks "
+        f"and {merged['artist_name'].notna().sum()} artists "
+        f"across {len(monthly)} months."
+    )
+
+    return monthly
+
 # ============ Discogs fallback for missing artist genres ============
 def discogs_search_genres(
     artist_names: List[str],
@@ -572,6 +670,9 @@ class MetadataEnricher:
         Build top 10 per-year entities (artists, shows, audiobooks), excluding already-seen.
         Returns DataFrames with columns: year, <entity_name>, minutes_played.
         """
+        print("[DEBUG] Categories summary in self.df:")
+        print(self.df["category"].value_counts(dropna=False))
+        print(self.df[self.df["category"] == "audiobook"])
         years = sorted(self.df["year"].dropna().unique().tolist(), reverse=True)
 
         music = self.df[self.df["category"] == "music"]
@@ -629,9 +730,9 @@ class MetadataEnricher:
                 })
 
         return (
-            pd.DataFrame(rows_art),
-            pd.DataFrame(rows_show),
-            pd.DataFrame(rows_book),
+            pd.DataFrame(rows_art, columns=["year", "artist_name", "minutes_played"]),
+            pd.DataFrame(rows_show, columns=["year", "show_name", "minutes_played"]),
+            pd.DataFrame(rows_book, columns=["year", "audiobook_title", "minutes_played"]),
         )
 
     def _build_top_track_ids_per_year(self) -> list[str]:
@@ -1254,6 +1355,64 @@ class MetadataEnricher:
         self.buf_audiobooks.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
         self.seen_audiobooks.update(titles)
 
+    # ---------- Chart scorer helpers ----------
+    def run_phase_chart_scorer(self):
+        """
+        Compute per-user chart scorer (Fri→Fri, 5-week decay) after enrichment.
+        - Early exit if that user+label+timestamp parquet already exists (overwrite=False).
+        - Respects cancel/kill via self.cancel_event.
+        """
+        from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
+
+        self._check_cancel(self.cancel_event)
+
+        charts_path = "datasets/reference/info_charts.csv"
+        output_dir = "datasets/enrichment/chart_scorer"  # fixed per your request
+
+        # Derive label & timestamp for naming, preferably from the dataset token/table name
+        label, ts_str = None, None
+        table_name = getattr(self, "table_name", None) or getattr(self, "input_table_name", None)
+        if table_name:
+            label, ts_str = parse_label_ts_from_table_name(table_name)
+
+        # Fall back to class label / now-ts if not parseable
+        if not label:
+            label = getattr(self, "label", "unknown")
+        if not ts_str:
+            # As a last resort; better to propagate the dataset timestamp if you have it
+            ts_str = pd.Timestamp.utcnow().strftime("%Y%m%d-%H%M%S")
+
+        # Minimal listening view
+        cols = [c for c in ["datetime", "artist_name", "track_name"] if c in self.df.columns]
+        listening_view = self.df.loc[:, cols].copy()
+
+        # Status
+        self.status.set_status(
+            self.user_id, self.label,
+            phase="chart_scorer",
+            detail=f"Scoring UK Top 50 (Fri→Fri, decay=10) [{label} {ts_str}]",
+            total=self._total_batches
+        )
+
+        # Compute (NOOP if per-user parquet already exists)
+        compute_chart_scorer_if_missing(
+            user_id=self.user_id,
+            label=label,
+            ts_str=ts_str,
+            listening=listening_view,
+            charts=charts_path,
+            output_dir=output_dir,
+            anchor_weekday=4,
+            max_weeks=5,
+            weekly_decay=10,
+            use_weighting_if_present=True,
+            overwrite=False,
+            cancel_event=self.cancel_event,
+        )
+
+        self._done_batches += 1
+        self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
+
     # --- phases called by run_all() ---
     def run_phase_overall_first50(self, top_art: pd.DataFrame, top_shows: pd.DataFrame, top_books: pd.DataFrame):
         """
@@ -1380,6 +1539,12 @@ class MetadataEnricher:
 
         # ---------- Audiobooks ----------
         batch, fired = [], 0
+        # 👇 INSERT THIS DEBUGGING BLOCK HERE
+        print("[DEBUG] per_book before sorting:")
+        print("  shape:", per_book.shape)
+        print("  columns:", per_book.columns.tolist())
+        print("  head:\n", per_book.head())
+        # 👆 This will tell us whether per_book has a 'year' column or if it's empty.
         for _, r in per_book.sort_values(["year"], ascending=False).iterrows():
             title = r["audiobook_title"]
             if title in self.seen_audiobooks:
@@ -1560,6 +1725,156 @@ class MetadataEnricher:
 
         self.log("[top_tracks_per_year] Done")
 
+    def run_phase_top_tracks_per_month(self):
+        """
+        Get metadata for the 25 most-listened tracks per month across the dataset.
+        Produces info_track.csv with track_id, track_name, track_popularity, explicit,
+        artist_name, album_name, release_date.
+        Applies master/seen filters before enrichment and logs before/after counts.
+        Uses batching (50 tracks per Spotify API call).
+        """
+        self.current_phase = "top_tracks_per_month"
+        self._check_cancel(self.cancel_event)
+        self.log("[top_tracks_per_month] Starting…")
+
+        df = self.df[self.df["category"] == "music"].copy()
+        df["month"] = pd.to_datetime(df["datetime"], errors="coerce").dt.to_period("M").dt.to_timestamp()
+
+        # Ensure track_id exists
+        if "track_id" not in df.columns and "spotify_track_uri" in df.columns:
+            df["track_id"] = df["spotify_track_uri"].apply(
+                lambda uri: parse_spotify_id(uri, "track") if isinstance(uri, str) else None
+            )
+
+        if "track_id" not in df.columns:
+            self.log("[top_tracks_per_month] No track_id or spotify_track_uri column found, skipping phase")
+            return
+
+        # Aggregate listening data
+        per_month_track = (
+            df.groupby(["month", "track_id", "track_name", "artist_name", "album_name"])["minutes_played"]
+            .sum()
+            .reset_index()
+            .sort_values(["month", "minutes_played"], ascending=[False, False])
+        )
+
+        months = sorted(per_month_track["month"].dropna().unique().tolist(), reverse=True)
+        all_top_tracks = []
+
+        # Collect all top tracks first (25 per month)
+        for m in months:
+            sub = per_month_track[per_month_track["month"] == m].sort_values("minutes_played", ascending=False)
+            top_tracks = sub["track_id"].dropna().astype(str).unique().tolist()[:25]
+            all_top_tracks.extend(top_tracks)
+
+            self.log(f"[top_tracks_per_month] Month {m.strftime('%Y-%m')} • Selected top {len(top_tracks)} tracks")
+
+        # Deduplicate globally before batching
+        all_top_tracks = list(dict.fromkeys(all_top_tracks))  # preserves order
+        self.log(f"[top_tracks_per_month] Total unique tracks to enrich: {len(all_top_tracks)}")
+
+        # Filter out already known tracks
+        todo = self._filter_known_tracks(all_top_tracks)
+        if not todo:
+            self.log("[top_tracks_per_month] All top tracks already enriched. Skipping.")
+            return
+
+        # --- Batch fetch ---
+        from itertools import islice
+
+        def batched(iterable, n=50):
+            it = iter(iterable)
+            while batch := list(islice(it, n)):
+                yield batch
+
+        batches = list(batched(todo, 50))
+        self.log(f"[top_tracks_per_month] Fetching {len(todo)} tracks in {len(batches)} batches")
+
+        for i, batch in enumerate(batches, start=1):
+            self._check_cancel(self.cancel_event)
+            self.log(f"[top_tracks_per_month] Fetching batch {i}/{len(batches)} • {len(batch)} tracks")
+            self.fetch_and_save_tracks(batch, cancel_event=self.cancel_event)
+
+            self.status.inc_status(
+                self.user_id, self.label,
+                add_batches=1,
+                detail=f"Top tracks per month • batch {i}/{len(batches)} • +{len(batch)}"
+            )
+            self._done_batches += 1
+            self._maybe_autosave(self._done_batches, self._total_batches)
+
+        self.log("[top_tracks_per_month] Done.")
+
+    def run_phase_popularity_timeseries(self):
+        """
+        Compute monthly average popularity (track & artist) for the current user.
+        Saves to datasets/enrichment/metadata/info_popularity.csv in long format.
+        """
+        self.current_phase = "popularity_timeseries"
+        self._check_cancel(self.cancel_event)
+        self.log("[popularity_timeseries] Starting…")
+
+        df = self.df[self.df["category"] == "music"].copy()
+
+        if df.empty:
+            self.log("[popularity_timeseries] No music data found, skipping phase.")
+            return
+
+        # Ensure proper datetime and track_id fields
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
+        if "track_id" not in df.columns and "spotify_track_uri" in df.columns:
+            df["track_id"] = (
+                df["spotify_track_uri"]
+                .astype(str)
+                .str.replace("spotify:track:", "", regex=False)
+                .str.strip()
+            )
+
+        # Load reference metadata
+        info_tracks = self.storage.get_master("info_track.csv")
+        info_artists = self.storage.get_master("info_artist_genre.csv")
+
+        # --- Step 1: Compute monthly popularity for this user ---
+        monthly = get_monthly_user_popularity(df, info_tracks, info_artists)
+
+        if monthly.empty:
+            self.log("[popularity_timeseries] No popularity data computed for this user.")
+            return
+
+        # --- Step 2: Convert to long format ---
+        track_df = monthly[["month", "avg_track_popularity"]].rename(
+            columns={"avg_track_popularity": "avg_popularity"}
+        )
+        track_df["type"] = "track"
+
+        artist_df = monthly[["month", "avg_artist_popularity"]].rename(
+            columns={"avg_artist_popularity": "avg_popularity"}
+        )
+        artist_df["type"] = "artist"
+
+        long_df = pd.concat([track_df, artist_df], ignore_index=True)
+        long_df["user_id"] = self.user_id
+
+        # --- Step 3: Normalize month format and deduplicate ---
+        long_df["month"] = pd.to_datetime(long_df["month"], errors="coerce").dt.strftime("%Y-%m-%d")
+        long_df = long_df.drop_duplicates(subset=["user_id", "month", "type"])
+
+        # --- Step 4: Merge into master ---
+        self.storage.merge_into_master(
+            df_new=long_df,
+            filename="info_popularity.csv",
+            keys=["user_id", "month", "type"]
+        )
+
+        self.log(f"[popularity_timeseries] Added {len(long_df)} monthly popularity rows for user {self.user_id}.")
+        self.status.inc_status(
+            self.user_id, self.label,
+            add_batches=1,
+            detail=f"Popularity timeseries saved • +{len(long_df)}"
+        )
+        self._done_batches += 1
+        self._maybe_autosave(self._done_batches, self._total_batches)
+
     def run_phase_breadth_first_years_remaining(self, per_art: pd.DataFrame, per_show: pd.DataFrame, per_book: pd.DataFrame):
         """
         Remaining metadata: breadth-first over years.
@@ -1627,6 +1942,24 @@ class MetadataEnricher:
                                         detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}")
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
+
+
+        """
+        Locate the UK Top 50 reference (weighted) chart CSV.
+        Checks common locations; adjust if you keep it elsewhere.
+        """
+        candidates = [
+            "datasets/reference/info_charts_weighted.csv",
+            "datasets/enrichment/metadata/info_charts_weighted.csv",
+            "/mnt/data/info_charts_weighted.csv",
+        ]
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+        raise FileNotFoundError(
+            "UK charts CSV not found. Put 'info_charts_weighted.csv' under "
+            "datasets/reference/ or datasets/enrichment/metadata/ (or /mnt/data/)."
+        )
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """
@@ -1734,21 +2067,44 @@ class MetadataEnricher:
             self.run_phase_per_album_all_albums_for_top_artists()
             _end_phase("per_album", before)
 
-            # 7) Top tracks per year
+            # 7) Top tracks per month
             self._check_cancel(self.cancel_event)
-            self.current_phase = "top_tracks_per_year"
-            self.log("[run_all] Starting phase: top_tracks_per_year")
+            self.current_phase = "top_tracks_per_month"
+            self.log("[run_all] Starting phase: top_tracks_per_month")
             before = self._done_batches
             self.status.set_status(
                 self.user_id, self.label,
-                phase="top_tracks_per_year",
-                detail="Fetching top 100 tracks per year…",
+                phase="top_tracks_per_month",
+                detail="Fetching top 25 tracks per month…",
                 total=total
             )
-            self.run_phase_top_tracks_per_year()
-            _end_phase("top_tracks_per_year", before)
+            self.run_phase_top_tracks_per_month()
+            _end_phase("top_tracks_per_month", before)
 
-            # 8) Breadth-first remaining
+            # 8) Popularity timeseries
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "popularity_timeseries"
+            self.log("[run_all] Starting phase: popularity_timeseries")
+            before = self._done_batches
+            self.status.set_status(
+                self.user_id, self.label,
+                phase="popularity_timeseries",
+                detail="Calculating monthly popularity averages…",
+                total=total
+            )
+            self.run_phase_popularity_timeseries()
+            _end_phase("popularity_timeseries", before)
+
+            # 9) Chart Scorer
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "chart_scorer"
+            self.log("[run_all] Starting phase: chart_scorer")
+            _before = self._done_batches
+
+            self.run_phase_chart_scorer()
+            _end_phase("chart_scorer", _before)
+
+            # 10) Breadth-first remaining
             self._check_cancel(self.cancel_event)
             self.current_phase = "breadth_first"
             self.log("[run_all] Starting phase: breadth_first")
@@ -1762,7 +2118,7 @@ class MetadataEnricher:
             self.run_phase_breadth_first_years_remaining(per_art, per_show, per_book)
             _end_phase("breadth_first", before)
 
-            # 9) Final flush
+            # 11) Final flush
             self._check_cancel(self.cancel_event)
             self.current_phase = "flush"
             self.log("[run_all] Starting final flush")
@@ -1775,7 +2131,7 @@ class MetadataEnricher:
             self.flush_all()
             self.log("[run_all] Flush complete")
 
-            # 10) Done
+            # 12) Done
             added_total = self._done_batches
             self.status.finish_status(
                 self.user_id, self.label,
@@ -1949,7 +2305,7 @@ class MetadataEnricher:
             if not artists_df.empty:
                 self.storage.upload_csv(artists_df, bucket="metadata", path=f"{base}/info_artist_genre.csv", overwrite=True)
             if not unlisted_df.empty:
-                self.storage.upload_csv(unlisted_df, bucket="metadata", path=f"{base}/info_artist_unlisted.csv", overwrite=True)
+                self.storage.upload_csv(unlisted_df, bucket="metadata", path=f"{base}/info_artist_genre_unlisted.csv", overwrite=True)
             if not albums_df.empty:
                 self.storage.upload_csv(albums_df, bucket="metadata", path=f"{base}/info_album.csv", overwrite=True)
             if not tracks_df.empty:
@@ -1964,7 +2320,7 @@ class MetadataEnricher:
                 if not artists_df.empty:
                     self.storage.merge_into_master(artists_df, "info_artist_genre.csv", keys=["artist_id"])
                 if not unlisted_df.empty:
-                    self.storage.merge_into_master(unlisted_df, "info_artist_unlisted.csv", keys=["artist_id"])
+                    self.storage.merge_into_master(unlisted_df, "info_artist_genre_unlisted.csv", keys=["artist_id"])
                 if not albums_df.empty:
                     self.storage.merge_into_master(albums_df, "info_album.csv", keys=["album_id"])
                 if not tracks_df.empty:
@@ -1996,7 +2352,7 @@ class MetadataEnricher:
                 self.master_tracks      = self.storage.get_master("info_track.csv")
                 self.master_shows       = self.storage.get_master("info_show.csv")
                 self.master_audiobooks  = self.storage.get_master("info_audiobook.csv")
-                self.master_unlisted    = self.storage.get_master("info_artist_unlisted.csv")
+                self.master_unlisted    = self.storage.get_master("info_artist_genre_unlisted.csv")
             else:
                 self.master_artists    = pd.DataFrame()
                 self.master_albums     = pd.DataFrame()

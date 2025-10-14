@@ -19,7 +19,6 @@ import jwt
 import os
 import pandas as pd
 from pathlib import Path
-import pickle
 from plotly_calplot import calplot
 import plotly.express as px
 import plotly.graph_objects as go
@@ -32,12 +31,13 @@ from supabase import create_client
 import tempfile
 import threading
 import time
+import traceback
 from typing import Optional
 import zipfile
 
-from dao import SupabaseDAOs, LocalMetadataDAO, LocalStatusDAO, LocalLogDAO
-from dao_selector import get_daos
+from dao_selector import get_daos, get_server_mode
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
+from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
 
 # -------------------------- CONFIG / CLIENTS -------------------------------- #
 st.set_page_config(page_title="Regifted", page_icon="./media/assets/icon_spotgreen.svg", layout="wide", initial_sidebar_state="expanded")
@@ -56,18 +56,64 @@ SUPABASE_KEY = st.secrets["supabase"]["key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ---------- Backend selection for ETL/enrichment I/O ----------
-# One switch to rule them all.
-SERVER_MODE = st.secrets.get("server_mode", "local")  # "local" | "supabase" | "cloudflare"
+# Determine active backend (from secrets.toml or environment)
+SERVER_MODE = get_server_mode(default="cloudflare")
 
-from dao_selector import get_daos
+# Initialize DAOs for this mode
 DAOS = get_daos(SERVER_MODE)
 
-# Canonical handles used everywhere else in the app:
-status_dao   = DAOS["status"]            # StatusDAO (local JSON / supabase table / cloudflare KV etc.)
-metadata_dao = DAOS["metadata"]          # StorageDAO for enrichment outputs
-log_dao      = DAOS["logs"]              # logger (local file / supabase table / cloudflare)
-user_data_dao = DAOS.get("user_data")    # only present in "local" mode (for cleaned CSVs)
-supabase_dao  = DAOS.get("main")         # only present in "supabase" mode if you decide to use DAO for storage later
+# Canonical DAO handles (used throughout the app)
+status_dao     = DAOS.get("status")
+metadata_dao   = DAOS.get("metadata") or DAOS.get("storage")
+log_dao        = DAOS.get("logs")
+user_data_dao  = DAOS.get("user_data") or DAOS.get("storage")
+main_dao       = DAOS.get("main")  # Optional (used for Supabase, may be None)
+
+# ✅ Alias for convenience — unified "storage" handle
+#    so you can reference storage_dao instead of guessing between metadata/user_data
+storage_dao = metadata_dao or user_data_dao
+
+if storage_dao is None:
+    st.warning("⚠️ No storage DAO configured. Metadata tables not loaded.")
+else:
+    INFO_TRACK = storage_dao.safe_download_csv(
+        "enrichment/metadata/info_track.csv",
+        required_cols=[
+            "track_id", "artist_name", "explicit", "track_popularity",
+            "release_date", "track_name", "album_name", "user_id"
+        ]
+    )
+
+    INFO_ARTIST_GENRE = storage_dao.safe_download_csv(
+        "enrichment/metadata/info_artist_genre.csv",
+        required_cols=[
+            "artist_name", "supergenre", "primary_genre",
+            "artist_image", "artist_id", "artist_popularity"
+        ]
+    )
+
+    INFO_ALBUM = storage_dao.safe_download_csv(
+        "enrichment/metadata/info_album.csv",
+        required_cols=[
+            "album_id", "artist_name", "release_date",
+            "album_name", "album_artwork"
+        ]
+    )
+
+    INFO_POPULARITY = storage_dao.safe_download_csv("enrichment/metadata/info_popularity.csv")
+    INFO_HEADLINE = storage_dao.safe_download_csv("reference/info_headline.csv")
+    INFO_SHOW = storage_dao.safe_download_csv("enrichment/metadata/info_show.csv")
+    INFO_AUDIOBOOK = storage_dao.safe_download_csv("enrichment/metadata/info_audiobook.csv")
+    GENRE_MAPPING = storage_dao.safe_download_csv("reference/supergenre_map.csv")
+
+LOGO_BLACK = "media/assets/logo_black.svg"
+LOGO_LIGHTGREY= "media/assets/logo_lightgrey.svg"
+LOGO_OFFWHITE = "media/assets/logo_offwhite.svg"
+LOGO_DARKGREEN = "media/assets/logo_darkgreen.svg"
+LOGO_MIDGREEN = "media/assets/logo_midgreen.svg"
+LOGO_LIGHTGREEN = "media/assets/logo_lightgreen.svg"
+LOGO_SPOTGREEN = "media/assets/logo_spotgreen.svg"
+IMAGE_PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
 
 JWT_COOKIE_NAME = "regifted_auth"
 JWT_ALG = "HS256"
@@ -82,76 +128,12 @@ TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 # ---- DEBUG/TEST: ETL-only mode ----
 ENABLE_ENRICHMENT = True  # <— set True later when we re-enable background processing
 
-# ---- METADATA DIRECTORY ----
-def safe_read_csv(path: str, required_cols: list[str] = None) -> pd.DataFrame:
-    """
-    Safely read a CSV file while normalizing column names.
-    Ensures required columns exist and strips any hidden or inconsistent characters.
-    """
-    try:
-        df = pd.read_csv(path, encoding="utf-8-sig", low_memory=False)
-    except FileNotFoundError:
-        return pd.DataFrame(columns=[c.lower() for c in (required_cols or [])])
-    except Exception as e:
-        st.warning(f"⚠️ Could not read {path}: {e}")
-        return pd.DataFrame(columns=[c.lower() for c in (required_cols or [])])
-
-    # Normalize column names
-    df.columns = (
-        df.columns.astype(str)
-        .str.strip()
-        .str.lower()
-        .str.replace(r"[\u200b\xa0]", "", regex=True)  # remove hidden Unicode spaces
-    )
-
-    # Ensure all required columns exist
-    if required_cols:
-        for col in required_cols:
-            col_lower = col.lower()
-            if col_lower not in df.columns:
-                df[col_lower] = pd.Series(dtype="object")
-
-    return df
-
-INFO_TRACK = safe_read_csv(
-    "datasets/enrichment/metadata/info_track.csv",
-    required_cols=["track_id", "artist_name", "explicit", "track_popularity",
-                   "release_date", "track_name", "album_name", "user_id"]
-)
-
-INFO_ARTIST_GENRE = safe_read_csv(
-    "datasets/enrichment/metadata/info_artist_genre.csv",
-    required_cols=["artist_name", "supergenre", "primary_genre",
-                   "artist_image", "artist_id", "artist_popularity"]
-)
-
-INFO_ALBUM = safe_read_csv(
-    "datasets/enrichment/metadata/info_album.csv",
-    required_cols=["album_id", "artist_name", "release_date",
-                   "album_name", "album_artwork"]
-)
-
-INFO_POPULARITY = safe_read_csv("datasets/enrichment/metadata/info_popularity.csv")
-INFO_HEADLINE = safe_read_csv("datasets/reference/info_headline.csv")
-INFO_SHOW = safe_read_csv("datasets/enrichment/metadata/info_show.csv")
-INFO_AUDIOBOOK = safe_read_csv("datasets/enrichment/metadata/info_audiobook.csv")
-
-LOGO_BLACK = "media/assets/logo_black.svg"
-LOGO_LIGHTGREY= "media/assets/logo_lightgrey.svg"
-LOGO_OFFWHITE = "media/assets/logo_offwhite.svg"
-LOGO_DARKGREEN = "media/assets/logo_darkgreen.svg"
-LOGO_MIDGREEN = "media/assets/logo_midgreen.svg"
-LOGO_LIGHTGREEN = "media/assets/logo_lightgreen.svg"
-LOGO_SPOTGREEN = "media/assets/logo_spotgreen.svg"
-PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
-
 @st.cache_resource(show_spinner=False)
-def task_registry() -> dict[str, dict]:
-    """
-    Server-global registry: { key: {"thread": Thread, "cancel": Event} }.
-    Lives across sessions/tabs; cleared only when the server process restarts.
-    """
-    return {}
+def task_registry():
+    """Persistent global registry of active enrichment threads."""
+    if "_enrichment_tasks" not in st.session_state:
+        st.session_state["_enrichment_tasks"] = {}
+    return st.session_state["_enrichment_tasks"]
 
 # --- SESSION INIT ---
 if "user" not in st.session_state:
@@ -285,7 +267,7 @@ def logout():
     except Exception:
         pass
     # Nudge the client so cookie JS commits before next run
-    st.experimental_set_query_params(_=secrets.token_hex(4))
+    st.set_query_params(_=secrets.token_hex(4))
     st.rerun()
 
 def require_current_df():
@@ -404,47 +386,59 @@ if st.session_state.get("user"):
 # ---- ETL helpers (wrappers) ----
 def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
     """
-    Thin wrapper around process_uploaded_zip.
-    Persists ETL completion into enrichment status so widget survives refresh.
+    Wrapper around process_uploaded_zip that:
+      - Runs the ETL process
+      - Persists ETL success/failure status via DAO (Cloudflare or local)
+      - Updates Streamlit session state for UI continuity
     """
+    import streamlit as st
+    from dao_selector import get_daos
+
+    daos = get_daos()
+    status_dao = daos.get("status")
+
     try:
-        # Run the actual ETL
+        # --- Run the actual ETL ---
         table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
 
+        # --- Handle ETL success ---
         if cleaned_df is not None and not cleaned_df.empty:
-            # Mark ETL completion in status.json
             try:
-                from dao import status_dao
-                status_dao.set_status(
-                    user_id,
-                    dataset_label,
-                    phase="etl",
-                    detail="✅ ETL completed successfully",
-                    total=None
-                )
+                if status_dao:
+                    status_dao.set_status(
+                        user_id,
+                        dataset_label,
+                        phase="etl",
+                        detail="✅ ETL completed successfully",
+                        total=len(cleaned_df),
+                    )
+                else:
+                    print("[etl_process_zip] Warning: no status DAO configured.")
             except Exception as e:
                 print(f"[etl_process_zip] Warning: could not persist ETL status: {e}")
 
-            # 🔑 Also mark it in session state so widget will render
-            import streamlit as st
+            # Mark ETL completion in session
             st.session_state.etl_done = True
 
         return table_name, cleaned_df
 
     except Exception as e:
-        # Persist failure to status.json so UI can reflect it
+        # --- Handle ETL failure ---
         try:
-            from dao import status_dao
-            status_dao.set_status(
-                user_id,
-                dataset_label,
-                phase="etl",
-                detail=f"❌ ETL failed: {e}",
-                total=None
-            )
+            if status_dao:
+                status_dao.set_status(
+                    user_id,
+                    dataset_label,
+                    phase="etl",
+                    detail=f"❌ ETL failed: {e}",
+                    total=None,
+                )
+            else:
+                print("[etl_process_zip] Warning: no status DAO configured (failure not persisted).")
         except Exception as e2:
             print(f"[etl_process_zip] Warning: could not persist ETL failure: {e2}")
 
+        # Bubble up the exception so UI can report it
         raise
 
 # --- LOCAL DATA I/O (for testing) ---
@@ -473,14 +467,23 @@ def dbg(user_id: str, dataset_label: str, where: str, msg: str, level: str = "in
 
 # --- DATA PROCESSING ---
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
-    """Processes a Spotify ZIP upload, cleans data, and saves locally to userdata/."""
+    """
+    Processes a Spotify ZIP upload, cleans data, and saves to the active DAO (local, supabase, or cloudflare).
+    """
+    daos = get_daos()
+    user_data_dao = daos.get("user_data")
+
+    if user_data_dao is None:
+        st.error("UserData DAO is not configured for this SERVER_MODE.")
+        return None, None
+
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Save uploaded ZIP
+        # --- Save uploaded ZIP temporarily ---
         zip_path = os.path.join(temp_dir, uploaded_file.name)
         with open(zip_path, 'wb') as f:
             f.write(uploaded_file.getbuffer())
 
-        # Extract contents
+        # --- Extract contents ---
         extract_dir = os.path.join(temp_dir, 'extracted')
         try:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -489,9 +492,9 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
             st.error(f"❌ Failed to extract zip: {e}")
             return None, None
 
-        # Collect all JSON files from ZIP
+        # --- Collect JSON files ---
         json_files = []
-        for root, dirs, files in os.walk(extract_dir):
+        for root, _, files in os.walk(extract_dir):
             for file in files:
                 if file.lower().endswith(".json") and not file.startswith("._"):
                     json_files.append(os.path.join(root, file))
@@ -500,7 +503,7 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
             st.warning("⚠️ No JSON files found in the uploaded ZIP.")
             return None, None
 
-        # Merge JSON content
+        # --- Merge JSON content ---
         combined_data = []
         for file in json_files:
             try:
@@ -514,21 +517,22 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
             st.error("❌ Failed to parse any valid listening data.")
             return None, None
 
-        # Create DataFrame
+        # --- Create DataFrame ---
         df = pd.json_normalize(combined_data)
         st.info(f"📦 Parsed {len(df)} rows of listening data")
 
-        # Clean the data
+        # --- Clean data ---
         cleaned_df = run_cleaning_pipeline(df, dataset_label)
 
-        # Save cleaned data locally (userdata/) for testing
-        from dao import LocalUserDataDAO
-        local_user_dao = LocalUserDataDAO(base_dir="datasets/userdata")
-        filename = uploaded_file.name
-        table_name, path = user_data_dao.save_user_data(user_id, dataset_label, cleaned_df, filename)
-
-        st.success(f"✅ Cleaned CSV saved locally at `{path}`")
-        return table_name, cleaned_df
+        # --- Save cleaned data via the active DAO ---
+        try:
+            filename = uploaded_file.name
+            table_name, path = user_data_dao.save_user_data(user_id, dataset_label, cleaned_df, filename)
+            st.success(f"✅ Cleaned CSV saved using {type(user_data_dao).__name__}")
+            return table_name, cleaned_df
+        except Exception as e:
+            st.error(f"❌ Failed to save cleaned data: {e}")
+            return None, None
 
 def run_cleaning_pipeline(df, username_label):
     """Cleans a Spotify listening dataframe and adds session/user metadata."""
@@ -565,6 +569,9 @@ def run_cleaning_pipeline(df, username_label):
 
         # Parse datetime
         cleaned_df['datetime'] = pd.to_datetime(cleaned_df['datetime'])
+        cleaned_df['year'] = cleaned_df['datetime'].dt.year
+        cleaned_df['month'] = cleaned_df['datetime'].dt.month
+        cleaned_df['day'] = cleaned_df['datetime'].dt.day
 
         # Add user label
         cleaned_df['username'] = username_label
@@ -603,14 +610,12 @@ def background_enrich(
     user_id: str,
     dataset_label: str,
     cleaned_df: pd.DataFrame,
-    log_dao: LocalLogDAO,   # <-- added explicit
+    log_dao,
     cancel_event: Optional[threading.Event] = None
 ):
     """
-    Background enrichment runner that:
-      - writes ALL status via status_dao (so the widget reads it)
-      - writes logs via log_dao
-      - stores CSVs via metadata_dao
+    Background enrichment runner using generic DAOs.
+    Writes status via status_dao, logs via log_dao, and stores CSVs via metadata_dao.
     """
     try:
         log_dao.log(user_id, dataset_label, "sanity", "Starting spotify_sanity_check")
@@ -636,9 +641,8 @@ def background_enrich(
             discogs_secret=DISCOGS_SECRET,
             status_dao=status_dao,
             storage_dao=metadata_dao,
-            log_dao=log_dao,   # <-- pass explicitly into the enricher too
+            log_dao=log_dao,
             info_table_dao=None,
-            verbose=True,
         )
 
         log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
@@ -654,14 +658,12 @@ def background_enrich(
         raise
 
 # ---- DEBUG LOCAL ENRICHMENT (saves CSVs to ./info_test) ----
-def run_local_enrichment_test(cleaned_df: pd.DataFrame, user_id: str, dataset_label: str):
+def run_enrichment_test(cleaned_df: pd.DataFrame, user_id: str, dataset_label: str):
     """Run enrichment using the active DAO bundle (status_dao/metadata_dao/log_dao)."""
-    if status_dao is None or metadata_dao is None:
-        raise RuntimeError("status_dao/metadata_dao not configured for this SERVER_MODE.")
+    if status_dao is None or metadata_dao is None or log_dao is None:
+        raise RuntimeError("DAOs not configured for current SERVER_MODE.")
 
-    local_log_dao = LocalLogDAO()   # <-- new
-
-    local_log_dao.log(user_id, dataset_label, "local_test", "starting run_local_enrichment_test")
+    log_dao.log(user_id, dataset_label, "test", "Starting run_enrichment_test")
 
     enricher = MetadataEnricher(
         user_id=user_id,
@@ -672,14 +674,13 @@ def run_local_enrichment_test(cleaned_df: pd.DataFrame, user_id: str, dataset_la
         discogs_secret=DISCOGS_SECRET,
         status_dao=status_dao,
         storage_dao=metadata_dao,
-        log_dao=local_log_dao,   # <-- pass explicitly here too
+        log_dao=log_dao,
         info_table_dao=None,
-        verbose=True,
     )
 
     enricher.run_all(cancel_event=None)
 
-    local_log_dao.log(user_id, dataset_label, "local_test", "completed run_local_enrichment_test")
+    log_dao.log(user_id, dataset_label, "test", "Completed run_enrichment_test")
 
 def spawn_enrichment_thread(user_id, label, cleaned_df):
     t = threading.Thread(target=background_enrich, kwargs={
@@ -706,8 +707,10 @@ def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str
 
     print(f"[DEBUG] Starting enrichment for {key}")
 
-    # 🔑 create a dedicated log DAO for this run
-    local_log_dao = LocalLogDAO()
+    # Use the active log DAO from the global DAO config
+    if log_dao is None:
+        st.error("Log DAO not configured for this SERVER_MODE.")
+        return
 
     t = threading.Thread(
         target=background_enrich,
@@ -715,7 +718,7 @@ def _maybe_start_enrichment(*, user_id: str, dataset_label: str, table_name: str
             "user_id": user_id,
             "dataset_label": dataset_label,
             "cleaned_df": cleaned_df,
-            "log_dao": local_log_dao,   # <-- passed explicitly
+            "log_dao": log_dao,  # generic DAO
             "cancel_event": None,
         },
         daemon=True
@@ -808,410 +811,126 @@ page = st.sidebar.radio("Go to",
                         )
 
 
-# --- Enrichment Status Widget (manual refresh friendly) ---
-def enrichment_status_widget(user_id: str, dataset_label: str, *, enable_enrichment: bool):
-    import json
-    st.subheader("Metadata Enrichment")
-
-    if not enable_enrichment:
-        st.caption("Enrichment disabled.")
-        return
-
-    status_path = Path("datasets/enrichment/status") / f"{user_id}_{dataset_label}.json"
-    log_path = Path("datasets/enrichment/logs") / f"{user_id}_{dataset_label}.log"
-
-    row = {}
-    if status_path.exists():
-        try:
-            row = json.loads(status_path.read_text())
-        except Exception as e:
-            st.error(f"Could not load status JSON: {e}")
-
-    status_str = (row.get("status") or "idle").lower()
-    phase = row.get("phase") or "—"
-    detail = row.get("detail")
-    bd = int(row.get("batches_done") or 0)
-    tb = row.get("total_batches")
-    updated = row.get("updated_at", "—")
-
-    st.markdown(f"**Status:** {status_str.upper()} • **Phase:** {phase}")
-    if detail:
-        st.caption(detail)
-    st.write(f"**Batches done:** {bd}" + (f" / {tb}" if tb else ""))
-
-    st.caption(f"Last update: {updated}")
-
-    # Always show the expander, even if no logs
-    with st.expander("Recent enrichment logs", expanded=False):
-        if not log_path.exists():
-            st.caption("No logs yet.")
-        else:
-            try:
-                with open(log_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                if not lines:
-                    st.caption("(Log file empty)")
-                else:
-                    for line in lines[-20:]:
-                        try:
-                            r = json.loads(line)
-                            ts = (r.get("event_time") or "")[:19].replace("T", " ")
-                            st.markdown(f"`{ts}` • **{r.get('where')}** • _{r.get('level')}_ — {r.get('message')}")
-                        except Exception:
-                            st.write(line.strip())
-            except Exception as e:
-                st.caption(f"(Could not load logs: {e})")
-
-# --- Background Enrichment Orchestrator (app.py) ---
-def _enrichment_tasks():
-    # lives across reruns
-    return st.session_state.setdefault("_enrichment_tasks", {})  # {label: {"thread": t, "cancel": Event}}
-
-def start_enrichment(*, user_id: str, dataset_label: str, table_name: str, cleaned_df=None):
-    key = f"{user_id}:{dataset_label}".strip()
-    tasks = task_registry()
-
-    # don't double-start
-    if key in tasks and tasks[key]["thread"].is_alive():
-        return
-
-    cancel = threading.Event()
-
-    def run():
-        try:
-            # Always require a DataFrame — raise if missing
-            if cleaned_df is None:
-                raise ValueError("No cleaned_df provided to start_enrichment")
-            background_enrich(
-                user_id=user_id,
-                dataset_label=dataset_label,
-                cleaned_df=cleaned_df,
-            )
-        finally:
-            # Clean registry entry when thread exits
-            try:
-                reg = task_registry()
-                if key in reg and not reg[key]["thread"].is_alive():
-                    reg.pop(key, None)
-            except Exception:
-                pass
-
-    t = threading.Thread(target=run, daemon=True, name=f"enrich:{key}")
-    tasks[key] = {"thread": t, "cancel": cancel}
-    t.start()
-
-def resolve_table_name_for_label(user_id: str, label: str) -> str:
-    """
-    Find the most recent saved CSV for this user/label in ./userdata and return its filename *stem*
-    (the piece without '.csv'), which is what load_user_data expects.
-    """
-    base = Path("datasets/userdata")
-    matches = sorted(base.glob(f"{user_id}_{label}_*_history.csv"))
-    if not matches:
-        raise FileNotFoundError(f"No local CSV found for label '{label}'.")
-    return matches[-1].stem
-
-def _block_autostart_for(label: str) -> None:
-    st.session_state.setdefault("_enrichment_autostart_block", False)
-    st.session_state.setdefault("_enrichment_block_label", None)
-    st.session_state["_enrichment_autostart_block"] = True
-    st.session_state["_enrichment_block_label"] = (label or "").strip()
-
-def _clear_autostart_if_new_label(label: str) -> None:
-    st.session_state.setdefault("_enrichment_autostart_block", False)
-    st.session_state.setdefault("_enrichment_block_label", None)
-    # Only clear if the label is different from the one we blocked
-    if st.session_state.get("_enrichment_block_label") != (label or "").strip():
-        st.session_state["_enrichment_autostart_block"] = False
-        st.session_state["_enrichment_block_label"] = None
-
-# --- Sidebar render: only show when running ---
-user = st.session_state.get("user") or {}
-user_id = user.get("user_id")
-current_label = st.session_state.get("current_dataset_label")
-
-with st.sidebar:
-    st.divider()
-    st.write("DEBUG:", {
-        "etl_done(session)": st.session_state.get("etl_done"),
-        "user_id": user_id,
-        "current_label": current_label,
-        "_enrichment_autostart_block": st.session_state.get("_enrichment_autostart_block"),
-    })
-
-    def debug_list_enrichment_threads():
-        tasks = task_registry()
-        active = {k: v for k, v in tasks.items() if v["thread"].is_alive()}
-        st.write("DEBUG: Active enrichment tasks = ", list(active.keys()))
-        st.write("DEBUG: Total threads =", len(threading.enumerate()))
-        for t in threading.enumerate():
-            if t.name.startswith("enrich:"):
-                st.write(f"Thread: {t.name}, alive={t.is_alive()}")
-
-    debug_list_enrichment_threads()
-
-    if current_label and user_id:
-        st.caption(f"Dataset: **{current_label}**")
-
-        # --- New: check ETL completion from status.json ---
-        import json
-        from pathlib import Path
-        etl_complete = False
-        try:
-            status_path = Path("datasets/enrichment/status") / f"{user_id}_{current_label}.json"
-            if status_path.exists():
-                row = json.loads(status_path.read_text())
-                if row.get("phase") == "etl" and "✅" in (row.get("detail") or ""):
-                    etl_complete = True
-        except Exception:
-            pass
-
-        if ENABLE_ENRICHMENT:
-            # Kill button
-            if st.button("🛑 Kill enrichment", key="kill_enrichment_btn"):
-                key = f"{user_id}:{current_label}"
-                tasks = task_registry()
-                task = tasks.get(key)
-
-                if task:
-                    task["cancel"].set()
-                    st.session_state["_enrichment_autostart_block"] = True
-                    st.session_state["_enrichment_block_label"] = current_label
-
-                    try:
-                        status_dao.set_status(
-                            user_id, current_label,
-                            phase="shutdown",
-                            detail="Cancelling…",
-                            total=None
-                        )
-                    except Exception:
-                        pass
-
-                    st.success("Sent stop signal. Autostart is blocked for this dataset until you manually restart.")
-                else:
-                    st.info("No active enrichment task found for this dataset.")
-
-            if st.button("🔁 Restart enrichment", key="btn_restart_enrich"):
-                st.session_state["_enrichment_autostart_block"] = False
-                st.session_state["_enrichment_block_label"] = None
-
-                table_stem = st.session_state.get("last_table_name")
-                if not table_stem:
-                    try:
-                        table_stem = resolve_table_name_for_label(user_id, current_label)
-                        st.session_state["last_table_name"] = table_stem
-                    except Exception as e:
-                        st.error(f"Could not resolve dataset table: {e}")
-                        table_stem = None
-
-                if table_stem:
-                    _maybe_start_enrichment(
-                        user_id=user_id,
-                        dataset_label=current_label,
-                        table_name=table_stem,
-                        cleaned_df=st.session_state.get("current_df"),
-                    )
-                    st.success("Restarted enrichment.")
-
-            # Show enrichment status widget (use status.json as ground truth)
-            if etl_complete:
-                enrichment_status_widget(user_id, current_label, enable_enrichment=True)
-            else:
-                st.caption("Enrichment will be available once ETL is complete.")
-        else:
-            st.caption("Enrichment disabled for testing.")
-
-        # ---- Debug: Local enrichment ----
-        if st.button("🐞 Run Local Enrichment Test", key="btn_local_enrich"):
-            if current_label and user_id:
-                try:
-                    table_stem = st.session_state.get("last_table_name")
-                    if not table_stem or not str(table_stem).startswith(f"{user_id}_{current_label}_"):
-                        table_stem = resolve_table_name_for_label(user_id, current_label)
-
-                    if user_data_dao is None:
-                        raise RuntimeError("No user_data_dao available in this SERVER_MODE.")
-
-                    df = user_data_dao.load_user_data(table_stem)
-                    if df is not None and not df.empty:
-                        run_local_enrichment_test(df, user_id, current_label)
-                        st.success("✅ Local enrichment test complete. Check ./enrichment/ for outputs.")
-                    else:
-                        st.error("No data found to enrich locally.")
-                except Exception as e:
-                    st.error(f"❌ Local enrichment failed: {e}")
-            else:
-                st.warning("No dataset available for local enrichment.")
-    else:
-        st.caption("No dataset selected yet.")
-
-
-# --- Sidebar Debug: Run only chart_scorer ---
-import traceback
-import streamlit as st
-import pandas as pd
-from pathlib import Path
-
-from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
-# from dao import LocalUserDataDAO  # if you prefer DAO load
-
-with st.sidebar:
-    st.caption("Run only the chart_scorer phase (Friday→Friday, 5-week decay).")
-    overwrite = st.checkbox("Overwrite existing outputs", value=False, key="chart_scorer_overwrite")
-    run_btn = st.button("Run chart_scorer now", use_container_width=True)
-
-    if run_btn:
-        try:
-            user = st.session_state.get("user")
-            if not user or "user_id" not in user:
-                st.error("No active user account. Please log in.")
-                st.stop()
-            user_id = user["user_id"]
-
-            table_name = st.session_state.get("last_table_name")
-            if not table_name:
-                label = st.session_state.get("current_dataset_label")
-                if not label:
-                    st.error("No dataset selected.")
-                    st.stop()
-                # if you have a resolver:
-                # table_name = resolve_table_name_for_label(user_id, label)
-                # else construct likely name or ask user
-                st.error("Cannot resolve table name from session. Make sure a dataset is selected.")
-                st.stop()
-
-            label, ts_str = parse_label_ts_from_table_name(table_name)
-            if not (label and ts_str):
-                st.error(f"Could not parse label/timestamp from table name: {table_name}")
-                st.stop()
-
-            # Load listening data (DAO or raw CSV)
-            # dao = LocalUserDataDAO(base_dir="datasets/userdata")
-            # listening_df = dao.load_user_data(table_name)
-            csv_path = Path("datasets/userdata") / f"{table_name}.csv"
-            if not csv_path.exists():
-                st.error(f"Listening CSV not found at {csv_path}")
-                st.stop()
-            listening_df = pd.read_csv(csv_path, low_memory=False)
-
-            cols = [c for c in ["datetime", "artist_name", "track_name"] if c in listening_df.columns]
-            if len(cols) < 3:
-                st.error("Listening data missing required columns: datetime, artist_name, track_name.")
-                st.stop()
-            listening_df = listening_df.loc[:, cols].copy()
-
-            charts_path = "datasets/reference/info_charts.csv"
-            output_dir = "datasets/enrichment/chart_scorer"
-
-            points_path, global_path = compute_chart_scorer_if_missing(
-                user_id=user_id,
-                label=label,
-                ts_str=ts_str,
-                listening=listening_df,
-                charts=charts_path,
-                output_dir=output_dir,
-                anchor_weekday=4,
-                max_weeks=5,
-                weekly_decay=10,
-                use_weighting_if_present=True,
-                overwrite=overwrite,
-                cancel_event=None,
-            )
-
-            st.success("chart_scorer complete.")
-            st.write("Per-user scores:", points_path)
-            st.write("Global summary:", global_path)
-
-        except KeyboardInterrupt:
-            st.warning("chart_scorer cancelled.")
-        except Exception as e:
-            st.error(f"{type(e).__name__}: {e}")
-            st.code("".join(traceback.format_exc()))
-
 # -------------------------------- Home Page --------------------------------- #
 if page == "Home":
     user_id = st.session_state.user["user_id"]
 
-    # --- Autostart enrichment on rerun ---
-    if st.session_state.get("_enrichment_autostart_pending"):
-        st.session_state["_enrichment_autostart_pending"] = False
-        _maybe_start_enrichment(
-            user_id=user_id,
-            dataset_label=st.session_state["current_dataset_label"],
-            table_name=st.session_state["last_table_name"],
-            cleaned_df=st.session_state["current_df"],
-        )
-
-    # Header
-    h1, h2, h3 = st.columns([3, 3, 3], vertical_alignment="center")
-    with h2:
-        st.image(LOGO_SPOTGREEN, width=400)
-    st.markdown("<h1 style='text-align: center;'>Your life on Spotify, in review:</h1>", unsafe_allow_html=True)
-
-    # --- Existing datasets ---
-    from dao import LocalUserDataDAO
-    local_user_dao = LocalUserDataDAO("datasets/userdata")
-    dataset_options = local_user_dao.list_datasets(user_id)  # [(label, filename_stem), ...]
-    label_to_table = dict(dataset_options) if dataset_options else {}
-    labels = [label for label, _ in dataset_options] if dataset_options else []
-
-    # Default to last-used dataset if available
-    default_index = 0
-    if labels and st.session_state.get("current_dataset_label") in labels:
-        default_index = labels.index(st.session_state["current_dataset_label"])
-
-    if labels:
-        s1, s2, s3 = st.columns([1, 1, 1])
-        with s1:
-            selected_label = st.selectbox("Choose a dataset you've uploaded", labels, index=default_index)
-        selected_table = label_to_table[selected_label]
-
-        df = local_user_dao.load_user_data(selected_table)
-
-        if df.empty:
-            st.warning("Failed to load selected dataset.")
-            st.stop()
-
-        # Normalize datetime + quick summary
-        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-        df = df.dropna(subset=["datetime"])
-        df["date"] = df["datetime"].dt.date
-
-        # 🔑 Rehydrate session state so sidebar + widget buttons work after refresh
-        st.session_state.current_df = df
-        st.session_state.current_dataset_label = selected_label
-        st.session_state.last_table_name = selected_table
-
-        total_listened_hours = (df["minutes_played"].sum() / 60.0) if "minutes_played" in df.columns else 0.0
-        st.markdown(f"🗓️ From **{df['datetime'].min().date()}** to **{df['datetime'].max().date()}**")
-        st.markdown(f"🎧 Total listening time: **{total_listened_hours:.2f} hours**")
-
-        st.dataframe(df.sample(min(50, len(df))) if len(df) > 0 else df, height=600)
-
-    else:
-        st.info("You haven’t uploaded any datasets yet.")
-
-    # --- Upload new dataset ---
-    st.markdown("### Upload a new dataset")
-
-    # Ensure session flags exist
+    # ---------- Session Defaults ----------
     st.session_state.setdefault("etl_done", False)
     st.session_state.setdefault("current_df", None)
     st.session_state.setdefault("current_dataset_label", None)
     st.session_state.setdefault("last_table_name", None)
     st.session_state.setdefault("_enrichment_autostart_block", False)
+    st.session_state.setdefault("_enrichment_autostart_pending", False)
+
+    # ---------- Helper ----------
+    def _clear_autostart_if_new_label(label: str) -> None:
+        """Clears autostart block when new dataset label is selected."""
+        st.session_state.setdefault("_enrichment_autostart_block", False)
+        st.session_state.setdefault("_enrichment_block_label", None)
+        if st.session_state.get("_enrichment_block_label") != (label or "").strip():
+            st.session_state["_enrichment_autostart_block"] = False
+            st.session_state["_enrichment_block_label"] = None
+
+    # ---------- Autostart Enrichment on Rerun ----------
+    if st.session_state.get("_enrichment_autostart_pending"):
+        st.session_state["_enrichment_autostart_pending"] = False
+        try:
+            _maybe_start_enrichment(
+                user_id=user_id,
+                dataset_label=st.session_state["current_dataset_label"],
+                table_name=st.session_state["last_table_name"],
+                cleaned_df=st.session_state["current_df"],
+            )
+        except Exception as e:
+            st.warning(f"Could not autostart enrichment: {e}")
+
+    # ---------- Header UI ----------
+    h1, h2, h3 = st.columns([3, 3, 3], vertical_alignment="center")
+    with h2:
+        st.image(LOGO_SPOTGREEN, width=400)
+    st.markdown(
+        "<h1 style='text-align: center;'>Your life on Spotify, in review:</h1>",
+        unsafe_allow_html=True
+    )
+
+    # ---------- Load DAOs ----------
+    daos = get_daos()
+    user_dao = daos.get("user_data")
+    status_dao = daos.get("status")
+
+    if user_dao is None:
+        st.error("UserData DAO is not configured for this server mode.")
+        st.stop()
+
+    # ---------- Existing Datasets ----------
+    try:
+        dataset_options = user_dao.list_datasets(user_id)  # [(label, table_name), ...]
+    except Exception as e:
+        st.error(f"Failed to list datasets: {e}")
+        dataset_options = []
+
+    label_to_table = dict(dataset_options)
+    labels = list(label_to_table.keys())
+
+    # Default to last-used dataset if available
+    default_index = labels.index(st.session_state["current_dataset_label"]) if (
+        labels and st.session_state.get("current_dataset_label") in labels
+    ) else 0
+
+    if labels:
+        s1, s2, s3 = st.columns([1, 1, 1])
+        with s1:
+            selected_label = st.selectbox(
+                "Choose a dataset you've uploaded", labels, index=default_index
+            )
+
+        selected_table = label_to_table[selected_label]
+        try:
+            df = user_dao.load_user_data(selected_table)
+        except Exception as e:
+            st.error(f"Failed to load dataset from storage: {e}")
+            st.stop()
+
+        if df.empty:
+            st.warning("Loaded dataset is empty.")
+            st.stop()
+
+        # Normalize datetime + summary
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+        df = df.dropna(subset=["datetime"])
+        df["date"] = df["datetime"].dt.date
+
+        # Update session state
+        st.session_state.current_df = df
+        st.session_state.current_dataset_label = selected_label
+        st.session_state.last_table_name = selected_table
+
+        total_hours = (
+            df["minutes_played"].sum() / 60.0 if "minutes_played" in df.columns else 0.0
+        )
+
+        st.markdown(
+            f"🗓️ From **{df['datetime'].min().date()}** to **{df['datetime'].max().date()}**"
+        )
+        st.markdown(f"🎧 Total listening time: **{total_hours:.2f} hours**")
+
+        st.dataframe(df.sample(min(50, len(df))), height=600)
+    else:
+        st.info("You haven’t uploaded any datasets yet.")
+
+    # ---------- Upload New Dataset ----------
+    st.markdown("### Upload a new dataset")
 
     with st.form("upload_form", clear_on_submit=False):
         uploaded = st.file_uploader(
             "Upload your full Spotify ZIP (music, podcasts, audiobooks)",
             type=["zip"],
             accept_multiple_files=False,
-            key="zip_uploader"
+            key="zip_uploader",
         )
         dataset_label = st.text_input(
-            "Dataset label (e.g. '2023', 'Main', 'Friend1')",
-            key="zip_label"
+            "Dataset label (e.g. '2023', 'Main', 'Friend1')", key="zip_label"
         )
 
         submitted = st.form_submit_button("Process Upload")
@@ -1238,29 +957,29 @@ if page == "Home":
                         st.session_state["last_table_name"] = table_name
                         st.session_state.etl_done = True
 
-                        # 🔑 Log ETL completion to status.json (for widget to resume after refresh)
-                        status_dao.set_status(
-                            user_id,
-                            dataset_label.strip(),
-                            phase="etl",
-                            detail="✅ ETL completed, dataset is ready.",
-                            total=len(cleaned_df),
-                        )
+                        # ✅ Update Cloudflare status
+                        try:
+                            status_dao.set_status(
+                                user_id,
+                                dataset_label.strip(),
+                                phase="etl",
+                                detail="✅ ETL completed, dataset ready.",
+                                total=len(cleaned_df),
+                            )
+                        except Exception as e:
+                            st.warning(f"⚠️ Could not persist ETL status: {e}")
 
                         st.success(
                             "✅ Dataset uploaded & cleaned. Preparing enrichment..."
-                            if ENABLE_ENRICHMENT else
-                            "✅ Dataset uploaded & cleaned. You can now explore your data."
+                            if ENABLE_ENRICHMENT
+                            else "✅ Dataset uploaded & cleaned. You can now explore your data."
                         )
 
-                        # Allow autostart for this (new) label even if a previous was killed
+                        # Handle enrichment autostart flags
                         _clear_autostart_if_new_label(dataset_label.strip())
                         st.session_state["_enrichment_autostart_block"] = False
-
-                        # 🔑 Signal autostart enrichment on *next* rerun
                         st.session_state["_enrichment_autostart_pending"] = True
 
-                        # Trigger rerun so sidebar + widget reload properly
                         st.rerun()
 
                 except zipfile.BadZipFile:
@@ -1268,10 +987,13 @@ if page == "Home":
                 except Exception as e:
                     st.error(f"ETL failed: {e}")
 
-    # --- Refresh list button ---
+    # ---------- Refresh Datasets ----------
     if st.button("Refresh list of uploaded datasets", key="btn_refresh_datasets"):
-        dataset_options = local_user_dao.list_datasets(user_id)
-        st.success("Dataset list refreshed.")
+        try:
+            dataset_options = user_dao.list_datasets(user_id)
+            st.success("Dataset list refreshed.")
+        except Exception as e:
+            st.error(f"Failed to refresh dataset list: {e}")
 
 # --------------------------- Overall Review Page ---------------------------- #
 elif page == "Overall Review":
@@ -1373,7 +1095,7 @@ elif page == "Overall Review":
 
     with col2:
         # Image carousels
-        placeholder = 'media/assets/Image-Coming-Soon_vector.svg'
+        IMAGE_PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
 
         if mode == "music":
             top = (
@@ -1385,7 +1107,7 @@ elif page == "Overall Review":
             artist_image_list = []
             for idx, artist in enumerate(top["artist_name"], start=1):
                 match = INFO_ARTIST_GENRE.loc[INFO_ARTIST_GENRE.artist_name == artist]
-                img = match["artist_image"].iloc[0] if not match.empty else placeholder
+                img = match["artist_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
                 artist_image_list.append(dict(text=artist, title=f"#{idx}", img=img))
             if artist_image_list:
                 carousel(items=artist_image_list, container_height=550)
@@ -1400,7 +1122,7 @@ elif page == "Overall Review":
             podcast_image_list = []
             for idx, show in enumerate(top["episode_show_name"], start=1):
                 match = INFO_SHOW.loc[INFO_SHOW["show_name"] == show]
-                img = match["show_image"].iloc[0] if not match.empty else placeholder
+                img = match["show_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
                 podcast_image_list.append(dict(text=show, title=f"#{idx}", img=img))
             if podcast_image_list:
                 carousel(items=podcast_image_list, container_height=550)
@@ -1415,7 +1137,7 @@ elif page == "Overall Review":
             audiobook_image_list = []
             for idx, book in enumerate(top["audiobook_title"], start=1):
                 match = INFO_AUDIOBOOK.loc[INFO_AUDIOBOOK["audiobook_title"] == book]
-                img = match["audiobook_image"].iloc[0] if not match.empty else placeholder
+                img = match["audiobook_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
                 audiobook_image_list.append(dict(text=book, title=f"#{idx}", img=img))
             if audiobook_image_list:
                 carousel(items=audiobook_image_list, container_height=550)
@@ -1840,7 +1562,7 @@ elif page == "Per Artist":
     with col2:
         # artist image
         info_artist = INFO_ARTIST_GENRE  # DataFrame
-        placeholder = 'media/assets/Image-Coming-Soon_vector.svg'
+        IMAGE_PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
 
         try:
             sub = info_artist.loc[info_artist['artist_name'] == artist_selected]
@@ -1849,14 +1571,14 @@ elif page == "Per Artist":
                 val = sub['artist_image'].iloc[0]
                 if isinstance(val, str) and val.strip():
                     img = val.strip()
-            st.image(img or placeholder, output_format="auto")
+            st.image(img or IMAGE_PLACEHOLDER, output_format="auto")
         except Exception:
-            st.image(placeholder, output_format="auto")
+            st.image(IMAGE_PLACEHOLDER, output_format="auto")
 
     with col3:
         # top album image
         info_album = INFO_ALBUM  # DataFrame
-        placeholder = 'media/assets/Image-Coming-Soon_vector.svg'
+        IMAGE_PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
 
         # precompute top albums
         top_albums = (
@@ -1889,7 +1611,7 @@ elif page == "Per Artist":
         except Exception:
             pass
 
-        st.image(album_img or placeholder, output_format="auto")
+        st.image(album_img or IMAGE_PLACEHOLDER, output_format="auto")
 
     col1, col2 = st.columns([2,1])
 
@@ -2213,7 +1935,7 @@ elif page == "Per Album":
 
 ## top album image
         info_album = INFO_ALBUM
-# placeholder - does not need recalculating once re-organised on page
+# IMAGE_PLACEHOLDER - does not need recalculating once re-organised on page
         top_albums = df_music[df_music.album_name == album_selected].groupby("album_name").minutes_played.sum().sort_values(ascending = False).reset_index()
 
         try:
@@ -2285,7 +2007,7 @@ elif page == "Per Album":
     fig_line.update_layout(xaxis_title="Month", yaxis_title="Minutes Played", legend_title_text="Year")
     st.plotly_chart(fig_line,use_container_width=True)
 
-# -------------------------------- Per Genre --------------------------------- #
+# ------------------------------- Per Genre ---------------------------------- #
 elif page == "Per Genre":
 
     # ✅ Make sure dataset is loaded
@@ -2401,7 +2123,7 @@ elif page == "Per Genre":
     # Get list of available years
     years = sorted(df['year'].unique())
 
-# --------------------------------- The Farm --------------------------------- #
+# ------------------------------- The Farm ----------------------------------- #
 elif page == "The Farm":
 
     # -------------------- Helpers (scoped to this page) -------------------- #
@@ -2504,11 +2226,11 @@ elif page == "The Farm":
         # User
         fig.add_trace(go.Scatter(
             x=um["month"], y=um["avg_track_popularity_smooth"],
-            mode="lines+markers", name=f"{user_name} – Track Popularity", line=dict(color="#1ed760")
+            mode="lines", name=f"{user_name} – Track Popularity", line=dict(color="#1ed760")
         ))
         fig.add_trace(go.Scatter(
             x=um["month"], y=um["avg_artist_popularity_smooth"],
-            mode="lines+markers", name=f"{user_name} – Artist Popularity", line=dict(color="#457e59")
+            mode="lines", name=f"{user_name} – Artist Popularity", line=dict(color="#457e59")
         ))
 
         # Global
@@ -2574,7 +2296,7 @@ elif page == "The Farm":
 
         return monthly
 
-    def load_chart_points_for_selected_dataset(user_id: str, table_name: str, base_dir: str = "datasets/enrichment/chart_scorer") -> pd.DataFrame | None:
+    def load_chart_points_for_selected_dataset(user_id: str, table_name: str, base_dir: str = "enrichment/chart_scorer") -> pd.DataFrame | None:
         """
         Load the *matching* chart_scorer parquet for the currently-selected dataset,
         e.g., {user}_{label}_{timestamp}_chart-scores.parquet.
@@ -2853,37 +2575,10 @@ elif page == "The Farm":
 
             st.dataframe(top_songs, use_container_width=True, hide_index=True)
 
-            # # ---------- Timeline (points over the year) ----------
-            # daily_points = chart_hits.copy()
-            # daily_points["date"] = pd.to_datetime(daily_points["first_listen_week_start"], errors="coerce").dt.date
-            # daily_summary = daily_points.groupby('date', as_index=False)['points_awarded'].sum()
-
-            # daily_summary['year'] = pd.to_datetime(daily_summary['date']).dt.year
-            # daily_summary['month_day'] = pd.to_datetime(daily_summary['date']).apply(lambda x: x.replace(year=2000))
-
-            # full_md_range = pd.date_range('2000-01-01', '2000-12-31', freq='D')
-
-            # all_years = []
-            # for year, group in daily_summary.groupby('year'):
-            #     g = group.set_index('month_day').reindex(full_md_range, fill_value=0).reset_index()
-            #     g['year'] = year
-            #     g.rename(columns={'index': 'month_day'}, inplace=True)
-            #     all_years.append(g)
-
-            # plot_df = pd.concat(all_years, ignore_index=True) if all_years else pd.DataFrame(columns=["month_day", "points_awarded", "year"])
-
-            # if not plot_df.empty:
-            #     plot_df['cumulative_points'] = plot_df.sort_values(['year', 'month_day']).groupby('year')['points_awarded'].cumsum()
-            #     years = sorted(plot_df['year'].unique())
-            #     latest_year = max(years)
-            #     c1, c2 = st.columns([3, 1], vertical_alignment='center')
-            #     with c1:
-            #         points_method = st.segmented_control("View Mode", options=["Discrete", "Cumulative"], selection_mode="single")
-            #     display_timeline_chart(chart_hits, plot_df, years, latest_year, points_method)
         else:
             st.info("No chart hits scored in the selected period yet.")
 
-# --------------------------------- FUN Page --------------------------------- #
+# ------------------------------- FUN Page ----------------------------------- #
 elif page == "FUN":
     # Show current user info
         # ✅ Make sure dataset is loaded
@@ -3043,7 +2738,7 @@ elif page == "FUN":
     #   """
     # st.markdown(htmlstr, unsafe_allow_html=True)
 
-# ------------------------------- FAQs -------------------------------- #
+# --------------------------------- FAQs ------------------------------------- #
 elif page == "FAQs":
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -3075,3 +2770,262 @@ elif page == "FAQs":
     st.markdown('')
 
     st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
+
+# --------------------------- Sidebar Debugger ------------------------------- #
+def render_debug_sidebar():
+    """Render the enrichment debugger and controls safely inside the sidebar."""
+    import traceback
+    import threading
+    import streamlit as st
+    from dao_selector import get_daos
+    from enrichment_service import MetadataEnricher
+
+    with st.sidebar:
+        st.divider()
+        st.subheader("🧩 Enrichment Debugger")
+
+        # --- Get session state info ---
+        user = st.session_state.get("user") or {}
+        user_id = user.get("user_id")
+        current_label = st.session_state.get("current_dataset_label")
+
+        # --- Debug summary header ---
+        st.write("DEBUG:", {
+            "etl_done(session)": st.session_state.get("etl_done"),
+            "user_id": user_id,
+            "current_label": current_label,
+            "_enrichment_autostart_block": st.session_state.get("_enrichment_autostart_block"),
+        })
+
+        # --- Thread monitoring helper ---
+        def debug_thread_status():
+            tasks = st.session_state.get("_enrichment_tasks", {})
+            active = {k: v for k, v in tasks.items() if v["thread"].is_alive()} if tasks else {}
+            st.write("DEBUG: Active enrichment tasks =", list(active.keys()))
+            st.write("DEBUG: Total threads =", len(threading.enumerate()))
+            for t in threading.enumerate():
+                if t.name.startswith(("enrich:", "force:", "resume:")):
+                    st.write(f"Thread: {t.name}, alive={t.is_alive()}")
+
+        debug_thread_status()
+
+        # --- Guard: no user/dataset selected ---
+        if not (user_id and current_label):
+            st.caption("⚠️ No dataset selected — enrichment controls disabled.")
+            st.caption("Once a dataset is selected on the main page, controls will reappear.")
+            return  # ✅ stops only sidebar logic, not entire app
+
+        # --- Setup DAOs ---
+        try:
+            daos = get_daos()
+            storage_dao = daos.get("metadata") or daos.get("storage")
+            user_data_dao = daos.get("user_data")
+            status_dao = daos.get("status")
+            log_dao = daos.get("logs")
+        except Exception as e:
+            st.error(f"Failed to initialize DAOs: {e}")
+            return
+
+        # =====================================================
+        #  HELPER FUNCTIONS
+        # =====================================================
+
+        def task_registry():
+            return st.session_state.setdefault("_enrichment_tasks", {})
+
+        def run_enrichment_in_thread(enricher, cancel_event=None):
+            """Run enrichment safely in background thread."""
+            t = threading.Thread(
+                target=lambda: enricher.run_all(cancel_event=cancel_event),
+                daemon=True,
+                name=f"enrich:{enricher.label}"
+            )
+            st.session_state.setdefault("_enrichment_tasks", {})
+            st.session_state["_enrichment_tasks"][enricher.label] = {"thread": t, "cancel": cancel_event}
+            t.start()
+            st.info(f"Started enrichment thread for dataset: {enricher.label}")
+
+        # =====================================================
+        #  CONTROLS
+        # =====================================================
+
+        # --- Kill Enrichment ---
+        if st.button("🛑 Kill Enrichment", key="kill_enrich_btn"):
+            key = current_label
+            tasks = task_registry()
+            task = tasks.get(key)
+            if task:
+                task["cancel"].set()
+                st.session_state["_enrichment_autostart_block"] = True
+                st.session_state["_enrichment_block_label"] = current_label
+                try:
+                    status_dao.set_status(
+                        user_id, current_label,
+                        phase="shutdown",
+                        detail="Cancelling…",
+                        total=None
+                    )
+                except Exception:
+                    pass
+                st.success("Sent stop signal. Autostart is now blocked.")
+            else:
+                st.info("No active enrichment task found.")
+
+        # --- Restart Enrichment from last status JSON ---
+        if st.button("🔁 Restart Enrichment (Auto-Resume)", key="restart_status_based"):
+            cancel_event = threading.Event()
+            try:
+                # --- Load current status from Cloudflare ---
+                status_key = f"enrichment/status/{user_id}_{current_label}.json"
+                try:
+                    status_json = storage_dao.download_json(path=status_key)
+                    last_phase = (status_json.get("phase") or "").lower().strip()
+                    st.info(f"Last recorded phase: **{last_phase or '(unknown)'}**")
+                except Exception:
+                    last_phase = None
+                    st.warning("Could not read last known phase; restarting from beginning.")
+
+                # --- Load user’s cleaned data ---
+                df = st.session_state.get("current_df")
+                if df is None:
+                    try:
+                        table_name = st.session_state.get("last_table_name") or f"{user_id}_{current_label}_history"
+                        df = user_data_dao.load_user_data(table_name)
+                        st.info(f"Reloaded dataset from storage: {table_name}")
+                    except Exception as e:
+                        st.error(f"Failed to load dataset for enrichment: {e}")
+                        return
+
+                enricher = MetadataEnricher(
+                    user_id=user_id,
+                    label=current_label,
+                    df=df,
+                    spotify_token=None,
+                    discogs_key=None,
+                    discogs_secret=None,
+                    status_dao=status_dao,
+                    storage_dao=storage_dao,
+                    log_dao=log_dao,
+                    info_table_dao=None,
+                )
+                enricher.cancel_event = cancel_event
+
+                PHASES = [
+                    "planning",
+                    "overall",
+                    "per_year",
+                    "albums_of_year",
+                    "per_album",
+                    "top_tracks_per_month",
+                    "popularity_timeseries",
+                    "chart_scorer",
+                    "breadth_first",
+                    "flush",
+                ]
+                next_phase = "planning"
+                if last_phase in PHASES:
+                    i = PHASES.index(last_phase)
+                    next_phase = PHASES[min(i + 1, len(PHASES) - 1)]
+                st.info(f"Resuming from phase: **{next_phase}**")
+
+                def run_from_phase():
+                    try:
+                        enricher.resume_from_phase(next_phase)
+                    except AttributeError:
+                        enricher.run_all(cancel_event=cancel_event)
+
+                enricher.cancel_event = cancel_event
+                t = threading.Thread(target=run_from_phase, daemon=True, name=f"resume:{current_label}")
+                t.start()
+                tasks = task_registry()
+                tasks[current_label] = {"thread": t, "cancel": cancel_event}
+                st.success(f"Restarted enrichment for {current_label} from phase {next_phase}.")
+            except Exception as e:
+                st.error(f"{type(e).__name__}: {e}")
+                st.code("".join(traceback.format_exc()))
+
+        # --- Force Start from Specific Phase ---
+        st.markdown("### ⚙️ Force Start Enrichment Phase")
+
+        PHASES = [
+            "1. Planning",
+            "2. Build Priority Sets",
+            "3. Overall (Top 50)",
+            "4. Per-Year (Top)",
+            "5. Albums of Year (Per-Artist)",
+            "6. Per-Album (All Top Artists)",
+            "7. Top Tracks Per Month",
+            "8. Popularity Timeseries",
+            "9. Chart Scorer",
+            "10. Breadth-First Remaining",
+            "11. Final Flush",
+        ]
+
+        selected_phase = st.selectbox("Choose Phase to Force Start", PHASES, index=0)
+
+        if st.button("🚀 Force Start Selected Phase", key="force_start"):
+            cancel_event = threading.Event()
+            df = st.session_state.get("current_df")
+            if df is None:
+                try:
+                    table_name = st.session_state.get("last_table_name") or f"{user_id}_{current_label}_history"
+                    df = user_data_dao.load_user_data(table_name)
+                    st.info(f"Reloaded dataset from storage: {table_name}")
+                except Exception as e:
+                    st.error(f"Failed to load dataset for enrichment: {e}")
+                    return
+
+            enricher = MetadataEnricher(
+                user_id=user_id,
+                label=current_label,
+                df=df,
+                spotify_token=None,
+                discogs_key=None,
+                discogs_secret=None,
+                status_dao=status_dao,
+                storage_dao=storage_dao,
+                log_dao=log_dao,
+                info_table_dao=None,
+            )
+            enricher.cancel_event = cancel_event
+
+            # --- Define mapping ---
+            phase_method_map = {
+                "Planning": lambda e: e.run_all(cancel_event=cancel_event),
+                "Build Priority Sets": lambda e: (e.top_overall(), e.top_per_year(set(), set(), set())),
+                "Overall (Top 50)": lambda e: e.run_phase_overall_first50(e.top_overall()[0], e.top_overall()[1], e.top_overall()[2]),
+                "Per-Year (Top)": lambda e: e.run_phase_per_year(e.top_per_year(set(), set(), set())[0],
+                                                                e.top_per_year(set(), set(), set())[1],
+                                                                e.top_per_year(set(), set(), set())[2]),
+                "Albums of Year (Per-Artist)": lambda e: e.run_phase_per_artist_albums_of_year(),
+                "Per-Album (All Top Artists)": lambda e: e.run_phase_per_album_all_albums_for_top_artists(),
+                "Top Tracks Per Month": lambda e: e.run_phase_top_tracks_per_month(),
+                "Popularity Timeseries": lambda e: e.run_phase_popularity_timeseries(),
+                "Chart Scorer": lambda e: e.run_phase_chart_scorer(),
+                "Breadth-First Remaining": lambda e: e.run_phase_breadth_first_years_remaining(set(), set(), set()),
+                "Final Flush": lambda e: e.flush_all(),
+            }
+
+            chosen_label = selected_phase.split(". ", 1)[-1]
+            func = phase_method_map.get(chosen_label)
+            if func is None:
+                st.warning(f"Phase '{chosen_label}' not implemented for direct run.")
+            else:
+                st.info(f"Starting '{chosen_label}' phase manually...")
+                enricher.cancel_event = cancel_event
+                t = threading.Thread(target=lambda: func(enricher), daemon=True, name=f"force:{chosen_label}")
+                t.start()
+                tasks = task_registry()
+                key = f"{user_id}:{current_label}"
+                tasks[key] = {"thread": t, "cancel": cancel_event}
+                st.success(f"Force-started phase: {chosen_label}")
+
+        # --- Enrichment Status Display ---
+        status_key = f"enrichment/status/{user_id}_{current_label}.json"
+        try:
+            status_json = storage_dao.download_json(path=status_key)
+            st.json(status_json)
+        except Exception:
+            st.caption("No current status JSON available.")
+
+render_debug_sidebar()

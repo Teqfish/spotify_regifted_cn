@@ -1,13 +1,14 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from botocore.client import Config
 from datetime import datetime, timezone
-from typing import Optional, Dict
-import io
-import os
-import pandas as pd
-import time
-import json
+from typing import Optional, List, Dict
 from pathlib import Path
+import boto3
+import io, json, os, time
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 # -------- Interfaces (DAOs) --------
 class StatusDAO(ABC):
@@ -34,7 +35,7 @@ class InfoTableDAO(ABC):
     @abstractmethod
     def upsert_track_rows(self, records: list[Dict]) -> None: ...
 
-# -------- Supabase implementation --------
+# -------- Server Implentations --------
 class SupabaseDAOs(StatusDAO, StorageDAO, InfoTableDAO):
     def __init__(self, sb_client):
         self.sb = sb_client
@@ -164,21 +165,339 @@ class SupabaseDAOs(StatusDAO, StorageDAO, InfoTableDAO):
             return
         self.sb.table("info_track").upsert(records, on_conflict="track_id").execute()
 
-# -------- Cloudflare R2 stub (fill in later) --------
-class CloudflareR2Storage(StorageDAO):
-    def __init__(self, r2_client, bucket_default: str):
-        self.r2 = r2_client
-        self.default_bucket = bucket_default
+class CloudflareDAOs(StatusDAO, StorageDAO):
+    """
+    Unified DAO for Cloudflare R2 storage.
 
-    def upload_csv(self, df: pd.DataFrame, *, bucket: str, path: str, overwrite: bool = True) -> None:
-        # TODO: implement with your R2 SDK (put_object)
-        raise NotImplementedError
+    Handles:
+      - User data (userdata/)
+      - Enrichment outputs (enrichment/…)
+      - Metadata masters
+      - Status tracking
+      - Logs
+      - Checkpoints
+      - JSON / CSV / Parquet uploads
+    """
 
-    def download_csv(self, *, bucket: str, path: str) -> pd.DataFrame:
-        # TODO: implement with your R2 SDK (get_object)
-        raise NotImplementedError
+    def __init__(
+        self,
+        account_id: str,
+        access_key: str,
+        secret_key: str,
+        bucket: str,
+        endpoint_url: str,
+        region: str = "auto",
+    ):
+        self.account_id = account_id
+        self.bucket = bucket
+        self.endpoint_url = endpoint_url
 
-# -------- Local UserData Storage (for ETL testing) --------
+        self.r2 = boto3.client(
+            "s3",
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            config=Config(signature_version="s3v4"),
+            region_name=region,
+        )
+
+    # ------------------------------------------------------------
+    # Generic low-level helpers
+    # ------------------------------------------------------------
+
+    def _put_bytes(self, key: str, body: bytes, content_type: str):
+        """Upload raw bytes to R2."""
+        key = key.lstrip("/")
+        self.r2.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=body,
+            ContentType=content_type,
+        )
+        print(f"[CloudflareDAO] ✅ Uploaded → {key}")
+
+    def _get_object(self, key: str) -> bytes:
+        """Retrieve object contents as bytes, or raise FileNotFoundError."""
+        key = key.lstrip("/")
+        try:
+            obj = self.r2.get_object(Bucket=self.bucket, Key=key)
+            return obj["Body"].read()
+        except self.r2.exceptions.NoSuchKey:
+            raise FileNotFoundError(f"No such object in R2: {key}")
+
+    def _upload_json(self, key: str, payload: dict):
+        """Internal helper for uploading JSON files."""
+        body = json.dumps(payload, indent=2).encode("utf-8")
+        self._put_bytes(key, body, content_type="application/json")
+
+    # ------------------------------------------------------------
+    # USER DATA
+    # ------------------------------------------------------------
+
+    def save_user_data(self, user_id: str, dataset_label: str, df: pd.DataFrame, filename: str):
+        """Save cleaned dataset to Cloudflare R2 under userdata/."""
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
+        key = f"userdata/{table_name}.csv"
+        buf = io.BytesIO()
+        df.to_csv(buf, index=False)
+        self._put_bytes(key, buf.getvalue(), "text/csv")
+        return table_name, key
+
+    def load_user_data(self, table_name: str) -> pd.DataFrame:
+        """Load cleaned dataset CSV from R2."""
+        key = f"userdata/{table_name}.csv"
+        csv_bytes = self._get_object(key)
+
+        dtype_map = {
+            "spotify_episode_uri": "string",
+            "audiobook_title": "string",
+            "audiobook_uri": "string",
+            "audiobook_chapter_uri": "string",
+        }
+
+        return pd.read_csv(io.BytesIO(csv_bytes), dtype=dtype_map, low_memory=False)
+
+    def list_datasets(self, user_id: str) -> List[tuple[str, str]]:
+        """List all datasets uploaded by this user."""
+        res = self.r2.list_objects_v2(Bucket=self.bucket, Prefix=f"userdata/{user_id}_")
+        contents = res.get("Contents", [])
+        pairs = []
+        for obj in contents:
+            key = obj["Key"]
+            table_name = key.split("/")[-1].replace(".csv", "")
+            parts = table_name.split("_")
+            if len(parts) >= 3:
+                label = parts[1]
+                pairs.append((label, table_name))
+        return pairs
+
+    # ------------------------------------------------------------
+    # STATUS
+    # ------------------------------------------------------------
+
+    def _status_key(self, user_id: str, label: str) -> str:
+        return f"enrichment/status/{user_id}_{label}.json"
+
+    def set_status(self, user_id: str, dataset_label: str, *, phase: str, detail: str = "", total: Optional[int] = None):
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "running",
+            "phase": phase,
+            "detail": detail,
+            "total_batches": total,
+            "batches_done": 0,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+
+    def inc_status(self, user_id: str, dataset_label: str, *, add_batches: int = 1, detail: Optional[str] = None):
+        key = self._status_key(user_id, dataset_label)
+        try:
+            data = json.loads(self._get_object(key))
+        except FileNotFoundError:
+            data = {}
+        data["batches_done"] = (data.get("batches_done", 0) or 0) + add_batches
+        if detail:
+            data["detail"] = detail
+        total = data.get("total_batches")
+        if total:
+            data["percent"] = round(100.0 * data["batches_done"] / total, 1)
+        data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._upload_json(key, data)
+
+    def finish_status(self, user_id: str, dataset_label: str, *, ok: bool = True, detail: str = ""):
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "done" if ok else "error",
+            "detail": detail,
+            "percent": 100 if ok else None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+
+    # ------------------------------------------------------------
+    # METADATA + MASTERS + CHECKPOINTS
+    # ------------------------------------------------------------
+
+    def upload_csv(self, df: pd.DataFrame, *, bucket: str | None = None, path: str, overwrite: bool = True) -> None:
+        """
+        Upload a CSV file to Cloudflare R2. The `bucket` argument is accepted for interface
+        compatibility but ignored since this DAO handles a single bucket.
+        Example: path='enrichment/metadata/info_album.csv'
+        """
+        key = path.lstrip("/")
+        csv_bytes = df.to_csv(index=False).encode("utf-8")
+
+        if not overwrite:
+            try:
+                self.r2.head_object(Bucket=self.bucket, Key=key)
+                raise FileExistsError(f"File already exists in R2: {key}")
+            except self.r2.exceptions.ClientError:
+                pass  # Object does not exist, safe to upload
+
+        self.r2.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=csv_bytes,
+            ContentType="text/csv",
+        )
+
+        print(f"[CloudflareDAO] ✅ Uploaded → {key}")
+
+    def download_csv(self, *, path: str) -> pd.DataFrame:
+        csv_bytes = self._get_object(path)
+        return pd.read_csv(io.BytesIO(csv_bytes), low_memory=False)
+
+    def safe_download_csv(self, path: str, required_cols: list[str] = None) -> pd.DataFrame:
+        """
+        Safely download a CSV file via the configured DAO (Cloudflare or Local).
+        Normalizes column names and guarantees required columns exist.
+        """
+        try:
+            df = self.download_csv(path=path)
+        except FileNotFoundError:
+            return pd.DataFrame(columns=[c.lower() for c in (required_cols or [])])
+        except Exception as e:
+            print(f"[DAO] ⚠️ Could not read {path}: {e}")
+            return pd.DataFrame(columns=[c.lower() for c in (required_cols or [])])
+
+        # --- Normalize column names ---
+        df.columns = (
+            df.columns.astype(str)
+            .str.strip()
+            .str.lower()
+            .str.replace(r"[\u200b\xa0]", "", regex=True)
+        )
+
+        # --- Ensure required columns exist ---
+        if required_cols:
+            for col in required_cols:
+                col_lower = col.lower()
+                if col_lower not in df.columns:
+                    df[col_lower] = pd.Series(dtype="object")
+
+        return df
+
+    def upload_parquet(self, df: pd.DataFrame, *, path: str, overwrite: bool = True):
+        buf = io.BytesIO()
+        pq.write_table(pa.Table.from_pandas(df), buf)
+        self._put_bytes(path, buf.getvalue(), "application/octet-stream")
+
+    def download_parquet(self, *, path: str) -> pd.DataFrame:
+        """Download and load a Parquet file from Cloudflare R2 into a DataFrame."""
+        import pyarrow.parquet as pq
+        import pyarrow as pa
+        key = path.lstrip("/")
+        obj = self.r2.get_object(Bucket=self.bucket, Key=key)
+        buf = io.BytesIO(obj["Body"].read())
+        table = pq.read_table(buf)
+        return table.to_pandas()
+
+    def safe_download_parquet(self, path: str) -> pd.DataFrame:
+        """Safely download a Parquet file, returning an empty DataFrame on failure."""
+        import pyarrow.parquet as pq
+        import io
+        try:
+            obj = self.r2.get_object(Bucket=self.bucket, Key=path.lstrip("/"))
+            buf = io.BytesIO(obj["Body"].read())
+            return pq.read_table(buf).to_pandas()
+        except Exception as e:
+            print(f"[DAO] ⚠️ Could not read Parquet {path}: {e}")
+            return pd.DataFrame()
+
+    def upload_json(self, data: dict | list, *, path: str):
+        body = json.dumps(data, indent=2).encode("utf-8")
+        self._put_bytes(path, body, "application/json")
+
+    def download_json(self, *, path: str) -> dict:
+        """Download and parse a JSON file from Cloudflare R2."""
+        key = path.lstrip("/")
+        obj = self.r2.get_object(Bucket=self.bucket, Key=key)
+        return json.loads(obj["Body"].read().decode("utf-8"))
+
+    def upload_text(self, text: str, *, path: str):
+        self._put_bytes(path, text.encode("utf-8"), "text/plain")
+
+    def save_checkpoint(self, user_id: str, label: str, state: dict):
+        key = f"enrichment/checkpoints/{user_id}_{label}.json"
+        self._upload_json(key, state)
+
+    def load_checkpoint(self, user_id: str, label: str) -> Optional[dict]:
+        key = f"enrichment/checkpoints/{user_id}_{label}.json"
+        try:
+            return json.loads(self._get_object(key))
+        except FileNotFoundError:
+            return None
+
+    def get_master(self, table_name: str) -> pd.DataFrame:
+        """Fetch master CSV (e.g., info_track.csv)."""
+        key = f"enrichment/metadata/{table_name}"
+        try:
+            csv_bytes = self._get_object(key)
+            return pd.read_csv(io.BytesIO(csv_bytes), low_memory=False)
+        except FileNotFoundError:
+            return pd.DataFrame()
+
+    def merge_into_master(self, df_new: pd.DataFrame, filename: str, *, keys: List[str]):
+        """Merge df_new into a master file in R2."""
+        key = f"enrichment/metadata/{filename}"
+        try:
+            df_old = pd.read_csv(io.BytesIO(self._get_object(key)), low_memory=False)
+        except FileNotFoundError:
+            df_old = pd.DataFrame(columns=df_new.columns)
+
+        cols = list({*df_old.columns.tolist(), *df_new.columns.tolist()})
+        df_old = df_old.reindex(columns=cols)
+        df_new = df_new.reindex(columns=cols)
+        df_combined = pd.concat([df_old, df_new], ignore_index=True)
+
+        if keys:
+            df_combined["_is_new"] = 0
+            df_combined.loc[df_combined.index[-len(df_new):], "_is_new"] = 1
+            def last_valid(series: pd.Series):
+                not_nulls = series[~series.isna()]
+                return not_nulls.iloc[-1] if not not_nulls.empty else None
+            df_combined = (
+                df_combined.sort_values(keys + ["_is_new"])
+                .groupby(keys, as_index=False)
+                .agg(last_valid)
+            )
+            df_combined.drop(columns=["_is_new"], inplace=True, errors="ignore")
+        else:
+            df_combined.drop_duplicates(keep="last", inplace=True)
+
+        buf = io.BytesIO()
+        df_combined.to_csv(buf, index=False)
+        self._put_bytes(key, buf.getvalue(), "text/csv")
+
+    # ------------------------------------------------------------
+    # LOGGING
+    # ------------------------------------------------------------
+
+    def log(self, user_id: str, dataset_label: str, where: str, msg: str,
+            level: str = "info", data: Optional[dict] = None):
+        """Append log entry to enrichment/logs/{user_id}_{label}.log"""
+        key = f"enrichment/logs/{user_id}_{dataset_label}.log"
+        entry = {
+            "event_time": datetime.now(timezone.utc).isoformat(),
+            "where": where,
+            "level": level,
+            "message": msg,
+            "data": data,
+        }
+
+        try:
+            logs = self._get_object(key).decode("utf-8").splitlines()
+        except FileNotFoundError:
+            logs = []
+
+        logs.append(json.dumps(entry))
+        new_body = "\n".join(logs).encode("utf-8")
+        self._put_bytes(key, new_body, "text/plain")
+
 class LocalUserDataDAO:
     """
     Saves cleaned listening history locally (userdata/).

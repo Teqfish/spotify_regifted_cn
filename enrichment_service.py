@@ -1,10 +1,9 @@
-import base64, math, os, queue, random, requests, time, threading
+import base64, json, math, os, queue, random, requests, time, threading
 import pandas as pd
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Iterable, Set
 
-# from chart_scorer import compute_chart_scorer_if_missing
 from dao import StatusDAO, StorageDAO, InfoTableDAO
 
 DISCOGS_KEY = st.secrets["discogs"]["key"]
@@ -92,10 +91,10 @@ class SpotifyToken:
         payload = r.json()
         self.access_token = payload["access_token"]
         ttl = int(payload.get("expires_in", 3600)) - 60
-        self.expires_at = datetime.utcnow() + timedelta(seconds=max(ttl, 60))
+        self.expires_at = datetime.now(timezone.utc) + timedelta(seconds=max(ttl, 60))
 
     def get(self) -> str:
-        if not self.access_token or datetime.utcnow() >= self.expires_at:
+        if not self.access_token or datetime.now(timezone.utc) >= self.expires_at:
             self._fetch()
         if self.access_token is None:
             raise RuntimeError("Spotify access token unavailable after fetch")
@@ -503,74 +502,79 @@ class MetadataEnricher:
         user_id: str,
         label: str,
         df: pd.DataFrame,
-        spotify_token: SpotifyToken,
+        spotify_token: "SpotifyToken",
         discogs_key: str,
         discogs_secret: str,
-        status_dao: StatusDAO,
-        storage_dao: StorageDAO,
-        log_dao,   # <-- NEW
-        info_table_dao: Optional[InfoTableDAO] = None,
+        status_dao,
+        storage_dao,
+        log_dao,   # keep this new addition
+        info_table_dao=None,
         verbose: bool = True,
     ):
+        # --- Core metadata ---
         self.user_id = user_id
         self.label = label
         self.df = df.copy()
+
+        # --- Data prep ---
         if "minutes_played" not in self.df and "ms_played" in self.df:
             self.df["minutes_played"] = self.df["ms_played"] / 60000.0
-        self.df["year"] = pd.to_datetime(self.df["datetime"]).dt.year
+        if "datetime" in self.df.columns:
+            self.df["year"] = pd.to_datetime(self.df["datetime"], errors="coerce").dt.year
 
+        # --- External credentials & DAOs ---
         self.token = spotify_token
         self.auth_header = lambda: make_auth_header(self.token)
         self.discogs_key = discogs_key
         self.discogs_secret = discogs_secret
-
         self.status = status_dao
         self.storage = storage_dao
-        self.log_dao = log_dao          # <-- NEW
+        self.log_dao = log_dao
         self.info_tables = info_table_dao
         self.verbose = verbose
 
-        # seen + id caches
-        self.seen_artists: Set[str] = set()
-        self.seen_albums: Set[Tuple[str, str]] = set()
-        self.artist_ids_by_name: Dict[str, str] = {}
-        self.album_ids_by_key: Dict[Tuple[str, str], str] = {}
-        self.seen_tracks: Set[str] = set()
-        self.seen_shows: Set[str] = set()
-        self.seen_audiobooks: Set[str] = set()
-        self.show_ids_by_name: Dict[str, str] = {}
-        self.audiobook_ids_by_title: Dict[str, str] = {}
+        # --- Seen & ID caches ---
+        self.seen_artists: set[str] = set()
+        self.seen_albums: set[tuple[str, str]] = set()
+        self.artist_ids_by_name: dict[str, str] = {}
+        self.album_ids_by_key: dict[tuple[str, str], str] = {}
+        self.seen_tracks: set[str] = set()
+        self.seen_shows: set[str] = set()
+        self.seen_audiobooks: set[str] = set()
+        self.show_ids_by_name: dict[str, str] = {}
+        self.audiobook_ids_by_title: dict[str, str] = {}
 
-        # buffers to flush once
+        # --- Output buffers (flushed once per enrichment) ---
         self.buf_artists: list[dict] = []
         self.buf_albums: list[dict] = []
         self.buf_tracks: list[dict] = []
         self.buf_shows: list[dict] = []
         self.buf_audiobooks: list[dict] = []
 
-        # autosave / checkpoint config
-        self.autosave_every_batches = 50   # save every N batches
+        # --- Autosave / checkpointing ---
+        self.autosave_every_batches = 50
         self._batches_since_save = 0
         self.save_snapshots = False
         self._done_batches = 0
         self._total_batches = 0
         self.current_phase = "planning"
 
-        # master reuse
+        # --- Master tables for enrichment reuse ---
         self.master_artists = pd.DataFrame()
-        self.master_albums  = pd.DataFrame()
+        self.master_albums = pd.DataFrame()
         self.master_tracks = pd.DataFrame()
 
-        # Discogs worker pool (shared across enrichers)
+        # --- Shared Discogs worker pool ---
         if not hasattr(MetadataEnricher, "_discogs_pool"):
             MetadataEnricher._discogs_pool = DiscogsWorkerPool(num_workers=5)
         self.discogs_pool = MetadataEnricher._discogs_pool
 
+    # --- Logging helper ---
     def log(self, msg: str):
         if self.verbose:
             print(f"[enrich] {msg}")
 
-    # --- cancel gate used by phases and helpers ---
+    # --- Cancel gate used by phases and helpers ---
     def _check_cancel(self, cancel_event: Optional[threading.Event]) -> None:
         if cancel_event is not None and cancel_event.is_set():
             raise CancelledError()
@@ -1087,12 +1091,24 @@ class MetadataEnricher:
             ),
         })
 
-        # --- Supergenre mapping ---
+        # --- Supergenre mapping (fetched via StorageDAO, not local file) ---
         if not hasattr(self, "supergenre_map_dict"):
-            supergenre_map = pd.read_csv("datasets/reference/supergenre_map.csv")
-            self.supergenre_map_dict = dict(
-                zip(supergenre_map["subgenre"].str.lower(), supergenre_map["supergenre"])
-            )
+            try:
+                supergenre_map = self.storage.safe_download_csv("reference/supergenre_map.csv")
+                if not supergenre_map.empty and {"subgenre", "supergenre"}.issubset(supergenre_map.columns):
+                    self.supergenre_map_dict = dict(
+                        zip(
+                            supergenre_map["subgenre"].astype(str).str.lower(),
+                            supergenre_map["supergenre"].astype(str)
+                        )
+                    )
+                    self.log(f"[init] Loaded {len(self.supergenre_map_dict)} supergenre mappings from storage.")
+                else:
+                    self.supergenre_map_dict = {}
+                    self.log("[init] Warning: Supergenre map CSV missing expected columns.")
+            except Exception as e:
+                self.supergenre_map_dict = {}
+                self.log(f"[init] Failed to load supergenre_map.csv from storage: {e}")
 
         # Map supergenres
         out["supergenre"] = out["primary_genre"].str.lower().map(self.supergenre_map_dict)
@@ -1256,8 +1272,12 @@ class MetadataEnricher:
             if rows:
                 df_out = pd.DataFrame(rows)
 
-                # Only replace actual NaN/NA, leave 0 and False intact
-                df_out = df_out.applymap(lambda v: None if pd.isna(v) else v)
+                # ✅ Replace NaN/NA with None, keep 0/False intact
+                # Use .map() if available, otherwise fall back to .applymap()
+                if hasattr(df_out, "map"):
+                    df_out = df_out.map(lambda v: None if pd.isna(v) else v)
+                else:
+                    df_out = df_out.applymap(lambda v: None if pd.isna(v) else v)
 
                 self.buf_tracks.extend(df_out.to_dict(orient="records"))
 
@@ -1359,34 +1379,35 @@ class MetadataEnricher:
     def run_phase_chart_scorer(self):
         """
         Compute per-user chart scorer (Fri→Fri, 5-week decay) after enrichment.
-        - Early exit if that user+label+timestamp parquet already exists (overwrite=False).
-        - Respects cancel/kill via self.cancel_event.
+
+        Uses CloudflareDAO (or local equivalent) for all file I/O.
+        Writes to: enrichment/chart_scorer/
+        Reads charts from: reference/info_charts.csv
         """
         from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
 
         self._check_cancel(self.cancel_event)
 
-        charts_path = "datasets/reference/info_charts.csv"
-        output_dir = "datasets/enrichment/chart_scorer"  # fixed per your request
+        # Use clean bucket paths (no local 'datasets/' prefix)
+        charts_path = "reference/info_charts.csv"
+        output_dir = "enrichment/chart_scorer"
 
-        # Derive label & timestamp for naming, preferably from the dataset token/table name
+        # Derive label & timestamp for naming, preferably from dataset filename
         label, ts_str = None, None
         table_name = getattr(self, "table_name", None) or getattr(self, "input_table_name", None)
         if table_name:
             label, ts_str = parse_label_ts_from_table_name(table_name)
 
-        # Fall back to class label / now-ts if not parseable
         if not label:
             label = getattr(self, "label", "unknown")
         if not ts_str:
-            # As a last resort; better to propagate the dataset timestamp if you have it
-            ts_str = pd.Timestamp.utcnow().strftime("%Y%m%d-%H%M%S")
+            ts_str = pd.Timestamp.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
         # Minimal listening view
         cols = [c for c in ["datetime", "artist_name", "track_name"] if c in self.df.columns]
         listening_view = self.df.loc[:, cols].copy()
 
-        # Status
+        # Update enrichment status
         self.status.set_status(
             self.user_id, self.label,
             phase="chart_scorer",
@@ -1394,21 +1415,41 @@ class MetadataEnricher:
             total=self._total_batches
         )
 
-        # Compute (NOOP if per-user parquet already exists)
-        compute_chart_scorer_if_missing(
+        # --- Load reference chart data ---
+        try:
+            # CloudflareDAO supports CSV read directly from R2
+            charts_df = self.storage.download_csv(path=charts_path)
+            print(f"[ChartScorer] ✅ Loaded charts from R2: {charts_path}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to load reference charts from R2: {charts_path} ({e})")
+
+        # --- Compute results entirely in-memory ---
+        points_df, global_df = compute_chart_scorer_if_missing(
             user_id=self.user_id,
             label=label,
             ts_str=ts_str,
             listening=listening_view,
-            charts=charts_path,
-            output_dir=output_dir,
+            charts=charts_df,
+            output_dir=None,  # prevents local writes
             anchor_weekday=4,
             max_weeks=5,
             weekly_decay=10,
             use_weighting_if_present=True,
             overwrite=False,
             cancel_event=self.cancel_event,
+            return_dataframes=True,
         )
+
+        # --- Upload results to Cloudflare ---
+        user_parquet_key = f"enrichment/chart_scorer/{self.user_id}_{label}_chart-scores.parquet"
+        global_parquet_key = "enrichment/chart_scorer/global_chart-summaries.parquet"
+
+        if hasattr(self.storage, "upload_parquet"):
+            self.storage.upload_parquet(points_df, path=user_parquet_key, overwrite=True)
+            self.storage.upload_parquet(global_df, path=global_parquet_key, overwrite=True)
+        else:
+            self.storage.upload_csv(points_df, path=user_parquet_key.replace(".parquet", ".csv"))
+            self.storage.upload_csv(global_df, path=global_parquet_key.replace(".parquet", ".csv"))
 
         self._done_batches += 1
         self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
@@ -1943,24 +1984,6 @@ class MetadataEnricher:
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
 
-
-        """
-        Locate the UK Top 50 reference (weighted) chart CSV.
-        Checks common locations; adjust if you keep it elsewhere.
-        """
-        candidates = [
-            "datasets/reference/info_charts_weighted.csv",
-            "datasets/enrichment/metadata/info_charts_weighted.csv",
-            "/mnt/data/info_charts_weighted.csv",
-        ]
-        for p in candidates:
-            if os.path.exists(p):
-                return p
-        raise FileNotFoundError(
-            "UK charts CSV not found. Put 'info_charts_weighted.csv' under "
-            "datasets/reference/ or datasets/enrichment/metadata/ (or /mnt/data/)."
-        )
-
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """
         Full enrichment pipeline with detailed debug logging.
@@ -2240,18 +2263,18 @@ class MetadataEnricher:
         # Optional snapshots
         if getattr(self, "save_snapshots", False):
             try:
-                ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
                 base = f"{self.user_id}/{self.label}/_autosave/{ts}"
                 if not artists_df.empty:
-                    self.storage.upload_csv(artists_df, bucket="metadata", path=f"{base}/info_artist_genre.csv", overwrite=True)
+                    self.storage.upload_csv(artists_df, path=f"{base}/info_artist_genre.csv", overwrite=True)
                 if not albums_df.empty:
-                    self.storage.upload_csv(albums_df, bucket="metadata", path=f"{base}/info_album.csv", overwrite=True)
+                    self.storage.upload_csv(albums_df, path=f"{base}/info_album.csv", overwrite=True)
                 if not tracks_df.empty:
-                    self.storage.upload_csv(tracks_df, bucket="metadata", path=f"{base}/info_track.csv", overwrite=True)
+                    self.storage.upload_csv(tracks_df, path=f"{base}/info_track.csv", overwrite=True)
                 if not shows_df.empty:
-                    self.storage.upload_csv(shows_df, bucket="metadata", path=f"{base}/info_show.csv", overwrite=True)
+                    self.storage.upload_csv(shows_df, path=f"{base}/info_show.csv", overwrite=True)
                 if not audiobooks_df.empty:
-                    self.storage.upload_csv(audiobooks_df, bucket="metadata", path=f"{base}/info_audiobook.csv", overwrite=True)
+                    self.storage.upload_csv(audiobooks_df, path=f"{base}/info_audiobook.csv", overwrite=True)
             except Exception as e:
                 print("[autosave] snapshot write failed:", e)
 
@@ -2281,70 +2304,69 @@ class MetadataEnricher:
     def flush_all(self, suffix: str = ""):
         """
         Final flush at the end of a run (or on graceful cancel).
-        Writes a dated per-run snapshot under {user}/{label}/{ts}{suffix}/...
-        AND merges everything into masters under datasets/enrichment/metadata/*.csv.
+        Merges all in-memory buffers directly into the global master metadata tables
+        under enrichment/metadata/*.csv (Cloudflare or local DAO).
         """
         try:
-            ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-            base = f"{self.user_id}/{self.label}/{ts}{suffix}"
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
-            artists_df     = pd.DataFrame(self.buf_artists)     if self.buf_artists else pd.DataFrame()
-            albums_df      = pd.DataFrame(self.buf_albums)      if self.buf_albums else pd.DataFrame()
-            tracks_df      = pd.DataFrame(self.buf_tracks)      if self.buf_tracks else pd.DataFrame()
-            shows_df       = pd.DataFrame(self.buf_shows)       if self.buf_shows else pd.DataFrame()
-            audiobooks_df  = pd.DataFrame(self.buf_audiobooks)  if self.buf_audiobooks else pd.DataFrame()
-            unlisted_df    = pd.DataFrame(getattr(self, "buf_artists_unlisted", [])) if getattr(self, "buf_artists_unlisted", None) else pd.DataFrame()
+            # Convert buffers into DataFrames
+            artists_df    = pd.DataFrame(self.buf_artists) if self.buf_artists else pd.DataFrame()
+            albums_df     = pd.DataFrame(self.buf_albums) if self.buf_albums else pd.DataFrame()
+            tracks_df     = pd.DataFrame(self.buf_tracks) if self.buf_tracks else pd.DataFrame()
+            shows_df      = pd.DataFrame(self.buf_shows) if self.buf_shows else pd.DataFrame()
+            audiobooks_df = pd.DataFrame(self.buf_audiobooks) if self.buf_audiobooks else pd.DataFrame()
+            unlisted_df   = pd.DataFrame(getattr(self, "buf_artists_unlisted", [])) if getattr(self, "buf_artists_unlisted", None) else pd.DataFrame()
 
-            # Ensure track snapshots always include user_id
+            # Ensure tracks include user_id for proper uniqueness
             if not tracks_df.empty:
                 if "user_id" not in tracks_df.columns:
                     tracks_df["user_id"] = self.user_id
                 tracks_df = tracks_df.drop_duplicates(subset=["track_id", "user_id"])
 
-            # Snapshot uploads
-            if not artists_df.empty:
-                self.storage.upload_csv(artists_df, bucket="metadata", path=f"{base}/info_artist_genre.csv", overwrite=True)
-            if not unlisted_df.empty:
-                self.storage.upload_csv(unlisted_df, bucket="metadata", path=f"{base}/info_artist_genre_unlisted.csv", overwrite=True)
-            if not albums_df.empty:
-                self.storage.upload_csv(albums_df, bucket="metadata", path=f"{base}/info_album.csv", overwrite=True)
-            if not tracks_df.empty:
-                self.storage.upload_csv(tracks_df, bucket="metadata", path=f"{base}/info_track.csv", overwrite=True)
-            if not shows_df.empty:
-                self.storage.upload_csv(shows_df, bucket="metadata", path=f"{base}/info_show.csv", overwrite=True)
-            if not audiobooks_df.empty:
-                self.storage.upload_csv(audiobooks_df, bucket="metadata", path=f"{base}/info_audiobook.csv", overwrite=True)
+            self.log(f"[flush_all] Starting global master merges at {ts}")
 
-            # Merge into masters
+            # --- Merge into global master tables only ---
             try:
                 if not artists_df.empty:
                     self.storage.merge_into_master(artists_df, "info_artist_genre.csv", keys=["artist_id"])
+                    self.log(f"[flush_all] → Merged {len(artists_df)} artists")
+
                 if not unlisted_df.empty:
                     self.storage.merge_into_master(unlisted_df, "info_artist_genre_unlisted.csv", keys=["artist_id"])
+                    self.log(f"[flush_all] → Merged {len(unlisted_df)} unlisted artists")
+
                 if not albums_df.empty:
                     self.storage.merge_into_master(albums_df, "info_album.csv", keys=["album_id"])
+                    self.log(f"[flush_all] → Merged {len(albums_df)} albums")
+
                 if not tracks_df.empty:
                     self.storage.merge_into_master(tracks_df, "info_track.csv", keys=["track_id", "user_id"])
+                    self.log(f"[flush_all] → Merged {len(tracks_df)} tracks")
+
                 if not shows_df.empty:
                     self.storage.merge_into_master(shows_df, "info_show.csv", keys=["show_id"])
+                    self.log(f"[flush_all] → Merged {len(shows_df)} shows")
+
                 if not audiobooks_df.empty:
                     self.storage.merge_into_master(audiobooks_df, "info_audiobook.csv", keys=["audiobook_id"])
+                    self.log(f"[flush_all] → Merged {len(audiobooks_df)} audiobooks")
+
             except Exception as e:
-                print("[master] merge failed:", e)
+                self.log(f"[flush_all] ⚠️ Master merge failed: {e}")
 
         finally:
-            # ✅ End of run → shut down background workers
+            # ✅ Always clean up worker pools even on error
             if hasattr(self, "discogs_pool"):
                 try:
                     self.log("[flush_all] Cleaning up Discogs worker pool…")
                     self.discogs_pool.shutdown()
-                    self.log("[flush_all] Discogs pool shut down successfully")
+                    self.log("[flush_all] Discogs pool shut down successfully.")
                 except Exception as e:
-                    self.log(f"[flush_all] Discogs pool shutdown failed: {e}")
-
+                    self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed: {e}")
     # --- Filters against master tables ---
     def _load_master_tables(self):
-        """Load master info tables so filters can skip already-enriched entities."""
+        """Load master info tables and initialize seen_* sets for enrichment filtering."""
         try:
             if hasattr(self.storage, "get_master"):
                 self.master_artists     = self.storage.get_master("info_artist_genre.csv")
@@ -2368,6 +2390,55 @@ class MetadataEnricher:
             self.master_shows      = pd.DataFrame()
             self.master_audiobooks = pd.DataFrame()
             self.master_unlisted   = pd.DataFrame()
+
+        # ✅ Initialize seen_* sets based on what’s already in master tables (or empty if missing)
+        self.seen_artists = (
+            set(self.master_artists["artist_name"].dropna().astype(str).str.lower())
+            if not self.master_artists.empty and "artist_name" in self.master_artists.columns
+            else set()
+        )
+
+        self.seen_albums = (
+            set(
+                (str(a).strip().lower(), str(b).strip().lower())
+                for a, b in self.master_albums[["artist_name", "album_name"]]
+                .dropna()
+                .astype(str)
+                .itertuples(index=False, name=None)
+            )
+            if not self.master_albums.empty and {"artist_name", "album_name"}.issubset(self.master_albums.columns)
+            else set()
+        )
+
+        self.seen_tracks = (
+            set(self.master_tracks["track_id"].dropna().astype(str).str.lower())
+            if not self.master_tracks.empty and "track_id" in self.master_tracks.columns
+            else set()
+        )
+
+        self.seen_shows = (
+            set(self.master_shows["show_name"].dropna().astype(str).str.lower())
+            if not self.master_shows.empty and "show_name" in self.master_shows.columns
+            else set()
+        )
+
+        self.seen_audiobooks = (
+            set(self.master_audiobooks["audiobook_title"].dropna().astype(str).str.lower())
+            if not self.master_audiobooks.empty and "audiobook_title" in self.master_audiobooks.columns
+            else set()
+        )
+
+        # ✅ Log results for clarity (optional)
+        self.log(
+            f"[master] Loaded: artists={len(self.master_artists)}, "
+            f"albums={len(self.master_albums)}, tracks={len(self.master_tracks)}, "
+            f"shows={len(self.master_shows)}, audiobooks={len(self.master_audiobooks)}"
+        )
+        self.log(
+            f"[master] Seen sets initialized: "
+            f"artists={len(self.seen_artists)}, albums={len(self.seen_albums)}, "
+            f"tracks={len(self.seen_tracks)}, shows={len(self.seen_shows)}, audiobooks={len(self.seen_audiobooks)}"
+        )
 
     def _filter_known_artists(self, names: list[str]) -> list[str]:
         """Skip artists already present in master or already seen in this run."""
@@ -2437,6 +2508,178 @@ class MetadataEnricher:
         if filtered > 0:
             self.log(f"[filter] Audiobooks filtered out: {filtered}/{before}")
         return out
+
+    # --- Restarter ---
+    def infer_last_phase_from_logs(self, log_text: str) -> Optional[str]:
+        """
+        Inspect logs to find the last successfully completed phase.
+        Returns the phase name string (e.g. 'per_album') or None.
+        """
+        lines = log_text.splitlines()
+        last_phase = None
+        for line in lines:
+            if "[run_all] Starting phase:" in line:
+                last_phase = line.split("Starting phase:")[1].strip()
+            elif "[run_all] Completed phase:" in line:
+                last_phase = line.split("Completed phase:")[1].strip()
+        return last_phase
+
+    def resume_from_logs(self, log_text: str):
+        """
+        Resume enrichment from the next phase after the last completed one.
+        """
+        phase_order = [
+            "overall",
+            "per_year",
+            "albums_of_year",
+            "per_album",
+            "top_tracks_per_month",
+            "popularity_timeseries",
+            "chart_scorer",
+            "breadth_first",
+            "flush",
+        ]
+
+        last_phase = self.infer_last_phase_from_logs(log_text)
+        if not last_phase:
+            self.log("[resume_from_logs] No previous phase found — starting from beginning.")
+            self.run_all()
+            return
+
+        if last_phase not in phase_order:
+            self.log(f"[resume_from_logs] Unknown last phase '{last_phase}', restarting fully.")
+            self.run_all()
+            return
+
+        idx = phase_order.index(last_phase)
+        next_phases = phase_order[idx + 1:]
+
+        self.log(f"[resume_from_logs] Resuming after '{last_phase}' — remaining phases: {next_phases}")
+
+        # Ensure master tables are loaded
+        self._load_master_tables()
+
+        for phase in next_phases:
+            self.log(f"[resume_from_logs] Starting phase: {phase}")
+            method = getattr(self, f"run_phase_{phase}", None)
+            if not method:
+                self.log(f"[resume_from_logs] No method for {phase}, skipping.")
+                continue
+            try:
+                method()
+            except Exception as e:
+                self.log(f"[resume_from_logs] Phase {phase} failed: {e}")
+                raise
+
+    def resume_from_phase(self, phase_name: str, cancel_event=None, auto: bool = True, last_error: str = None):
+        """
+        Resume enrichment starting from a given phase, using logs and status tracking.
+        Logs the restart event, updates status, and continues from the selected phase onward.
+        """
+
+        import traceback
+        from datetime import datetime, timezone
+
+        self.cancel_event = cancel_event
+        valid_phases = [
+            "planning",
+            "overall",
+            "per_year",
+            "albums_of_year",
+            "per_album",
+            "top_tracks_per_month",
+            "popularity_timeseries",
+            "chart_scorer",
+            "breadth_first",
+            "flush",
+        ]
+
+        # ---- Validate phase ----
+        if phase_name not in valid_phases:
+            msg = f"[resume_from_phase] Invalid phase '{phase_name}' — restarting from beginning."
+            self.log(self.user_id, self.label, where="resume_from_phase", msg=msg, level="warning")
+            return self.run_all(cancel_event=cancel_event)
+
+        start_index = valid_phases.index(phase_name)
+        timestamp = datetime.now(timezone.utc).isoformat()
+        restart_type = "auto" if auto else "manual"
+
+        # ---- Log the restart event ----
+        restart_log = {
+            "event_time": timestamp,
+            "where": "resume_from_phase",
+            "level": "info",
+            "message": f"Restarting enrichment ({restart_type}) from phase '{phase_name}'.",
+            "data": {
+                "user_id": self.user_id,
+                "label": self.label,
+                "phase": phase_name,
+                "auto_restart": auto,
+                "last_error": last_error or None,
+            },
+        }
+
+        try:
+            # Write to Cloudflare R2 logs
+            key = f"enrichment/logs/{self.user_id}_{self.label}.log"
+            try:
+                obj = self.storage_dao.r2.get_object(Bucket=self.storage_dao.bucket, Key=key)
+                logs = obj["Body"].read().decode("utf-8").splitlines()
+            except Exception:
+                logs = []
+            logs.append(json.dumps(restart_log))
+            new_body = "\n".join(logs).encode("utf-8")
+            self.storage_dao.r2.put_object(
+                Bucket=self.storage_dao.bucket,
+                Key=key,
+                Body=new_body,
+                ContentType="text/plain",
+            )
+        except Exception as e:
+            self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Failed to write restart log: {e}", level="error")
+
+        # ---- Update status JSON ----
+        try:
+            self.status_dao.set_status(
+                self.user_id,
+                self.label,
+                phase="restart",
+                detail=f"Restarting ({restart_type}) from phase '{phase_name}'",
+                total=None,
+            )
+        except Exception as e:
+            self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Failed to update restart status: {e}", level="warning")
+
+        self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Resuming from phase '{phase_name}' (type={restart_type})")
+
+        # ---- Execute remaining pipeline phases ----
+        for ph in valid_phases[start_index:]:
+            self._check_cancel(self.cancel_event)
+            method_name = f"run_phase_{ph}"
+            try:
+                if hasattr(self, method_name):
+                    self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Executing {method_name}()")
+                    getattr(self, method_name)()
+                elif ph == "flush":
+                    self.flush_all()
+                else:
+                    self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Skipping unknown phase '{ph}'", level="warning")
+            except Exception as e:
+                err_str = "".join(traceback.format_exc())
+                self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Exception during phase '{ph}': {e}", level="error")
+                self.status_dao.finish_status(
+                    self.user_id, self.label, ok=False, detail=f"❌ Failed again during resumed phase '{ph}': {e}"
+                )
+                raise
+
+        # ---- Finish cleanly ----
+        self.status_dao.finish_status(
+            self.user_id,
+            self.label,
+            ok=True,
+            detail=f"✅ Enrichment resumed successfully from '{phase_name}' and completed",
+        )
+        self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Completed resumed enrichment from '{phase_name}'")
 
 class DiscogsWorkerPool:
     def __init__(self, num_workers: int = 5):

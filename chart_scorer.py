@@ -27,7 +27,6 @@ DEFAULT_USE_WEIGHTING = True
 DEFAULT_OUTPUT_DIR = "datasets/enrichment/chart_scorer"
 PARQUET_COMPRESSION = "zstd"  # smaller; will auto-fallback to 'snappy' if unsupported
 
-
 # ===========================
 # Utilities
 # ===========================
@@ -60,12 +59,13 @@ def floor_to_anchor_week(dt: pd.Series, anchor_weekday: int = DEFAULT_ANCHOR_WEE
     # Drop tz after converting to UTC so arithmetic is tz-naive but aligned
     return week_start.dt.tz_convert("UTC").dt.tz_localize(None)
 
-def build_points_filename(user_id: str, label: str, ts_str: str) -> str:
+def build_points_filename(user_id: str, label: str) -> str:
     """
-    Per your naming convention:
-      {user_id}_{label}_{timestamp}_chart-scores.parquet
+    Deterministic filename (no timestamp).
+    Each user_id + label pair gets exactly one Parquet file:
+      {user_id}_{label}_chart-scores.parquet
     """
-    return f"{user_id}_{label}_{ts_str}_chart-scores.parquet"
+    return f"{user_id}_{label}_chart-scores.parquet"
 
 def global_summary_filename() -> str:
     return "global_chart-summaries.parquet"
@@ -81,7 +81,6 @@ def parse_label_ts_from_table_name(table_name: str) -> Tuple[Optional[str], Opti
     if m:
         return m.group(1), m.group(2)
     return None, None
-
 
 # ===========================
 # Chart peaks
@@ -136,7 +135,6 @@ def prepare_chart_peaks(
     peaks["max_points"] = peaks["max_points"].astype(float)
     return peaks.reset_index(drop=True)
 
-
 # ===========================
 # First listen per song
 # ===========================
@@ -172,7 +170,6 @@ def first_listen_from_dataframe(
         .first()[["song_key", "artist_name", "track_name"]]
     )
     return first_weeks.merge(rep, on="song_key", how="left")
-
 
 # ===========================
 # Scoring
@@ -211,7 +208,6 @@ def score_user_against_charts(
     out = merged[cols].copy()
     return out.sort_values(["points_awarded", "peak_week_start"], ascending=[False, True]).reset_index(drop=True)
 
-
 # ===========================
 # Summaries
 # ===========================
@@ -236,27 +232,29 @@ def calculate_listener_summary(points_df: pd.DataFrame) -> Dict[str, float]:
         "user_best_single_track_points": best_single_track,
     }
 
-
 # ===========================
 # Storage (single dir, no subfolders; no JSON)
 # ===========================
-def output_paths(output_dir: str, user_id: str, label: str, ts_str: str) -> Tuple[str, str]:
+def output_paths(output_dir: str, user_id: str, label: str, ts_str: str | None = None) -> Tuple[str, str]:
     """
     Returns (points_path, global_summary_path)
+    NOTE: ts_str ignored (kept for backward compatibility with orchestrator signature).
     """
     base = output_dir or DEFAULT_OUTPUT_DIR
     ensure_dir(base)
     return (
-        os.path.join(base, build_points_filename(user_id, label, ts_str)),
+        os.path.join(base, build_points_filename(user_id, label)),
         os.path.join(base, global_summary_filename()),
     )
 
-def _write_parquet(df: pd.DataFrame, path: str) -> None:
-    # try zstd (smaller), fallback to snappy
-    try:
-        df.to_parquet(path, index=False, compression=PARQUET_COMPRESSION)
-    except Exception:
-        df.to_parquet(path, index=False, compression="snappy")
+def _write_parquet(df: pd.DataFrame, path: str | None):
+    """Writes parquet locally only if path is defined (skipped for cloud mode)."""
+    if not path:
+        print("[_write_parquet] Skipping local write (output_dir=None)")
+        return  # ✅ do nothing in cloud mode
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    df.to_parquet(path, index=False)
 
 def optimize_points_for_storage(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -266,31 +264,37 @@ def optimize_points_for_storage(df: pd.DataFrame) -> pd.DataFrame:
     for col in ["artist_name", "track_name", "song_key"]:
         if col in out.columns:
             out[col] = out[col].astype("category")
-    # datetimes are already datetime64[ns]; floats are fine
     return out
 
 def upsert_global_summary(output_dir: str, user_id: str, summary: Dict[str, float]) -> str:
     """
-    One-row-per-user table with summary stats; stored in the same folder.
+    One-row-per-user table with summary stats.
+    - Always replaces the existing entry for that user_id.
+    - Never appends duplicates.
     Returns the global parquet path.
     """
-    _, global_path = output_paths(output_dir, user_id, "unused", "unused")  # to resolve folder & filename
-    row = {"user_id": user_id, **summary}
-    row_df = pd.DataFrame([row])
+    _, global_path = output_paths(output_dir, user_id, "unused")
+
+    row_df = pd.DataFrame([{ "user_id": user_id, **summary }])
 
     if os.path.exists(global_path):
         try:
             g = pd.read_parquet(global_path)
         except Exception:
             g = pd.DataFrame(columns=row_df.columns)
-        g = g[g["user_id"] != user_id]
+
+        # Remove existing rows for this user_id to prevent duplicates
+        if "user_id" in g.columns:
+            g = g[g["user_id"] != user_id]
+
+        # Append this run’s data
         g = pd.concat([g, row_df], ignore_index=True)
     else:
         g = row_df
 
+    # Overwrite the global parquet cleanly
     _write_parquet(g, global_path)
     return global_path
-
 
 # ===========================
 # Orchestrator (call this)
@@ -309,22 +313,29 @@ def compute_chart_scorer_if_missing(
     use_weighting_if_present: bool = DEFAULT_USE_WEIGHTING,
     overwrite: bool = False,
     cancel_event: Optional[object] = None,
-) -> Tuple[str, str]:
+    return_dataframes: bool = False
+) -> Tuple[str, str] | Tuple[pd.DataFrame, pd.DataFrame]:
     """
     - Writes per-user detailed Parquet named: {user}_{label}_{ts}_chart-scores.parquet
     - Upserts one row into global_chart-summaries.parquet
     - Early-exits if per-user file already exists and overwrite=False
-    Returns (points_path, global_summary_path).
+    - When return_dataframes=True, returns (points_df_small, global_df) instead of writing to disk.
     """
+
     _check_cancel(cancel_event)
 
     points_path, global_path = output_paths(output_dir, user_id, label, ts_str)
 
+    # --- Early exit if already exists and not overwriting ---
     if (not overwrite) and os.path.exists(points_path):
-        # Already computed for this dataset id (user+label+timestamp)
+        if return_dataframes:
+            # Read and return for convenience
+            points_df = pd.read_parquet(points_path)
+            global_df = pd.read_parquet(global_path) if os.path.exists(global_path) else pd.DataFrame()
+            return points_df, global_df
         return points_path, global_path
 
-    # Load charts
+    # --- Load chart reference data ---
     charts_df = pd.read_csv(charts) if isinstance(charts, str) else charts.copy()
     _check_cancel(cancel_event)
 
@@ -335,9 +346,13 @@ def compute_chart_scorer_if_missing(
     )
     _check_cancel(cancel_event)
 
-    # Load/prepare listening
+    # --- Load or prepare listening data ---
     if isinstance(listening, str):
-        df_listening = pd.read_csv(listening, usecols=["datetime", "artist_name", "track_name"], low_memory=False)
+        df_listening = pd.read_csv(
+            listening,
+            usecols=["datetime", "artist_name", "track_name"],
+            low_memory=False,
+        )
     else:
         cols = [c for c in ["datetime", "artist_name", "track_name"] if c in listening.columns]
         df_listening = listening.loc[:, cols].copy()
@@ -345,7 +360,7 @@ def compute_chart_scorer_if_missing(
     first_listens = first_listen_from_dataframe(df_listening, anchor_weekday=anchor_weekday)
     _check_cancel(cancel_event)
 
-    # Score + store
+    # --- Score user vs charts ---
     points_df = score_user_against_charts(
         first_listens=first_listens,
         chart_peaks=chart_peaks,
@@ -353,12 +368,24 @@ def compute_chart_scorer_if_missing(
         weekly_decay=weekly_decay,
     )
 
-    # storage optimization (categories + compressed parquet)
+    # --- Optimize for storage ---
     points_df_small = optimize_points_for_storage(points_df)
     _write_parquet(points_df_small, points_path)
 
-    # Global summary upsert
+    # --- Global summary update ---
     summary = calculate_listener_summary(points_df)
     global_path = upsert_global_summary(output_dir, user_id, summary)
 
-    return points_path, global_path
+    # Try loading the updated global summary into a dataframe (if exists)
+    try:
+        global_df = pd.read_parquet(global_path)
+    except Exception:
+        global_df = pd.DataFrame()
+
+    # --- Final return ---
+    if return_dataframes:
+        # return in-memory dataframes
+        return points_df_small, global_df
+    else:
+        # return file paths (legacy/local mode)
+        return points_path, global_path

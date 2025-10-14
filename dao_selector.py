@@ -11,30 +11,37 @@ from dao import (
     LocalMetadataDAO,
     LocalStatusDAO,
     LocalLogDAO,
-    # CloudflareDAOs  # <-- later
+    CloudflareDAOs
 )
 
 # --- Optional helper: read mode from secrets or env, with a safe default ---
-def get_server_mode(default: str = "local") -> str:
+def get_server_mode(default: str = "cloudflare") -> str:
     """
-    Resolve the server mode in this order:
-    1) st.secrets["general"]["server_mode"] if present
-    2) environment variable SERVER_MODE
-    3) default (local)
+    Returns the active SERVER_MODE ('local', 'supabase', 'cloudflare', etc.)
+    Priority:
+      1. st.secrets["general"]["server_mode"]
+      2. Environment variable SERVER_MODE
+      3. Default ('cloudflare' if unspecified)
     """
+    mode = None
+
+    # 1️⃣ Prefer secrets.toml
     try:
         mode = st.secrets.get("general", {}).get("server_mode")
-        if mode:
-            return str(mode).lower()
     except Exception:
-        pass
+        mode = None
 
-    mode = os.getenv("SERVER_MODE")
-    if mode:
-        return mode.lower()
+    # 2️⃣ Fallback: environment variable
+    if not mode:
+        mode = os.environ.get("SERVER_MODE")
 
-    return default
+    # 3️⃣ Default
+    if not mode:
+        mode = default
 
+    mode = mode.lower().strip()
+
+    return mode
 
 # --- Small shim to give Supabase a .log(...) method like LocalLogDAO ---
 class SupabaseLogDAO:
@@ -62,7 +69,6 @@ class SupabaseLogDAO:
         except Exception as e:
             # Fail-soft so logging never crashes the app
             print("[SupabaseLogDAO] log insert failed:", e, where, msg)
-
 
 def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
     """
@@ -106,11 +112,23 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
         }
 
     elif mode == "cloudflare":
-        # Placeholder — add your Cloudflare DAOs here later and keep the same keys
-        # Example shape you’ll want to return:
-        # cf = CloudflareDAOs(...)
-        # return {"main": cf, "status": cf, "metadata": cf, "logs": cf, "user_data": None}
-        raise NotImplementedError("Cloudflare DAO support not added yet.")
+        cf_conf = st.secrets["cloudflare"]
+
+        cf = CloudflareDAOs(
+            account_id=cf_conf["account_id"],
+            access_key=cf_conf["access_key"],
+            secret_key=cf_conf["secret_key"],
+            bucket=cf_conf["bucket"],
+            endpoint_url=cf_conf["endpoint_url"],
+        )
+
+        return {
+            "main": cf,
+            "status": cf,
+            "metadata": cf,
+            "logs": cf,
+            "user_data": cf,
+        }
 
     else:
         raise ValueError(f"Unknown server_mode: {mode}")

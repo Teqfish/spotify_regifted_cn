@@ -2239,6 +2239,54 @@ class MetadataEnricher:
             # Non-fatal, keep going
             print(f"[autosave] flush_partial failed: {e}")
 
+    def validate_master_integrity(self):
+        """
+        Perform lightweight consistency checks on master metadata files in Cloudflare.
+        - Ensures required columns exist
+        - Ensures no duplicate key values
+        - Logs summary counts for visibility
+        """
+        import io
+        import pandas as pd
+
+        master_files = {
+            "info_artist_genre.csv": ["artist_id"],
+            "info_album.csv": ["album_id"],
+            "info_track.csv": ["track_id", "user_id"],
+            "info_show.csv": ["show_id"],
+            "info_audiobook.csv": ["audiobook_id"],
+        }
+
+        self.log("[integrity] Starting master consistency validation...")
+
+        for filename, keys in master_files.items():
+            key = f"enrichment/metadata/{filename}"
+
+            try:
+                df = pd.read_csv(io.BytesIO(self._get_object(key)), low_memory=False)
+                row_count = len(df)
+                col_count = len(df.columns)
+
+                missing_cols = [k for k in keys if k not in df.columns]
+                if missing_cols:
+                    self.log(f"[integrity] ⚠️ {filename}: missing key columns {missing_cols}")
+                    continue
+
+                # Check for duplicates by key columns
+                dup_count = df.duplicated(subset=keys, keep=False).sum()
+                if dup_count > 0:
+                    self.log(f"[integrity] ⚠️ {filename}: {dup_count} duplicate rows by {keys}")
+
+                # Report summary
+                self.log(f"[integrity] ✅ {filename}: {row_count} rows, {col_count} columns, {dup_count} duplicates")
+
+            except FileNotFoundError:
+                self.log(f"[integrity] ℹ️ {filename} not found (skipping).")
+            except Exception as e:
+                self.log(f"[integrity] ❌ Failed to validate {filename}: {e}")
+
+        self.log("[integrity] Validation complete.")
+
     def flush_partial(self) -> None:
         """
         Autosave: dump current buffers into master CSVs so pages can use data immediately.
@@ -2364,6 +2412,9 @@ class MetadataEnricher:
                     self.log("[flush_all] Discogs pool shut down successfully.")
                 except Exception as e:
                     self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed: {e}")
+
+        self.validate_master_integrity()
+
     # --- Filters against master tables ---
     def _load_master_tables(self):
         """Load master info tables and initialize seen_* sets for enrichment filtering."""

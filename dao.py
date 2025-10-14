@@ -442,36 +442,57 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             return pd.DataFrame()
 
     def merge_into_master(self, df_new: pd.DataFrame, filename: str, *, keys: List[str]):
-        """Merge df_new into a master file in R2."""
+        """
+        Merge df_new into a global master file in Cloudflare R2.
+        Deduplicates based on `keys`, keeping the latest non-null values.
+        """
         key = f"enrichment/metadata/{filename}"
+
         try:
-            df_old = pd.read_csv(io.BytesIO(self._get_object(key)), low_memory=False)
-        except FileNotFoundError:
-            df_old = pd.DataFrame(columns=df_new.columns)
+            # --- Try loading existing master ---
+            try:
+                df_old = pd.read_csv(io.BytesIO(self._get_object(key)), low_memory=False)
+                print(f"[merge_into_master] ✅ Loaded existing {filename} ({len(df_old)} rows)")
+            except FileNotFoundError:
+                print(f"[merge_into_master] ℹ️ {filename} not found — creating new master.")
+                df_old = pd.DataFrame(columns=df_new.columns)
 
-        cols = list({*df_old.columns.tolist(), *df_new.columns.tolist()})
-        df_old = df_old.reindex(columns=cols)
-        df_new = df_new.reindex(columns=cols)
-        df_combined = pd.concat([df_old, df_new], ignore_index=True)
+            # --- Align schemas (ensure both DataFrames share columns) ---
+            cols = list({*df_old.columns.tolist(), *df_new.columns.tolist()})
+            df_old = df_old.reindex(columns=cols)
+            df_new = df_new.reindex(columns=cols)
 
-        if keys:
-            df_combined["_is_new"] = 0
-            df_combined.loc[df_combined.index[-len(df_new):], "_is_new"] = 1
-            def last_valid(series: pd.Series):
-                not_nulls = series[~series.isna()]
-                return not_nulls.iloc[-1] if not not_nulls.empty else None
-            df_combined = (
-                df_combined.sort_values(keys + ["_is_new"])
-                .groupby(keys, as_index=False)
-                .agg(last_valid)
-            )
-            df_combined.drop(columns=["_is_new"], inplace=True, errors="ignore")
-        else:
-            df_combined.drop_duplicates(keep="last", inplace=True)
+            # --- Combine ---
+            df_combined = pd.concat([df_old, df_new], ignore_index=True)
 
-        buf = io.BytesIO()
-        df_combined.to_csv(buf, index=False)
-        self._put_bytes(key, buf.getvalue(), "text/csv")
+            # --- Deduplicate based on keys (keep latest non-null entries) ---
+            if keys:
+                df_combined["_is_new"] = 0
+                df_combined.loc[df_combined.index[-len(df_new):], "_is_new"] = 1
+
+                def last_valid(series: pd.Series):
+                    not_nulls = series[~series.isna()]
+                    return not_nulls.iloc[-1] if not not_nulls.empty else None
+
+                df_combined = (
+                    df_combined.sort_values(keys + ["_is_new"])
+                    .groupby(keys, as_index=False)
+                    .agg(last_valid)
+                )
+                df_combined.drop(columns=["_is_new"], inplace=True, errors="ignore")
+            else:
+                df_combined.drop_duplicates(keep="last", inplace=True)
+
+            # --- Upload merged master back to Cloudflare ---
+            buf = io.BytesIO()
+            df_combined.to_csv(buf, index=False, encoding="utf-8")
+            self._put_bytes(key, buf.getvalue(), "text/csv")
+
+            print(f"[merge_into_master] ✅ Updated {filename}: {len(df_combined)} total rows")
+
+        except Exception as e:
+            print(f"[merge_into_master] ❌ Failed to merge into {filename}: {e}")
+            raise
 
     # ------------------------------------------------------------
     # LOGGING

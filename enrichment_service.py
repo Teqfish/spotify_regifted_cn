@@ -1,7 +1,7 @@
 import base64, json, math, os, queue, random, requests, time, threading
 import pandas as pd
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Iterable, Set
 
 from dao import StatusDAO, StorageDAO, InfoTableDAO
@@ -91,10 +91,10 @@ class SpotifyToken:
         payload = r.json()
         self.access_token = payload["access_token"]
         ttl = int(payload.get("expires_in", 3600)) - 60
-        self.expires_at = datetime.utcnow() + timedelta(seconds=max(ttl, 60))
+        self.expires_at = datetime.now(timezone.utc) + timedelta(seconds=max(ttl, 60))
 
     def get(self) -> str:
-        if not self.access_token or datetime.utcnow() >= self.expires_at:
+        if not self.access_token or datetime.now(timezone.utc) >= self.expires_at:
             self._fetch()
         if self.access_token is None:
             raise RuntimeError("Spotify access token unavailable after fetch")
@@ -1401,7 +1401,7 @@ class MetadataEnricher:
         if not label:
             label = getattr(self, "label", "unknown")
         if not ts_str:
-            ts_str = pd.Timestamp.utcnow().strftime("%Y%m%d-%H%M%S")
+            ts_str = pd.Timestamp.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
         # Minimal listening view
         cols = [c for c in ["datetime", "artist_name", "track_name"] if c in self.df.columns]
@@ -2263,7 +2263,7 @@ class MetadataEnricher:
         # Optional snapshots
         if getattr(self, "save_snapshots", False):
             try:
-                ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
                 base = f"{self.user_id}/{self.label}/_autosave/{ts}"
                 if not artists_df.empty:
                     self.storage.upload_csv(artists_df, path=f"{base}/info_artist_genre.csv", overwrite=True)
@@ -2304,67 +2304,66 @@ class MetadataEnricher:
     def flush_all(self, suffix: str = ""):
         """
         Final flush at the end of a run (or on graceful cancel).
-        Writes a dated per-run snapshot under {user}/{label}/{ts}{suffix}/...
-        AND merges everything into masters under datasets/enrichment/metadata/*.csv.
+        Merges all in-memory buffers directly into the global master metadata tables
+        under enrichment/metadata/*.csv (Cloudflare or local DAO).
         """
         try:
-            ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-            base = f"{self.user_id}/{self.label}/{ts}{suffix}"
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
-            artists_df     = pd.DataFrame(self.buf_artists)     if self.buf_artists else pd.DataFrame()
-            albums_df      = pd.DataFrame(self.buf_albums)      if self.buf_albums else pd.DataFrame()
-            tracks_df      = pd.DataFrame(self.buf_tracks)      if self.buf_tracks else pd.DataFrame()
-            shows_df       = pd.DataFrame(self.buf_shows)       if self.buf_shows else pd.DataFrame()
-            audiobooks_df  = pd.DataFrame(self.buf_audiobooks)  if self.buf_audiobooks else pd.DataFrame()
-            unlisted_df    = pd.DataFrame(getattr(self, "buf_artists_unlisted", [])) if getattr(self, "buf_artists_unlisted", None) else pd.DataFrame()
+            # Convert buffers into DataFrames
+            artists_df    = pd.DataFrame(self.buf_artists) if self.buf_artists else pd.DataFrame()
+            albums_df     = pd.DataFrame(self.buf_albums) if self.buf_albums else pd.DataFrame()
+            tracks_df     = pd.DataFrame(self.buf_tracks) if self.buf_tracks else pd.DataFrame()
+            shows_df      = pd.DataFrame(self.buf_shows) if self.buf_shows else pd.DataFrame()
+            audiobooks_df = pd.DataFrame(self.buf_audiobooks) if self.buf_audiobooks else pd.DataFrame()
+            unlisted_df   = pd.DataFrame(getattr(self, "buf_artists_unlisted", [])) if getattr(self, "buf_artists_unlisted", None) else pd.DataFrame()
 
-            # Ensure track snapshots always include user_id
+            # Ensure tracks include user_id for proper uniqueness
             if not tracks_df.empty:
                 if "user_id" not in tracks_df.columns:
                     tracks_df["user_id"] = self.user_id
                 tracks_df = tracks_df.drop_duplicates(subset=["track_id", "user_id"])
 
-            # Snapshot uploads
-            if not artists_df.empty:
-                self.storage.upload_csv(artists_df, path=f"{base}/info_artist_genre.csv", overwrite=True)
-            if not unlisted_df.empty:
-                self.storage.upload_csv(unlisted_df, path=f"{base}/info_artist_genre_unlisted.csv", overwrite=True)
-            if not albums_df.empty:
-                self.storage.upload_csv(albums_df, path=f"{base}/info_album.csv", overwrite=True)
-            if not tracks_df.empty:
-                self.storage.upload_csv(tracks_df, path=f"{base}/info_track.csv", overwrite=True)
-            if not shows_df.empty:
-                self.storage.upload_csv(shows_df, path=f"{base}/info_show.csv", overwrite=True)
-            if not audiobooks_df.empty:
-                self.storage.upload_csv(audiobooks_df, path=f"{base}/info_audiobook.csv", overwrite=True)
+            self.log(f"[flush_all] Starting global master merges at {ts}")
 
-            # Merge into masters
+            # --- Merge into global master tables only ---
             try:
                 if not artists_df.empty:
                     self.storage.merge_into_master(artists_df, "info_artist_genre.csv", keys=["artist_id"])
+                    self.log(f"[flush_all] → Merged {len(artists_df)} artists")
+
                 if not unlisted_df.empty:
                     self.storage.merge_into_master(unlisted_df, "info_artist_genre_unlisted.csv", keys=["artist_id"])
+                    self.log(f"[flush_all] → Merged {len(unlisted_df)} unlisted artists")
+
                 if not albums_df.empty:
                     self.storage.merge_into_master(albums_df, "info_album.csv", keys=["album_id"])
+                    self.log(f"[flush_all] → Merged {len(albums_df)} albums")
+
                 if not tracks_df.empty:
                     self.storage.merge_into_master(tracks_df, "info_track.csv", keys=["track_id", "user_id"])
+                    self.log(f"[flush_all] → Merged {len(tracks_df)} tracks")
+
                 if not shows_df.empty:
                     self.storage.merge_into_master(shows_df, "info_show.csv", keys=["show_id"])
+                    self.log(f"[flush_all] → Merged {len(shows_df)} shows")
+
                 if not audiobooks_df.empty:
                     self.storage.merge_into_master(audiobooks_df, "info_audiobook.csv", keys=["audiobook_id"])
+                    self.log(f"[flush_all] → Merged {len(audiobooks_df)} audiobooks")
+
             except Exception as e:
-                print("[master] merge failed:", e)
+                self.log(f"[flush_all] ⚠️ Master merge failed: {e}")
 
         finally:
-            # ✅ End of run → shut down background workers
+            # ✅ Always clean up worker pools even on error
             if hasattr(self, "discogs_pool"):
                 try:
                     self.log("[flush_all] Cleaning up Discogs worker pool…")
                     self.discogs_pool.shutdown()
-                    self.log("[flush_all] Discogs pool shut down successfully")
+                    self.log("[flush_all] Discogs pool shut down successfully.")
                 except Exception as e:
-                    self.log(f"[flush_all] Discogs pool shutdown failed: {e}")
-
+                    self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed: {e}")
     # --- Filters against master tables ---
     def _load_master_tables(self):
         """Load master info tables and initialize seen_* sets for enrichment filtering."""

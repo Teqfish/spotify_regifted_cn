@@ -143,44 +143,32 @@ st.session_state["_runs"] = st.session_state.get("_runs", 0) + 1
 st.sidebar.caption(f"Debug: run #{st.session_state['_runs']}")
 
 # --- AUTH FUNCTIONS ---
-def save_user(user_id, email, hashed_pw, first_name, last_name):
-    try:
-        response = supabase.table("users").insert({
-            "user_id": user_id,
-            "email": email,
-            "hashed_password": hashed_pw,
-            "first_name": first_name,
-            "last_name": last_name,
-        }).execute()
-    except Exception as e:
-        raise RuntimeError(f"Supabase insert failed: {e}")
-
-    # The new API returns a list in response.data if successful
-    if not response.data:
-        raise RuntimeError(f"Supabase insert returned no data: {response}")
-
-    print(f"✅ User {email} saved successfully.")
-    return response.data
-
-def hash_password(password):
+def hash_password(password: str) -> str:
+    """Securely hash a plaintext password using bcrypt."""
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-def verify_password(password, hashed):
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a plaintext password against a bcrypt hash."""
+    try:
+        return bcrypt.checkpw(password.encode(), hashed.encode())
+    except Exception:
+        return False
 
-def generate_user_id():
+def generate_user_id() -> str:
+    """Generate a unique user ID."""
     return secrets.token_hex(8)
 
 def validate_signup_inputs(email, password, confirm_password, first_name, last_name):
+    """Return a list of validation error messages, if any."""
     errors = []
+    EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
     fn = (first_name or "").strip()
     ln = (last_name or "").strip()
-    em = (email or "").strip()
+    em = (email or "").strip().lower()
     pw = password or ""
     cpw = confirm_password or ""
 
-    # Required fields
     if not fn:
         errors.append("First name is required.")
     if not ln:
@@ -191,70 +179,98 @@ def validate_signup_inputs(email, password, confirm_password, first_name, last_n
         errors.append("Password is required.")
     if not cpw:
         errors.append("Please confirm your password.")
-
-    # Only run format checks if present
     if em and not EMAIL_RE.match(em):
         errors.append("Enter a valid email address (e.g., name@example.com).")
-
     if pw and len(pw) < 6:
         errors.append("Password must be at least 6 characters.")
-
     if pw and cpw and pw != cpw:
         errors.append("Passwords do not match.")
 
     return errors
 
 def signup(email, password, confirm_password, first_name, last_name):
-    # Normalize inputs
-    email = (email or "").strip().lower()
-    first_name = (first_name or "").strip()
-    last_name = (last_name or "").strip()
+    """
+    Register a new user in Cloudflare D1.
+    Returns (success, message) where message may be a string or list of errors.
+    """
+    d1 = DAOS.get("main")
+    if d1 is None:
+        return False, ["Cloudflare D1 DAO not configured."]
 
-    # Client-side validations
+    # Input validation
     errs = validate_signup_inputs(email, password, confirm_password, first_name, last_name)
     if errs:
         return False, errs
 
-    # Uniqueness check (server-side)
+    email = email.strip().lower()
+    first_name = first_name.strip()
+    last_name = last_name.strip()
+
+    # Check if user already exists
     try:
-        result = supabase.table("users").select("email").eq("email", email).limit(1).execute()
+        existing = d1.get_user_by_email(email)
+        if existing:
+            return False, ["Email already registered. Try logging in instead."]
     except Exception as e:
-        return False, [f"Error checking existing users: {e}"]
+        return False, [f"Database error while checking user: {e}"]
 
-    if result.data and len(result.data) > 0:
-        return False, ["Email already in use. Try logging in instead."]
-
-    # Create user
+    # Create new user
     try:
-        user_id = generate_user_id()
         hashed_pw = hash_password(password)
-        save_user(user_id, email, hashed_pw, first_name, last_name)
+        user_id = d1.create_user(email, hashed_pw, first_name, last_name)
+        return True, {"user_id": user_id, "email": email, "first_name": first_name, "last_name": last_name}
     except Exception as e:
-        return False, [f"Error saving user: {e}"]
-
-    return True, "Signup successful!"
+        return False, [f"Failed to create user: {e}"]
 
 def login(email, password):
-    result = supabase.table("users").select("*").eq("email", email).execute()
-    if not result.data:
-        log_login_attempt(email, False)
-        return False, "Email not found."
+    """
+    Authenticate user against Cloudflare D1.
+    Returns (success, user_data_or_message).
+    """
+    d1 = DAOS.get("main")
+    if d1 is None:
+        return False, "Cloudflare D1 DAO not configured."
 
-    user = result.data[0]
-    if not verify_password(password, user["hashed_password"]):
-        log_login_attempt(email, False, user["user_id"])
-        return False, "Incorrect password."
+    email = (email or "").strip().lower()
+    if not email or not password:
+        return False, "Email and password are required."
 
-    log_login_attempt(email, True, user["user_id"])
+    try:
+        user = d1.get_user_by_email(email)
+        if not user:
+            d1.log_login_event(None, email, False, reason="no such email")
+            return False, "No account found with that email."
+    except Exception as e:
+        return False, f"Database error: {e}"
+
+    try:
+        hashed = user.get("hashed_password")
+        if not hashed or not verify_password(password, hashed):
+            d1.log_login_event(user.get("user_id"), email, False, reason="incorrect password")
+            return False, "Incorrect password."
+    except Exception as e:
+        return False, f"Password verification error: {e}"
+
+    # Log success
+    try:
+        d1.log_login_event(user["user_id"], email, True, reason="success")
+    except Exception:
+        pass  # never crash on logging
+
     return True, user
 
-def log_login_attempt(email, success, user_id=None):
-    supabase.table("login_events").insert({
-        "event_time": datetime.now().isoformat(),
-        "user_id": user_id,
-        "email": email,
-        "success": success,
-    }).execute()
+def log_login_attempt(email, success, user_id=None, reason=None):
+    """
+    Explicit login event logger (used in edge cases).
+    """
+    d1 = DAOS.get("main")
+    if d1 is None:
+        print(f"[warn] log_login_attempt called with no DAO configured ({email})")
+        return
+    try:
+        d1.log_login_event(user_id, email, success, reason)
+    except Exception as e:
+        print(f"[warn] Failed to log login attempt: {e}")
 
 def logout():
     st.session_state["_skip_restore"] = True  # block restore on subsequent reruns
@@ -267,7 +283,7 @@ def logout():
     except Exception:
         pass
     # Nudge the client so cookie JS commits before next run
-    st.set_query_params(_=secrets.token_hex(4))
+    st.query_params(_=secrets.token_hex(4))
     st.rerun()
 
 def require_current_df():
@@ -412,6 +428,10 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
                         detail="✅ ETL completed successfully",
                         total=len(cleaned_df),
                     )
+                    try:
+                        log_upload_event(user_id, table_name, dataset_label, uploaded_file.name, status="completed")
+                    except Exception as log_e:
+                        print(f"[etl_process_zip] Warning: failed to log upload event: {log_e}")
                 else:
                     print("[etl_process_zip] Warning: no status DAO configured.")
             except Exception as e:
@@ -433,6 +453,10 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
                     detail=f"❌ ETL failed: {e}",
                     total=None,
                 )
+                try:
+                    log_upload_event(user_id, None, dataset_label, uploaded_file.name, status="failed")
+                except Exception as e1:
+                    print(f"[etl_process_zip] Warning: failed to log upload event: {e1}")
             else:
                 print("[etl_process_zip] Warning: no status DAO configured (failure not persisted).")
         except Exception as e2:
@@ -442,16 +466,56 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
         raise
 
 # --- LOCAL DATA I/O (for testing) ---
-def list_local_datasets(user_id):
-    """Return [(label, table_name), ...] for datasets in userdata/."""
-    base = Path("datasets/userdata")
-    index_path = base / "index.json"
-    if not index_path.exists():
+# def list_local_datasets(user_id):
+#     """Return [(label, table_name), ...] for datasets in userdata/."""
+#     base = Path("datasets/userdata")
+#     index_path = base / "index.json"
+#     if not index_path.exists():
+#         return []
+
+#     index = json.loads(index_path.read_text())
+#     # Only return datasets for this user_id
+#     return [(label, table) for table, label in index.items() if table.startswith(f"{user_id}_")]
+
+def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
+    """
+    Return a list of (dataset_label, table_name) for all datasets uploaded by a given user.
+    Scans the R2 bucket under enrichment/userdata/ or equivalent.
+    """
+    try:
+        objects = self.list_objects(prefix=f"userdata/{user_id}_")
+        datasets = []
+        for obj in objects:
+            name = obj["Key"].split("/")[-1]
+            if name.endswith(".csv"):
+                label = Path(name).stem.split("_", 1)[-1]  # userID_label.csv → label
+                datasets.append((label, name))
+        return datasets
+    except Exception as e:
+        print(f"[CloudflareDAO] list_datasets failed: {e}")
         return []
 
-    index = json.loads(index_path.read_text())
-    # Only return datasets for this user_id
-    return [(label, table) for table, label in index.items() if table.startswith(f"{user_id}_")]
+def log_upload_event(user_id: str, table_name: str, dataset_label: str, filename: str, status: str = "pending"):
+    """
+    Record an upload event in Cloudflare D1.
+    Called at the end of ETL (success or failure).
+    """
+    d1 = DAOS.get("main")
+    if d1 is None:
+        print("[warn] D1 DAO not configured; skipping upload event log.")
+        return
+
+    try:
+        d1.record_upload_event(
+            user_id=user_id,
+            table_name=table_name,
+            dataset_label=dataset_label,
+            filename=filename,
+            status=status,
+        )
+        print(f"[upload_event] Recorded: user={user_id}, label={dataset_label}, status={status}")
+    except Exception as e:
+        print(f"[upload_event] ⚠️ Failed to record upload event: {e}")
 
 # # ---------- DEBUG LOGGING (lightweight) ----------
 def dbg(user_id: str, dataset_label: str, where: str, msg: str, level: str = "info", data: dict | None = None):
@@ -466,6 +530,54 @@ def dbg(user_id: str, dataset_label: str, where: str, msg: str, level: str = "in
         print(f"[dbg-error] {e} — {user_id}/{dataset_label} {where}: {msg}")
 
 # --- DATA PROCESSING ---
+def set_enrichment_status(
+    user_id: str,
+    dataset_label: str,
+    *,
+    status: str = "running",
+    phase: str = "init",
+    detail: str = None,
+    batches_done: int = 0,
+    total_batches: int | None = None,
+    percent: float | None = None,
+):
+    """
+    Upsert (insert/update) enrichment status into Cloudflare D1.
+    Keeps R2 JSON status updates as-is.
+    """
+    d1 = DAOS.get("main")
+    if d1 is None:
+        print("[warn] D1 DAO not configured; skipping enrichment status write.")
+        return
+
+    try:
+        d1.upsert_enrichment_status(
+            user_id=user_id,
+            dataset_label=dataset_label,
+            status=status,
+            phase=phase,
+            detail=detail,
+            batches_done=batches_done,
+            total_batches=total_batches,
+            percent=percent,
+        )
+        print(f"[status] {user_id}/{dataset_label}: {phase} → {status}")
+    except Exception as e:
+        print(f"[status] ⚠️ Failed to update enrichment_status: {e}")
+
+def finish_enrichment_status(user_id: str, dataset_label: str, ok: bool, detail: str = None):
+    """
+    Convenience wrapper to finalize enrichment status at completion/failure.
+    """
+    set_enrichment_status(
+        user_id=user_id,
+        dataset_label=dataset_label,
+        status="completed" if ok else "failed",
+        phase="done",
+        detail=detail,
+        percent=100 if ok else None,
+    )
+
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
     """
     Processes a Spotify ZIP upload, cleans data, and saves to the active DAO (local, supabase, or cloudflare).
@@ -2607,7 +2719,7 @@ elif page == "FUN":
     st.markdown("## Random News & Listening Day")
 
     # Load and normalize headlines dataset
-    headlines_df = pd.read_csv("datasets/reference/info_headline.csv")
+    headlines_df = INFO_HEADLINE.copy()
 
     # Clean and rename columns
     headlines_df.columns = headlines_df.columns.str.strip()
@@ -2773,259 +2885,92 @@ elif page == "FAQs":
 
 # --------------------------- Sidebar Debugger ------------------------------- #
 def render_debug_sidebar():
-    """Render the enrichment debugger and controls safely inside the sidebar."""
-    import traceback
-    import threading
+    """Sidebar control for full enrichment rerun + live status monitor."""
     import streamlit as st
+    import time
     from dao_selector import get_daos
-    from enrichment_service import MetadataEnricher
+    from streamlit_autorefresh import st_autorefresh  # if not available, we’ll show inline alternative
 
     with st.sidebar:
         st.divider()
-        st.subheader("🧩 Enrichment Debugger")
+        st.subheader("🧩 Enrichment Control")
 
-        # --- Get session state info ---
         user = st.session_state.get("user") or {}
         user_id = user.get("user_id")
         current_label = st.session_state.get("current_dataset_label")
 
-        # --- Debug summary header ---
-        st.write("DEBUG:", {
-            "etl_done(session)": st.session_state.get("etl_done"),
-            "user_id": user_id,
-            "current_label": current_label,
-            "_enrichment_autostart_block": st.session_state.get("_enrichment_autostart_block"),
-        })
-
-        # --- Thread monitoring helper ---
-        def debug_thread_status():
-            tasks = st.session_state.get("_enrichment_tasks", {})
-            active = {k: v for k, v in tasks.items() if v["thread"].is_alive()} if tasks else {}
-            st.write("DEBUG: Active enrichment tasks =", list(active.keys()))
-            st.write("DEBUG: Total threads =", len(threading.enumerate()))
-            for t in threading.enumerate():
-                if t.name.startswith(("enrich:", "force:", "resume:")):
-                    st.write(f"Thread: {t.name}, alive={t.is_alive()}")
-
-        debug_thread_status()
-
-        # --- Guard: no user/dataset selected ---
         if not (user_id and current_label):
-            st.caption("⚠️ No dataset selected — enrichment controls disabled.")
-            st.caption("Once a dataset is selected on the main page, controls will reappear.")
-            return  # ✅ stops only sidebar logic, not entire app
-
-        # --- Setup DAOs ---
-        try:
-            daos = get_daos()
-            storage_dao = daos.get("metadata") or daos.get("storage")
-            user_data_dao = daos.get("user_data")
-            status_dao = daos.get("status")
-            log_dao = daos.get("logs")
-        except Exception as e:
-            st.error(f"Failed to initialize DAOs: {e}")
+            st.caption("⚠️ No dataset selected — enrichment control disabled.")
             return
 
-        # =====================================================
-        #  HELPER FUNCTIONS
-        # =====================================================
-
-        def task_registry():
-            return st.session_state.setdefault("_enrichment_tasks", {})
-
-        def run_enrichment_in_thread(enricher, cancel_event=None):
-            """Run enrichment safely in background thread."""
-            t = threading.Thread(
-                target=lambda: enricher.run_all(cancel_event=cancel_event),
-                daemon=True,
-                name=f"enrich:{enricher.label}"
-            )
-            st.session_state.setdefault("_enrichment_tasks", {})
-            st.session_state["_enrichment_tasks"][enricher.label] = {"thread": t, "cancel": cancel_event}
-            t.start()
-            st.info(f"Started enrichment thread for dataset: {enricher.label}")
+        daos = get_daos()
+        metadata_dao = daos.get("metadata") or daos.get("storage")
 
         # =====================================================
-        #  CONTROLS
+        #  RESTART ENRICHMENT BUTTON
         # =====================================================
+        if st.button("🔁 Rerun Enrichment from Scratch", key="rerun_enrich_btn"):
+            df = st.session_state.get("current_df")
+            dataset_label = st.session_state.get("current_dataset_label")
+            table_name = st.session_state.get("last_table_name")
 
-        # --- Kill Enrichment ---
-        if st.button("🛑 Kill Enrichment", key="kill_enrich_btn"):
-            key = current_label
-            tasks = task_registry()
-            task = tasks.get(key)
-            if task:
-                task["cancel"].set()
-                st.session_state["_enrichment_autostart_block"] = True
-                st.session_state["_enrichment_block_label"] = current_label
-                try:
-                    status_dao.set_status(
-                        user_id, current_label,
-                        phase="shutdown",
-                        detail="Cancelling…",
-                        total=None
-                    )
-                except Exception:
-                    pass
-                st.success("Sent stop signal. Autostart is now blocked.")
-            else:
-                st.info("No active enrichment task found.")
+            if df is None or df.empty:
+                st.error("No dataset loaded or dataset is empty.")
+                return
 
-        # --- Restart Enrichment from last status JSON ---
-        if st.button("🔁 Restart Enrichment (Auto-Resume)", key="restart_status_based"):
-            cancel_event = threading.Event()
+            st.session_state["_enrichment_running"] = True  # mark as running
+            st.info(f"Restarting enrichment for '{dataset_label}'...")
             try:
-                # --- Load current status from Cloudflare ---
-                status_key = f"enrichment/status/{user_id}_{current_label}.json"
-                try:
-                    status_json = storage_dao.download_json(path=status_key)
-                    last_phase = (status_json.get("phase") or "").lower().strip()
-                    st.info(f"Last recorded phase: **{last_phase or '(unknown)'}**")
-                except Exception:
-                    last_phase = None
-                    st.warning("Could not read last known phase; restarting from beginning.")
-
-                # --- Load user’s cleaned data ---
-                df = st.session_state.get("current_df")
-                if df is None:
-                    try:
-                        table_name = st.session_state.get("last_table_name") or f"{user_id}_{current_label}_history"
-                        df = user_data_dao.load_user_data(table_name)
-                        st.info(f"Reloaded dataset from storage: {table_name}")
-                    except Exception as e:
-                        st.error(f"Failed to load dataset for enrichment: {e}")
-                        return
-
-                enricher = MetadataEnricher(
+                _maybe_start_enrichment(
                     user_id=user_id,
-                    label=current_label,
-                    df=df,
-                    spotify_token=None,
-                    discogs_key=None,
-                    discogs_secret=None,
-                    status_dao=status_dao,
-                    storage_dao=storage_dao,
-                    log_dao=log_dao,
-                    info_table_dao=None,
+                    dataset_label=dataset_label,
+                    table_name=table_name,
+                    cleaned_df=df,
                 )
-                enricher.cancel_event = cancel_event
-
-                PHASES = [
-                    "planning",
-                    "overall",
-                    "per_year",
-                    "albums_of_year",
-                    "per_album",
-                    "top_tracks_per_month",
-                    "popularity_timeseries",
-                    "chart_scorer",
-                    "breadth_first",
-                    "flush",
-                ]
-                next_phase = "planning"
-                if last_phase in PHASES:
-                    i = PHASES.index(last_phase)
-                    next_phase = PHASES[min(i + 1, len(PHASES) - 1)]
-                st.info(f"Resuming from phase: **{next_phase}**")
-
-                def run_from_phase():
-                    try:
-                        enricher.resume_from_phase(next_phase)
-                    except AttributeError:
-                        enricher.run_all(cancel_event=cancel_event)
-
-                enricher.cancel_event = cancel_event
-                t = threading.Thread(target=run_from_phase, daemon=True, name=f"resume:{current_label}")
-                t.start()
-                tasks = task_registry()
-                tasks[current_label] = {"thread": t, "cancel": cancel_event}
-                st.success(f"Restarted enrichment for {current_label} from phase {next_phase}.")
+                st.success(f"Enrichment restarted for {dataset_label}.")
             except Exception as e:
-                st.error(f"{type(e).__name__}: {e}")
+                st.error(f"Failed to restart enrichment: {e}")
+                import traceback
                 st.code("".join(traceback.format_exc()))
 
-        # --- Force Start from Specific Phase ---
-        st.markdown("### ⚙️ Force Start Enrichment Phase")
+        # =====================================================
+        #  LIVE STATUS MONITOR
+        # =====================================================
+        st.markdown("### 📡 Enrichment Status Monitor")
 
-        PHASES = [
-            "1. Planning",
-            "2. Build Priority Sets",
-            "3. Overall (Top 50)",
-            "4. Per-Year (Top)",
-            "5. Albums of Year (Per-Artist)",
-            "6. Per-Album (All Top Artists)",
-            "7. Top Tracks Per Month",
-            "8. Popularity Timeseries",
-            "9. Chart Scorer",
-            "10. Breadth-First Remaining",
-            "11. Final Flush",
-        ]
+        status_placeholder = st.empty()
+        refresh_interval = 5  # seconds
 
-        selected_phase = st.selectbox("Choose Phase to Force Start", PHASES, index=0)
+        # Automatically refresh sidebar every few seconds
+        st_autorefresh(interval=refresh_interval * 1000, key="status_refresh")
 
-        if st.button("🚀 Force Start Selected Phase", key="force_start"):
-            cancel_event = threading.Event()
-            df = st.session_state.get("current_df")
-            if df is None:
-                try:
-                    table_name = st.session_state.get("last_table_name") or f"{user_id}_{current_label}_history"
-                    df = user_data_dao.load_user_data(table_name)
-                    st.info(f"Reloaded dataset from storage: {table_name}")
-                except Exception as e:
-                    st.error(f"Failed to load dataset for enrichment: {e}")
-                    return
-
-            enricher = MetadataEnricher(
-                user_id=user_id,
-                label=current_label,
-                df=df,
-                spotify_token=None,
-                discogs_key=None,
-                discogs_secret=None,
-                status_dao=status_dao,
-                storage_dao=storage_dao,
-                log_dao=log_dao,
-                info_table_dao=None,
-            )
-            enricher.cancel_event = cancel_event
-
-            # --- Define mapping ---
-            phase_method_map = {
-                "Planning": lambda e: e.run_all(cancel_event=cancel_event),
-                "Build Priority Sets": lambda e: (e.top_overall(), e.top_per_year(set(), set(), set())),
-                "Overall (Top 50)": lambda e: e.run_phase_overall_first50(e.top_overall()[0], e.top_overall()[1], e.top_overall()[2]),
-                "Per-Year (Top)": lambda e: e.run_phase_per_year(e.top_per_year(set(), set(), set())[0],
-                                                                e.top_per_year(set(), set(), set())[1],
-                                                                e.top_per_year(set(), set(), set())[2]),
-                "Albums of Year (Per-Artist)": lambda e: e.run_phase_per_artist_albums_of_year(),
-                "Per-Album (All Top Artists)": lambda e: e.run_phase_per_album_all_albums_for_top_artists(),
-                "Top Tracks Per Month": lambda e: e.run_phase_top_tracks_per_month(),
-                "Popularity Timeseries": lambda e: e.run_phase_popularity_timeseries(),
-                "Chart Scorer": lambda e: e.run_phase_chart_scorer(),
-                "Breadth-First Remaining": lambda e: e.run_phase_breadth_first_years_remaining(set(), set(), set()),
-                "Final Flush": lambda e: e.flush_all(),
-            }
-
-            chosen_label = selected_phase.split(". ", 1)[-1]
-            func = phase_method_map.get(chosen_label)
-            if func is None:
-                st.warning(f"Phase '{chosen_label}' not implemented for direct run.")
-            else:
-                st.info(f"Starting '{chosen_label}' phase manually...")
-                enricher.cancel_event = cancel_event
-                t = threading.Thread(target=lambda: func(enricher), daemon=True, name=f"force:{chosen_label}")
-                t.start()
-                tasks = task_registry()
-                key = f"{user_id}:{current_label}"
-                tasks[key] = {"thread": t, "cancel": cancel_event}
-                st.success(f"Force-started phase: {chosen_label}")
-
-        # --- Enrichment Status Display ---
-        status_key = f"enrichment/status/{user_id}_{current_label}.json"
+        # Attempt to load current enrichment status from R2
         try:
-            status_json = storage_dao.download_json(path=status_key)
-            st.json(status_json)
-        except Exception:
-            st.caption("No current status JSON available.")
+            status_key = f"enrichment/status/{user_id}_{current_label}.json"
+            status_json = metadata_dao.download_json(path=status_key)
 
+            phase = (status_json.get("phase") or "unknown").capitalize()
+            detail = status_json.get("detail", "")
+            percent = status_json.get("percent") or 0
+            total = status_json.get("total_batches")
+            done = status_json.get("batches_done")
+
+            msg = f"""
+            **Phase:** {phase}
+            **Progress:** {done or 0}/{total or '?'}
+            **Percent:** {percent:.1f}%
+            **Detail:** {detail}
+            """
+            status_placeholder.markdown(msg)
+
+            # Stop polling if finished
+            if phase.lower() in {"done", "completed"}:
+                st.session_state["_enrichment_running"] = False
+                st.success("✅ Enrichment complete.")
+        except Exception:
+            if st.session_state.get("_enrichment_running"):
+                status_placeholder.warning("No status data yet…")
+            else:
+                st.caption("⏸️ Enrichment not currently running.")
+                
 render_debug_sidebar()

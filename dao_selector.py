@@ -11,7 +11,8 @@ from dao import (
     LocalMetadataDAO,
     LocalStatusDAO,
     LocalLogDAO,
-    CloudflareDAOs
+    CloudflareDAOs,
+    CloudflareD1DAO
 )
 
 # --- Optional helper: read mode from secrets or env, with a safe default ---
@@ -114,7 +115,8 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
     elif mode == "cloudflare":
         cf_conf = st.secrets["cloudflare"]
 
-        cf = CloudflareDAOs(
+        # --- R2 STORAGE (existing) ---
+        cf_r2 = CloudflareDAOs(
             account_id=cf_conf["account_id"],
             access_key=cf_conf["access_key"],
             secret_key=cf_conf["secret_key"],
@@ -122,12 +124,22 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
             endpoint_url=cf_conf["endpoint_url"],
         )
 
+        # --- D1 DATABASE (new) ---
+        cf_d1 = CloudflareD1DAO(
+            account_id=cf_conf["account_id"],
+            database_id=cf_conf["database_id"],   # add to secrets.toml
+            api_token=cf_conf["token"],       # add to secrets.toml
+        )
+
+        # Ensure tables exist
+        cf_d1.init_tables_if_missing()
+
         return {
-            "main": cf,
-            "status": cf,
-            "metadata": cf,
-            "logs": cf,
-            "user_data": cf,
+            "main": cf_d1,         # ← use D1 for all database tables (users, uploads, etc.)
+            "status": cf_r2,       # ← still use R2 for JSON-based enrichment status files
+            "metadata": cf_r2,     # ← R2 for metadata CSVs
+            "logs": cf_r2,         # ← R2 for logs
+            "user_data": cf_r2,    # ← R2 for uploaded datasets
         }
 
     else:

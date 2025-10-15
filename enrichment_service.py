@@ -1987,7 +1987,11 @@ class MetadataEnricher:
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """
         Full enrichment pipeline with detailed debug logging.
+        Also syncs progress to Cloudflare D1 every 25 batches.
         """
+
+        from app import set_enrichment_status, finish_enrichment_status
+
         self.cancel_event = cancel_event
         self._load_master_tables()
 
@@ -2007,12 +2011,29 @@ class MetadataEnricher:
                 total=total
             )
 
+            set_enrichment_status(
+                user_id=self.user_id,
+                dataset_label=self.label,
+                status="running",
+                phase="planning",
+                detail=f"Planning complete, ~{total} total batches",
+                batches_done=0,
+                total_batches=total,
+                percent=0.0,
+            )
+
             if total == 0:
                 self.log("[run_all] Nothing new to enrich (all entities already in masters)")
                 self.status.finish_status(
                     self.user_id, self.label,
                     ok=True,
                     detail="✅ All enrichment already up to date"
+                )
+                finish_enrichment_status(
+                    user_id=self.user_id,
+                    dataset_label=self.label,
+                    ok=True,
+                    detail="All enrichment already up to date"
                 )
                 return
 
@@ -2026,6 +2047,24 @@ class MetadataEnricher:
                     total=total
                 )
 
+                # --- Periodic D1 sync every 25 batches ---
+                if self._done_batches > 0 and self._done_batches % 25 == 0:
+                    progress = (self._done_batches / total) * 100
+                    try:
+                        set_enrichment_status(
+                            user_id=self.user_id,
+                            dataset_label=self.label,
+                            status="running",
+                            phase=name,
+                            detail=f"Progress update: {self._done_batches}/{total} batches done",
+                            batches_done=self._done_batches,
+                            total_batches=total,
+                            percent=progress,
+                        )
+                        self.log(f"[run_all] Synced D1 progress ({progress:.1f}%) after {name}")
+                    except Exception as e:
+                        self.log(f"[run_all] ⚠️ D1 sync failed after {name}: {e}")
+
             # 2) Build priority sets
             self._check_cancel(self.cancel_event)
             self.log("[run_all] Building priority sets…")
@@ -2034,110 +2073,67 @@ class MetadataEnricher:
             per_art, per_show, per_book = self.top_per_year(set(), set(), set())
             self.log(f"[run_all] Per-year counts: artists={len(per_art)}, shows={len(per_show)}, books={len(per_book)}")
 
-            # 3) Overall
+            # 3–11) Phases (unchanged, with _end_phase now including D1 sync)
             self._check_cancel(self.cancel_event)
             self.current_phase = "overall"
             self.log("[run_all] Starting phase: overall")
             before = self._done_batches
-            self.status.set_status(
-                self.user_id, self.label,
-                phase="overall",
-                detail="Processing overall top…",
-                total=total
-            )
+            self.status.set_status(self.user_id, self.label, phase="overall", detail="Processing overall top…", total=total)
             self.run_phase_overall_first50(top_art, top_shows, top_books)
             _end_phase("overall", before)
 
-            # 4) Per-year
             self._check_cancel(self.cancel_event)
             self.current_phase = "per_year"
             self.log("[run_all] Starting phase: per_year")
             before = self._done_batches
-            self.status.set_status(
-                self.user_id, self.label,
-                phase="per_year",
-                detail="Processing per-year top…",
-                total=total
-            )
+            self.status.set_status(self.user_id, self.label, phase="per_year", detail="Processing per-year top…", total=total)
             self.run_phase_per_year(per_art, per_show, per_book)
             _end_phase("per_year", before)
 
-            # 5) Per-artist albums of year
             self._check_cancel(self.cancel_event)
             self.current_phase = "albums_of_year"
             self.log("[run_all] Starting phase: albums_of_year")
             before = self._done_batches
-            self.status.set_status(
-                self.user_id, self.label,
-                phase="albums_of_year",
-                detail="Top albums per artist-year…",
-                total=total
-            )
+            self.status.set_status(self.user_id, self.label, phase="albums_of_year", detail="Top albums per artist-year…", total=total)
             self.run_phase_per_artist_albums_of_year()
             _end_phase("albums_of_year", before)
 
-            # 6) Per-album for top artists
             self._check_cancel(self.cancel_event)
             self.current_phase = "per_album"
             self.log("[run_all] Starting phase: per_album")
             before = self._done_batches
-            self.status.set_status(
-                self.user_id, self.label,
-                phase="per_album",
-                detail="All albums for top artists…",
-                total=total
-            )
+            self.status.set_status(self.user_id, self.label, phase="per_album", detail="All albums for top artists…", total=total)
             self.run_phase_per_album_all_albums_for_top_artists()
             _end_phase("per_album", before)
 
-            # 7) Top tracks per month
             self._check_cancel(self.cancel_event)
             self.current_phase = "top_tracks_per_month"
             self.log("[run_all] Starting phase: top_tracks_per_month")
             before = self._done_batches
-            self.status.set_status(
-                self.user_id, self.label,
-                phase="top_tracks_per_month",
-                detail="Fetching top 25 tracks per month…",
-                total=total
-            )
+            self.status.set_status(self.user_id, self.label, phase="top_tracks_per_month", detail="Fetching top 25 tracks per month…", total=total)
             self.run_phase_top_tracks_per_month()
             _end_phase("top_tracks_per_month", before)
 
-            # 8) Popularity timeseries
             self._check_cancel(self.cancel_event)
             self.current_phase = "popularity_timeseries"
             self.log("[run_all] Starting phase: popularity_timeseries")
             before = self._done_batches
-            self.status.set_status(
-                self.user_id, self.label,
-                phase="popularity_timeseries",
-                detail="Calculating monthly popularity averages…",
-                total=total
-            )
+            self.status.set_status(self.user_id, self.label, phase="popularity_timeseries", detail="Calculating monthly popularity averages…", total=total)
             self.run_phase_popularity_timeseries()
             _end_phase("popularity_timeseries", before)
 
-            # 9) Chart Scorer
             self._check_cancel(self.cancel_event)
             self.current_phase = "chart_scorer"
             self.log("[run_all] Starting phase: chart_scorer")
-            _before = self._done_batches
-
+            before = self._done_batches
             self.run_phase_chart_scorer()
-            _end_phase("chart_scorer", _before)
+            _end_phase("chart_scorer", before)
 
-            # 10) Breadth-first remaining
             self._check_cancel(self.cancel_event)
             self.current_phase = "breadth_first"
             self.log("[run_all] Starting phase: breadth_first")
             before = self._done_batches
-            self.status.set_status(
-                self.user_id, self.label,
-                phase="breadth_first",
-                detail="Filling remaining artists by year…",
-                total=total
-            )
+            self.status.set_status(self.user_id, self.label, phase="breadth_first", detail="Filling remaining artists by year…", total=total)
             self.run_phase_breadth_first_years_remaining(per_art, per_show, per_book)
             _end_phase("breadth_first", before)
 
@@ -2161,6 +2157,12 @@ class MetadataEnricher:
                 ok=True,
                 detail=f"✅ Enrichment completed (CSV flushed) • {added_total} new batches"
             )
+            finish_enrichment_status(
+                user_id=self.user_id,
+                dataset_label=self.label,
+                ok=True,
+                detail=f"Enrichment completed • {added_total} new batches",
+            )
             self.log(f"[run_all] Enrichment finished OK — {added_total} new batches enriched")
 
         except CancelledError:
@@ -2174,6 +2176,12 @@ class MetadataEnricher:
                 ok=False,
                 detail="🛑 Cancelled by user (partial results saved)"
             )
+            finish_enrichment_status(
+                user_id=self.user_id,
+                dataset_label=self.label,
+                ok=False,
+                detail="Cancelled by user (partial results saved)",
+            )
             raise
 
         except Exception as e:
@@ -2186,6 +2194,12 @@ class MetadataEnricher:
                 self.user_id, self.label,
                 ok=False,
                 detail=f"❌ Failed: {e}"
+            )
+            finish_enrichment_status(
+                user_id=self.user_id,
+                dataset_label=self.label,
+                ok=False,
+                detail=f"Error during enrichment: {e}",
             )
             raise
 
@@ -2648,7 +2662,7 @@ class MetadataEnricher:
         # ---- Validate phase ----
         if phase_name not in valid_phases:
             msg = f"[resume_from_phase] Invalid phase '{phase_name}' — restarting from beginning."
-            self.log(self.user_id, self.label, where="resume_from_phase", msg=msg, level="warning")
+            self.log(self.user_id, self.label, msg=msg, level="warning")
             return self.run_all(cancel_event=cancel_event)
 
         start_index = valid_phases.index(phase_name)
@@ -2687,7 +2701,7 @@ class MetadataEnricher:
                 ContentType="text/plain",
             )
         except Exception as e:
-            self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Failed to write restart log: {e}", level="error")
+            self.log(f"[resume_from_phase] Failed to write restart log: {e}", level="error")
 
         # ---- Update status JSON ----
         try:
@@ -2699,9 +2713,9 @@ class MetadataEnricher:
                 total=None,
             )
         except Exception as e:
-            self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Failed to update restart status: {e}", level="warning")
+            self.log(f"[resume_from_phase] Failed to update restart status: {e}", level="warning")
 
-        self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Resuming from phase '{phase_name}' (type={restart_type})")
+        self.log(f"[resume_from_phase] Resuming from phase '{phase_name}' (type={restart_type})")
 
         # ---- Execute remaining pipeline phases ----
         for ph in valid_phases[start_index:]:
@@ -2709,15 +2723,15 @@ class MetadataEnricher:
             method_name = f"run_phase_{ph}"
             try:
                 if hasattr(self, method_name):
-                    self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Executing {method_name}()")
+                    self.log(f"[resume_from_phase] Executing {method_name}()")
                     getattr(self, method_name)()
                 elif ph == "flush":
                     self.flush_all()
                 else:
-                    self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Skipping unknown phase '{ph}'", level="warning")
+                    self.log(f"[resume_from_phase] Skipping unknown phase '{ph}'", level="warning")
             except Exception as e:
                 err_str = "".join(traceback.format_exc())
-                self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Exception during phase '{ph}': {e}", level="error")
+                self.log(f"[resume_from_phase] Exception during phase '{ph}': {e}", level="error")
                 self.status_dao.finish_status(
                     self.user_id, self.label, ok=False, detail=f"❌ Failed again during resumed phase '{ph}': {e}"
                 )
@@ -2730,7 +2744,7 @@ class MetadataEnricher:
             ok=True,
             detail=f"✅ Enrichment resumed successfully from '{phase_name}' and completed",
         )
-        self.log(self.user_id, self.label, where="resume_from_phase", msg=f"Completed resumed enrichment from '{phase_name}'")
+        self.log(f"[resume_from_phase] Completed resumed enrichment from '{phase_name}'")
 
 class DiscogsWorkerPool:
     def __init__(self, num_workers: int = 5):

@@ -10,6 +10,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import secrets
+import re
 
 # -------- Interfaces (DAOs) --------
 class StatusDAO(ABC):
@@ -260,17 +261,30 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         return pd.read_csv(io.BytesIO(csv_bytes), dtype=dtype_map, low_memory=False)
 
     def list_datasets(self, user_id: str) -> List[tuple[str, str]]:
-        """List all datasets uploaded by this user."""
+        """List all datasets uploaded by this user.
+        Extract dataset labels correctly, even if they contain underscores or hyphens.
+        Expected filename format:
+            userdata/{user_id}_{dataset_label}_{timestamp}_history.csv
+        """
         res = self.r2.list_objects_v2(Bucket=self.bucket, Prefix=f"userdata/{user_id}_")
         contents = res.get("Contents", [])
         pairs = []
+
         for obj in contents:
             key = obj["Key"]
             table_name = key.split("/")[-1].replace(".csv", "")
-            parts = table_name.split("_")
-            if len(parts) >= 3:
-                label = parts[1]
-                pairs.append((label, table_name))
+
+            # Extract dataset label between first "_" and second-to-last "_"
+            m = re.match(rf"^{re.escape(user_id)}_(.+)_[^_]+_history$", table_name)
+            if m:
+                label = m.group(1)
+            else:
+                # fallback: old simple logic
+                parts = table_name.split("_")
+                label = parts[1] if len(parts) >= 3 else table_name
+
+            pairs.append((label, table_name))
+
         return pairs
 
     # ------------------------------------------------------------

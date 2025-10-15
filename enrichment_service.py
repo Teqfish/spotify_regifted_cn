@@ -315,8 +315,8 @@ def get_monthly_user_popularity(
         st.warning("⚠️ No 'datetime' column found in user history.")
         return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
 
-    user_history["datetime"] = pd.to_datetime(user_history["datetime"], errors="coerce", utc=True)
-    user_history["month"] = user_history["datetime"].dt.to_period("M").dt.to_timestamp()
+    df["month"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
+    df["month"] = df["month"].dt.tz_localize(None).dt.to_period("M").dt.to_timestamp()
 
     # --- Step 3. Extract track_id from Spotify URI if needed ---
     if "spotify_track_uri" in user_history.columns and "track_id" not in user_history.columns:
@@ -570,9 +570,46 @@ class MetadataEnricher:
         self.discogs_pool = MetadataEnricher._discogs_pool
 
     # --- Logging helper ---
-    def log(self, msg: str):
-        if self.verbose:
-            print(f"[enrich] {msg}")
+    def log(self, msg: str, level: str = "info"):
+        """
+        Thread-safe logging helper.
+        - Writes to console
+        - If a log_dao is attached, writes to persistent Cloudflare R2 logs
+        - Never triggers Streamlit ScriptRunContext warnings
+        """
+        import traceback
+
+        formatted = f"[enrich] {msg}"
+
+        # --- Always print to console ---
+        try:
+            print(formatted)
+        except Exception:
+            # Printing should never fail
+            pass
+
+        # --- Optional: record to log_dao (if provided) ---
+        try:
+            if hasattr(self, "log_dao") and self.log_dao:
+                self.log_dao.log(
+                    user_id=self.user_id,
+                    dataset_label=self.label,
+                    phase=getattr(self, "current_phase", "unknown"),
+                    message=msg,
+                    level=level,
+                )
+        except Exception as e:
+            # Silent fail (no recursion risk)
+            print(f"[enrich] ⚠️ log_dao failed: {e}")
+
+        # --- Optional: Streamlit console write ---
+        # Avoids 'missing ScriptRunContext' warning in background threads
+        try:
+            import streamlit as st
+            if st.runtime.exists():  # only true inside UI thread
+                st.text(formatted)
+        except Exception:
+            pass
 
     # --- Cancel gate used by phases and helpers ---
     def _check_cancel(self, cancel_event: Optional[threading.Event]) -> None:
@@ -1779,7 +1816,8 @@ class MetadataEnricher:
         self.log("[top_tracks_per_month] Starting…")
 
         df = self.df[self.df["category"] == "music"].copy()
-        df["month"] = pd.to_datetime(df["datetime"], errors="coerce").dt.to_period("M").dt.to_timestamp()
+        df["month"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
+        df["month"] = df["month"].dt.tz_localize(None).dt.to_period("M").dt.to_timestamp()
 
         # Ensure track_id exists
         if "track_id" not in df.columns and "spotify_track_uri" in df.columns:
@@ -1990,7 +2028,7 @@ class MetadataEnricher:
         Also syncs progress to Cloudflare D1 every 25 batches.
         """
 
-        from app import set_enrichment_status, finish_enrichment_status
+        # from app import set_enrichment_status, finish_enrichment_status
 
         self.cancel_event = cancel_event
         self._load_master_tables()
@@ -2011,16 +2049,16 @@ class MetadataEnricher:
                 total=total
             )
 
-            set_enrichment_status(
-                user_id=self.user_id,
-                dataset_label=self.label,
-                status="running",
-                phase="planning",
-                detail=f"Planning complete, ~{total} total batches",
-                batches_done=0,
-                total_batches=total,
-                percent=0.0,
-            )
+            # set_enrichment_status(
+            #     user_id=self.user_id,
+            #     dataset_label=self.label,
+            #     status="running",
+            #     phase="planning",
+            #     detail=f"Planning complete, ~{total} total batches",
+            #     batches_done=0,
+            #     total_batches=total,
+            #     percent=0.0,
+            # )
 
             if total == 0:
                 self.log("[run_all] Nothing new to enrich (all entities already in masters)")
@@ -2029,12 +2067,12 @@ class MetadataEnricher:
                     ok=True,
                     detail="✅ All enrichment already up to date"
                 )
-                finish_enrichment_status(
-                    user_id=self.user_id,
-                    dataset_label=self.label,
-                    ok=True,
-                    detail="All enrichment already up to date"
-                )
+                # finish_enrichment_status(
+                #     user_id=self.user_id,
+                #     dataset_label=self.label,
+                #     ok=True,
+                #     detail="All enrichment already up to date"
+                # )
                 return
 
             def _end_phase(name: str, before: int):
@@ -2047,23 +2085,23 @@ class MetadataEnricher:
                     total=total
                 )
 
-                # --- Periodic D1 sync every 25 batches ---
-                if self._done_batches > 0 and self._done_batches % 25 == 0:
-                    progress = (self._done_batches / total) * 100
-                    try:
-                        set_enrichment_status(
-                            user_id=self.user_id,
-                            dataset_label=self.label,
-                            status="running",
-                            phase=name,
-                            detail=f"Progress update: {self._done_batches}/{total} batches done",
-                            batches_done=self._done_batches,
-                            total_batches=total,
-                            percent=progress,
-                        )
-                        self.log(f"[run_all] Synced D1 progress ({progress:.1f}%) after {name}")
-                    except Exception as e:
-                        self.log(f"[run_all] ⚠️ D1 sync failed after {name}: {e}")
+                # # --- Periodic D1 sync every 25 batches ---
+                # if self._done_batches > 0 and self._done_batches % 25 == 0:
+                #     progress = (self._done_batches / total) * 100
+                #     try:
+                #         set_enrichment_status(
+                #             user_id=self.user_id,
+                #             dataset_label=self.label,
+                #             status="running",
+                #             phase=name,
+                #             detail=f"Progress update: {self._done_batches}/{total} batches done",
+                #             batches_done=self._done_batches,
+                #             total_batches=total,
+                #             percent=progress,
+                #         )
+                #         self.log(f"[run_all] Synced D1 progress ({progress:.1f}%) after {name}")
+                #     except Exception as e:
+                #         self.log(f"[run_all] ⚠️ D1 sync failed after {name}: {e}")
 
             # 2) Build priority sets
             self._check_cancel(self.cancel_event)
@@ -2157,12 +2195,12 @@ class MetadataEnricher:
                 ok=True,
                 detail=f"✅ Enrichment completed (CSV flushed) • {added_total} new batches"
             )
-            finish_enrichment_status(
-                user_id=self.user_id,
-                dataset_label=self.label,
-                ok=True,
-                detail=f"Enrichment completed • {added_total} new batches",
-            )
+            # finish_enrichment_status(
+            #     user_id=self.user_id,
+            #     dataset_label=self.label,
+            #     ok=True,
+            #     detail=f"Enrichment completed • {added_total} new batches",
+            # )
             self.log(f"[run_all] Enrichment finished OK — {added_total} new batches enriched")
 
         except CancelledError:
@@ -2176,12 +2214,12 @@ class MetadataEnricher:
                 ok=False,
                 detail="🛑 Cancelled by user (partial results saved)"
             )
-            finish_enrichment_status(
-                user_id=self.user_id,
-                dataset_label=self.label,
-                ok=False,
-                detail="Cancelled by user (partial results saved)",
-            )
+            # finish_enrichment_status(
+            #     user_id=self.user_id,
+            #     dataset_label=self.label,
+            #     ok=False,
+            #     detail="Cancelled by user (partial results saved)",
+            # )
             raise
 
         except Exception as e:
@@ -2195,12 +2233,12 @@ class MetadataEnricher:
                 ok=False,
                 detail=f"❌ Failed: {e}"
             )
-            finish_enrichment_status(
-                user_id=self.user_id,
-                dataset_label=self.label,
-                ok=False,
-                detail=f"Error during enrichment: {e}",
-            )
+            # finish_enrichment_status(
+            #     user_id=self.user_id,
+            #     dataset_label=self.label,
+            #     ok=False,
+            #     detail=f"Error during enrichment: {e}",
+            # )
             raise
 
         finally:
@@ -2260,7 +2298,6 @@ class MetadataEnricher:
         - Ensures no duplicate key values
         - Logs summary counts for visibility
         """
-        import io
         import pandas as pd
 
         master_files = {
@@ -2277,10 +2314,16 @@ class MetadataEnricher:
             key = f"enrichment/metadata/{filename}"
 
             try:
-                df = pd.read_csv(io.BytesIO(self._get_object(key)), low_memory=False)
+                # ✅ Use the DAO's safe downloader (automatically handles not-found, R2 errors, etc.)
+                df = self.storage_dao.safe_download_csv(key)
+                if df is None or df.empty:
+                    self.log(f"[integrity] ℹ️ {filename} not found or empty (skipping).")
+                    continue
+
                 row_count = len(df)
                 col_count = len(df.columns)
 
+                # Ensure all required columns exist
                 missing_cols = [k for k in keys if k not in df.columns]
                 if missing_cols:
                     self.log(f"[integrity] ⚠️ {filename}: missing key columns {missing_cols}")
@@ -2290,9 +2333,14 @@ class MetadataEnricher:
                 dup_count = df.duplicated(subset=keys, keep=False).sum()
                 if dup_count > 0:
                     self.log(f"[integrity] ⚠️ {filename}: {dup_count} duplicate rows by {keys}")
+                else:
+                    dup_count = 0  # for reporting clarity
 
-                # Report summary
-                self.log(f"[integrity] ✅ {filename}: {row_count} rows, {col_count} columns, {dup_count} duplicates")
+                # ✅ Report summary
+                self.log(
+                    f"[integrity] ✅ {filename}: {row_count} rows, "
+                    f"{col_count} columns, {dup_count} duplicates"
+                )
 
             except FileNotFoundError:
                 self.log(f"[integrity] ℹ️ {filename} not found (skipping).")

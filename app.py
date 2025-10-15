@@ -478,19 +478,30 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
 #     return [(label, table) for table, label in index.items() if table.startswith(f"{user_id}_")]
 
 def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
-    """
-    Return a list of (dataset_label, table_name) for all datasets uploaded by a given user.
-    Scans the R2 bucket under enrichment/userdata/ or equivalent.
-    """
+    from pathlib import Path
+
     try:
         objects = self.list_objects(prefix=f"userdata/{user_id}_")
         datasets = []
+
         for obj in objects:
             name = obj["Key"].split("/")[-1]
-            if name.endswith(".csv"):
-                label = Path(name).stem.split("_", 1)[-1]  # userID_label.csv → label
-                datasets.append((label, name))
+            if not name.endswith(".csv"):
+                continue
+
+            stem = Path(name).stem
+            parts = stem.split("_")
+
+            if len(parts) < 4:
+                print(f"[CloudflareDAO] ⚠️ Unexpected filename format: {name}")
+                continue
+
+            label = "_".join(parts[1:-2])
+            datasets.append((label, stem))
+
+        print(f"[DEBUG:list_datasets] Returned datasets: {datasets}")  # ← ADD THIS
         return datasets
+
     except Exception as e:
         print(f"[CloudflareDAO] list_datasets failed: {e}")
         return []
@@ -2884,93 +2895,93 @@ elif page == "FAQs":
     st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
 
 # --------------------------- Sidebar Debugger ------------------------------- #
-def render_debug_sidebar():
-    """Sidebar control for full enrichment rerun + live status monitor."""
-    import streamlit as st
-    import time
-    from dao_selector import get_daos
-    from streamlit_autorefresh import st_autorefresh  # if not available, we’ll show inline alternative
+# def render_debug_sidebar():
+#     """Sidebar control for full enrichment rerun + live status monitor."""
+#     import streamlit as st
+#     import time
+#     from dao_selector import get_daos
+#     from streamlit_autorefresh import st_autorefresh  # if not available, we’ll show inline alternative
 
-    with st.sidebar:
-        st.divider()
-        st.subheader("🧩 Enrichment Control")
+#     with st.sidebar:
+#         st.divider()
+#         st.subheader("🧩 Enrichment Control")
 
-        user = st.session_state.get("user") or {}
-        user_id = user.get("user_id")
-        current_label = st.session_state.get("current_dataset_label")
+#         user = st.session_state.get("user") or {}
+#         user_id = user.get("user_id")
+#         current_label = st.session_state.get("current_dataset_label")
 
-        if not (user_id and current_label):
-            st.caption("⚠️ No dataset selected — enrichment control disabled.")
-            return
+#         if not (user_id and current_label):
+#             st.caption("⚠️ No dataset selected — enrichment control disabled.")
+#             return
 
-        daos = get_daos()
-        metadata_dao = daos.get("metadata") or daos.get("storage")
+#         daos = get_daos()
+#         metadata_dao = daos.get("metadata") or daos.get("storage")
 
-        # =====================================================
-        #  RESTART ENRICHMENT BUTTON
-        # =====================================================
-        if st.button("🔁 Rerun Enrichment from Scratch", key="rerun_enrich_btn"):
-            df = st.session_state.get("current_df")
-            dataset_label = st.session_state.get("current_dataset_label")
-            table_name = st.session_state.get("last_table_name")
+#         # =====================================================
+#         #  RESTART ENRICHMENT BUTTON
+#         # =====================================================
+#         if st.button("🔁 Rerun Enrichment from Scratch", key="rerun_enrich_btn"):
+#             df = st.session_state.get("current_df")
+#             dataset_label = st.session_state.get("current_dataset_label")
+#             table_name = st.session_state.get("last_table_name")
 
-            if df is None or df.empty:
-                st.error("No dataset loaded or dataset is empty.")
-                return
+#             if df is None or df.empty:
+#                 st.error("No dataset loaded or dataset is empty.")
+#                 return
 
-            st.session_state["_enrichment_running"] = True  # mark as running
-            st.info(f"Restarting enrichment for '{dataset_label}'...")
-            try:
-                _maybe_start_enrichment(
-                    user_id=user_id,
-                    dataset_label=dataset_label,
-                    table_name=table_name,
-                    cleaned_df=df,
-                )
-                st.success(f"Enrichment restarted for {dataset_label}.")
-            except Exception as e:
-                st.error(f"Failed to restart enrichment: {e}")
-                import traceback
-                st.code("".join(traceback.format_exc()))
+#             st.session_state["_enrichment_running"] = True  # mark as running
+#             st.info(f"Restarting enrichment for '{dataset_label}'...")
+#             try:
+#                 _maybe_start_enrichment(
+#                     user_id=user_id,
+#                     dataset_label=dataset_label,
+#                     table_name=table_name,
+#                     cleaned_df=df,
+#                 )
+#                 st.success(f"Enrichment restarted for {dataset_label}.")
+#             except Exception as e:
+#                 st.error(f"Failed to restart enrichment: {e}")
+#                 import traceback
+#                 st.code("".join(traceback.format_exc()))
 
-        # =====================================================
-        #  LIVE STATUS MONITOR
-        # =====================================================
-        st.markdown("### 📡 Enrichment Status Monitor")
+#         # =====================================================
+#         #  LIVE STATUS MONITOR
+#         # =====================================================
+#         st.markdown("### 📡 Enrichment Status Monitor")
 
-        status_placeholder = st.empty()
-        refresh_interval = 5  # seconds
+#         status_placeholder = st.empty()
+#         refresh_interval = 5  # seconds
 
-        # Automatically refresh sidebar every few seconds
-        st_autorefresh(interval=refresh_interval * 1000, key="status_refresh")
+#         # Automatically refresh sidebar every few seconds
+#         st_autorefresh(interval=refresh_interval * 1000, key="status_refresh")
 
-        # Attempt to load current enrichment status from R2
-        try:
-            status_key = f"enrichment/status/{user_id}_{current_label}.json"
-            status_json = metadata_dao.download_json(path=status_key)
+#         # Attempt to load current enrichment status from R2
+#         try:
+#             status_key = f"enrichment/status/{user_id}_{current_label}.json"
+#             status_json = metadata_dao.download_json(path=status_key)
 
-            phase = (status_json.get("phase") or "unknown").capitalize()
-            detail = status_json.get("detail", "")
-            percent = status_json.get("percent") or 0
-            total = status_json.get("total_batches")
-            done = status_json.get("batches_done")
+#             phase = (status_json.get("phase") or "unknown").capitalize()
+#             detail = status_json.get("detail", "")
+#             percent = status_json.get("percent") or 0
+#             total = status_json.get("total_batches")
+#             done = status_json.get("batches_done")
 
-            msg = f"""
-            **Phase:** {phase}
-            **Progress:** {done or 0}/{total or '?'}
-            **Percent:** {percent:.1f}%
-            **Detail:** {detail}
-            """
-            status_placeholder.markdown(msg)
+#             msg = f"""
+#             **Phase:** {phase}
+#             **Progress:** {done or 0}/{total or '?'}
+#             **Percent:** {percent:.1f}%
+#             **Detail:** {detail}
+#             """
+#             status_placeholder.markdown(msg)
 
-            # Stop polling if finished
-            if phase.lower() in {"done", "completed"}:
-                st.session_state["_enrichment_running"] = False
-                st.success("✅ Enrichment complete.")
-        except Exception:
-            if st.session_state.get("_enrichment_running"):
-                status_placeholder.warning("No status data yet…")
-            else:
-                st.caption("⏸️ Enrichment not currently running.")
-                
-render_debug_sidebar()
+#             # Stop polling if finished
+#             if phase.lower() in {"done", "completed"}:
+#                 st.session_state["_enrichment_running"] = False
+#                 st.success("✅ Enrichment complete.")
+#         except Exception:
+#             if st.session_state.get("_enrichment_running"):
+#                 status_placeholder.warning("No status data yet…")
+#             else:
+#                 st.caption("⏸️ Enrichment not currently running.")
+
+# render_debug_sidebar()

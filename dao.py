@@ -9,6 +9,8 @@ import io, json, os, time
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import secrets
+import re
 
 # -------- Interfaces (DAOs) --------
 class StatusDAO(ABC):
@@ -259,17 +261,30 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         return pd.read_csv(io.BytesIO(csv_bytes), dtype=dtype_map, low_memory=False)
 
     def list_datasets(self, user_id: str) -> List[tuple[str, str]]:
-        """List all datasets uploaded by this user."""
+        """List all datasets uploaded by this user.
+        Extract dataset labels correctly, even if they contain underscores or hyphens.
+        Expected filename format:
+            userdata/{user_id}_{dataset_label}_{timestamp}_history.csv
+        """
         res = self.r2.list_objects_v2(Bucket=self.bucket, Prefix=f"userdata/{user_id}_")
         contents = res.get("Contents", [])
         pairs = []
+
         for obj in contents:
             key = obj["Key"]
             table_name = key.split("/")[-1].replace(".csv", "")
-            parts = table_name.split("_")
-            if len(parts) >= 3:
-                label = parts[1]
-                pairs.append((label, table_name))
+
+            # Extract dataset label between first "_" and second-to-last "_"
+            m = re.match(rf"^{re.escape(user_id)}_(.+)_[^_]+_history$", table_name)
+            if m:
+                label = m.group(1)
+            else:
+                # fallback: old simple logic
+                parts = table_name.split("_")
+                label = parts[1] if len(parts) >= 3 else table_name
+
+            pairs.append((label, table_name))
+
         return pairs
 
     # ------------------------------------------------------------
@@ -518,6 +533,144 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         logs.append(json.dumps(entry))
         new_body = "\n".join(logs).encode("utf-8")
         self._put_bytes(key, new_body, "text/plain")
+
+class CloudflareD1DAO:
+    """Data Access Object for Cloudflare D1 via REST API."""
+
+    def __init__(self, account_id: str, database_id: str, api_token: str):
+        self.account_id = account_id
+        self.database_id = database_id
+        self.api_token = api_token
+        self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}"
+
+    def _query(self, sql: str, params: list = None):
+        """Run a parameterized SQL query securely."""
+        import requests, json
+
+        headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json",
+        }
+
+        body = {"sql": sql}
+        if params:
+            body["params"] = params
+
+        resp = requests.post(f"{self.base_url}/query", headers=headers, json=body)
+        if not resp.ok:
+            raise RuntimeError(f"D1 query failed ({resp.status_code}): {resp.text}")
+
+        result = resp.json()
+        if not result.get("success", True):
+            raise RuntimeError(f"D1 returned error: {result}")
+        data = result.get("result", [])
+        if isinstance(data, list) and len(data) and "results" in data[0]:
+            return data[0]["results"]
+        return data
+
+    # ---------------- Initialization ----------------
+    def init_tables_if_missing(self):
+        """Create all required tables if they do not exist."""
+        schema_sql = [
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                hashed_password TEXT NOT NULL,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                signup_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS upload_events (
+                upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                user_id TEXT NOT NULL,
+                table_name TEXT,
+                dataset_label TEXT,
+                filename TEXT,
+                status TEXT DEFAULT 'pending',
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS login_events (
+                event_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                user_id TEXT,
+                email TEXT,
+                success BOOLEAN,
+                reason TEXT
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS enrichment_status (
+                user_id TEXT NOT NULL,
+                dataset_label TEXT NOT NULL,
+                status TEXT DEFAULT 'running' NOT NULL,
+                phase TEXT DEFAULT 'init' NOT NULL,
+                detail TEXT,
+                batches_done INTEGER DEFAULT 0,
+                total_batches INTEGER,
+                percent REAL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                PRIMARY KEY (user_id, dataset_label)
+            )
+            """,
+        ]
+
+        for stmt in schema_sql:
+            self._query(stmt)
+
+    # ---------------- User Management ----------------
+    def create_user(self, email, hashed_password, first_name, last_name):
+        user_id = secrets.token_hex(8)
+        sql = """
+        INSERT INTO users (user_id, email, hashed_password, first_name, last_name)
+        VALUES (?, ?, ?, ?, ?)
+        """
+        self._query(sql, [user_id, email, hashed_password, first_name, last_name])
+        return user_id
+
+    def get_user_by_email(self, email):
+        sql = "SELECT * FROM users WHERE email = ? LIMIT 1"
+        rows = self._query(sql, [email])
+        return rows[0] if rows else None
+
+    # ---------------- Login Events ----------------
+    def log_login_event(self, user_id, email, success, reason=None):
+        sql = """
+        INSERT INTO login_events (user_id, email, success, reason)
+        VALUES (?, ?, ?, ?)
+        """
+        self._query(sql, [user_id, email, success, reason])
+
+    # ---------------- Upload Events ----------------
+    def record_upload_event(self, user_id, table_name, dataset_label, filename, status="pending"):
+        sql = """
+        INSERT INTO upload_events (user_id, table_name, dataset_label, filename, status)
+        VALUES (?, ?, ?, ?, ?)
+        """
+        self._query(sql, [user_id, table_name, dataset_label, filename, status])
+
+    # ---------------- Enrichment Status ----------------
+    def upsert_enrichment_status(
+        self, user_id, dataset_label, status, phase, detail, batches_done, total_batches, percent
+    ):
+        sql = """
+        INSERT INTO enrichment_status
+            (user_id, dataset_label, status, phase, detail, batches_done, total_batches, percent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, dataset_label)
+        DO UPDATE SET
+            status = excluded.status,
+            phase = excluded.phase,
+            detail = excluded.detail,
+            batches_done = excluded.batches_done,
+            total_batches = excluded.total_batches,
+            percent = excluded.percent,
+            updated_at = CURRENT_TIMESTAMP
+        """
+        self._query(sql, [user_id, dataset_label, status, phase, detail, batches_done, total_batches, percent])
 
 class LocalUserDataDAO:
     """

@@ -292,33 +292,52 @@ def get_chapters(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[
 def get_monthly_user_popularity(
     user_history: pd.DataFrame,
     info_tracks: pd.DataFrame,
-    info_artists: pd.DataFrame
+    info_artists: pd.DataFrame,
+    log_fn: Optional[callable] = print,  # default logger
 ) -> pd.DataFrame:
     """
     Compute monthly averages of track & artist popularity based on listening activity.
 
-    - Groups by month of listening (from `datetime` column in user history)
-    - Merges track popularity from `info_tracks` using track_id
-    - Merges artist popularity from `info_artists` using artist_name
-    - Handles column collisions gracefully
+    - Groups by month of listening (from a datetime-like column in user history)
+    - Merges track popularity from info_tracks using track_id
+    - Merges artist popularity from info_artists using artist_name
     """
+
+    import pandas as pd
+
+    def _log(msg):
+        if log_fn:
+            try:
+                log_fn(msg)
+            except Exception:
+                print(msg)
+
     if user_history.empty:
-        st.warning("⚠️ User history is empty.")
+        _log("⚠️ User history is empty.")
         return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
 
-    # --- Step 1. Normalize column names ---
+    # --- Step 1: Normalize columns ---
     for df in [user_history, info_tracks, info_artists]:
         df.columns = df.columns.str.strip().str.lower()
 
-    # --- Step 2. Parse datetime & month ---
-    if "datetime" not in user_history.columns:
-        st.warning("⚠️ No 'datetime' column found in user history.")
+    # --- Step 2: Ensure datetime column exists ---
+    datetime_col = next(
+        (c for c in ["datetime", "played_at", "timestamp", "end_time"] if c in user_history.columns),
+        None
+    )
+    if not datetime_col:
+        _log("⚠️ No datetime-like column found in user history.")
         return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
 
-    df["month"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
-    df["month"] = df["month"].dt.tz_localize(None).dt.to_period("M").dt.to_timestamp()
+    # --- Step 3: Convert datetime and derive month ---
+    user_history["month"] = (
+        pd.to_datetime(user_history[datetime_col], errors="coerce", utc=True)
+        .dt.tz_localize(None)
+        .dt.to_period("M")
+        .dt.to_timestamp()
+    )
 
-    # --- Step 3. Extract track_id from Spotify URI if needed ---
+    # --- Step 4: Ensure track_id ---
     if "spotify_track_uri" in user_history.columns and "track_id" not in user_history.columns:
         user_history["track_id"] = (
             user_history["spotify_track_uri"]
@@ -328,22 +347,24 @@ def get_monthly_user_popularity(
         )
 
     if "track_id" not in user_history.columns:
-        st.warning("⚠️ No 'track_id' or 'spotify_track_uri' column found in user history.")
+        _log("⚠️ No 'track_id' or 'spotify_track_uri' column found in user history.")
         return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
 
-    # --- Step 4. Merge with track metadata (keeping track_popularity + artist_name) ---
-    if not {"track_id", "artist_name", "track_popularity"}.issubset(info_tracks.columns):
-        st.warning("⚠️ Track metadata missing required columns.")
+    # --- Step 5: Merge with track metadata ---
+    required_track_cols = {"track_id", "artist_name", "track_popularity"}
+    if not required_track_cols.issubset(info_tracks.columns):
+        missing = required_track_cols - set(info_tracks.columns)
+        _log(f"⚠️ Track metadata missing required columns: {missing}")
         return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
 
     merged = user_history.merge(
-        info_tracks[["track_id", "artist_name", "track_popularity"]],
+        info_tracks[list(required_track_cols)],
         on="track_id",
         how="left",
-        suffixes=("", "_trackmeta")  # prevent duplicate naming
+        suffixes=("", "_trackmeta")
     )
 
-    # Choose the correct artist_name source
+    # Fix duplicated artist_name
     if "artist_name_trackmeta" in merged.columns:
         merged["artist_name"] = merged["artist_name_trackmeta"]
         merged = merged.drop(columns=["artist_name_trackmeta"], errors="ignore")
@@ -351,9 +372,9 @@ def get_monthly_user_popularity(
         merged["artist_name"] = merged["artist_name_y"].combine_first(merged["artist_name_x"])
         merged = merged.drop(columns=["artist_name_x", "artist_name_y"], errors="ignore")
 
-    # --- Step 5. Merge with artist popularity metadata ---
+    # --- Step 6: Merge with artist popularity ---
     if not {"artist_name", "artist_popularity"}.issubset(info_artists.columns):
-        st.warning("⚠️ Artist metadata missing required columns.")
+        _log("⚠️ Artist metadata missing required columns.")
         merged["artist_popularity"] = pd.NA
     else:
         merged = merged.merge(
@@ -362,25 +383,23 @@ def get_monthly_user_popularity(
             how="left",
             suffixes=("", "_artistmeta")
         )
-
-        # Handle possible suffix duplication again
         if "artist_popularity_artistmeta" in merged.columns:
             merged["artist_popularity"] = merged["artist_popularity_artistmeta"]
             merged = merged.drop(columns=["artist_popularity_artistmeta"], errors="ignore")
 
-    # --- Step 6. Compute monthly averages ---
+    # --- Step 7: Compute monthly averages ---
     monthly = (
         merged.groupby("month")[["track_popularity", "artist_popularity"]]
         .mean(numeric_only=True)
         .reset_index()
         .rename(columns={
             "track_popularity": "avg_track_popularity",
-            "artist_popularity": "avg_artist_popularity"
+            "artist_popularity": "avg_artist_popularity",
         })
     )
 
-    # --- Step 7. Diagnostics ---
-    st.caption(
+    # --- Step 8: Diagnostics ---
+    _log(
         f"Matched {merged['track_id'].notna().sum()} tracks "
         f"and {merged['artist_name'].notna().sum()} artists "
         f"across {len(monthly)} months."
@@ -533,6 +552,10 @@ class MetadataEnricher:
         self.info_tables = info_table_dao
         self.verbose = verbose
 
+        # ✅ Backward compatibility alias for old integrity-check references
+        # Some legacy integrity validation code still expects self.storage_dao
+        self.storage_dao = storage_dao
+
         # --- Seen & ID caches ---
         self.seen_artists: set[str] = set()
         self.seen_albums: set[tuple[str, str]] = set()
@@ -601,15 +624,6 @@ class MetadataEnricher:
         except Exception as e:
             # Silent fail (no recursion risk)
             print(f"[enrich] ⚠️ log_dao failed: {e}")
-
-        # --- Optional: Streamlit console write ---
-        # Avoids 'missing ScriptRunContext' warning in background threads
-        try:
-            import streamlit as st
-            if st.runtime.exists():  # only true inside UI thread
-                st.text(formatted)
-        except Exception:
-            pass
 
     # --- Cancel gate used by phases and helpers ---
     def _check_cancel(self, cancel_event: Optional[threading.Event]) -> None:
@@ -1914,7 +1928,7 @@ class MetadataEnricher:
         info_artists = self.storage.get_master("info_artist_genre.csv")
 
         # --- Step 1: Compute monthly popularity for this user ---
-        monthly = get_monthly_user_popularity(df, info_tracks, info_artists)
+        monthly = get_monthly_user_popularity(df, info_tracks, info_artists, log_fn=self.log)
 
         if monthly.empty:
             self.log("[popularity_timeseries] No popularity data computed for this user.")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from cmath import phase
 from botocore.client import Config
 from datetime import datetime, timezone
 from typing import Optional, List, Dict
@@ -303,9 +304,13 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             "detail": detail,
             "total_batches": total,
             "batches_done": 0,
+            "percent": 0,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         self._upload_json(self._status_key(user_id, dataset_label), payload)
+
+        # ✅ Mirror to D1 with all fields present
+        self._maybe_write_d1_status(payload)
 
     def inc_status(self, user_id: str, dataset_label: str, *, add_batches: int = 1, detail: Optional[str] = None):
         key = self._status_key(user_id, dataset_label)
@@ -313,26 +318,40 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             data = json.loads(self._get_object(key))
         except FileNotFoundError:
             data = {}
+
         data["batches_done"] = (data.get("batches_done", 0) or 0) + add_batches
         if detail:
             data["detail"] = detail
+
         total = data.get("total_batches")
         if total:
             data["percent"] = round(100.0 * data["batches_done"] / total, 1)
+        else:
+            data["percent"] = None
+
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
         self._upload_json(key, data)
+
+        # ✅ Mirror to D1
+        self._maybe_write_d1_status(data)
 
     def finish_status(self, user_id: str, dataset_label: str, *, ok: bool = True, detail: str = ""):
         payload = {
             "user_id": user_id,
             "dataset_label": dataset_label,
             "status": "done" if ok else "error",
+            "phase": "done",
             "detail": detail,
+            "batches_done": 1,
+            "total_batches": 1,
             "percent": 100 if ok else None,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         self._upload_json(self._status_key(user_id, dataset_label), payload)
 
+        # ✅ Mirror to D1
+        self._maybe_write_d1_status(payload)
+        
     # ------------------------------------------------------------
     # METADATA + MASTERS + CHECKPOINTS
     # ------------------------------------------------------------
@@ -513,26 +532,97 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     # LOGGING
     # ------------------------------------------------------------
 
-    def log(self, user_id: str, dataset_label: str, where: str, msg: str,
-            level: str = "info", data: Optional[dict] = None):
-        """Append log entry to enrichment/logs/{user_id}_{label}.log"""
-        key = f"enrichment/logs/{user_id}_{dataset_label}.log"
+    def log(
+        self,
+        user_id: str,
+        dataset_label: str,
+        where: str | None = None,
+        msg: str | None = None,
+        level: str = "info",
+        data: Optional[dict] = None,
+        phase: str | None = None,
+        **kwargs,
+    ):
+        """
+        Append a structured log entry to enrichment/logs/{user_id}_{dataset_label}.log.
+
+        Compatible with all legacy call styles and adds optional 'phase'.
+        Example usage:
+            log_dao.log(user_id, label, "spotify", "Fetched 100 tracks")
+            log_dao.log(user_id=user_id, dataset_label=label, where="enrichment",
+                        msg="Phase started", level="info", phase="planning")
+        """
+        import json
+        from datetime import datetime, timezone
+
+        # Support for older call styles that omit 'where'
+        if msg is None and where is not None:
+            msg = where
+            where = "general"
+        elif where is None:
+            where = "general"
+            msg = msg or ""
+
+        # If passed as a keyword accidentally, remap here
+        if "phase" in kwargs and not phase:
+            phase = kwargs.pop("phase")
+
         entry = {
             "event_time": datetime.now(timezone.utc).isoformat(),
             "where": where,
             "level": level,
-            "message": msg,
-            "data": data,
+            "message": msg or "",
+            "data": data or {},
         }
+        if phase:
+            entry["phase"] = phase
+
+        key = f"enrichment/logs/{user_id}_{dataset_label}.log"
 
         try:
-            logs = self._get_object(key).decode("utf-8").splitlines()
-        except FileNotFoundError:
-            logs = []
+            # Load existing log
+            try:
+                existing = self._get_object(key).decode("utf-8").splitlines()
+            except FileNotFoundError:
+                existing = []
 
-        logs.append(json.dumps(entry))
-        new_body = "\n".join(logs).encode("utf-8")
-        self._put_bytes(key, new_body, "text/plain")
+            existing.append(json.dumps(entry))
+            new_body = "\n".join(existing).encode("utf-8")
+
+            self._put_bytes(key, new_body, content_type="text/plain")
+            print(f"[CloudflareDAO] 🪵 Logged ({level}) → {key} — {where}:{phase or ''} {msg[:80]}")
+
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ Failed to write log: {e}")
+
+    def _maybe_write_d1_status(self, payload: dict):
+        """
+        Mirror enrichment status JSON to Cloudflare D1 if DAO is available.
+        This version replaces the old positional-argument signature.
+        """
+        try:
+            import dao_selector
+            daos = getattr(dao_selector, "DAOS", {})
+            d1 = daos.get("main")
+
+            if not d1:
+                print("[CloudflareDAO] ⚠️ No D1 DAO found — skipping D1 status sync.")
+                return
+
+            d1.upsert_enrichment_status(
+                user_id=payload.get("user_id"),
+                dataset_label=payload.get("dataset_label"),
+                status=payload.get("status"),
+                phase=payload.get("phase"),
+                detail=payload.get("detail"),
+                batches_done=payload.get("batches_done", 0),
+                total_batches=payload.get("total_batches"),
+                percent=payload.get("percent"),
+            )
+
+            print(f"[CloudflareDAO] 🧭 Wrote status to D1 for {payload.get('dataset_label')} → {payload.get('phase')}")
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ D1 status write failed: {e}")
 
 class CloudflareD1DAO:
     """Data Access Object for Cloudflare D1 via REST API."""

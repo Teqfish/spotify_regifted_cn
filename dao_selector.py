@@ -15,6 +15,9 @@ from dao import (
     CloudflareD1DAO
 )
 
+# 🌍 Global DAO registry — shared across threads
+DAOS: dict[str, object] = {}
+
 # --- Optional helper: read mode from secrets or env, with a safe default ---
 def get_server_mode(default: str = "cloudflare") -> str:
     """
@@ -144,3 +147,47 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
 
     else:
         raise ValueError(f"Unknown server_mode: {mode}")
+
+def load_global_daos():
+    """
+    Ensures the global DAOS registry is populated.
+    Safe to call multiple times (idempotent).
+    """
+    global DAOS
+    if DAOS and "main" in DAOS:
+        return DAOS  # already loaded
+
+    from dao import CloudflareD1DAO, CloudflareDAOs
+    import streamlit as st
+
+    try:
+        cf_conf = st.secrets["cloudflare"]
+
+        # --- Initialize Cloudflare DAOs ---
+        cf_r2 = CloudflareDAOs(
+            account_id=cf_conf["account_id"],
+            access_key=cf_conf["access_key"],
+            secret_key=cf_conf["secret_key"],
+            bucket=cf_conf["bucket"],
+            endpoint_url=cf_conf["endpoint_url"],
+        )
+
+        cf_d1 = CloudflareD1DAO(
+            account_id=cf_conf["account_id"],
+            database_id=cf_conf["database_id"],
+            api_token=cf_conf["token"],  # note: this is "token" in your secrets.toml
+        )
+
+        # --- Ensure D1 tables exist (safe no-op if already created) ---
+        cf_d1.init_tables_if_missing()
+
+        # --- Register globally ---
+        DAOS["main"] = cf_d1
+        DAOS["r2"] = cf_r2
+
+        print("[dao_selector] ✅ Global DAOs loaded successfully")
+    except Exception as e:
+        print(f"[dao_selector] ⚠️ Failed to load DAOs: {e}")
+        DAOS = {}
+
+    return DAOS

@@ -34,12 +34,21 @@ import time
 import traceback
 from typing import Optional
 import zipfile
+import sys
 
 from dao_selector import get_daos, get_server_mode
+from dao import CloudflareD1DAO, CloudflareDAOs
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
 from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
 
 # -------------------------- CONFIG / CLIENTS -------------------------------- #
+def excepthook(type, value, tb):
+    print("🔥 FULL TRACEBACK (uncaught exception):")
+    traceback.print_exception(type, value, tb)
+    sys.__excepthook__(type, value, tb)
+
+sys.excepthook = excepthook
+
 st.set_page_config(page_title="Regifted", page_icon="./media/assets/icon_spotgreen.svg", layout="wide", initial_sidebar_state="expanded")
 
 SPOTIFY_ID = st.secrets["spotify"]["client_id"]
@@ -139,8 +148,68 @@ def task_registry():
 if "user" not in st.session_state:
     st.session_state.user = None
 
-st.session_state["_runs"] = st.session_state.get("_runs", 0) + 1
-st.sidebar.caption(f"Debug: run #{st.session_state['_runs']}")
+
+def debug_thread_status():
+    """Display active enrichment threads and allow safe cooperative kill."""
+
+    st.subheader("🧵 Thread Monitor")
+
+    # --- Collect all threads ---
+    threads = threading.enumerate()
+    total = len(threads)
+
+    # --- Filter enrichment-related threads ---
+    enrich_threads = [
+        t for t in threads
+        if any(tag in t.name for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
+    ]
+
+    st.write(f"**Total Threads:** {total}")
+    st.write(f"**Enrichment Threads:** {len(enrich_threads)}")
+
+    if enrich_threads:
+        for t in enrich_threads:
+            st.write(f"• `{t.name}` — Alive: `{t.is_alive()}`")
+
+        # ======================================================
+        # 🛑 Kill Button
+        # ======================================================
+        st.markdown("---")
+        if st.button("🛑 Force-Kill All Enrichment Threads", key="kill_all_threads"):
+            count = 0
+            for t in enrich_threads:
+                try:
+                    if hasattr(t, "cancel_event") and t.cancel_event:
+                        t.cancel_event.set()
+                        count += 1
+                        print(f"[thread_monitor] Cancel signal sent to {t.name}")
+                    else:
+                        print(f"[thread_monitor] {t.name} has no cancel_event; cannot directly stop.")
+                except Exception as e:
+                    print(f"[thread_monitor] ⚠️ Failed to cancel {t.name}: {e}")
+
+            # --- Clear autostart block flag in Streamlit session ---
+            try:
+                st.session_state["_enrichment_autostart_block"] = True
+                st.session_state["_enrichment_block_label"] = st.session_state.get("current_dataset_label")
+                print("[thread_monitor] 🧱 Autostart block set to prevent immediate restart.")
+            except Exception as e:
+                print(f"[thread_monitor] ⚠️ Could not set autostart block: {e}")
+
+            st.warning(f"🧨 Sent cancel signal to {count} enrichment threads. Autostart disabled.")
+    else:
+        st.caption("✅ No active enrichment threads.")
+
+    # ======================================================
+    # Optional: Show all threads
+    # ======================================================
+    with st.expander("🔍 Show all threads"):
+        for t in threads:
+            st.write(f"• `{t.name}` (alive={t.is_alive()})")
+
+with st.sidebar:
+    debug_thread_status()
+    st.divider()
 
 # --- AUTH FUNCTIONS ---
 def hash_password(password: str) -> str:
@@ -741,6 +810,15 @@ def background_enrich(
     Writes status via status_dao, logs via log_dao, and stores CSVs via metadata_dao.
     """
     try:
+        # ✅ Ensure dao_selector.DAOS is imported and populated in this thread
+        import dao_selector
+        from dao_selector import DAOS
+
+        if not DAOS or "main" not in DAOS:
+            print("[enrich:init] DAO registry missing — reloading manually.")
+            dao_selector.load_global_daos()  # defined in dao_selector.py
+
+        # --- Now continue with enrichment setup ---
         log_dao.log(user_id, dataset_label, "sanity", "Starting spotify_sanity_check")
         ok, msg = spotify_sanity_check(token)
         log_dao.log(user_id, dataset_label, "sanity", f"spotify_sanity_check result: ok={ok}, msg={msg}")
@@ -783,6 +861,14 @@ def background_enrich(
 # ---- DEBUG LOCAL ENRICHMENT (saves CSVs to ./info_test) ----
 def run_enrichment_test(cleaned_df: pd.DataFrame, user_id: str, dataset_label: str):
     """Run enrichment using the active DAO bundle (status_dao/metadata_dao/log_dao)."""
+    # ✅ Ensure dao_selector.DAOS is imported and populated
+    import dao_selector
+    from dao_selector import DAOS
+
+    if not DAOS or "main" not in DAOS:
+        print("[enrich:test:init] DAO registry missing — reloading manually.")
+        dao_selector.load_global_daos()
+
     if status_dao is None or metadata_dao is None or log_dao is None:
         raise RuntimeError("DAOs not configured for current SERVER_MODE.")
 

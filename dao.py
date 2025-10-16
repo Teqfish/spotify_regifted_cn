@@ -351,7 +351,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
 
         # ✅ Mirror to D1
         self._maybe_write_d1_status(payload)
-        
+
     # ------------------------------------------------------------
     # METADATA + MASTERS + CHECKPOINTS
     # ------------------------------------------------------------
@@ -660,7 +660,11 @@ class CloudflareD1DAO:
 
     # ---------------- Initialization ----------------
     def init_tables_if_missing(self):
-        """Create all required tables if they do not exist."""
+        """
+        Ensure all required tables exist in D1 and upgrade schema if needed.
+        Safe to call repeatedly — idempotent and backward compatible.
+        """
+        # --- Core tables (from original version) ---
         schema_sql = [
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -702,6 +706,7 @@ class CloudflareD1DAO:
                 batches_done INTEGER DEFAULT 0,
                 total_batches INTEGER,
                 percent REAL,
+                phase_progress TEXT DEFAULT '{}',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 PRIMARY KEY (user_id, dataset_label)
             )
@@ -710,6 +715,37 @@ class CloudflareD1DAO:
 
         for stmt in schema_sql:
             self._query(stmt)
+        print("[CloudflareD1DAO] ✅ Ensured all base tables exist")
+
+        # --- Schema upgrades (self-healing) ---
+        try:
+            cols = self._query("PRAGMA table_info(enrichment_status);")
+            # PRAGMA returns a list of dicts or tuples depending on _query implementation
+            colnames = [row["name"] if isinstance(row, dict) else row[1] for row in cols]
+
+            missing = []
+            if "phase_progress" not in colnames:
+                missing.append(("phase_progress", "TEXT DEFAULT '{}'"))
+            if "updated_at" not in colnames:
+                missing.append(("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL"))
+
+            for name, type_def in missing:
+                alter_sql = f"ALTER TABLE enrichment_status ADD COLUMN {name} {type_def};"
+                self._query(alter_sql)
+                print(f"[CloudflareD1DAO] 🧩 Added missing column: {name}")
+
+        except Exception as e:
+            print(f"[CloudflareD1DAO] ⚠️ Schema validation failed: {e}")
+
+        # --- Optional index for fast lookups ---
+        try:
+            self._query(
+                "CREATE INDEX IF NOT EXISTS idx_enrich_status_user "
+                "ON enrichment_status(user_id, status);"
+            )
+            print("[CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user")
+        except Exception as e:
+            print(f"[CloudflareD1DAO] ⚠️ Index creation failed: {e}")
 
     # ---------------- User Management ----------------
     def create_user(self, email, hashed_password, first_name, last_name):
@@ -744,23 +780,57 @@ class CloudflareD1DAO:
 
     # ---------------- Enrichment Status ----------------
     def upsert_enrichment_status(
-        self, user_id, dataset_label, status, phase, detail, batches_done, total_batches, percent
+        self, user_id, dataset_label, status, phase, detail,
+        batches_done, total_batches, percent
     ):
+        """
+        Upsert global enrichment status and per-phase progress JSON.
+        """
+        # Serialize per-phase progress as JSON snippet
+        import json
+        import sqlite3  # SQLite-compatible formatting
+
+        phase_data = json.dumps({
+            "batches_done": batches_done,
+            "total_batches": total_batches,
+            "percent": percent,
+        })
+
         sql = """
         INSERT INTO enrichment_status
-            (user_id, dataset_label, status, phase, detail, batches_done, total_batches, percent)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, dataset_label, status, phase, detail,
+            batches_done, total_batches, percent, phase_progress)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, json_object(? , ?))
         ON CONFLICT(user_id, dataset_label)
         DO UPDATE SET
-            status = excluded.status,
-            phase = excluded.phase,
-            detail = excluded.detail,
-            batches_done = excluded.batches_done,
+            status        = excluded.status,
+            phase         = excluded.phase,
+            detail        = excluded.detail,
+            batches_done  = excluded.batches_done,
             total_batches = excluded.total_batches,
-            percent = excluded.percent,
+            percent       = excluded.percent,
+            phase_progress = json_patch(
+                COALESCE(enrichment_status.phase_progress, '{}'),
+                json_object(excluded.phase, json(excluded.phase_progress))
+            ),
             updated_at = CURRENT_TIMESTAMP
         """
-        self._query(sql, [user_id, dataset_label, status, phase, detail, batches_done, total_batches, percent])
+
+        self._query(
+            sql,
+            [
+                user_id,
+                dataset_label,
+                status,
+                phase,
+                detail,
+                batches_done,
+                total_batches,
+                percent,
+                phase,  # key
+                phase_data,  # value
+            ],
+        )
 
 class LocalUserDataDAO:
     """

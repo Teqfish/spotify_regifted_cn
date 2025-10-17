@@ -128,11 +128,21 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
         )
 
         # --- D1 DATABASE (new) ---
-        cf_d1 = CloudflareD1DAO(
-            account_id=cf_conf["account_id"],
-            database_id=cf_conf["database_id"],   # add to secrets.toml
-            api_token=cf_conf["token"],       # add to secrets.toml
-        )
+        if not hasattr(st.session_state, "_d1_initialized"):
+            cf_d1 = CloudflareD1DAO(
+                account_id=cf_conf["account_id"],
+                database_id=cf_conf["database_id"],
+                api_token=cf_conf["token"],
+            )
+            cf_d1.init_tables_if_missing()
+            st.session_state["_d1_initialized"] = True
+            print("[dao_selector] ✅ Initialized Cloudflare D1 (first time this session)")
+        else:
+            cf_d1 = CloudflareD1DAO(
+                account_id=cf_conf["account_id"],
+                database_id=cf_conf["database_id"],
+                api_token=cf_conf["token"],
+            )
 
         # Ensure tables exist
         cf_d1.init_tables_if_missing()

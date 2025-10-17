@@ -467,16 +467,27 @@ def log_login_attempt(email, success, user_id=None, reason=None):
 
 def logout():
     st.session_state["_skip_restore"] = True  # block restore on subsequent reruns
+
+    # Clear authentication and session info
     clear_auth_cookie()
     st.session_state.pop("user", None)
     st.session_state.pop("current_dataset_label", None)
+
+    # Clear all Streamlit caches (safe fail)
     try:
         st.cache_data.clear()
         st.cache_resource.clear()
-    except Exception:
-        pass
-    # Nudge the client so cookie JS commits before next run
-    st.query_params(_=secrets.token_hex(4))
+    except Exception as e:
+        print(f"[logout] ⚠️ Failed to clear cache: {e}")
+
+    # ✅ Modern Streamlit fix: st.query_params is NOT callable
+    try:
+        # Assign a random cache-busting query param (instead of calling)
+        st.query_params["_"] = secrets.token_hex(4)
+    except Exception as e:
+        print(f"[logout] ⚠️ Could not update query params: {e}")
+
+    # Force rerun to refresh UI and clear user state
     st.rerun()
 
 def require_current_df():

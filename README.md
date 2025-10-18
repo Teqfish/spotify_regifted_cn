@@ -12,10 +12,10 @@ You are welcome to upload your own data, however The Farm will not function.
 ********************************************************************************
 
 # CREDITS
+- Charlie Nash (github.com/Teqfish)
 - Ben Garalnick (github.com/bebby95)
 - Jana Hueppe (github.com/J-Hueppe)
 - Tom Witt (github.com/Thomas-Witt95)
-- Charlie Nash (github.com/Teqfish)
 
 
 # DESCRIPTION
@@ -41,7 +41,7 @@ Spotify's yearly wrapped doesn't feel satisfying enough, so we've extracted, loa
 06. Drop rows with nulls in either artist, album, or track columns as well as audiobook columns
 07. Drop rows with 0ms listening time
 08. Save as CSV to user_clean
-  
+
 09. Discogs and API calls from track list
 10. Remap subgenres to supergenre column
 

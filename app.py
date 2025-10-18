@@ -12,7 +12,6 @@ import bcrypt
 import country_converter as coco
 from datetime import date, datetime, timedelta, timezone
 import dayplot as dp
-from dayplot import calendar
 import extra_streamlit_components as stx
 import json
 import jwt
@@ -21,7 +20,6 @@ import numpy as np
 import os
 import pandas as pd
 from pathlib import Path
-from plotly_calplot import calplot
 import plotly.express as px
 import plotly.graph_objects as go
 import re
@@ -376,13 +374,14 @@ def log_login_attempt(email, success, user_id=None, reason=None):
     Explicit login event logger (used in edge cases).
     """
     d1 = DAOS.get("main")
-    if d1 is None:
-        print(f"[warn] log_login_attempt called with no DAO configured ({email})")
-        return
+    if not d1:
+        return  # No-op if DAO not configured
+
     try:
         d1.log_login_event(user_id, email, success, reason)
-    except Exception as e:
-        print(f"[warn] Failed to log login attempt: {e}")
+    except Exception:
+        # Silent fail — logging must never interrupt UX
+        pass
 
 def logout():
     st.session_state["_skip_restore"] = True  # block restore on subsequent reruns
@@ -537,13 +536,13 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
     status_dao = daos.get("status")
 
     try:
-        # --- Run the actual ETL ---
+        # --- Run ETL ---
         table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
 
-        # --- Handle ETL success ---
+        # --- On success ---
         if cleaned_df is not None and not cleaned_df.empty:
-            try:
-                if status_dao:
+            if status_dao:
+                try:
                     status_dao.set_status(
                         user_id,
                         dataset_label,
@@ -551,24 +550,17 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
                         detail="✅ ETL completed successfully",
                         total=len(cleaned_df),
                     )
-                    try:
-                        log_upload_event(user_id, table_name, dataset_label, uploaded_file.name, status="completed")
-                    except Exception as log_e:
-                        print(f"[etl_process_zip] Warning: failed to log upload event: {log_e}")
-                else:
-                    print("[etl_process_zip] Warning: no status DAO configured.")
-            except Exception as e:
-                print(f"[etl_process_zip] Warning: could not persist ETL status: {e}")
-
-            # Mark ETL completion in session
+                    log_upload_event(user_id, table_name, dataset_label, uploaded_file.name, status="completed")
+                except Exception:
+                    pass  # Logging must never interrupt flow
             st.session_state.etl_done = True
 
         return table_name, cleaned_df
 
     except Exception as e:
-        # --- Handle ETL failure ---
-        try:
-            if status_dao:
+        # --- On failure ---
+        if status_dao:
+            try:
                 status_dao.set_status(
                     user_id,
                     dataset_label,
@@ -576,20 +568,13 @@ def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
                     detail=f"❌ ETL failed: {e}",
                     total=None,
                 )
-                try:
-                    log_upload_event(user_id, None, dataset_label, uploaded_file.name, status="failed")
-                except Exception as e1:
-                    print(f"[etl_process_zip] Warning: failed to log upload event: {e1}")
-            else:
-                print("[etl_process_zip] Warning: no status DAO configured (failure not persisted).")
-        except Exception as e2:
-            print(f"[etl_process_zip] Warning: could not persist ETL failure: {e2}")
-
-        # Bubble up the exception so UI can report it
+                log_upload_event(user_id, None, dataset_label, uploaded_file.name, status="failed")
+            except Exception:
+                pass
         raise
 
 def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
-    from pathlib import Path
+    from pathlib import Path  # Can also move to top-level import safely
 
     try:
         objects = self.list_objects(prefix=f"userdata/{user_id}_")
@@ -604,17 +589,14 @@ def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
             parts = stem.split("_")
 
             if len(parts) < 4:
-                print(f"[CloudflareDAO] ⚠️ Unexpected filename format: {name}")
-                continue
+                continue  # Skip unexpected filename format
 
             label = "_".join(parts[1:-2])
             datasets.append((label, stem))
 
-        print(f"[DEBUG:list_datasets] Returned datasets: {datasets}")  # ← ADD THIS
         return datasets
 
-    except Exception as e:
-        print(f"[CloudflareDAO] list_datasets failed: {e}")
+    except Exception:
         return []
 
 def log_upload_event(user_id: str, table_name: str, dataset_label: str, filename: str, status: str = "pending"):

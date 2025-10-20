@@ -1175,10 +1175,17 @@ with st.sidebar:
     st.title("Navigation")
     st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
 
-    # ✅ Reserve a placeholder high up in the sidebar
-    status_placeholder = st.empty()
+    # ✅ Render the enrichment status *right here*, before the radio
+    if st.session_state.get("current_dataset_label"):
+        show_enrichment_status_sidebar(
+            st.session_state.user["user_id"],
+            st.session_state["current_dataset_label"]
+        )
 
-    # Render the radio menu AFTER
+    # Divider (optional)
+    st.divider()
+
+    # ✅ Then your page selector
     page = st.radio(
         "Go to",
         [
@@ -1195,17 +1202,10 @@ with st.sidebar:
     )
 
     st.divider()
+
+    # ✅ Finally, your logout button
     if st.button("Log out", key="logout_btn"):
         logout()
-
-# ✅ Now fill the placeholder *after* layout is established
-if st.session_state.get("current_dataset_label"):
-    with status_placeholder:
-        show_enrichment_status_sidebar(
-            st.session_state.user["user_id"],
-            st.session_state["current_dataset_label"]
-        )
-
 
 # -------------------------------- Home Page --------------------------------- #
 if page == "Home":

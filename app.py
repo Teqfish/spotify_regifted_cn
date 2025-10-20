@@ -1173,6 +1173,8 @@ if not st.session_state.user:
 # --- PAGE NAVIGATION ---
 st.sidebar.title("Navigation")
 st.sidebar.write(f"Logged in as: **{st.session_state.user['first_name']}**")
+if st.session_state.get("current_dataset_label"):
+    show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state["current_dataset_label"])
 if st.sidebar.button("Log out", key="logout_btn"):
     logout()
 
@@ -1289,7 +1291,7 @@ if page == "Home":
         st.session_state.current_df = df
         st.session_state.current_dataset_label = selected_label
         st.session_state.last_table_name = selected_table
-        show_enrichment_status_sidebar(user_id, selected_label)
+        # show_enrichment_status_sidebar(user_id, selected_label)
         # --- Auto check enrichment completion & rerun if needed ---
         _auto_check_and_reenrich_if_needed(user_id, selected_label, df)
 

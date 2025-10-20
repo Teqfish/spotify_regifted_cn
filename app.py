@@ -295,9 +295,9 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     detail = status_row.get("detail") or ""
 
     if status in {"done", "complete"}:
-        msg = f"✅ Enrichment complete for **{dataset_label}**"
+        msg = f"Enrichment complete for **{dataset_label}**"
     elif status == "error":
-        msg = f"❌ Enrichment failed during {phase.lower()} — check logs."
+        msg = f"Enrichment failed during {phase.lower()} — check logs."
     else:
         msg = f"🔄 {phase} phase ({done}/{total} batches, {percent}% done)…"
 
@@ -305,7 +305,7 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     with st.sidebar:
         st.caption(f"**{msg}**")
         if detail:
-            st.caption(detail)
+            # st.caption(detail)
 
 @st.cache_resource(show_spinner=False)
 def task_registry():

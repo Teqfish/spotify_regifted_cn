@@ -152,7 +152,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, df: pd.
 
         if not DAOS or not ("main" in DAOS or "r2" in DAOS):
             print("[auto_reenrich] ⚠️ Failed to initialize DAOs after reload.")
-            st.caption("⚠️ Could not access database connections — skipping enrichment check.")
+            # st.caption("⚠️ Could not access database connections — skipping enrichment check.")
             return
 
         print(f"\n[auto_reenrich] 🔍 Checking enrichment status for dataset '{dataset_label}' (user {user_id})")
@@ -194,7 +194,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, df: pd.
         # --- Interpret results ---
         if not status_row:
             print(f"[auto_reenrich] ❌ No enrichment record found — triggering full enrichment rerun for {dataset_label}")
-            st.caption(f"🚀 Enrichment not found — starting full run for **{dataset_label}**")
+            # st.caption(f"🚀 Enrichment not found — starting full run for **{dataset_label}**")
             st.session_state["_enrichment_autostart_pending"] = True
             return
 
@@ -205,12 +205,12 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, df: pd.
         # --- Complete? Do nothing ---
         if status in {"done", "complete"}:
             print(f"[auto_reenrich] ✅ Enrichment already complete for {dataset_label} — nothing to do.")
-            st.caption(f"✅ Enrichment complete for **{dataset_label}**")
+            # st.caption(f"✅ Enrichment complete for **{dataset_label}**")
             return
 
         # --- Incomplete? Trigger new run ---
         print(f"[auto_reenrich] 🔁 Incomplete enrichment detected for {dataset_label} — restarting background enrichment.")
-        st.caption(f"⏳ Resuming incomplete enrichment for **{dataset_label}**…")
+        # st.caption(f"⏳ Resuming incomplete enrichment for **{dataset_label}**…")
 
         # Prevent immediate recursive reruns during initialization
         if not st.session_state.get("_auto_reenrich_deferred_triggered"):
@@ -233,7 +233,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, df: pd.
 
     except Exception as e:
         print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
-        st.caption(f"⚠️ Failed to check enrichment status for **{dataset_label}**")
+        # st.caption(f"⚠️ Failed to check enrichment status for **{dataset_label}**")
 
 def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     """

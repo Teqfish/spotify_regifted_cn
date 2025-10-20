@@ -303,7 +303,7 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
 
     # --- Render single line in sidebar ---
     with st.sidebar:
-        st.markdown(f"**{msg}**")
+        st.caption(f"**{msg}**")
         if detail:
             st.caption(detail)
 

@@ -2283,7 +2283,9 @@ elif page == "Per Album":
                 .groupby("date")["minutes_played"]
                 .sum()
                 .reset_index()
+                .copy()
             )
+
             df_day["date"] = pd.to_datetime(df_day["date"], errors="coerce").dt.date
 
             if not df_day.empty:

@@ -138,7 +138,8 @@ def load_global_daos():
         )
 
         # --- Ensure D1 tables exist (safe no-op if already created) ---
-        cf_d1.init_tables_if_missing()
+        if not getattr(cf_d1, "_schema_initialized", False):
+            cf_d1.init_tables_if_missing()
 
         # --- Register globally ---
         DAOS["main"] = cf_d1

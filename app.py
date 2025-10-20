@@ -235,6 +235,78 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, df: pd.
         print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
         st.caption(f"⚠️ Failed to check enrichment status for **{dataset_label}**")
 
+def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
+    """
+    Displays a persistent, single-line enrichment progress message in the sidebar.
+    Checks D1 first, falls back to R2 JSON.
+    """
+    import json
+    from datetime import datetime
+    import streamlit as st
+    from dao_selector import DAOS, load_global_daos
+
+    # Make sure DAOs are ready
+    if not DAOS or "main" not in DAOS:
+        load_global_daos()
+
+    d1 = DAOS.get("main")
+    r2 = DAOS.get("r2")
+
+    status_row = None
+
+    # --- Prefer D1 ---
+    try:
+        if d1:
+            rows = d1._query(
+                "SELECT status, phase, detail, batches_done, total_batches, percent FROM enrichment_status WHERE user_id=? AND dataset_label=?",
+                [user_id, dataset_label],
+            )
+            if rows:
+                status_row = rows[0]
+    except Exception as e:
+        print(f"[sidebar_status] ⚠️ Failed to query D1: {e}")
+
+    # --- Fallback to R2 JSON ---
+    if not status_row and r2:
+        try:
+            key = f"enrichment/status/{user_id}_{dataset_label}.json"
+            data = json.loads(r2._get_object(key))
+            status_row = {
+                "status": data.get("status"),
+                "phase": data.get("phase"),
+                "detail": data.get("detail"),
+                "batches_done": data.get("batches_done"),
+                "total_batches": data.get("total_batches"),
+                "percent": data.get("percent"),
+            }
+        except Exception as e:
+            print(f"[sidebar_status] ⚠️ Failed to read R2 JSON: {e}")
+
+    # --- Show nothing if missing ---
+    if not status_row:
+        return
+
+    # --- Format message ---
+    status = (status_row.get("status") or "").lower()
+    phase = (status_row.get("phase") or "init").capitalize()
+    percent = status_row.get("percent") or 0
+    done = status_row.get("batches_done") or 0
+    total = status_row.get("total_batches") or "?"
+    detail = status_row.get("detail") or ""
+
+    if status in {"done", "complete"}:
+        msg = f"✅ Enrichment complete for **{dataset_label}**"
+    elif status == "error":
+        msg = f"❌ Enrichment failed during {phase.lower()} — check logs."
+    else:
+        msg = f"🔄 {phase} phase ({done}/{total} batches, {percent}% done)…"
+
+    # --- Render single line in sidebar ---
+    with st.sidebar:
+        st.markdown(f"**{msg}**")
+        if detail:
+            st.caption(detail)
+
 @st.cache_resource(show_spinner=False)
 def task_registry():
     """Persistent global registry of active enrichment threads."""
@@ -1217,6 +1289,7 @@ if page == "Home":
         st.session_state.current_df = df
         st.session_state.current_dataset_label = selected_label
         st.session_state.last_table_name = selected_table
+        show_enrichment_status_sidebar(user_id, selected_label)
         # --- Auto check enrichment completion & rerun if needed ---
         _auto_check_and_reenrich_if_needed(user_id, selected_label, df)
 
@@ -1323,6 +1396,9 @@ elif page == "Overall Review":
     df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
     df = df.dropna(subset=["datetime"]).copy()
     df["date"] = df["datetime"].dt.date
+
+    if "user" in st.session_state:
+        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     # --- HEADER AND LOGO ---
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -1518,6 +1594,9 @@ elif page == "Per Year":
 
     # Extract year from datetime
     user_df['year'] = pd.to_datetime(user_df['datetime']).dt.year
+
+    if "user" in st.session_state:
+        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     col1,col2,col3,col4,col5 = st.columns([1, 0.5, 1.8, 0.6 ,1], vertical_alignment='center')
     with col5:
@@ -1779,6 +1858,9 @@ elif page == "Per Artist":
         st.stop()
 
     df, current_label = require_current_df()
+
+    if "user" in st.session_state:
+        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     # project title and header
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -2082,6 +2164,9 @@ elif page == "Per Album":
         st.stop()
 
     df, current_label = require_current_df()
+
+    if "user" in st.session_state:
+        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     # project title
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment="center")
@@ -2408,6 +2493,9 @@ elif page == "Per Genre":
         .head(5)
     )
 
+    if "user" in st.session_state:
+        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
+
     # --- BUILD SUNBURST ---
     fig = px.sunburst(
         top_tracks,
@@ -2724,6 +2812,9 @@ elif page == "The Farm":
     else:
         track_delta_str = art_delta_str = "N/A"
 
+    if "user" in st.session_state:
+        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
+
     # -------------------- Chart scorer (per-user parquet) -------------------- #
     # Resolve the currently selected dataset's table name
     table_name = st.session_state.get("last_table_name")
@@ -2922,6 +3013,9 @@ elif page == "FUN":
             return f"https://open.spotify.com/{item_type}/{uri_value.split(':')[-1]}"
         else:
             return None
+
+    if "user" in st.session_state:
+        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')

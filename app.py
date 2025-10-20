@@ -839,14 +839,17 @@ def background_enrich(
     thread_name = threading.current_thread().name
     print(f"[enrich:{thread_name}] 🧵 Starting enrichment thread for {dataset_label}")
 
+    # ✅ Ensure all DAOs are available in this thread
+    ensure_daos_initialized_for_thread()
+
     try:
-        # ✅ Ensure DAO registry is available in this thread
         import dao_selector
         from dao_selector import DAOS
 
-        if not DAOS or "main" not in DAOS:
-            print(f"[enrich:{thread_name}] ⚙️ DAO registry missing — reloading manually.")
-            dao_selector.load_global_daos()
+        # Re-attach references for clarity
+        global status_dao, metadata_dao
+        status_dao = DAOS.get("status")
+        metadata_dao = DAOS.get("r2")
 
         # --- Helper to check cancellation mid-phase ---
         def _check_cancel(point: str = ""):
@@ -1025,6 +1028,25 @@ def info_tables_update(user_id, table_name):
 
     except Exception as e:
         print(f"[Background task error] {e}")
+
+def ensure_daos_initialized_for_thread():
+    """
+    Ensure that Cloudflare DAOs (D1 + R2) are initialized in this thread.
+    Runs safely inside background threads without re-printing schema logs.
+    """
+    try:
+        import dao_selector
+        from dao_selector import DAOS
+
+        # Already loaded → no work needed
+        if DAOS and "main" in DAOS:
+            return
+
+        # Load DAOs quietly (guarded inside dao_selector)
+        dao_selector.load_global_daos()
+
+    except Exception as e:
+        print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
 
 # --- LOGIN UI ---
 if not st.session_state.user:

@@ -1441,9 +1441,29 @@ elif page == "Overall Review":
 
     # --- World map ---
     st.markdown("<h1 style='text-align: center;'>Where you've been with your music</h1>", unsafe_allow_html=True)
+
     df_country = df.groupby("country")["minutes_played"].sum().reset_index()
-    df_country["country"] = df_country["country"].apply(lambda x: coco.convert(x, to="name_short"))
-    df_country["country_iso"] = df_country["country"].apply(lambda x: coco.convert(x, to="ISO3"))
+
+    def safe_convert_country(code):
+        try:
+            name = coco.convert(names=code, to="name_short")
+            if name in ("not found", None):
+                return None
+            return name
+        except Exception:
+            return None
+
+    def safe_convert_iso(code):
+        try:
+            iso = coco.convert(names=code, to="ISO3")
+            if iso in ("not found", None):
+                return None
+            return iso
+        except Exception:
+            return None
+
+    df_country["country"] = df_country["country"].apply(safe_convert_country)
+    df_country["country_iso"] = df_country["country"].apply(safe_convert_iso)
     df_country["hours_played"] = df_country["minutes_played"] / 60
 
     fig = px.choropleth(df_country, locations="country_iso", color="hours_played",

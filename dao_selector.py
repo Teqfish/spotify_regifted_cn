@@ -113,7 +113,7 @@ def load_global_daos():
     Safe to call multiple times (idempotent).
     """
     global DAOS
-    if DAOS and "main" in DAOS:
+    if getattr(load_global_daos, "_initialized", False) and "main" in DAOS:
         return DAOS  # already loaded
 
     from dao import CloudflareD1DAO, CloudflareDAOs
@@ -144,6 +144,7 @@ def load_global_daos():
         DAOS["main"] = cf_d1
         DAOS["r2"] = cf_r2
 
+        load_global_daos._initialized = True
         print("[dao_selector] ✅ Global DAOs loaded successfully")
     except Exception as e:
         print(f"[dao_selector] ⚠️ Failed to load DAOs: {e}")

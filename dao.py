@@ -604,7 +604,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             d1 = daos.get("main")
 
             if not d1:
-                print("[CloudflareDAO] ⚠️ No D1 DAO found — skipping D1 status sync.")
+                # print("[CloudflareDAO] ⚠️ No D1 DAO found — skipping D1 status sync.")
                 return
 
             d1.upsert_enrichment_status(
@@ -662,6 +662,9 @@ class CloudflareD1DAO:
         Ensure all required tables exist in D1 and upgrade schema if needed.
         Safe to call repeatedly — idempotent and backward compatible.
         """
+        if getattr(self, "_schema_initialized", False):
+            return  # ✅ Skip redundant reinitialization
+
         # --- Core tables (from original version) ---
         schema_sql = [
             """
@@ -744,6 +747,8 @@ class CloudflareD1DAO:
             print("[CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user")
         except Exception as e:
             print(f"[CloudflareD1DAO] ⚠️ Index creation failed: {e}")
+                # mark schema done
+        self._schema_initialized = True
 
     # ---------------- User Management ----------------
     def create_user(self, email, hashed_password, first_name, last_name):

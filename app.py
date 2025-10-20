@@ -1171,25 +1171,40 @@ if not st.session_state.user:
     st.stop()
 
 # --- PAGE NAVIGATION ---
-st.sidebar.title("Navigation")
-st.sidebar.write(f"Logged in as: **{st.session_state.user['first_name']}**")
-if st.session_state.get("current_dataset_label"):
-    show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state["current_dataset_label"])
-if st.sidebar.button("Log out", key="logout_btn"):
-    logout()
+with st.sidebar:
+    st.title("Navigation")
+    st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
 
-page = st.sidebar.radio("Go to",
-                        ["Home",
-                         "Overall Review",
-                         "Per Year",
-                         "Per Artist",
-                         "Per Album",
-                         "Per Genre",
-                         "The Farm",
-                         "FUN",
-                         "FAQs"
-                         ]
-                        )
+    # ✅ Reserve a placeholder high up in the sidebar
+    status_placeholder = st.empty()
+
+    # Render the radio menu AFTER
+    page = st.radio(
+        "Go to",
+        [
+            "Home",
+            "Overall Review",
+            "Per Year",
+            "Per Artist",
+            "Per Album",
+            "Per Genre",
+            "The Farm",
+            "FUN",
+            "FAQs"
+        ]
+    )
+
+    st.divider()
+    if st.button("Log out", key="logout_btn"):
+        logout()
+
+# ✅ Now fill the placeholder *after* layout is established
+if st.session_state.get("current_dataset_label"):
+    with status_placeholder:
+        show_enrichment_status_sidebar(
+            st.session_state.user["user_id"],
+            st.session_state["current_dataset_label"]
+        )
 
 
 # -------------------------------- Home Page --------------------------------- #

@@ -254,13 +254,24 @@ st.session_state.setdefault("_enrichment_registry", {
 
 # --- AUTH FUNCTIONS ---
 def hash_password(password: str) -> str:
-    """Securely hash a plaintext password using bcrypt."""
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    """
+    Securely hash a plaintext password using bcrypt.
+    Returns a UTF-8 string for safe DB storage.
+    """
+    if isinstance(password, bytes):
+        password = password.decode("utf-8")
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    return hashed.decode("utf-8")
 
 def verify_password(password: str, hashed: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
+    """
+    Verify a plaintext password against a bcrypt hash.
+    Handles both str/bytes safely and returns a boolean.
+    """
     try:
-        return bcrypt.checkpw(password.encode(), hashed.encode())
+        if isinstance(hashed, str):
+            hashed = hashed.encode("utf-8")
+        return bcrypt.checkpw(password.encode("utf-8"), hashed)
     except Exception:
         return False
 

@@ -22,6 +22,7 @@ import pandas as pd
 from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.colors import make_colorscale
 import re
 import secrets
 import streamlit as st
@@ -103,7 +104,7 @@ else:
     INFO_HEADLINE = storage_dao.safe_download_csv("reference/info_headline.csv")
     INFO_SHOW = storage_dao.safe_download_csv("enrichment/metadata/info_show.csv")
     INFO_AUDIOBOOK = storage_dao.safe_download_csv("enrichment/metadata/info_audiobook.csv")
-    GENRE_MAPPING = storage_dao.safe_download_csv("reference/supergenre_map.csv")
+    INFO_SUPERGENRE = storage_dao.safe_download_csv("reference/supergenre_map.csv")
 
 LOGO_BLACK = "media/assets/logo_black.svg"
 LOGO_LIGHTGREY= "media/assets/logo_lightgrey.svg"
@@ -123,6 +124,23 @@ JWT_COOKIE_PATH = "/"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
+
+# ---------- Plotly neon colorscale ----------
+neon_palette =["#e67e0e",
+               "#db6636",
+               "#d04e5e",
+               "#C53686",
+               "#ba1ead",
+               "#8D2DBF",
+               "#5f3cd1",
+               "#324BE3",
+               "#0459f5",
+               "#0677CC",
+               "#0794a2",
+               "#08B278",
+               "#09cf4e",
+               "#46D72D"]
+neon_colorscale = make_colorscale(neon_palette)
 
 def log_enrichment_thread_count(context: str = ""):
     threads = threading.enumerate()
@@ -1190,8 +1208,9 @@ with st.sidebar:
         "Go to",
         [
             "Home",
-            "Overall Review",
+            "All Time Review",
             "Per Year",
+            "Listening Insights",
             "Per Artist",
             "Per Album",
             "Per Genre",
@@ -1247,13 +1266,13 @@ if page == "Home":
             st.warning(f"Could not autostart enrichment: {e}")
 
     # ---------- Header UI ----------
-    h1, h2, h3 = st.columns([3, 3, 3], vertical_alignment="center")
+    h1, h2, h3 = st.columns([1, 1, 1], vertical_alignment="center")
     with h2:
         st.image(LOGO_SPOTGREEN, width=400)
-    st.markdown(
-        "<h1 style='text-align: center;'>Your life on Spotify, in review:</h1>",
-        unsafe_allow_html=True
-    )
+        st.markdown(
+            "<h1 style='text-align: right;'><em>Your life on Spotify</em></h1>",
+            unsafe_allow_html=True
+        )
 
     # ---------- Load DAOs ----------
     daos = get_daos()
@@ -1306,7 +1325,6 @@ if page == "Home":
         st.session_state.current_df = df
         st.session_state.current_dataset_label = selected_label
         st.session_state.last_table_name = selected_table
-        # show_enrichment_status_sidebar(user_id, selected_label)
         # --- Auto check enrichment completion & rerun if needed ---
         _auto_check_and_reenrich_if_needed(user_id, selected_label, df)
 
@@ -1314,16 +1332,15 @@ if page == "Home":
             df["minutes_played"].sum() / 60.0 if "minutes_played" in df.columns else 0.0
         )
 
-        st.markdown(
-            f"🗓️ From **{df['datetime'].min().date()}** to **{df['datetime'].max().date()}**"
-        )
-        st.markdown(f"🎧 Total listening time: **{total_hours:.2f} hours**")
+        st.divider()
+        st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
 
-        st.dataframe(df.sample(min(50, len(df))), height=600)
+        st.dataframe(df.sample(min(20, len(df))), height=300)
     else:
         st.info("You haven’t uploaded any datasets yet.")
 
     # ---------- Upload New Dataset ----------
+    st.divider()
     st.markdown("### Upload a new dataset")
 
     with st.form("upload_form", clear_on_submit=False):
@@ -1396,7 +1413,7 @@ if page == "Home":
             st.error(f"Failed to refresh dataset list: {e}")
 
 # --------------------------- Overall Review Page ---------------------------- #
-elif page == "Overall Review":
+elif page == "All Time Review":
 
     # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
@@ -1413,9 +1430,6 @@ elif page == "Overall Review":
     df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
     df = df.dropna(subset=["datetime"]).copy()
     df["date"] = df["datetime"].dt.date
-
-    if "user" in st.session_state:
-        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     # --- HEADER AND LOGO ---
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -1611,9 +1625,6 @@ elif page == "Per Year":
 
     # Extract year from datetime
     user_df['year'] = pd.to_datetime(user_df['datetime']).dt.year
-
-    if "user" in st.session_state:
-        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     col1,col2,col3,col4,col5 = st.columns([1, 0.5, 1.8, 0.6 ,1], vertical_alignment='center')
     with col5:
@@ -1859,7 +1870,435 @@ elif page == "Per Year":
     # Filter again for just top titles
     df_top10 = df_filtered[df_filtered[title_field].isin(top_titles)]
 
-    # Group for chart
+# ---------------------------- Listening Insights ---------------------------- #
+elif page == "Listening Insights":
+
+    # ✅ Ensure dataset loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df, current_label = require_current_df()
+
+    # ✅ Prepare datetime fields
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df = df.dropna(subset=["datetime"]).copy()
+    df["date"] = df["datetime"].dt.date
+    df["year"] = df["datetime"].dt.year
+
+    def format_hhmmss(minutes):
+        """Convert minutes to hh:mm:ss string."""
+        total_seconds = int(minutes * 60)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+    # --- Metadata references (already loaded globally) ---
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
+    df_album = INFO_ALBUM.copy()
+    df_supergenre_map = INFO_SUPERGENRE.copy()
+
+    # --- Header ---
+    c1, c2, c3 = st.columns([3, 3, 1], vertical_alignment="center")
+    with c3:
+        st.image(LOGO_SPOTGREEN, width=200)
+    with c2:
+        st.title("Your Listening Insights")
+
+    # --- Year + Category selectors ---
+    years = sorted(df["year"].dropna().unique())
+    year_options = ["All Time"] + [str(y) for y in years]
+
+    c1, c2 = st.columns([3, 1], vertical_alignment="center")
+    with c1:
+        selected_year = st.segmented_control(
+            "Select Year", year_options, selection_mode="single", default="All Time"
+        )
+    with c2:
+        categories = ["music", "podcast"]
+        if "audiobook" in df["category"].unique():
+            categories.append("audiobook")
+        selected_category = st.segmented_control(
+            "Category", categories, selection_mode="single", default="music"
+        )
+
+    # --- Filter data ---
+    df_filtered = df[df["category"] == selected_category].copy()
+    if selected_year != "All Time":
+        df_filtered = df_filtered[df_filtered["year"] == int(selected_year)]
+
+    # --- Merge with supergenres ---
+    df_filtered = df_filtered.merge(
+        df_artist_genre[["artist_name", "supergenre"]],
+        on="artist_name", how="left"
+    )
+
+    all_supergenres = df_supergenre_map["supergenre"].unique().tolist()
+
+    # --- Helper ---
+    def get_top(series):
+        return series.value_counts().idxmax() if not series.empty else "N/A"
+
+    # --- Highlights / Scorecards ---
+    def get_top_combined(df, artist_col="artist_name", track_col="track_name"):
+        """Return 'artist — track' for the most played or skipped entry."""
+        if df.empty or df[track_col].isna().all():
+            return "N/A"
+        top_row = (
+            df.groupby([artist_col, track_col])["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()
+            .head(1)
+        )
+        artist = top_row.iloc[0][artist_col] if not top_row.empty else "Unknown Artist"
+        track = top_row.iloc[0][track_col] if not top_row.empty else "Unknown Track"
+        return f"{artist} — {track}"
+
+    # --- Favourite Artist / Track / Supergenre ---
+    fav_artist = df_filtered["artist_name"].value_counts().idxmax() if not df_filtered.empty else "N/A"
+    fav_track_combo = get_top_combined(df_filtered)
+
+    # --- Skipped items ---
+    skips_df = df_filtered[df_filtered["skipped"] == True]
+    skipped_artist = skips_df["artist_name"].value_counts().idxmax() if not skips_df.empty else "N/A"
+    skipped_track_combo = get_top_combined(skips_df)
+
+    # --- Favourite Supergenre ---
+    fav_supergenre = (
+        df_filtered["supergenre"].value_counts().idxmax()
+        if "supergenre" in df_filtered.columns and not df_filtered["supergenre"].empty
+        else "N/A"
+    )
+
+    # --- Least Listened Genre ---
+    listened_supergenres = df_filtered["supergenre"].dropna().unique().tolist()
+    unlistened_supergenres = [s for s in all_supergenres if s not in listened_supergenres]
+    if unlistened_supergenres:
+        least_genre = ", ".join(
+            [str(s) for s in unlistened_supergenres if isinstance(s, str) and pd.notna(s)]
+        ) or "N/A"
+    else:
+        least_genre = (
+            df_filtered["supergenre"].value_counts().idxmin()
+            if not df_filtered["supergenre"].empty
+            else "N/A"
+        )
+
+    # --- Christmas + Summer favourites ---
+    df_filtered["month_day"] = df_filtered["datetime"].dt.strftime("%m-%d")
+
+    df_xmas = df_filtered[
+        (df_filtered["month_day"] >= "11-15") | (df_filtered["month_day"] <= "01-01")
+    ]
+    fav_xmas_combo = get_top_combined(df_xmas)
+
+    df_summer = df_filtered[
+        (df_filtered["month_day"] >= "06-21") & (df_filtered["month_day"] <= "09-22")
+    ]
+    fav_summer_combo = get_top_combined(df_summer)
+
+    # --- Render Scorecards ---
+    st.markdown("### Your Highlights")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("🎤 Favourite Artist", fav_artist)
+        st.metric("🎧 Favourite Supergenre", fav_supergenre)
+        st.metric("🎄 Christmas Favourite", fav_xmas_combo)
+    with c2:
+        st.metric("🎵 Favourite Track", fav_track_combo)
+        st.metric("🪩 Song of the Summer", fav_summer_combo)
+        st.metric("💤 Least Listened Genre", least_genre)
+    with c3:
+        st.metric("⏭️ Most Skipped Artist", skipped_artist)
+        st.metric("⏩ Most Skipped Track", skipped_track_combo)
+
+    # -------------------- Top 10 Artists -------------------- #
+    st.markdown("## Top 10 Artists")
+    c1, c2 = st.columns([3, 2])
+
+    top_artists = (
+        df_filtered.groupby("artist_name")["minutes_played"]
+        .sum()
+        .nlargest(10)
+        .reset_index()
+    )
+    top_artists["time"] = pd.to_timedelta(top_artists["minutes_played"], unit="m")
+    top_artists["hhmmss"] = top_artists["minutes_played"].apply(format_hhmmss)
+
+    with c1:
+        fig_artists = px.bar(
+            top_artists,
+            y="artist_name",
+            x="minutes_played",
+            orientation="h",
+            text="hhmmss",
+            color_discrete_sequence=["#1ed760"],
+            labels={"minutes_played": "Time Played (HH:MM:SS)", "artist_name": "Artist"},
+        )
+        fig_artists.update_traces(texttemplate="%{text}", textposition="outside")
+        fig_artists.update_layout(yaxis={"categoryorder": "total ascending"}, height=500)
+        st.plotly_chart(fig_artists, use_container_width=True)
+
+    with c2:
+        artist_image_list = []
+        for idx, artist in enumerate(top_artists["artist_name"], start=1):
+            match = df_artist_genre.loc[df_artist_genre["artist_name"] == artist]
+            img = match["artist_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
+            artist_image_list.append(dict(text=artist, title=f"#{idx}", img=img))
+        if artist_image_list:
+            carousel(items=artist_image_list, container_height=500)
+
+    # -------------------- Top 10 Tracks -------------------- #
+    st.markdown("## Top 10 Tracks")
+    c1, c2 = st.columns([3, 2])
+
+    top_tracks = (
+        df_filtered.groupby(["track_name", "artist_name"])["minutes_played"]
+        .sum()
+        .nlargest(10)
+        .reset_index()
+    )
+
+    top_tracks["time"] = pd.to_timedelta(top_tracks["minutes_played"], unit="m")
+    top_tracks["hhmmss"] = top_tracks["minutes_played"].apply(format_hhmmss)
+
+    # 👇 Combine artist and track into a single display label
+    top_tracks["label"] = top_tracks["artist_name"] + " — " + top_tracks["track_name"]
+
+    with c1:
+        fig_tracks = px.bar(
+            top_tracks,
+            y="label",
+            x="minutes_played",
+            orientation="h",
+            text="hhmmss",
+            color_discrete_sequence=["#1ed760"],
+            labels={
+                "minutes_played": "Time Played (HH:MM:SS)",
+                "label": ""
+            },
+            hover_data={
+                "artist_name": True,
+                "track_name": True,
+                "hhmmss": True,
+                "minutes_played": False,
+            },
+        )
+
+        fig_tracks.update_traces(
+            texttemplate="%{text}",
+            textposition="outside"
+        )
+        fig_tracks.update_layout(
+            yaxis={"categoryorder": "total ascending"},
+            height=500
+        )
+        st.plotly_chart(fig_tracks, use_container_width=True)
+
+    with c2:
+        track_image_list = []
+        for idx, row in top_tracks.iterrows():
+            track = row["track_name"]
+            match = df_album.loc[
+                df_album["album_name"].isin(
+                    df_filtered.loc[df_filtered["track_name"] == track, "album_name"]
+                )
+            ]
+            img = match["album_artwork"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
+            track_image_list.append(dict(text=row["label"], title=f"#{idx+1}", img=img))
+        if track_image_list:
+            carousel(items=track_image_list, container_height=500)
+
+    # -------------------- Extra Insights -------------------- #
+    st.markdown("## Extra Insights")
+
+    # --- Listening Trend ---
+    st.markdown("### Listening Trend")
+
+    # Ensure datetime and derive helper columns
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df["year"] = df["datetime"].dt.year
+    df["date"] = df["datetime"].dt.date
+    df["hours_played"] = df["minutes_played"] / 60
+
+    if selected_year == "All Time":
+        # Aggregate by date
+        timeline = (
+            df.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+        # Rolling average
+        timeline["rolling_avg"] = timeline["hours_played"].rolling(window=30, min_periods=1).mean()
+
+        # --- Logarithmic trendline (smooth overall growth shape) ---
+        import numpy as np
+        timeline["days_since_start"] = (pd.to_datetime(timeline["date"]) - pd.to_datetime(timeline["date"]).min()).dt.days
+        x = np.log(timeline["days_since_start"] + 1)
+        y = timeline["hours_played"]
+        coeffs = np.polyfit(x, y, 1)
+        timeline["trendline"] = coeffs[0] * x + coeffs[1]
+
+        # Plot
+        fig_timeline = px.line(
+            timeline,
+            x="date",
+            y="rolling_avg",
+            title="Listening Trend (All Time)",
+            labels={"rolling_avg": "Hours Played (30-Day Rolling Avg)", "date": "Date"},
+            color_discrete_sequence=["#1ed760"],
+        )
+
+        # Add trendline overlay
+        fig_timeline.add_scatter(
+            x=timeline["date"],
+            y=timeline["trendline"],
+            mode="lines",
+            name="Log Trendline",
+            line=dict(color="white", width=3, dash="dot"),
+        )
+
+    else:
+        # --- Compare all years on a Jan–Dec timeline ---
+        df["hours_played"] = df["minutes_played"] / 60
+        df["month_day"] = df["datetime"].dt.strftime("%m-%d")  # normalize across years
+
+        # Aggregate daily listening by year + month/day
+        timeline_all = (
+            df.groupby(["year", "month_day"])["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values(["year", "month_day"])
+        )
+
+        # Compute rolling averages within each year (smooth daily fluctuations)
+        timeline_all["rolling_avg"] = (
+            timeline_all.groupby("year")["hours_played"]
+            .transform(lambda s: s.rolling(window=30, min_periods=1).mean())
+        )
+
+        # Create proxy x-axis: fixed year (e.g., 2000) so all lines align on calendar months
+        timeline_all["date_proxy"] = pd.to_datetime("2000-" + timeline_all["month_day"], errors="coerce")
+
+        # Plot overlapping year lines
+        fig_timeline = px.line(
+            timeline_all,
+            x="date_proxy",
+            y="rolling_avg",
+            color="year",
+            title="Listening Trends by Year (30-Day Rolling Avg)",
+            labels={
+                "rolling_avg": "Hours Played (30-Day Rolling Avg)",
+                "date_proxy": "Month",
+            },
+            color_discrete_sequence=px.colors.qualitative.Set2,
+        )
+
+        fig_timeline.update_xaxes(
+            tickformat="%b",  # show Jan, Feb, Mar, ...
+            title="Month (Jan → Dec)",
+            dtick="M1"
+        )
+
+        fig_timeline.update_layout(
+            height=450,
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis_title="Hours per Day (Smoothed)",
+            legend_title="Year",
+        )
+
+    st.plotly_chart(fig_timeline, use_container_width=True)
+
+    # -------------------- Genre Diversity (100% stacked area, correctly ordered) -------------------- #
+    st.markdown("### Genre Diversity Over Time (Share of Total Listening)")
+
+    # --- Compute monthly totals per supergenre ---
+    genre_trend = (
+        df_filtered.groupby([pd.Grouper(key="datetime", freq="M"), "supergenre"])["minutes_played"]
+        .sum()
+        .reset_index()
+    )
+    genre_trend["month"] = genre_trend["datetime"].dt.to_period("M").astype(str)
+
+    # --- Pivot and normalize to percentages ---
+    genre_pivot = genre_trend.pivot(index="month", columns="supergenre", values="minutes_played").fillna(0)
+    genre_percent = genre_pivot.divide(genre_pivot.sum(axis=1), axis=0) * 100
+
+    # --- Compute total share for ordering ---
+    total_share = genre_percent.sum(axis=0).sort_values(ascending=False)
+
+    # --- Genre Diversity Over Time (Share of Total Listening) ---
+    import plotly.graph_objects as go
+    import plotly.express as px
+
+    # --- Create ordered stacked area manually ---
+    ordered_genres = total_share.index.tolist()  # bottom → top order
+    palette = ["#e67e0e",
+               "#db6636",
+               "#d04e5e",
+               "#C53686",
+               "#ba1ead",
+               "#8D2DBF",
+               "#5f3cd1",
+               "#324BE3",
+               "#0459f5",
+               "#0677CC",
+               "#0794a2",
+               "#08B278",
+               "#09cf4e",
+               "#46D72D",
+               "#7dd62f",
+               "#C9D81C",
+               "#cdbc08"][::-1]
+
+    fig_genre = go.Figure()
+
+    # Add traces in descending total-share order (bottom → top)
+    for i, genre in enumerate(ordered_genres):
+        color = palette[i % len(palette)]
+        fig_genre.add_trace(go.Scatter(
+            x=genre_percent.index,
+            y=genre_percent[genre],
+            mode="lines",
+            name=genre,
+            stackgroup="one",
+            line=dict(width=0.5, color=color),
+            fillcolor=color,
+            hoverinfo="x+y+name"
+        ))
+
+    fig_genre.update_layout(
+        title="Genre Diversity Over Time (Share of Total Listening)",
+        yaxis=dict(title="Listening Share (%)", range=[0, 100]),
+        xaxis=dict(title="Month"),
+        legend_title="Supergenre",
+        height=500,
+        plot_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified"
+    )
+
+    st.plotly_chart(fig_genre, use_container_width=True)
+
+    # 3️⃣ Listening hour heatmap
+    df_filtered["hour"] = df_filtered["datetime"].dt.hour
+    df_filtered["weekday"] = df_filtered["datetime"].dt.day_name()
+    heat = df_filtered.pivot_table(
+        index="weekday", columns="hour", values="minutes_played", aggfunc="sum", fill_value=0
+    )
+    weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    heat = heat.reindex(weekday_order)
+    fig_heat = px.imshow(
+        heat,
+        labels=dict(x="Hour of Day", y="Weekday", color="Minutes Played"),
+        title="When You Listen Most",
+        aspect="auto",
+        color_continuous_scale="Greens_r",
+    )
+    fig_heat.update_layout(height=500)
+    st.plotly_chart(fig_heat, use_container_width=True)
 
 # ----------------------------- Per Artist Page ------------------------------ #
 elif page == "Per Artist":
@@ -1875,9 +2314,6 @@ elif page == "Per Artist":
         st.stop()
 
     df, current_label = require_current_df()
-
-    if "user" in st.session_state:
-        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     # project title and header
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
@@ -2182,9 +2618,6 @@ elif page == "Per Album":
 
     df, current_label = require_current_df()
 
-    if "user" in st.session_state:
-        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
-
     # project title
     col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment="center")
     with col3:
@@ -2329,9 +2762,16 @@ elif page == "Per Album":
     with col1:
         st.markdown(f"<h2 style='text-align: center;'>{album_selected}'s weighting</h2>", unsafe_allow_html=True)
         year_range = df_music[df_music.album_name == album_selected].datetime.dt.year.sort_values().unique().tolist()
-        year_selected = st.segmented_control(
-            "Year", year_range, selection_mode="single", default=df_music.datetime.dt.year.max()
-        )
+        if year_range:
+            year_selected = st.segmented_control(
+                "Year",
+                year_range,
+                selection_mode="single",
+                default=df_music.datetime.dt.year.max()
+            )
+        else:
+            st.warning("No year data available in this dataset.")
+            st.stop()
 
         # --- Polar bar chart ---
         df_polar = (
@@ -2509,9 +2949,6 @@ elif page == "Per Genre":
         .groupby(['year', 'supergenre', 'artist_name'])
         .head(5)
     )
-
-    if "user" in st.session_state:
-        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     # --- BUILD SUNBURST ---
     fig = px.sunburst(
@@ -2829,9 +3266,6 @@ elif page == "The Farm":
     else:
         track_delta_str = art_delta_str = "N/A"
 
-    if "user" in st.session_state:
-        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
-
     # -------------------- Chart scorer (per-user parquet) -------------------- #
     # Resolve the currently selected dataset's table name
     table_name = st.session_state.get("last_table_name")
@@ -3030,9 +3464,6 @@ elif page == "FUN":
             return f"https://open.spotify.com/{item_type}/{uri_value.split(':')[-1]}"
         else:
             return None
-
-    if "user" in st.session_state:
-        show_enrichment_status_sidebar(st.session_state.user["user_id"], st.session_state.get("current_dataset_label", ""))
 
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')

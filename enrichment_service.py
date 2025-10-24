@@ -1168,6 +1168,8 @@ class MetadataEnricher:
         unlisted_mask = out["supergenre"].isna()
         out.loc[unlisted_mask, "supergenre"] = "Unlisted"
 
+        self.log(f"[debug] Saving {len(out)} artists to buffer → {out[['artist_id','artist_name']].head(3).to_dict('records')}")
+
         # Save unlisted separately into buffer
         if not hasattr(self, "buf_artists_unlisted"):
             self.buf_artists_unlisted = []
@@ -2003,6 +2005,7 @@ class MetadataEnricher:
                                         detail=f"breadth_first(artists) • year={y} • +{len(batch)}")
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
+                    self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip()}
 
             # --- Shows ---
             for y in years_show:
@@ -2019,6 +2022,7 @@ class MetadataEnricher:
                                         detail=f"breadth_first(shows) • year={y} • +{len(batch)}")
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
+                    self.seen_shows |= {s.strip().lower() for s in batch}
 
             # --- Audiobooks ---
             for y in years_book:
@@ -2035,6 +2039,7 @@ class MetadataEnricher:
                                         detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}")
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
+                    self.seen_audiobooks |= {t.strip().lower() for t in batch}
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """
@@ -2493,30 +2498,82 @@ class MetadataEnricher:
 
     # --- Filters against master tables ---
     def _load_master_tables(self):
-        """Load master info tables and initialize seen_* sets for enrichment filtering."""
+        """Load master info tables and initialize seen_* sets for enrichment filtering.
+        If any master table is missing, create it with the correct schema and upload to storage.
+        """
+        # --- Define canonical schemas ---
+        schemas = {
+            "info_artist_genre.csv": [
+                "artist_id", "artist_popularity", "supergenre", "artist_image", "artist_name", "primary_genre"
+            ],
+            "info_album.csv": [
+                "album_id", "artist_name", "release_date", "album_name", "album_artwork"
+            ],
+            "info_track.csv": [
+                "track_id", "user_id", "release_date", "track_name", "artist_name",
+                "track_popularity", "album_name", "explicit"
+            ],
+            "info_show.csv": [
+                "show_id", "publisher", "show_name", "show_image", "show_description"
+            ],
+            "info_audiobook.csv": [
+                "audiobook_id", "audiobook_image", "audiobook_title", "publisher", "authors"
+            ],
+            "info_artist_genre_unlisted.csv": [
+                "artist_id", "artist_popularity", "supergenre", "artist_image", "artist_name", "primary_genre"
+            ],
+        }
+
+        def ensure_master_exists(filename: str):
+            """Ensure a master table exists in R2, otherwise create an empty one with headers."""
+            try:
+                df = self.storage.get_master(filename)
+                if df.empty and len(df.columns) == 0:
+                    self.log(f"[master:init] ⚠️ {filename} found empty — recreating headers.")
+                    df = pd.DataFrame(columns=schemas[filename])
+                    self.storage.upload_csv(df, path=f"enrichment/metadata/{filename}", overwrite=True)
+                elif not all(col in df.columns for col in schemas[filename]):
+                    self.log(f"[master:init] ⚠️ {filename} missing expected columns — resetting schema.")
+                    df = pd.DataFrame(columns=schemas[filename])
+                    self.storage.upload_csv(df, path=f"enrichment/metadata/{filename}", overwrite=True)
+                return df
+            except FileNotFoundError:
+                self.log(f"[master:init] ℹ️ {filename} missing — creating new empty file.")
+                df = pd.DataFrame(columns=schemas[filename])
+                self.storage.upload_csv(df, path=f"enrichment/metadata/{filename}", overwrite=True)
+                return df
+            except Exception as e:
+                self.log(f"[master:init] ❌ Could not ensure {filename}: {e}")
+                return pd.DataFrame(columns=schemas[filename])
+
+        # --- Load or create all masters safely ---
         try:
             if hasattr(self.storage, "get_master"):
-                self.master_artists     = self.storage.get_master("info_artist_genre.csv")
-                self.master_albums      = self.storage.get_master("info_album.csv")
-                self.master_tracks      = self.storage.get_master("info_track.csv")
-                self.master_shows       = self.storage.get_master("info_show.csv")
-                self.master_audiobooks  = self.storage.get_master("info_audiobook.csv")
-                self.master_unlisted    = self.storage.get_master("info_artist_genre_unlisted.csv")
+                self.master_artists     = ensure_master_exists("info_artist_genre.csv")
+                self.master_albums      = ensure_master_exists("info_album.csv")
+                self.master_tracks      = ensure_master_exists("info_track.csv")
+                self.master_shows       = ensure_master_exists("info_show.csv")
+                self.master_audiobooks  = ensure_master_exists("info_audiobook.csv")
+                self.master_unlisted    = ensure_master_exists("info_artist_genre_unlisted.csv")
             else:
-                self.master_artists    = pd.DataFrame()
-                self.master_albums     = pd.DataFrame()
-                self.master_tracks     = pd.DataFrame()
-                self.master_shows      = pd.DataFrame()
-                self.master_audiobooks = pd.DataFrame()
-                self.master_unlisted   = pd.DataFrame()
+                self.master_artists    = pd.DataFrame(columns=schemas["info_artist_genre.csv"])
+                self.master_albums     = pd.DataFrame(columns=schemas["info_album.csv"])
+                self.master_tracks     = pd.DataFrame(columns=schemas["info_track.csv"])
+                self.master_shows      = pd.DataFrame(columns=schemas["info_show.csv"])
+                self.master_audiobooks = pd.DataFrame(columns=schemas["info_audiobook.csv"])
+                self.master_unlisted   = pd.DataFrame(columns=schemas["info_artist_genre_unlisted.csv"])
         except Exception as e:
-            print("[master] load failed:", e)
-            self.master_artists    = pd.DataFrame()
-            self.master_albums     = pd.DataFrame()
-            self.master_tracks     = pd.DataFrame()
-            self.master_shows      = pd.DataFrame()
-            self.master_audiobooks = pd.DataFrame()
-            self.master_unlisted   = pd.DataFrame()
+            self.log(f"[master] load failed: {e}")
+            self.master_artists    = pd.DataFrame(columns=schemas["info_artist_genre.csv"])
+            self.master_albums     = pd.DataFrame(columns=schemas["info_album.csv"])
+            self.master_tracks     = pd.DataFrame(columns=schemas["info_track.csv"])
+            self.master_shows      = pd.DataFrame(columns=schemas["info_show.csv"])
+            self.master_audiobooks = pd.DataFrame(columns=schemas["info_audiobook.csv"])
+            self.master_unlisted   = pd.DataFrame(columns=schemas["info_artist_genre_unlisted.csv"])
+
+        # --- Debug logs ---
+        self.log(f"[debug] master_artists.columns = {list(self.master_artists.columns)}")
+        self.log(f"[debug] master_artists.head(5) = {self.master_artists.head(5).to_dict('records')}")
 
         # ✅ Initialize seen_* sets based on what’s already in master tables (or empty if missing)
         self.seen_artists = (
@@ -2555,7 +2612,7 @@ class MetadataEnricher:
             else set()
         )
 
-        # ✅ Log results for clarity (optional)
+        # ✅ Log summary
         self.log(
             f"[master] Loaded: artists={len(self.master_artists)}, "
             f"albums={len(self.master_albums)}, tracks={len(self.master_tracks)}, "
@@ -2567,16 +2624,41 @@ class MetadataEnricher:
             f"tracks={len(self.seen_tracks)}, shows={len(self.seen_shows)}, audiobooks={len(self.seen_audiobooks)}"
         )
 
+        if not self.master_artists.empty:
+            missing_cols = [c for c in ["artist_name"] if c not in self.master_artists.columns]
+            if missing_cols:
+                self.log(f"[master] ⚠️ Missing columns in artist master: {missing_cols}")
+            else:
+                self.log(f"[master] ✅ Master artist table loaded with {len(self.master_artists)} rows.")
+
     def _filter_known_artists(self, names: list[str]) -> list[str]:
         """Skip artists already present in master or already seen in this run."""
         before = len(names)
-        known = set(n.lower() for n in self.seen_artists if isinstance(n, str))
-        if not self.master_artists.empty and "artist_name" in self.master_artists.columns:
-            known |= set(self.master_artists["artist_name"].dropna().astype(str).str.lower())
-        out = [n for n in names if isinstance(n, str) and n.strip() and n.lower() not in known]
+
+        # Normalize input list
+        normalized_names = {str(n).strip().lower() for n in names if isinstance(n, str) and n.strip()}
+
+        # Merge known sources
+        known = set()
+        if hasattr(self, "seen_artists"):
+            known |= {str(n).strip().lower() for n in self.seen_artists if isinstance(n, str)}
+
+        if hasattr(self, "master_artists") and not self.master_artists.empty:
+            if "artist_name" in self.master_artists.columns:
+                known |= set(self.master_artists["artist_name"].dropna().astype(str).str.strip().str.lower())
+
+        # Identify truly new names
+        out = [n for n in names if str(n).strip().lower() not in known]
+
         filtered = before - len(out)
         if filtered > 0:
-            self.log(f"[filter] Artists filtered out: {filtered}/{before}")
+            self.log(f"[filter] Artists filtered out: {filtered}/{before} (remaining={len(out)})")
+
+        self.log(f"[filter:debug] master_artists.columns = {list(self.master_artists.columns)}")
+        self.log(f"[filter:debug] sample master artist names: {self.master_artists['artist_name'].head(5).tolist()}")
+        self.log(f"[filter:debug] incoming artist sample: {names[:5]}")
+        self.log(f"[debug] Filtering {len(names)} artists, seen_artists={len(self.seen_artists)}")
+
         return out
 
     def _filter_known_album_pairs(self, pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:

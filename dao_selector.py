@@ -51,6 +51,7 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
       - "metadata":  StorageDAO (where info_*.csv go)
       - "logs":      Log DAO (has .log(user_id, label, where, msg, ...))
       - "main":      The combined SupabaseDAOs when in supabase mode
+      - "r2":        R2 DAO for enrichment status / metadata / logs (added for consistency)
     """
     mode = (server_mode or get_server_mode()).lower()
 
@@ -61,13 +62,12 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
             "status":    LocalStatusDAO(base_dir="datasets/enrichment/status"),
             "metadata":  LocalMetadataDAO(base_dir="datasets/enrichment/metadata"),
             "logs":      LocalLogDAO(base_dir="datasets/enrichment/logs"),
-            # "main": None  # not needed in local mode
         }
 
     elif mode == "cloudflare":
         cf_conf = st.secrets["cloudflare"]
 
-        # --- R2 STORAGE (existing) ---
+        # --- R2 STORAGE (object storage) ---
         cf_r2 = CloudflareDAOs(
             account_id=cf_conf["account_id"],
             access_key=cf_conf["access_key"],
@@ -77,31 +77,27 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
         )
 
         # --- D1 DATABASE (new) ---
-        if not hasattr(st.session_state, "_d1_initialized"):
+        if "_d1_instance" not in st.session_state:
             cf_d1 = CloudflareD1DAO(
                 account_id=cf_conf["account_id"],
                 database_id=cf_conf["database_id"],
                 api_token=cf_conf["token"],
             )
             cf_d1.init_tables_if_missing()
+            st.session_state["_d1_instance"] = cf_d1
             st.session_state["_d1_initialized"] = True
             print("[dao_selector] ✅ Initialized Cloudflare D1 (first time this session)")
         else:
-            cf_d1 = CloudflareD1DAO(
-                account_id=cf_conf["account_id"],
-                database_id=cf_conf["database_id"],
-                api_token=cf_conf["token"],
-            )
-
-        # Ensure tables exist
-        cf_d1.init_tables_if_missing()
+            cf_d1 = st.session_state["_d1_instance"]
+            
 
         return {
-            "main": cf_d1,         # ← use D1 for all database tables (users, uploads, etc.)
-            "status": cf_r2,       # ← still use R2 for JSON-based enrichment status files
-            "metadata": cf_r2,     # ← R2 for metadata CSVs
-            "logs": cf_r2,         # ← R2 for logs
-            "user_data": cf_r2,    # ← R2 for uploaded datasets
+            "main": cf_d1,      # D1 for structured data
+            "r2": cf_r2,        # ✅ R2 explicitly included (fix)
+            "status": cf_r2,    # R2 for JSON-based enrichment status files
+            "metadata": cf_r2,  # R2 for metadata CSVs
+            "logs": cf_r2,      # R2 for logs
+            "user_data": cf_r2, # R2 for uploaded datasets
         }
 
     else:
@@ -109,10 +105,11 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
 
 def load_global_daos():
     """
-    Ensures the global DAOS registry is populated.
+    Ensures the global DAOS registry is populated and consistent.
     Safe to call multiple times (idempotent).
     """
     global DAOS
+
     if getattr(load_global_daos, "_initialized", False) and "main" in DAOS:
         return DAOS  # already loaded
 
@@ -134,21 +131,25 @@ def load_global_daos():
         cf_d1 = CloudflareD1DAO(
             account_id=cf_conf["account_id"],
             database_id=cf_conf["database_id"],
-            api_token=cf_conf["token"],  # note: this is "token" in your secrets.toml
+            api_token=cf_conf["token"],
         )
 
-        # --- Ensure D1 tables exist (safe no-op if already created) ---
-        if not getattr(cf_d1, "_schema_initialized", False):
-            cf_d1.init_tables_if_missing()
+        # Ensure tables exist (safe no-op if already created)
+        cf_d1.init_tables_if_missing()
 
         # --- Register globally ---
         DAOS["main"] = cf_d1
-        DAOS["r2"] = cf_r2
+        DAOS["r2"] = cf_r2          # ✅ Ensure r2 always registered
+        DAOS["status"] = cf_r2
+        DAOS["metadata"] = cf_r2
+        DAOS["logs"] = cf_r2
+        DAOS["user_data"] = cf_r2
 
         load_global_daos._initialized = True
         print("[dao_selector] ✅ Global DAOs loaded successfully")
+
     except Exception as e:
         print(f"[dao_selector] ⚠️ Failed to load DAOs: {e}")
-        DAOS = {}
+        DAOS.clear()  # safer than DAOS = {} to preserve global reference
 
     return DAOS

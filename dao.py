@@ -291,7 +291,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     # ------------------------------------------------------------
 
     def _status_key(self, user_id: str, label: str) -> str:
-        return f"enrichment/status/{user_id}_{label}.json"
+        return f"enrichment/status/{user_id}_{label}_status.json"
 
     def set_status(self, user_id: str, dataset_label: str, *, phase: str, detail: str = "", total: Optional[int] = None):
         payload = {
@@ -334,21 +334,64 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         self._maybe_write_d1_status(data)
 
     def finish_status(self, user_id: str, dataset_label: str, *, ok: bool = True, detail: str = ""):
+        """
+        Marks an enrichment run as finished (success or error).
+        Prevents 'phase': 'done' leakage by preserving the previous phase or
+        defaulting to 'final' for clarity.
+        """
+        try:
+            # Try to preserve the current phase if a status record exists
+            current = self.read_status(user_id, dataset_label)
+            prev_phase = current.get("phase", "final") if isinstance(current, dict) else "final"
+        except Exception:
+            prev_phase = "final"
+
         payload = {
             "user_id": user_id,
             "dataset_label": dataset_label,
             "status": "done" if ok else "error",
-            "phase": "done",
+            "phase": prev_phase,  # ✅ preserve or fall back to "final"
             "detail": detail,
             "batches_done": 1,
             "total_batches": 1,
             "percent": 100 if ok else None,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        self._upload_json(self._status_key(user_id, dataset_label), payload)
 
-        # ✅ Mirror to D1
+        # Save to R2 and mirror to D1
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
         self._maybe_write_d1_status(payload)
+
+    def read_status(self, user_id: str, dataset_label: str) -> dict:
+        """
+        Retrieve the current enrichment status for a given user and dataset.
+        Reads the JSON file from R2 (primary) and falls back to D1 if needed.
+        """
+        key = self._status_key(user_id, dataset_label)
+        try:
+            raw = self._get_object(key)
+            if raw:
+                return json.loads(raw)
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"[CloudflareDAOs] ⚠️ Failed to read R2 status: {e}")
+
+        # --- Optional fallback: try D1 if available ---
+        try:
+            if hasattr(self, "_maybe_read_d1_status"):
+                d1_data = self._maybe_read_d1_status(user_id, dataset_label)
+                if d1_data:
+                    return d1_data
+        except Exception as e:
+            print(f"[CloudflareDAOs] ⚠️ Failed to read D1 fallback: {e}")
+
+        return {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "unknown",
+            "detail": "No status found in R2 or D1",
+        }
 
     # ------------------------------------------------------------
     # METADATA + MASTERS + CHECKPOINTS
@@ -621,6 +664,8 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             print(f"[CloudflareDAO] 🧭 Wrote status to D1 for {payload.get('dataset_label')} → {payload.get('phase')}")
         except Exception as e:
             print(f"[CloudflareDAO] ⚠️ D1 status write failed: {e}")
+
+    get_status = read_status
 
 class CloudflareD1DAO:
     """Data Access Object for Cloudflare D1 via REST API."""

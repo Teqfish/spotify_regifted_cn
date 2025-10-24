@@ -1,0 +1,2083 @@
+2025-10-23 21:37:44,491 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:37:44,902 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:37:44,903 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:40:14,114 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:40:14,493 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:40:14,494 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:40:21,489 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:40:21,860 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:40:21,860 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:40:24,008 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:40:24,372 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:40:24,372 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:45:48,932 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:45:49,317 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:45:49,317 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:45:50,308 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:45:50,640 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:45:50,640 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:46:50,180 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:46:50,579 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:46:50,579 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:46:51,226 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:46:51,542 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:46:51,543 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:48:25,943 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:48:27,196 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:48:27,196 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:48:30,054 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:48:30,368 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:48:30,369 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:50:47,391 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:50:47,759 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:50:47,759 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 21:50:48,646 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 21:50:48,988 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 21:50:48,988 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:00:30,065 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_Charlie_20251023-220026_history.csv
+2025-10-23 22:00:30,250 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 22:00:30,435 [INFO] [upload_event] Recorded: user=58d0bd65d3f40b92, label=Charlie, status=completed
+2025-10-23 22:00:30,578 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 22:00:32,676 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:00:33,140 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:00:33,141 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:00:33,397 [INFO] [sidebar_status] ⚠️ Failed to read R2 JSON: No such object in R2: enrichment/status/58d0bd65d3f40b92_Charlie.json
+2025-10-23 22:00:33,400 [INFO] [enrich:background_enrich_Charlie] Starting enrichment thread for Charlie
+2025-10-23 22:00:33,400 [INFO] [thread_monitor] 1 enrichment thread(s) active after starting new enrichment.
+2025-10-23 22:00:33,403 [INFO] [enrich] 🚀 Started enrichment thread for 'Charlie'
+2025-10-23 22:00:33,574 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:00:33,574 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — sanity: Starting Spotify sanity check
+2025-10-23 22:00:33,692 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:00:33,693 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — thread: Thread started for Charlie
+2025-10-23 22:00:34,175 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:00:34,176 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — sanity: Starting Discogs sanity check
+2025-10-23 22:00:34,902 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:00:34,903 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — enrichment: Starting run_all()
+2025-10-23 22:00:35,065 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 22:00:35,258 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → running
+2025-10-23 22:00:36,116 [INFO] [enrich] [debug] master_artists.columns = []
+2025-10-23 22:00:36,321 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:00:36,321 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:planning
+2025-10-23 22:00:36,324 [INFO] [enrich] [debug] master_artists.head(5) = []
+2025-10-23 22:00:36,538 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:00:36,539 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:planning
+2025-10-23 22:00:36,577 [INFO] [enrich] [master] Loaded: artists=0, albums=34459, tracks=4333, shows=91, audiobooks=29
+2025-10-23 22:00:36,783 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:00:36,783 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:planning
+2025-10-23 22:00:36,783 [INFO] [enrich] [master] Seen sets initialized: artists=0, albums=34247, tracks=4333, shows=91, audiobooks=29
+2025-10-23 22:00:37,004 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:00:37,004 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:planning
+2025-10-23 22:00:37,057 [INFO] [DEBUG] Categories summary in self.df:
+2025-10-23 22:00:37,058 [INFO] category
+2025-10-23 22:00:37,058 [INFO] music        73243
+2025-10-23 22:00:37,058 [INFO] podcast        156
+2025-10-23 22:00:37,058 [INFO] audiobook       52
+2025-10-23 22:00:37,058 [INFO] Name: count, dtype: int64
+2025-10-23 22:00:37,075 [INFO]                        datetime  ms_played country track_name artist_name album_name spotify_track_uri episode_name episode_show_name  ... shuffle skipped seconds_played minutes_played  year month day  username   category
+2025-10-23 22:00:37,075 [INFO] 48130 2024-02-25 14:02:51+00:00      64785      GB       None        None       None              None         None              None  ...   False   False         64.785           1.08  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48131 2024-02-25 14:07:53+00:00     210921      GB       None        None       None              None         None              None  ...   False   False        210.921           3.52  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48132 2024-02-25 14:12:39+00:00     264671      GB       None        None       None              None         None              None  ...   False   False        264.671           4.41  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48133 2024-02-25 14:16:20+00:00     220503      GB       None        None       None              None         None              None  ...   False   False        220.503           3.68  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48134 2024-02-25 14:22:28+00:00     367940      GB       None        None       None              None         None              None  ...   False   False        367.940           6.13  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48135 2024-02-25 14:30:41+00:00     492548      GB       None        None       None              None         None              None  ...   False   False        492.548           8.21  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48136 2024-02-25 14:40:28+00:00     585352      GB       None        None       None              None         None              None  ...   False   False        585.352           9.76  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48137 2024-02-25 14:57:54+00:00    1046559      GB       None        None       None              None         None              None  ...   False   False       1046.559          17.44  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48138 2024-02-25 15:10:46+00:00     512613      GB       None        None       None              None         None              None  ...   False   False        512.613           8.54  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48139 2024-02-25 15:11:43+00:00      54415      GB       None        None       None              None         None              None  ...   False    True         54.415           0.91  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48148 2024-02-25 15:50:29+00:00     719939      GB       None        None       None              None         None              None  ...   False   False        719.939          12.00  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48149 2024-02-25 15:59:36+00:00     545218      GB       None        None       None              None         None              None  ...   False   False        545.218           9.09  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48150 2024-02-25 16:18:42+00:00    1146773      GB       None        None       None              None         None              None  ...   False   False       1146.773          19.11  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48151 2024-02-25 16:26:52+00:00     488882      GB       None        None       None              None         None              None  ...   False   False        488.882           8.15  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48152 2024-02-25 16:38:47+00:00     714183      GB       None        None       None              None         None              None  ...   False   False        714.183          11.90  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48153 2024-02-25 17:02:07+00:00    1399712      GB       None        None       None              None         None              None  ...   False   False       1399.712          23.33  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48154 2024-02-25 17:18:06+00:00     957596      GB       None        None       None              None         None              None  ...   False   False        957.596          15.96  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48155 2024-02-25 17:30:00+00:00     714295      GB       None        None       None              None         None              None  ...   False   False        714.295          11.90  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48156 2024-02-25 17:39:45+00:00     585066      GB       None        None       None              None         None              None  ...   False   False        585.066           9.75  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 48157 2024-02-25 17:40:16+00:00       6886      GB       None        None       None              None         None              None  ...   False    True          6.886           0.11  2024     2  25   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 50255 2024-05-04 12:16:21+00:00     478143      GB       None        None       None              None         None              None  ...   False    True        478.143           7.97  2024     5   4   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 50256 2024-05-04 12:17:00+00:00       1555      GB       None        None       None              None         None              None  ...   False    True          1.555           0.03  2024     5   4   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 50257 2024-05-04 12:23:47+00:00     406188      GB       None        None       None              None         None              None  ...   False    True        406.188           6.77  2024     5   4   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 50258 2024-05-04 12:34:10+00:00     462784      GB       None        None       None              None         None              None  ...   False    True        462.784           7.71  2024     5   4   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 52934 2024-08-24 07:22:14+00:00      16470      GB       None        None       None              None         None              None  ...   False   False         16.470           0.27  2024     8  24   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 56965 2025-02-01 08:02:43+00:00     192530      GB       None        None       None              None         None              None  ...   False    True        192.530           3.21  2025     2   1   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 56966 2025-02-01 08:16:04+00:00     193660      GB       None        None       None              None         None              None  ...   False   False        193.660           3.23  2025     2   1   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 58059 2025-02-28 18:00:25+00:00     478143      GB       None        None       None              None         None              None  ...   False    True        478.143           7.97  2025     2  28   Charlie  audiobook
+2025-10-23 22:00:37,075 [INFO] 58068 2025-02-28 19:22:50+00:00     123594      GB       None        None       None              None         None              None  ...   False   False        123.594           2.06  2025     2  28   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58401 2025-03-09 21:18:05+00:00     694880      GB       None        None       None              None         None              None  ...   False   False        694.880          11.58  2025     3   9   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58620 2025-03-16 08:39:12+00:00       4238      GB       None        None       None              None         None              None  ...   False    True          4.238           0.07  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58621 2025-03-16 08:39:14+00:00        666      GB       None        None       None              None         None              None  ...   False    True          0.666           0.01  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58622 2025-03-16 08:39:21+00:00       6268      GB       None        None       None              None         None              None  ...   False    True          6.268           0.10  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58623 2025-03-16 08:39:23+00:00       1460      GB       None        None       None              None         None              None  ...   False    True          1.460           0.02  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58624 2025-03-16 08:39:29+00:00       3635      GB       None        None       None              None         None              None  ...   False    True          3.635           0.06  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58625 2025-03-16 08:39:33+00:00       1961      GB       None        None       None              None         None              None  ...   False    True          1.961           0.03  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58626 2025-03-16 08:39:35+00:00       1263      GB       None        None       None              None         None              None  ...   False    True          1.263           0.02  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58627 2025-03-16 08:39:41+00:00       5634      GB       None        None       None              None         None              None  ...   False    True          5.634           0.09  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58628 2025-03-16 08:39:45+00:00       2194      GB       None        None       None              None         None              None  ...   False    True          2.194           0.04  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58629 2025-03-16 08:40:02+00:00       3954      GB       None        None       None              None         None              None  ...   False    True          3.954           0.07  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58630 2025-03-16 08:40:04+00:00       1535      GB       None        None       None              None         None              None  ...   False    True          1.535           0.03  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58631 2025-03-16 08:40:06+00:00        454      GB       None        None       None              None         None              None  ...   False    True          0.454           0.01  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58632 2025-03-16 08:48:53+00:00     448869      GB       None        None       None              None         None              None  ...   False   False        448.869           7.48  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58633 2025-03-16 08:55:29+00:00     394827      GB       None        None       None              None         None              None  ...   False   False        394.827           6.58  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58634 2025-03-16 08:59:55+00:00     252269      GB       None        None       None              None         None              None  ...   False   False        252.269           4.20  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58635 2025-03-16 09:03:15+00:00     196561      GB       None        None       None              None         None              None  ...   False    True        196.561           3.28  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58636 2025-03-16 09:03:22+00:00       2793      GB       None        None       None              None         None              None  ...   False    True          2.793           0.05  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58637 2025-03-16 09:06:37+00:00     188946      GB       None        None       None              None         None              None  ...   False   False        188.946           3.15  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58638 2025-03-16 09:09:56+00:00     198423      GB       None        None       None              None         None              None  ...   False   False        198.423           3.31  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58639 2025-03-16 09:17:02+00:00     424267      GB       None        None       None              None         None              None  ...   False   False        424.267           7.07  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58640 2025-03-16 09:28:20+00:00      76001      GB       None        None       None              None         None              None  ...   False   False         76.001           1.27  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 58641 2025-03-16 10:04:21+00:00      54588      GB       None        None       None              None         None              None  ...   False    True         54.588           0.91  2025     3  16   Charlie  audiobook
+2025-10-23 22:00:37,076 [INFO] 
+2025-10-23 22:00:37,076 [INFO] [52 rows x 25 columns]
+2025-10-23 22:01:00,857 [INFO] [enrich] [run_all] Planning complete. Estimated total batches = 623
+2025-10-23 22:01:01,090 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:01,090 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:planning
+2025-10-23 22:01:01,222 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 22:01:01,569 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → planning
+2025-10-23 22:01:01,569 [INFO] [enrich] [run_all] Building priority sets…
+2025-10-23 22:01:01,774 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:01,774 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:planning
+2025-10-23 22:01:01,817 [INFO] [enrich] [run_all] Top overall counts: artists=10, shows=10, books=10
+2025-10-23 22:01:02,064 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:02,064 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:planning
+2025-10-23 22:01:02,064 [INFO] [DEBUG] Categories summary in self.df:
+2025-10-23 22:01:02,066 [INFO] category
+2025-10-23 22:01:02,066 [INFO] music        73243
+2025-10-23 22:01:02,066 [INFO] podcast        156
+2025-10-23 22:01:02,066 [INFO] audiobook       52
+2025-10-23 22:01:02,066 [INFO] Name: count, dtype: int64
+2025-10-23 22:01:02,086 [INFO]                        datetime  ms_played country track_name artist_name album_name spotify_track_uri episode_name episode_show_name  ... shuffle skipped seconds_played minutes_played  year month day  username   category
+2025-10-23 22:01:02,086 [INFO] 48130 2024-02-25 14:02:51+00:00      64785      GB       None        None       None              None         None              None  ...   False   False         64.785           1.08  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,086 [INFO] 48131 2024-02-25 14:07:53+00:00     210921      GB       None        None       None              None         None              None  ...   False   False        210.921           3.52  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,086 [INFO] 48132 2024-02-25 14:12:39+00:00     264671      GB       None        None       None              None         None              None  ...   False   False        264.671           4.41  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,086 [INFO] 48133 2024-02-25 14:16:20+00:00     220503      GB       None        None       None              None         None              None  ...   False   False        220.503           3.68  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,086 [INFO] 48134 2024-02-25 14:22:28+00:00     367940      GB       None        None       None              None         None              None  ...   False   False        367.940           6.13  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,086 [INFO] 48135 2024-02-25 14:30:41+00:00     492548      GB       None        None       None              None         None              None  ...   False   False        492.548           8.21  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,086 [INFO] 48136 2024-02-25 14:40:28+00:00     585352      GB       None        None       None              None         None              None  ...   False   False        585.352           9.76  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,086 [INFO] 48137 2024-02-25 14:57:54+00:00    1046559      GB       None        None       None              None         None              None  ...   False   False       1046.559          17.44  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,086 [INFO] 48138 2024-02-25 15:10:46+00:00     512613      GB       None        None       None              None         None              None  ...   False   False        512.613           8.54  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48139 2024-02-25 15:11:43+00:00      54415      GB       None        None       None              None         None              None  ...   False    True         54.415           0.91  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48148 2024-02-25 15:50:29+00:00     719939      GB       None        None       None              None         None              None  ...   False   False        719.939          12.00  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48149 2024-02-25 15:59:36+00:00     545218      GB       None        None       None              None         None              None  ...   False   False        545.218           9.09  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48150 2024-02-25 16:18:42+00:00    1146773      GB       None        None       None              None         None              None  ...   False   False       1146.773          19.11  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48151 2024-02-25 16:26:52+00:00     488882      GB       None        None       None              None         None              None  ...   False   False        488.882           8.15  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48152 2024-02-25 16:38:47+00:00     714183      GB       None        None       None              None         None              None  ...   False   False        714.183          11.90  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48153 2024-02-25 17:02:07+00:00    1399712      GB       None        None       None              None         None              None  ...   False   False       1399.712          23.33  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48154 2024-02-25 17:18:06+00:00     957596      GB       None        None       None              None         None              None  ...   False   False        957.596          15.96  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48155 2024-02-25 17:30:00+00:00     714295      GB       None        None       None              None         None              None  ...   False   False        714.295          11.90  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48156 2024-02-25 17:39:45+00:00     585066      GB       None        None       None              None         None              None  ...   False   False        585.066           9.75  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 48157 2024-02-25 17:40:16+00:00       6886      GB       None        None       None              None         None              None  ...   False    True          6.886           0.11  2024     2  25   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 50255 2024-05-04 12:16:21+00:00     478143      GB       None        None       None              None         None              None  ...   False    True        478.143           7.97  2024     5   4   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 50256 2024-05-04 12:17:00+00:00       1555      GB       None        None       None              None         None              None  ...   False    True          1.555           0.03  2024     5   4   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 50257 2024-05-04 12:23:47+00:00     406188      GB       None        None       None              None         None              None  ...   False    True        406.188           6.77  2024     5   4   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 50258 2024-05-04 12:34:10+00:00     462784      GB       None        None       None              None         None              None  ...   False    True        462.784           7.71  2024     5   4   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 52934 2024-08-24 07:22:14+00:00      16470      GB       None        None       None              None         None              None  ...   False   False         16.470           0.27  2024     8  24   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 56965 2025-02-01 08:02:43+00:00     192530      GB       None        None       None              None         None              None  ...   False    True        192.530           3.21  2025     2   1   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 56966 2025-02-01 08:16:04+00:00     193660      GB       None        None       None              None         None              None  ...   False   False        193.660           3.23  2025     2   1   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58059 2025-02-28 18:00:25+00:00     478143      GB       None        None       None              None         None              None  ...   False    True        478.143           7.97  2025     2  28   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58068 2025-02-28 19:22:50+00:00     123594      GB       None        None       None              None         None              None  ...   False   False        123.594           2.06  2025     2  28   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58401 2025-03-09 21:18:05+00:00     694880      GB       None        None       None              None         None              None  ...   False   False        694.880          11.58  2025     3   9   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58620 2025-03-16 08:39:12+00:00       4238      GB       None        None       None              None         None              None  ...   False    True          4.238           0.07  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58621 2025-03-16 08:39:14+00:00        666      GB       None        None       None              None         None              None  ...   False    True          0.666           0.01  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58622 2025-03-16 08:39:21+00:00       6268      GB       None        None       None              None         None              None  ...   False    True          6.268           0.10  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58623 2025-03-16 08:39:23+00:00       1460      GB       None        None       None              None         None              None  ...   False    True          1.460           0.02  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58624 2025-03-16 08:39:29+00:00       3635      GB       None        None       None              None         None              None  ...   False    True          3.635           0.06  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58625 2025-03-16 08:39:33+00:00       1961      GB       None        None       None              None         None              None  ...   False    True          1.961           0.03  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58626 2025-03-16 08:39:35+00:00       1263      GB       None        None       None              None         None              None  ...   False    True          1.263           0.02  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58627 2025-03-16 08:39:41+00:00       5634      GB       None        None       None              None         None              None  ...   False    True          5.634           0.09  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58628 2025-03-16 08:39:45+00:00       2194      GB       None        None       None              None         None              None  ...   False    True          2.194           0.04  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58629 2025-03-16 08:40:02+00:00       3954      GB       None        None       None              None         None              None  ...   False    True          3.954           0.07  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58630 2025-03-16 08:40:04+00:00       1535      GB       None        None       None              None         None              None  ...   False    True          1.535           0.03  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58631 2025-03-16 08:40:06+00:00        454      GB       None        None       None              None         None              None  ...   False    True          0.454           0.01  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58632 2025-03-16 08:48:53+00:00     448869      GB       None        None       None              None         None              None  ...   False   False        448.869           7.48  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58633 2025-03-16 08:55:29+00:00     394827      GB       None        None       None              None         None              None  ...   False   False        394.827           6.58  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58634 2025-03-16 08:59:55+00:00     252269      GB       None        None       None              None         None              None  ...   False   False        252.269           4.20  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58635 2025-03-16 09:03:15+00:00     196561      GB       None        None       None              None         None              None  ...   False    True        196.561           3.28  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58636 2025-03-16 09:03:22+00:00       2793      GB       None        None       None              None         None              None  ...   False    True          2.793           0.05  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58637 2025-03-16 09:06:37+00:00     188946      GB       None        None       None              None         None              None  ...   False   False        188.946           3.15  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58638 2025-03-16 09:09:56+00:00     198423      GB       None        None       None              None         None              None  ...   False   False        198.423           3.31  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58639 2025-03-16 09:17:02+00:00     424267      GB       None        None       None              None         None              None  ...   False   False        424.267           7.07  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58640 2025-03-16 09:28:20+00:00      76001      GB       None        None       None              None         None              None  ...   False   False         76.001           1.27  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 58641 2025-03-16 10:04:21+00:00      54588      GB       None        None       None              None         None              None  ...   False    True         54.588           0.91  2025     3  16   Charlie  audiobook
+2025-10-23 22:01:02,087 [INFO] 
+2025-10-23 22:01:02,088 [INFO] [52 rows x 25 columns]
+2025-10-23 22:01:02,143 [INFO] [enrich] [run_all] Per-year counts: artists=80, shows=31, books=15
+2025-10-23 22:01:02,458 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:02,458 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:planning
+2025-10-23 22:01:02,458 [INFO] [enrich] [run_all] Starting phase: overall
+2025-10-23 22:01:02,653 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:02,653 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:overall
+2025-10-23 22:01:03,039 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 22:01:03,243 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → overall
+2025-10-23 22:01:03,243 [INFO] [enrich] [overall_first50] Top counts: artists=10, shows=10, books=10
+2025-10-23 22:01:03,427 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:03,427 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:overall
+2025-10-23 22:01:03,428 [INFO] [enrich] [filter:debug] master_artists.columns = []
+2025-10-23 22:01:03,705 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:03,706 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:overall
+2025-10-23 22:01:03,707 [INFO] [enrich] [run_all] Exception: 'artist_name'
+2025-10-23 22:01:03,908 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:03,908 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:overall
+2025-10-23 22:01:04,081 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 22:01:04,374 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-23 22:01:04,374 [INFO] [enrich] [run_all] Cleaning up Discogs worker pool…
+2025-10-23 22:01:04,596 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:04,597 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:overall
+2025-10-23 22:01:04,835 [INFO] [enrich] [run_all] Discogs worker pool shut down successfully
+2025-10-23 22:01:05,043 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:05,043 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — general:overall
+2025-10-23 22:01:05,056 [INFO] [enrich:background_enrich_Charlie] ❌ Exception: 'artist_name'
+2025-10-23 22:01:05,056 [INFO] Traceback (most recent call last):
+2025-10-23 22:01:05,056 [INFO]   File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1058, in background_enrich
+2025-10-23 22:01:05,056 [INFO]     enricher.run_all(cancel_event=cancel_event)
+2025-10-23 22:01:05,056 [INFO]   File "/Users/admin/Documents/GitHub/spotify_regifted_cn/enrichment_service.py", line 2139, in run_all
+2025-10-23 22:01:05,056 [INFO]     self.run_phase_overall_first50(top_art, top_shows, top_books)
+2025-10-23 22:01:05,057 [INFO]   File "/Users/admin/Documents/GitHub/spotify_regifted_cn/enrichment_service.py", line 1521, in run_phase_overall_first50
+2025-10-23 22:01:05,057 [INFO]     todo = self._filter_known_artists(top_art["artist_name"].tolist())
+2025-10-23 22:01:05,057 [INFO]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-10-23 22:01:05,057 [INFO]   File "/Users/admin/Documents/GitHub/spotify_regifted_cn/enrichment_service.py", line 2608, in _filter_known_artists
+2025-10-23 22:01:05,057 [INFO]     self.log(f"[filter:debug] sample master artist names: {self.master_artists['artist_name'].head(5).tolist()}")
+2025-10-23 22:01:05,057 [INFO]                                                            ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+2025-10-23 22:01:05,057 [INFO]   File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+2025-10-23 22:01:05,057 [INFO]     indexer = self.columns.get_loc(key)
+2025-10-23 22:01:05,057 [INFO]               ^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-10-23 22:01:05,057 [INFO]   File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/indexes/range.py", line 417, in get_loc
+2025-10-23 22:01:05,057 [INFO]     raise KeyError(key)
+2025-10-23 22:01:05,057 [INFO] KeyError: 'artist_name'
+2025-10-23 22:01:05,203 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 22:01:05,421 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-23 22:01:05,653 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:05,654 [INFO] [CloudflareDAO] 🪵 Logged (error) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — enrichment: Exception in background_enrich: 'artist_name'
+2025-10-23 22:01:05,655 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-23 22:01:05,869 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_Charlie.log
+2025-10-23 22:01:05,870 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_Charlie.log — thread: Thread finished for Charlie
+2025-10-23 22:01:05,870 [INFO] [enrich:background_enrich_Charlie] 💤 Thread finished for Charlie
+2025-10-23 22:03:45,673 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2815: SettingWithCopyWarning:
+2025-10-23 22:03:45,673 [ERROR] 
+2025-10-23 22:03:45,673 [ERROR] 
+2025-10-23 22:03:45,673 [ERROR] A value is trying to be set on a copy of a slice from a DataFrame.
+2025-10-23 22:03:45,674 [ERROR] Try using .loc[row_indexer,col_indexer] = value instead
+2025-10-23 22:03:45,674 [ERROR] 
+2025-10-23 22:03:45,674 [ERROR] See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-10-23 22:03:45,674 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2816: SettingWithCopyWarning:
+2025-10-23 22:03:45,674 [ERROR] 
+2025-10-23 22:03:45,674 [ERROR] 
+2025-10-23 22:03:45,674 [ERROR] A value is trying to be set on a copy of a slice from a DataFrame.
+2025-10-23 22:03:45,674 [ERROR] Try using .loc[row_indexer,col_indexer] = value instead
+2025-10-23 22:03:45,674 [ERROR] 
+2025-10-23 22:03:45,674 [ERROR] See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-10-23 22:17:01,217 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:17:01,613 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:17:01,613 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:17:02,181 [INFO] [logging] ✅ StreamToLogger attached
+2025-10-23 22:28:54,447 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:28:54,894 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:28:54,906 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:28:57,808 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:28:58,142 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:28:58,142 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:29:02,546 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:29:02,897 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:29:02,897 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:32:41,881 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:32:42,260 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:32:42,261 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:50:27,806 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:50:28,248 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:50:28,249 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:50:28,787 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:50:29,123 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:50:29,124 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:50:29,798 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:1905: FutureWarning:
+
+'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+2025-10-23 22:50:29,845 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:1909: UserWarning:
+
+Converting to PeriodArray/Index representation will drop timezone information.
+2025-10-23 22:56:16,885 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:56:17,251 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:56:17,251 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:56:18,138 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:56:18,476 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:56:18,476 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 22:56:21,753 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 22:56:22,161 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 22:56:22,162 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:04:13,160 [INFO] [logging] ✅ StreamToLogger attached
+2025-10-23 23:05:09,068 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:05:09,480 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:05:09,480 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:23:48,055 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:23:48,237 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:23:48,388 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:23:48,388 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:23:48,546 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:23:48,547 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:26:33,273 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:26:33,613 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:26:33,614 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:26:51,250 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:26:53,141 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:26:53,141 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:31:37,067 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:31:37,509 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:31:37,510 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:33:30,632 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:33:30,919 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:33:30,919 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:34:58,003 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:34:58,305 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:34:58,305 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:34:58,859 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:34:59,168 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:34:59,169 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:35:18,858 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:35:19,274 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:35:19,274 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-23 23:35:21,154 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-23 23:35:21,154 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-23 23:35:21,405 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-23 23:35:22,024 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-23 23:35:22,024 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-23 23:35:22,071 [INFO] [enrich:Thread-1 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-23 23:35:22,071 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-23 23:35:22,155 [INFO] [enrich:Thread-1 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-23 23:35:22,346 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 23:35:22,537 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-23 23:35:22,539 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-23 23:35:22,539 [ERROR] Exception in thread
+2025-10-23 23:35:22,539 [ERROR] Thread-1 (background_enrich)
+2025-10-23 23:35:22,539 [ERROR] :
+2025-10-23 23:35:22,539 [ERROR] Traceback (most recent call last):
+2025-10-23 23:35:22,539 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-23 23:35:22,541 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-23 23:35:22,541 [ERROR] ^
+2025-10-23 23:35:22,541 [ERROR] ^
+2025-10-23 23:35:22,541 [ERROR] ^
+2025-10-23 23:35:22,541 [ERROR] ^
+2025-10-23 23:35:22,542 [ERROR] ^
+2025-10-23 23:35:22,542 [ERROR] ^
+2025-10-23 23:35:22,542 [ERROR] ^
+2025-10-23 23:35:22,542 [ERROR] ^
+2025-10-23 23:35:22,542 [ERROR] ^
+2025-10-23 23:35:22,542 [ERROR] ^
+2025-10-23 23:35:22,542 [ERROR] ^
+2025-10-23 23:35:22,542 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:35:22,545 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:35:22,545 [ERROR] ^
+2025-10-23 23:35:22,545 [ERROR] ^
+2025-10-23 23:35:22,545 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,546 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] ^
+2025-10-23 23:35:22,547 [ERROR] AttributeError
+2025-10-23 23:35:22,548 [ERROR] :
+2025-10-23 23:35:22,548 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:35:22,549 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:35:22,549 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-23 23:35:22,549 [ERROR] Traceback (most recent call last):
+2025-10-23 23:35:22,549 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-23 23:35:22,549 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-23 23:35:22,549 [ERROR] ^
+2025-10-23 23:35:22,549 [ERROR] ^
+2025-10-23 23:35:22,549 [ERROR] ^
+2025-10-23 23:35:22,549 [ERROR] ^
+2025-10-23 23:35:22,550 [ERROR] ^
+2025-10-23 23:35:22,550 [ERROR] ^
+2025-10-23 23:35:22,550 [ERROR] ^
+2025-10-23 23:35:22,550 [ERROR] ^
+2025-10-23 23:35:22,550 [ERROR] ^
+2025-10-23 23:35:22,550 [ERROR] ^
+2025-10-23 23:35:22,550 [ERROR] ^
+2025-10-23 23:35:22,550 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:35:22,551 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,551 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] ^
+2025-10-23 23:35:22,552 [ERROR] AttributeError
+2025-10-23 23:35:22,552 [ERROR] :
+2025-10-23 23:35:22,552 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:35:22,553 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:35:22,553 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-23 23:35:22,553 [ERROR] Traceback (most recent call last):
+2025-10-23 23:35:22,553 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-23 23:35:22,556 [ERROR] self.run()
+2025-10-23 23:35:22,556 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-23 23:35:22,556 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-23 23:35:22,556 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-23 23:35:22,557 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] ^
+2025-10-23 23:35:22,557 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:35:22,558 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:35:22,558 [ERROR] ^
+2025-10-23 23:35:22,558 [ERROR] ^
+2025-10-23 23:35:22,558 [ERROR] ^
+2025-10-23 23:35:22,558 [ERROR] ^
+2025-10-23 23:35:22,558 [ERROR] ^
+2025-10-23 23:35:22,558 [ERROR] ^
+2025-10-23 23:35:22,558 [ERROR] ^
+2025-10-23 23:35:22,558 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,559 [ERROR] ^
+2025-10-23 23:35:22,560 [ERROR] ^
+2025-10-23 23:35:22,560 [ERROR] ^
+2025-10-23 23:35:22,560 [ERROR] ^
+2025-10-23 23:35:22,560 [ERROR] ^
+2025-10-23 23:35:22,560 [ERROR] AttributeError
+2025-10-23 23:35:22,560 [ERROR] :
+2025-10-23 23:35:22,560 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:35:22,560 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:08,818 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-23 23:36:08,819 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-23 23:36:09,086 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-23 23:36:09,886 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-23 23:36:09,887 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-23 23:36:09,928 [INFO] [enrich:Thread-2 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-23 23:36:09,928 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-23 23:36:09,929 [INFO] [enrich:Thread-2 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-23 23:36:10,100 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 23:36:10,271 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-23 23:36:10,272 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-23 23:36:10,272 [ERROR] Exception in thread
+2025-10-23 23:36:10,272 [ERROR] Thread-2 (background_enrich)
+2025-10-23 23:36:10,272 [ERROR] :
+2025-10-23 23:36:10,272 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:10,272 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-23 23:36:10,273 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-23 23:36:10,273 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] ^
+2025-10-23 23:36:10,274 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:10,276 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,276 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] ^
+2025-10-23 23:36:10,277 [ERROR] AttributeError
+2025-10-23 23:36:10,277 [ERROR] :
+2025-10-23 23:36:10,277 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:10,278 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:10,278 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-23 23:36:10,278 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:10,278 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-23 23:36:10,279 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] ^
+2025-10-23 23:36:10,279 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:10,280 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,280 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] ^
+2025-10-23 23:36:10,281 [ERROR] AttributeError
+2025-10-23 23:36:10,281 [ERROR] :
+2025-10-23 23:36:10,281 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:10,281 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:10,281 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-23 23:36:10,281 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:10,281 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-23 23:36:10,282 [ERROR] self.run()
+2025-10-23 23:36:10,282 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-23 23:36:10,283 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-23 23:36:10,283 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-23 23:36:10,283 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] ^
+2025-10-23 23:36:10,283 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:10,284 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:10,284 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] ^
+2025-10-23 23:36:10,285 [ERROR] AttributeError
+2025-10-23 23:36:10,285 [ERROR] :
+2025-10-23 23:36:10,285 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:10,286 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:17,899 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-23 23:36:18,226 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-23 23:36:18,227 [INFO] [dao_selector] ✅ Initialized Cloudflare D1 (first time this session)
+2025-10-23 23:36:21,065 [INFO] [logging] ✅ StreamToLogger attached
+2025-10-23 23:36:24,715 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-23 23:36:24,715 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-23 23:36:25,036 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-23 23:36:25,723 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-23 23:36:25,724 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-23 23:36:25,770 [INFO] [enrich:Thread-3 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-23 23:36:25,770 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-23 23:36:25,772 [INFO] [enrich:Thread-3 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-23 23:36:25,914 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 23:36:26,108 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-23 23:36:26,109 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-23 23:36:26,109 [ERROR] Exception in thread
+2025-10-23 23:36:26,109 [ERROR] Thread-3 (background_enrich)
+2025-10-23 23:36:26,109 [ERROR] :
+2025-10-23 23:36:26,109 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:26,109 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-23 23:36:26,110 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] ^
+2025-10-23 23:36:26,110 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:26,112 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:26,112 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,113 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] ^
+2025-10-23 23:36:26,114 [ERROR] AttributeError
+2025-10-23 23:36:26,115 [ERROR] :
+2025-10-23 23:36:26,115 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:26,117 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:26,117 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-23 23:36:26,117 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:26,117 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-23 23:36:26,118 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] ^
+2025-10-23 23:36:26,118 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:26,120 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,120 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] ^
+2025-10-23 23:36:26,121 [ERROR] AttributeError
+2025-10-23 23:36:26,121 [ERROR] :
+2025-10-23 23:36:26,121 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:26,122 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:26,122 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-23 23:36:26,122 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:26,122 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-23 23:36:26,123 [ERROR] self.run()
+2025-10-23 23:36:26,123 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-23 23:36:26,123 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-23 23:36:26,123 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-23 23:36:26,124 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] ^
+2025-10-23 23:36:26,124 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:26,125 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,125 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] ^
+2025-10-23 23:36:26,126 [ERROR] AttributeError
+2025-10-23 23:36:26,126 [ERROR] :
+2025-10-23 23:36:26,126 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:26,127 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:38,993 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-23 23:36:38,993 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-23 23:36:39,311 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-23 23:36:39,932 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-23 23:36:39,932 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-23 23:36:39,972 [INFO] [enrich:Thread-4 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-23 23:36:39,972 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-23 23:36:39,974 [INFO] [enrich:Thread-4 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-23 23:36:40,128 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-23 23:36:40,289 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-23 23:36:40,290 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-23 23:36:40,290 [ERROR] Exception in thread
+2025-10-23 23:36:40,290 [ERROR] Thread-4 (background_enrich)
+2025-10-23 23:36:40,290 [ERROR] :
+2025-10-23 23:36:40,290 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:40,290 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-23 23:36:40,293 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] ^
+2025-10-23 23:36:40,293 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:40,295 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,295 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,296 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] ^
+2025-10-23 23:36:40,297 [ERROR] AttributeError
+2025-10-23 23:36:40,297 [ERROR] :
+2025-10-23 23:36:40,297 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:40,298 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:40,298 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-23 23:36:40,298 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:40,298 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-23 23:36:40,301 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-23 23:36:40,301 [ERROR] ^
+2025-10-23 23:36:40,301 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] ^
+2025-10-23 23:36:40,302 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:40,303 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,303 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] ^
+2025-10-23 23:36:40,304 [ERROR] AttributeError
+2025-10-23 23:36:40,304 [ERROR] :
+2025-10-23 23:36:40,304 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:40,305 [ERROR] . Did you mean: 'loc'?
+2025-10-23 23:36:40,305 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-23 23:36:40,305 [ERROR] Traceback (most recent call last):
+2025-10-23 23:36:40,305 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-23 23:36:40,306 [ERROR] self.run()
+2025-10-23 23:36:40,306 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-23 23:36:40,306 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-23 23:36:40,306 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-23 23:36:40,306 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-23 23:36:40,306 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] ^
+2025-10-23 23:36:40,307 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-23 23:36:40,308 [ERROR] return object.__getattribute__(self, name)
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,308 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] ^
+2025-10-23 23:36:40,309 [ERROR] AttributeError
+2025-10-23 23:36:40,309 [ERROR] :
+2025-10-23 23:36:40,309 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-23 23:36:40,310 [ERROR] . Did you mean: 'loc'?
+2025-10-24 09:25:37,683 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-24 09:25:37,684 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-24 09:25:37,979 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-24 09:25:39,810 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-24 09:25:39,810 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-24 09:25:39,866 [INFO] [enrich:Thread-5 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-24 09:25:39,866 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-24 09:25:39,869 [INFO] [enrich:Thread-5 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-24 09:25:40,094 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-24 09:25:40,332 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-24 09:25:40,332 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-24 09:25:40,333 [ERROR] Exception in thread
+2025-10-24 09:25:40,333 [ERROR] Thread-5 (background_enrich)
+2025-10-24 09:25:40,333 [ERROR] :
+2025-10-24 09:25:40,333 [ERROR] Traceback (most recent call last):
+2025-10-24 09:25:40,333 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-24 09:25:40,335 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-24 09:25:40,335 [ERROR] ^
+2025-10-24 09:25:40,335 [ERROR] ^
+2025-10-24 09:25:40,335 [ERROR] ^
+2025-10-24 09:25:40,335 [ERROR] ^
+2025-10-24 09:25:40,335 [ERROR] ^
+2025-10-24 09:25:40,335 [ERROR] ^
+2025-10-24 09:25:40,336 [ERROR] ^
+2025-10-24 09:25:40,336 [ERROR] ^
+2025-10-24 09:25:40,336 [ERROR] ^
+2025-10-24 09:25:40,336 [ERROR] ^
+2025-10-24 09:25:40,336 [ERROR] ^
+2025-10-24 09:25:40,336 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 09:25:40,339 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,339 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] ^
+2025-10-24 09:25:40,340 [ERROR] AttributeError
+2025-10-24 09:25:40,340 [ERROR] :
+2025-10-24 09:25:40,341 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 09:25:40,341 [ERROR] . Did you mean: 'loc'?
+2025-10-24 09:25:40,341 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 09:25:40,341 [ERROR] Traceback (most recent call last):
+2025-10-24 09:25:40,341 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-24 09:25:40,342 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-24 09:25:40,342 [ERROR] ^
+2025-10-24 09:25:40,342 [ERROR] ^
+2025-10-24 09:25:40,342 [ERROR] ^
+2025-10-24 09:25:40,342 [ERROR] ^
+2025-10-24 09:25:40,342 [ERROR] ^
+2025-10-24 09:25:40,342 [ERROR] ^
+2025-10-24 09:25:40,342 [ERROR] ^
+2025-10-24 09:25:40,342 [ERROR] ^
+2025-10-24 09:25:40,343 [ERROR] ^
+2025-10-24 09:25:40,343 [ERROR] ^
+2025-10-24 09:25:40,343 [ERROR] ^
+2025-10-24 09:25:40,343 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 09:25:40,344 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,344 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] ^
+2025-10-24 09:25:40,345 [ERROR] AttributeError
+2025-10-24 09:25:40,345 [ERROR] :
+2025-10-24 09:25:40,345 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 09:25:40,346 [ERROR] . Did you mean: 'loc'?
+2025-10-24 09:25:40,346 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 09:25:40,346 [ERROR] Traceback (most recent call last):
+2025-10-24 09:25:40,346 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-24 09:25:40,347 [ERROR] self.run()
+2025-10-24 09:25:40,347 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-24 09:25:40,347 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-24 09:25:40,347 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-24 09:25:40,348 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] ^
+2025-10-24 09:25:40,348 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 09:25:40,349 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 09:25:40,349 [ERROR] ^
+2025-10-24 09:25:40,349 [ERROR] ^
+2025-10-24 09:25:40,349 [ERROR] ^
+2025-10-24 09:25:40,349 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] ^
+2025-10-24 09:25:40,350 [ERROR] AttributeError
+2025-10-24 09:25:40,350 [ERROR] :
+2025-10-24 09:25:40,350 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 09:25:40,351 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:02:11,146 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-24 10:02:12,136 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-24 10:02:12,136 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-24 10:02:19,104 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-24 10:02:19,104 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-24 10:02:19,515 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-24 10:02:21,245 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-24 10:02:21,246 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-24 10:02:21,312 [INFO] [enrich:Thread-6 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-24 10:02:21,312 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-24 10:02:21,314 [INFO] [enrich:Thread-6 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-24 10:02:21,704 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-24 10:02:21,900 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-24 10:02:21,900 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-24 10:02:21,901 [ERROR] Exception in thread
+2025-10-24 10:02:21,901 [ERROR] Thread-6 (background_enrich)
+2025-10-24 10:02:21,901 [ERROR] :
+2025-10-24 10:02:21,901 [ERROR] Traceback (most recent call last):
+2025-10-24 10:02:21,901 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-24 10:02:21,903 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-24 10:02:21,903 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] ^
+2025-10-24 10:02:21,904 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:02:21,908 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,909 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,910 [ERROR] ^
+2025-10-24 10:02:21,911 [ERROR] ^
+2025-10-24 10:02:21,911 [ERROR] ^
+2025-10-24 10:02:21,911 [ERROR] ^
+2025-10-24 10:02:21,911 [ERROR] ^
+2025-10-24 10:02:21,911 [ERROR] AttributeError
+2025-10-24 10:02:21,911 [ERROR] :
+2025-10-24 10:02:21,911 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:02:21,912 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:02:21,912 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 10:02:21,912 [ERROR] Traceback (most recent call last):
+2025-10-24 10:02:21,912 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-24 10:02:21,913 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] ^
+2025-10-24 10:02:21,913 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:02:21,915 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,915 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] ^
+2025-10-24 10:02:21,916 [ERROR] AttributeError
+2025-10-24 10:02:21,916 [ERROR] :
+2025-10-24 10:02:21,916 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:02:21,916 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:02:21,916 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 10:02:21,916 [ERROR] Traceback (most recent call last):
+2025-10-24 10:02:21,916 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-24 10:02:21,917 [ERROR] self.run()
+2025-10-24 10:02:21,918 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-24 10:02:21,918 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-24 10:02:21,918 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-24 10:02:21,919 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] ^
+2025-10-24 10:02:21,919 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:02:21,921 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,921 [ERROR] ^
+2025-10-24 10:02:21,922 [ERROR] ^
+2025-10-24 10:02:21,922 [ERROR] ^
+2025-10-24 10:02:21,922 [ERROR] ^
+2025-10-24 10:02:21,922 [ERROR] ^
+2025-10-24 10:02:21,922 [ERROR] ^
+2025-10-24 10:02:21,922 [ERROR] ^
+2025-10-24 10:02:21,922 [ERROR] ^
+2025-10-24 10:02:21,922 [ERROR] AttributeError
+2025-10-24 10:02:21,922 [ERROR] :
+2025-10-24 10:02:21,922 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:02:21,922 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:24:32,212 [INFO] [logging] ✅ StreamToLogger attached
+2025-10-24 10:24:44,798 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-24 10:24:44,798 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-24 10:24:45,091 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-24 10:24:47,113 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-24 10:24:47,113 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-24 10:24:47,181 [INFO] [enrich:Thread-1 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-24 10:24:47,181 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-24 10:24:48,369 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-10-24 10:24:48,762 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-10-24 10:24:48,762 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-10-24 10:24:48,769 [INFO] [enrich:Thread-1 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-24 10:24:49,036 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-24 10:24:49,247 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-24 10:24:49,248 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-24 10:24:49,248 [ERROR] Exception in thread
+2025-10-24 10:24:49,248 [ERROR] Thread-1 (background_enrich)
+2025-10-24 10:24:49,248 [ERROR] :
+2025-10-24 10:24:49,249 [ERROR] Traceback (most recent call last):
+2025-10-24 10:24:49,249 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-24 10:24:49,249 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-24 10:24:49,249 [ERROR] ^
+2025-10-24 10:24:49,249 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] ^
+2025-10-24 10:24:49,250 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:24:49,251 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,252 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] ^
+2025-10-24 10:24:49,253 [ERROR] AttributeError
+2025-10-24 10:24:49,253 [ERROR] :
+2025-10-24 10:24:49,253 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:24:49,255 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:24:49,255 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 10:24:49,255 [ERROR] Traceback (most recent call last):
+2025-10-24 10:24:49,255 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-24 10:24:49,256 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-24 10:24:49,256 [ERROR] ^
+2025-10-24 10:24:49,256 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] ^
+2025-10-24 10:24:49,257 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:24:49,258 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:24:49,258 [ERROR] ^
+2025-10-24 10:24:49,258 [ERROR] ^
+2025-10-24 10:24:49,258 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] ^
+2025-10-24 10:24:49,259 [ERROR] AttributeError
+2025-10-24 10:24:49,259 [ERROR] :
+2025-10-24 10:24:49,259 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:24:49,259 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:24:49,259 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 10:24:49,259 [ERROR] Traceback (most recent call last):
+2025-10-24 10:24:49,259 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-24 10:24:49,260 [ERROR] self.run()
+2025-10-24 10:24:49,260 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-24 10:24:49,260 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-24 10:24:49,260 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-24 10:24:49,260 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] ^
+2025-10-24 10:24:49,260 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:24:49,261 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,261 [ERROR] ^
+2025-10-24 10:24:49,262 [ERROR] ^
+2025-10-24 10:24:49,262 [ERROR] AttributeError
+2025-10-24 10:24:49,262 [ERROR] :
+2025-10-24 10:24:49,262 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:24:49,262 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:24:58,666 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-24 10:24:58,666 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-24 10:24:58,964 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-24 10:25:01,611 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-24 10:25:01,611 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-24 10:25:01,792 [INFO] [enrich:Thread-2 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-24 10:25:01,792 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-24 10:25:01,794 [INFO] [enrich:Thread-2 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-24 10:25:02,518 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-24 10:25:02,893 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-24 10:25:02,894 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-24 10:25:02,894 [ERROR] Exception in thread
+2025-10-24 10:25:02,894 [ERROR] Thread-2 (background_enrich)
+2025-10-24 10:25:02,894 [ERROR] :
+2025-10-24 10:25:02,894 [ERROR] Traceback (most recent call last):
+2025-10-24 10:25:02,894 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-24 10:25:02,894 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-24 10:25:02,894 [ERROR] ^
+2025-10-24 10:25:02,894 [ERROR] ^
+2025-10-24 10:25:02,894 [ERROR] ^
+2025-10-24 10:25:02,894 [ERROR] ^
+2025-10-24 10:25:02,895 [ERROR] ^
+2025-10-24 10:25:02,895 [ERROR] ^
+2025-10-24 10:25:02,895 [ERROR] ^
+2025-10-24 10:25:02,895 [ERROR] ^
+2025-10-24 10:25:02,895 [ERROR] ^
+2025-10-24 10:25:02,895 [ERROR] ^
+2025-10-24 10:25:02,895 [ERROR] ^
+2025-10-24 10:25:02,895 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:25:02,896 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,896 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] ^
+2025-10-24 10:25:02,897 [ERROR] AttributeError
+2025-10-24 10:25:02,897 [ERROR] :
+2025-10-24 10:25:02,897 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:25:02,897 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:25:02,897 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 10:25:02,897 [ERROR] Traceback (most recent call last):
+2025-10-24 10:25:02,898 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-24 10:25:02,898 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] ^
+2025-10-24 10:25:02,898 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:25:02,899 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:25:02,899 [ERROR] ^
+2025-10-24 10:25:02,899 [ERROR] ^
+2025-10-24 10:25:02,899 [ERROR] ^
+2025-10-24 10:25:02,899 [ERROR] ^
+2025-10-24 10:25:02,899 [ERROR] ^
+2025-10-24 10:25:02,899 [ERROR] ^
+2025-10-24 10:25:02,899 [ERROR] ^
+2025-10-24 10:25:02,899 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] ^
+2025-10-24 10:25:02,900 [ERROR] AttributeError
+2025-10-24 10:25:02,900 [ERROR] :
+2025-10-24 10:25:02,900 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:25:02,901 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:25:02,901 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 10:25:02,901 [ERROR] Traceback (most recent call last):
+2025-10-24 10:25:02,901 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-24 10:25:02,901 [ERROR] self.run()
+2025-10-24 10:25:02,901 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-24 10:25:02,901 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-24 10:25:02,901 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-24 10:25:02,902 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] ^
+2025-10-24 10:25:02,902 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:25:02,903 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,903 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] ^
+2025-10-24 10:25:02,904 [ERROR] AttributeError
+2025-10-24 10:25:02,904 [ERROR] :
+2025-10-24 10:25:02,904 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:25:02,905 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:25:09,394 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for Charlie
+2025-10-24 10:25:09,394 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-10-24 10:25:09,686 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-10-24 10:25:11,761 [INFO] [verify_enrich] ❌ Inconsistent enrichment for Charlie.
+2025-10-24 10:25:11,762 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for Charlie (status mismatch or incomplete data).
+2025-10-24 10:25:11,841 [INFO] [enrich:Thread-3 (background_enrich)] Starting enrichment thread for Charlie
+2025-10-24 10:25:11,841 [INFO] [auto_reenrich] 🚀 Started enrichment thread for Charlie
+2025-10-24 10:25:11,844 [INFO] [enrich:Thread-3 (background_enrich)] ❌ Exception: 'DataFrame' object has no attribute 'log'
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+    log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+    ^^^^^^^^^^^
+  File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
+2025-10-24 10:25:12,068 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_Charlie_status.json
+2025-10-24 10:25:15,466 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for Charlie → done
+2025-10-24 10:25:15,466 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-10-24 10:25:15,466 [ERROR] Exception in thread
+2025-10-24 10:25:15,466 [ERROR] Thread-3 (background_enrich)
+2025-10-24 10:25:15,466 [ERROR] :
+2025-10-24 10:25:15,466 [ERROR] Traceback (most recent call last):
+2025-10-24 10:25:15,466 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1023, in background_enrich
+2025-10-24 10:25:15,467 [ERROR] log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] ^
+2025-10-24 10:25:15,467 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:25:15,468 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] ^
+2025-10-24 10:25:15,468 [ERROR] AttributeError
+2025-10-24 10:25:15,468 [ERROR] :
+2025-10-24 10:25:15,468 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:25:15,469 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:25:15,469 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 10:25:15,469 [ERROR] Traceback (most recent call last):
+2025-10-24 10:25:15,469 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-10-24 10:25:15,469 [ERROR] log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] ^
+2025-10-24 10:25:15,469 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:25:15,470 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,470 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] ^
+2025-10-24 10:25:15,471 [ERROR] AttributeError
+2025-10-24 10:25:15,471 [ERROR] :
+2025-10-24 10:25:15,471 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:25:15,471 [ERROR] . Did you mean: 'loc'?
+2025-10-24 10:25:15,471 [ERROR] During handling of the above exception, another exception occurred:
+2025-10-24 10:25:15,471 [ERROR] Traceback (most recent call last):
+2025-10-24 10:25:15,471 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-10-24 10:25:15,471 [ERROR] self.run()
+2025-10-24 10:25:15,471 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-10-24 10:25:15,471 [ERROR] self._target(*self._args, **self._kwargs)
+2025-10-24 10:25:15,471 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1099, in background_enrich
+2025-10-24 10:25:15,472 [ERROR] log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] ^
+2025-10-24 10:25:15,472 [ERROR] File "/Users/admin/.pyenv/versions/regifted/lib/python3.12/site-packages/pandas/core/generic.py", line 6299, in __getattr__
+2025-10-24 10:25:15,473 [ERROR] return object.__getattribute__(self, name)
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,473 [ERROR] ^
+2025-10-24 10:25:15,474 [ERROR] ^
+2025-10-24 10:25:15,474 [ERROR] ^
+2025-10-24 10:25:15,474 [ERROR] ^
+2025-10-24 10:25:15,474 [ERROR] ^
+2025-10-24 10:25:15,474 [ERROR] ^
+2025-10-24 10:25:15,474 [ERROR] AttributeError
+2025-10-24 10:25:15,474 [ERROR] :
+2025-10-24 10:25:15,474 [ERROR] 'DataFrame' object has no attribute 'log'
+2025-10-24 10:25:15,474 [ERROR] . Did you mean: 'loc'?

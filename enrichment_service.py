@@ -552,8 +552,7 @@ class MetadataEnricher:
         self.info_tables = info_table_dao
         self.verbose = verbose
 
-        # ✅ Backward compatibility alias for old integrity-check references
-        # Some legacy integrity validation code still expects self.storage_dao
+        # ✅ Backward compatibility alias for old references
         self.storage_dao = storage_dao
 
         # --- Seen & ID caches ---
@@ -591,6 +590,19 @@ class MetadataEnricher:
         if not hasattr(MetadataEnricher, "_discogs_pool"):
             MetadataEnricher._discogs_pool = DiscogsWorkerPool(num_workers=5)
         self.discogs_pool = MetadataEnricher._discogs_pool
+
+        # --- Safe logging fallback ---
+        if hasattr(log_dao, "log") and callable(getattr(log_dao, "log")):
+            def _log(msg, level="info"):
+                try:
+                    log_dao.log(level, msg, user_id=self.user_id, label=self.label)
+                except Exception:
+                    print(f"[log_dao] ⚠️ Failed to log remotely: {msg}")
+                    print(msg)
+            self.log = _log
+        else:
+            print("[init] ⚠️ log_dao invalid or missing .log(); defaulting to print()")
+            self.log = lambda msg, level="info": print(msg)
 
     # --- Logging helper ---
     def log(self, msg: str, level: str = "info"):
@@ -2371,7 +2383,8 @@ class MetadataEnricher:
     def flush_partial(self) -> None:
         """
         Autosave: dump current buffers into master CSVs so pages can use data immediately.
-        Optionally write per-run autosave snapshots under {user}/{label}/_autosave/{ts}/...
+        Writes to enrichment/metadata/*.csv via DAO.merge_into_master().
+        Includes detailed logging of merge results.
         """
         artists_df     = pd.DataFrame(self.buf_artists)     if self.buf_artists else pd.DataFrame()
         albums_df      = pd.DataFrame(self.buf_albums)      if self.buf_albums else pd.DataFrame()
@@ -2385,61 +2398,74 @@ class MetadataEnricher:
                 tracks_df["user_id"] = self.user_id
             tracks_df = tracks_df.drop_duplicates(subset=["track_id", "user_id"])
 
-        # Bail if nothing to write
         if all(df.empty for df in [artists_df, albums_df, tracks_df, shows_df, audiobooks_df]):
+            self.log("[flush_partial] Nothing to flush (all buffers empty).")
             return
 
-        # Optional snapshots
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        self.log(f"[flush_partial] Starting autosave snapshot at {ts}")
+
+        # Optional snapshot for inspection
         if getattr(self, "save_snapshots", False):
             try:
-                ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
                 base = f"{self.user_id}/{self.label}/_autosave/{ts}"
-                if not artists_df.empty:
-                    self.storage.upload_csv(artists_df, path=f"{base}/info_artist_genre.csv", overwrite=True)
-                if not albums_df.empty:
-                    self.storage.upload_csv(albums_df, path=f"{base}/info_album.csv", overwrite=True)
-                if not tracks_df.empty:
-                    self.storage.upload_csv(tracks_df, path=f"{base}/info_track.csv", overwrite=True)
-                if not shows_df.empty:
-                    self.storage.upload_csv(shows_df, path=f"{base}/info_show.csv", overwrite=True)
-                if not audiobooks_df.empty:
-                    self.storage.upload_csv(audiobooks_df, path=f"{base}/info_audiobook.csv", overwrite=True)
+                for name, df in {
+                    "info_artist_genre.csv": artists_df,
+                    "info_album.csv": albums_df,
+                    "info_track.csv": tracks_df,
+                    "info_show.csv": shows_df,
+                    "info_audiobook.csv": audiobooks_df,
+                }.items():
+                    if not df.empty:
+                        self.storage.upload_csv(df, path=f"{base}/{name}", overwrite=True)
+                        self.log(f"[flush_partial] Snapshot → {name} ({len(df)} rows)")
             except Exception as e:
-                print("[autosave] snapshot write failed:", e)
+                self.log(f"[flush_partial] ⚠️ Snapshot upload failed: {e}")
 
-        # Merge into masters
+        # --- Merge into masters with detailed diagnostics ---
         try:
-            if not artists_df.empty:
-                self.storage.merge_into_master(artists_df, "info_artist_genre.csv", keys=["artist_id"])
-            if not albums_df.empty:
-                self.storage.merge_into_master(albums_df, "info_album.csv", keys=["album_id"])
-            if not tracks_df.empty:
-                self.storage.merge_into_master(tracks_df, "info_track.csv", keys=["track_id", "user_id"])
-            if not shows_df.empty:
-                self.storage.merge_into_master(shows_df, "info_show.csv", keys=["show_id"])
-            if not audiobooks_df.empty:
-                self.storage.merge_into_master(audiobooks_df, "info_audiobook.csv", keys=["audiobook_id"])
+            for label, df, keycols in [
+                ("info_artist_genre.csv", artists_df, ["artist_id"]),
+                ("info_album.csv", albums_df, ["album_id"]),
+                ("info_track.csv", tracks_df, ["track_id", "user_id"]),
+                ("info_show.csv", shows_df, ["show_id"]),
+                ("info_audiobook.csv", audiobooks_df, ["audiobook_id"]),
+            ]:
+                if df.empty:
+                    continue
+                before_count = len(df)
+                ok = self.storage.merge_into_master(df, label, keys=keycols)
+                status = "✅ merged" if ok else "⚠️ failed"
+                self.log(f"[flush_partial] {status} {before_count} rows → {label}")
         except Exception as e:
-            print("[autosave][master] merge failed:", e)
+            self.log(f"[flush_partial] ❌ merge_into_master failed: {e}")
             return
 
-        # Clear buffers after successful merge
+        # Clear buffers
         self.buf_artists.clear()
         self.buf_albums.clear()
         self.buf_tracks.clear()
         self.buf_shows.clear()
         self.buf_audiobooks.clear()
+        self.log("[flush_partial] Buffers cleared after successful merge.")
+
+        # Log R2 master counts for visibility
+        try:
+            self.summarize_master_counts()
+        except Exception as e:
+            self.log(f"[flush_all] ⚠️ summarize_master_counts failed: {e}")
 
     def flush_all(self, suffix: str = ""):
         """
         Final flush at the end of a run (or on graceful cancel).
-        Merges all in-memory buffers directly into the global master metadata tables
-        under enrichment/metadata/*.csv (Cloudflare or local DAO).
+        Writes all buffered metadata tables into global masters with
+        row-count diagnostics and atomic upload safety.
         """
-        try:
-            ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        self.log(f"[flush_all] Starting global master merges at {ts}")
 
-            # Convert buffers into DataFrames
+        try:
+            # Convert buffers to DataFrames
             artists_df    = pd.DataFrame(self.buf_artists) if self.buf_artists else pd.DataFrame()
             albums_df     = pd.DataFrame(self.buf_albums) if self.buf_albums else pd.DataFrame()
             tracks_df     = pd.DataFrame(self.buf_tracks) if self.buf_tracks else pd.DataFrame()
@@ -2447,45 +2473,43 @@ class MetadataEnricher:
             audiobooks_df = pd.DataFrame(self.buf_audiobooks) if self.buf_audiobooks else pd.DataFrame()
             unlisted_df   = pd.DataFrame(getattr(self, "buf_artists_unlisted", [])) if getattr(self, "buf_artists_unlisted", None) else pd.DataFrame()
 
-            # Ensure tracks include user_id for proper uniqueness
+            # Ensure track uniqueness
             if not tracks_df.empty:
                 if "user_id" not in tracks_df.columns:
                     tracks_df["user_id"] = self.user_id
                 tracks_df = tracks_df.drop_duplicates(subset=["track_id", "user_id"])
 
-            self.log(f"[flush_all] Starting global master merges at {ts}")
+            merge_targets = [
+                ("info_artist_genre.csv", artists_df, ["artist_id"]),
+                ("info_artist_genre_unlisted.csv", unlisted_df, ["artist_id"]),
+                ("info_album.csv", albums_df, ["album_id"]),
+                ("info_track.csv", tracks_df, ["track_id", "user_id"]),
+                ("info_show.csv", shows_df, ["show_id"]),
+                ("info_audiobook.csv", audiobooks_df, ["audiobook_id"]),
+            ]
 
-            # --- Merge into global master tables only ---
-            try:
-                if not artists_df.empty:
-                    self.storage.merge_into_master(artists_df, "info_artist_genre.csv", keys=["artist_id"])
-                    self.log(f"[flush_all] → Merged {len(artists_df)} artists")
+            total_written = 0
+            for name, df, keys in merge_targets:
+                if df.empty:
+                    continue
+                before = len(df)
+                ok = self.storage.merge_into_master(df, name, keys=keys)
+                if ok:
+                    total_written += before
+                    self.log(f"[flush_all] ✅ {name} merged ({before} new rows)")
+                else:
+                    self.log(f"[flush_all] ⚠️ {name} merge failed or skipped ({before} rows).")
 
-                if not unlisted_df.empty:
-                    self.storage.merge_into_master(unlisted_df, "info_artist_genre_unlisted.csv", keys=["artist_id"])
-                    self.log(f"[flush_all] → Merged {len(unlisted_df)} unlisted artists")
+            if total_written == 0:
+                self.log("[flush_all] ⚠️ No data written — all buffers empty or merges skipped.")
+            else:
+                self.log(f"[flush_all] ✅ Completed flush_all with {total_written} rows total.")
 
-                if not albums_df.empty:
-                    self.storage.merge_into_master(albums_df, "info_album.csv", keys=["album_id"])
-                    self.log(f"[flush_all] → Merged {len(albums_df)} albums")
-
-                if not tracks_df.empty:
-                    self.storage.merge_into_master(tracks_df, "info_track.csv", keys=["track_id", "user_id"])
-                    self.log(f"[flush_all] → Merged {len(tracks_df)} tracks")
-
-                if not shows_df.empty:
-                    self.storage.merge_into_master(shows_df, "info_show.csv", keys=["show_id"])
-                    self.log(f"[flush_all] → Merged {len(shows_df)} shows")
-
-                if not audiobooks_df.empty:
-                    self.storage.merge_into_master(audiobooks_df, "info_audiobook.csv", keys=["audiobook_id"])
-                    self.log(f"[flush_all] → Merged {len(audiobooks_df)} audiobooks")
-
-            except Exception as e:
-                self.log(f"[flush_all] ⚠️ Master merge failed: {e}")
+        except Exception as e:
+            self.log(f"[flush_all] ❌ Exception during flush_all: {e}")
 
         finally:
-            # ✅ Always clean up worker pools even on error
+            # Clean up worker pool
             if hasattr(self, "discogs_pool"):
                 try:
                     self.log("[flush_all] Cleaning up Discogs worker pool…")
@@ -2494,14 +2518,60 @@ class MetadataEnricher:
                 except Exception as e:
                     self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed: {e}")
 
-        self.validate_master_integrity()
+        # Optional post-validation
+        try:
+            self.validate_master_integrity()
+            self.log("[flush_all] ✅ Master integrity validated.")
+        except Exception as e:
+            self.log(f"[flush_all] ⚠️ validate_master_integrity failed: {e}")
+
+        # Log R2 master counts for visibility
+        try:
+            self.summarize_master_counts()
+        except Exception as e:
+            self.log(f"[flush_all] ⚠️ summarize_master_counts failed: {e}")
+
+    def summarize_master_counts(self):
+        """
+        Diagnostic: inspect row counts of all master metadata tables in R2.
+        Logs both presence and row count for each info_* table.
+        Safe to call anytime after flush_partial() or flush_all().
+        """
+        tables = [
+            "info_artist_genre.csv",
+            "info_artist_genre_unlisted.csv",
+            "info_album.csv",
+            "info_track.csv",
+            "info_show.csv",
+            "info_audiobook.csv",
+        ]
+
+        self.log("[summarize_master_counts] 🔍 Checking current master tables in R2...")
+
+        for table in tables:
+            try:
+                df = self.storage.safe_download_csv(
+                    path=f"enrichment/metadata/{table}",
+                    required_cols=None,
+                )
+                count = len(df)
+                if count > 0:
+                    self.log(f"[summarize_master_counts] ✅ {table}: {count} rows")
+                else:
+                    self.log(f"[summarize_master_counts] ⚠️ {table}: found but empty")
+            except FileNotFoundError:
+                self.log(f"[summarize_master_counts] ❌ {table}: not found in R2")
+            except Exception as e:
+                self.log(f"[summarize_master_counts] ⚠️ {table}: error reading — {e}")
+
+        self.log("[summarize_master_counts] ✅ Summary complete.")
 
     # --- Filters against master tables ---
     def _load_master_tables(self):
-        """Load master info tables and initialize seen_* sets for enrichment filtering.
-        If any master table is missing, create it with the correct schema and upload to storage.
         """
-        # --- Define canonical schemas ---
+        Load master info tables and initialize seen_* sets for enrichment filtering.
+        Uses safe_download_csv() to lazily initialize schemas and avoid uploading empty CSVs.
+        """
         schemas = {
             "info_artist_genre.csv": [
                 "artist_id", "artist_popularity", "supergenre", "artist_image", "artist_name", "primary_genre"
@@ -2525,63 +2595,44 @@ class MetadataEnricher:
         }
 
         def ensure_master_exists(filename: str):
-            """Ensure a master table exists in R2, otherwise create an empty one with headers."""
+            """Safely load an existing master or create an empty DataFrame with required columns."""
+            path = f"enrichment/metadata/{filename}"
+            required_cols = schemas[filename]
             try:
-                df = self.storage.get_master(filename)
-                if df.empty and len(df.columns) == 0:
-                    self.log(f"[master:init] ⚠️ {filename} found empty — recreating headers.")
-                    df = pd.DataFrame(columns=schemas[filename])
-                    self.storage.upload_csv(df, path=f"enrichment/metadata/{filename}", overwrite=True)
-                elif not all(col in df.columns for col in schemas[filename]):
-                    self.log(f"[master:init] ⚠️ {filename} missing expected columns — resetting schema.")
-                    df = pd.DataFrame(columns=schemas[filename])
-                    self.storage.upload_csv(df, path=f"enrichment/metadata/{filename}", overwrite=True)
-                return df
-            except FileNotFoundError:
-                self.log(f"[master:init] ℹ️ {filename} missing — creating new empty file.")
-                df = pd.DataFrame(columns=schemas[filename])
-                self.storage.upload_csv(df, path=f"enrichment/metadata/{filename}", overwrite=True)
+                df = self.storage.safe_download_csv(path, required_cols=required_cols)
+                if df.empty:
+                    self.log(f"[master:init] ⚠️ {filename} empty or missing — initializing in memory only.")
+                    df = pd.DataFrame(columns=required_cols)
+                elif not all(c in df.columns for c in required_cols):
+                    self.log(f"[master:init] ⚠️ {filename} schema mismatch — resetting columns.")
+                    df = pd.DataFrame(columns=required_cols)
                 return df
             except Exception as e:
-                self.log(f"[master:init] ❌ Could not ensure {filename}: {e}")
-                return pd.DataFrame(columns=schemas[filename])
+                self.log(f"[master:init] ❌ Could not load {filename}: {e}")
+                return pd.DataFrame(columns=required_cols)
 
-        # --- Load or create all masters safely ---
         try:
-            if hasattr(self.storage, "get_master"):
-                self.master_artists     = ensure_master_exists("info_artist_genre.csv")
-                self.master_albums      = ensure_master_exists("info_album.csv")
-                self.master_tracks      = ensure_master_exists("info_track.csv")
-                self.master_shows       = ensure_master_exists("info_show.csv")
-                self.master_audiobooks  = ensure_master_exists("info_audiobook.csv")
-                self.master_unlisted    = ensure_master_exists("info_artist_genre_unlisted.csv")
-            else:
-                self.master_artists    = pd.DataFrame(columns=schemas["info_artist_genre.csv"])
-                self.master_albums     = pd.DataFrame(columns=schemas["info_album.csv"])
-                self.master_tracks     = pd.DataFrame(columns=schemas["info_track.csv"])
-                self.master_shows      = pd.DataFrame(columns=schemas["info_show.csv"])
-                self.master_audiobooks = pd.DataFrame(columns=schemas["info_audiobook.csv"])
-                self.master_unlisted   = pd.DataFrame(columns=schemas["info_artist_genre_unlisted.csv"])
+            self.master_artists     = ensure_master_exists("info_artist_genre.csv")
+            self.master_albums      = ensure_master_exists("info_album.csv")
+            self.master_tracks      = ensure_master_exists("info_track.csv")
+            self.master_shows       = ensure_master_exists("info_show.csv")
+            self.master_audiobooks  = ensure_master_exists("info_audiobook.csv")
+            self.master_unlisted    = ensure_master_exists("info_artist_genre_unlisted.csv")
         except Exception as e:
             self.log(f"[master] load failed: {e}")
-            self.master_artists    = pd.DataFrame(columns=schemas["info_artist_genre.csv"])
-            self.master_albums     = pd.DataFrame(columns=schemas["info_album.csv"])
-            self.master_tracks     = pd.DataFrame(columns=schemas["info_track.csv"])
-            self.master_shows      = pd.DataFrame(columns=schemas["info_show.csv"])
-            self.master_audiobooks = pd.DataFrame(columns=schemas["info_audiobook.csv"])
-            self.master_unlisted   = pd.DataFrame(columns=schemas["info_artist_genre_unlisted.csv"])
+            self.master_artists     = pd.DataFrame(columns=schemas["info_artist_genre.csv"])
+            self.master_albums      = pd.DataFrame(columns=schemas["info_album.csv"])
+            self.master_tracks      = pd.DataFrame(columns=schemas["info_track.csv"])
+            self.master_shows       = pd.DataFrame(columns=schemas["info_show.csv"])
+            self.master_audiobooks  = pd.DataFrame(columns=schemas["info_audiobook.csv"])
+            self.master_unlisted    = pd.DataFrame(columns=schemas["info_artist_genre_unlisted.csv"])
 
-        # --- Debug logs ---
-        self.log(f"[debug] master_artists.columns = {list(self.master_artists.columns)}")
-        self.log(f"[debug] master_artists.head(5) = {self.master_artists.head(5).to_dict('records')}")
-
-        # ✅ Initialize seen_* sets based on what’s already in master tables (or empty if missing)
+        # ✅ Initialize seen_* sets
         self.seen_artists = (
             set(self.master_artists["artist_name"].dropna().astype(str).str.lower())
             if not self.master_artists.empty and "artist_name" in self.master_artists.columns
             else set()
         )
-
         self.seen_albums = (
             set(
                 (str(a).strip().lower(), str(b).strip().lower())
@@ -2593,30 +2644,25 @@ class MetadataEnricher:
             if not self.master_albums.empty and {"artist_name", "album_name"}.issubset(self.master_albums.columns)
             else set()
         )
-
         self.seen_tracks = (
             set(self.master_tracks["track_id"].dropna().astype(str).str.lower())
             if not self.master_tracks.empty and "track_id" in self.master_tracks.columns
             else set()
         )
-
         self.seen_shows = (
             set(self.master_shows["show_name"].dropna().astype(str).str.lower())
             if not self.master_shows.empty and "show_name" in self.master_shows.columns
             else set()
         )
-
         self.seen_audiobooks = (
             set(self.master_audiobooks["audiobook_title"].dropna().astype(str).str.lower())
             if not self.master_audiobooks.empty and "audiobook_title" in self.master_audiobooks.columns
             else set()
         )
 
-        # ✅ Log summary
         self.log(
-            f"[master] Loaded: artists={len(self.master_artists)}, "
-            f"albums={len(self.master_albums)}, tracks={len(self.master_tracks)}, "
-            f"shows={len(self.master_shows)}, audiobooks={len(self.master_audiobooks)}"
+            f"[master] Loaded: artists={len(self.master_artists)}, albums={len(self.master_albums)}, "
+            f"tracks={len(self.master_tracks)}, shows={len(self.master_shows)}, audiobooks={len(self.master_audiobooks)}"
         )
         self.log(
             f"[master] Seen sets initialized: "
@@ -2624,40 +2670,39 @@ class MetadataEnricher:
             f"tracks={len(self.seen_tracks)}, shows={len(self.seen_shows)}, audiobooks={len(self.seen_audiobooks)}"
         )
 
-        if not self.master_artists.empty:
-            missing_cols = [c for c in ["artist_name"] if c not in self.master_artists.columns]
-            if missing_cols:
-                self.log(f"[master] ⚠️ Missing columns in artist master: {missing_cols}")
-            else:
-                self.log(f"[master] ✅ Master artist table loaded with {len(self.master_artists)} rows.")
-
     def _filter_known_artists(self, names: list[str]) -> list[str]:
-        """Skip artists already present in master or already seen in this run."""
-        before = len(names)
+        """
+        Skip artists already present in master or already seen in this run.
+        Relaxed logic: if master is empty or schema incomplete, all names are allowed.
+        """
+        if not names:
+            self.log("[filter_known_artists] ⚠️ No input names provided.")
+            return []
 
-        # Normalize input list
+        before = len(names)
         normalized_names = {str(n).strip().lower() for n in names if isinstance(n, str) and n.strip()}
 
-        # Merge known sources
-        known = set()
-        if hasattr(self, "seen_artists"):
-            known |= {str(n).strip().lower() for n in self.seen_artists if isinstance(n, str)}
+        # If master table invalid, bypass filtering
+        if self.master_artists.empty or "artist_name" not in self.master_artists.columns:
+            self.log("[filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.")
+            return list(normalized_names)
 
-        if hasattr(self, "master_artists") and not self.master_artists.empty:
-            if "artist_name" in self.master_artists.columns:
-                known |= set(self.master_artists["artist_name"].dropna().astype(str).str.strip().str.lower())
+        known = set(self.seen_artists)
+        known |= set(self.master_artists["artist_name"].dropna().astype(str).str.strip().str.lower())
 
-        # Identify truly new names
         out = [n for n in names if str(n).strip().lower() not in known]
-
         filtered = before - len(out)
+
         if filtered > 0:
             self.log(f"[filter] Artists filtered out: {filtered}/{before} (remaining={len(out)})")
+        else:
+            self.log(f"[filter] No artists filtered (all {before} retained).")
 
-        self.log(f"[filter:debug] master_artists.columns = {list(self.master_artists.columns)}")
-        self.log(f"[filter:debug] sample master artist names: {self.master_artists['artist_name'].head(5).tolist()}")
+        # Debug diagnostics
+        self.log(f"[filter:debug] master_artists shape={self.master_artists.shape}")
+        self.log(f"[filter:debug] sample master artist names: {self.master_artists['artist_name'].head(5).tolist() if 'artist_name' in self.master_artists.columns else 'missing col'}")
         self.log(f"[filter:debug] incoming artist sample: {names[:5]}")
-        self.log(f"[debug] Filtering {len(names)} artists, seen_artists={len(self.seen_artists)}")
+        self.log(f"[filter:debug] seen_artists count={len(self.seen_artists)}")
 
         return out
 

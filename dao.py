@@ -217,6 +217,34 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         )
         print(f"[CloudflareDAO] ✅ Uploaded → {key}")
 
+    def _put_bytes_safe(self, key: str, body: bytes, content_type: str) -> bool:
+        """
+        Safe upload to R2: writes to a temp key first, then renames on success.
+        Returns True on success, False on failure.
+        """
+        key = key.lstrip("/")
+        tmp_key = f"{key}.tmp"
+        try:
+            # Stage temporary upload
+            self.r2.put_object(Bucket=self.bucket, Key=tmp_key, Body=body, ContentType=content_type)
+
+            # Verify size > 0
+            head = self.r2.head_object(Bucket=self.bucket, Key=tmp_key)
+            if head["ContentLength"] == 0:
+                print(f"[CloudflareDAO] ⚠️ Temp upload empty: {tmp_key}")
+                self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
+                return False
+
+            # Replace original
+            self.r2.copy_object(Bucket=self.bucket, CopySource={"Bucket": self.bucket, "Key": tmp_key}, Key=key)
+            self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
+            print(f"[CloudflareDAO] ✅ Atomic upload → {key}")
+            return True
+
+        except Exception as e:
+            print(f"[CloudflareDAO] ❌ Safe upload failed for {key}: {e}")
+            return False
+
     def _get_object(self, key: str) -> bytes:
         """Retrieve object contents as bytes, or raise FileNotFoundError."""
         key = key.lstrip("/")
@@ -225,6 +253,23 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             return obj["Body"].read()
         except self.r2.exceptions.NoSuchKey:
             raise FileNotFoundError(f"No such object in R2: {key}")
+
+    def _get_object_safe(self, key: str) -> Optional[bytes]:
+        """Retrieve bytes if object exists and non-empty, else None."""
+        key = key.lstrip("/")
+        try:
+            obj = self.r2.get_object(Bucket=self.bucket, Key=key)
+            data = obj["Body"].read()
+            if not data:
+                print(f"[CloudflareDAO] ⚠️ Empty object for {key}")
+                return None
+            return data
+        except self.r2.exceptions.NoSuchKey:
+            print(f"[CloudflareDAO] ℹ️ No object in R2: {key}")
+            return None
+        except Exception as e:
+            print(f"[CloudflareDAO] ❌ Failed to get {key}: {e}")
+            return None
 
     def _upload_json(self, key: str, payload: dict):
         """Internal helper for uploading JSON files."""
@@ -518,56 +563,56 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
 
     def merge_into_master(self, df_new: pd.DataFrame, filename: str, *, keys: List[str]):
         """
-        Merge df_new into a global master file in Cloudflare R2.
-        Deduplicates based on `keys`, keeping the latest non-null values.
+        Safely merge df_new into master CSV in R2.
+        Avoids accidental overwrite if new data is empty or upload fails.
         """
         key = f"enrichment/metadata/{filename}"
+        if df_new.empty:
+            print(f"[merge_into_master] ⚠️ No new rows for {filename}, skipping merge.")
+            return False
 
-        try:
-            # --- Try loading existing master ---
+        # --- Load old data
+        data_bytes = self._get_object_safe(key)
+        if data_bytes is None:
+            df_old = pd.DataFrame(columns=df_new.columns)
+            print(f"[merge_into_master] ℹ️ Starting new master for {filename}")
+        else:
             try:
-                df_old = pd.read_csv(io.BytesIO(self._get_object(key)), low_memory=False)
-                print(f"[merge_into_master] ✅ Loaded existing {filename} ({len(df_old)} rows)")
-            except FileNotFoundError:
-                print(f"[merge_into_master] ℹ️ {filename} not found — creating new master.")
+                df_old = pd.read_csv(io.BytesIO(data_bytes), low_memory=False)
+            except Exception as e:
+                print(f"[merge_into_master] ⚠️ Corrupt CSV {filename}: {e}, resetting.")
                 df_old = pd.DataFrame(columns=df_new.columns)
 
-            # --- Align schemas (ensure both DataFrames share columns) ---
-            cols = list({*df_old.columns.tolist(), *df_new.columns.tolist()})
-            df_old = df_old.reindex(columns=cols)
-            df_new = df_new.reindex(columns=cols)
+        before = len(df_old)
 
-            # --- Combine ---
-            df_combined = pd.concat([df_old, df_new], ignore_index=True)
+        # --- Align + merge
+        cols = list({*df_old.columns, *df_new.columns})
+        df_old = df_old.reindex(columns=cols)
+        df_new = df_new.reindex(columns=cols)
+        df_combined = pd.concat([df_old, df_new], ignore_index=True)
 
-            # --- Deduplicate based on keys (keep latest non-null entries) ---
-            if keys:
-                df_combined["_is_new"] = 0
-                df_combined.loc[df_combined.index[-len(df_new):], "_is_new"] = 1
+        if keys:
+            df_combined.drop_duplicates(subset=keys, keep="last", inplace=True)
 
-                def last_valid(series: pd.Series):
-                    not_nulls = series[~series.isna()]
-                    return not_nulls.iloc[-1] if not not_nulls.empty else None
+        after = len(df_combined)
+        print(f"[merge_into_master] Merged {len(df_new)} new → total {after} (before={before})")
 
-                df_combined = (
-                    df_combined.sort_values(keys + ["_is_new"])
-                    .groupby(keys, as_index=False)
-                    .agg(last_valid)
-                )
-                df_combined.drop(columns=["_is_new"], inplace=True, errors="ignore")
-            else:
-                df_combined.drop_duplicates(keep="last", inplace=True)
+        # --- Sanity checks
+        if after < before:
+            print(f"[merge_into_master] ❌ Merge shrank dataset, aborting upload.")
+            return False
 
-            # --- Upload merged master back to Cloudflare ---
-            buf = io.BytesIO()
-            df_combined.to_csv(buf, index=False, encoding="utf-8")
-            self._put_bytes(key, buf.getvalue(), "text/csv")
+        # --- Upload atomically
+        buf = io.BytesIO()
+        df_combined.to_csv(buf, index=False, encoding="utf-8")
+        ok = self._put_bytes_safe(key, buf.getvalue(), "text/csv")
 
-            print(f"[merge_into_master] ✅ Updated {filename}: {len(df_combined)} total rows")
+        if not ok:
+            print(f"[merge_into_master] ❌ Upload failed, leaving old version intact.")
+            return False
 
-        except Exception as e:
-            print(f"[merge_into_master] ❌ Failed to merge into {filename}: {e}")
-            raise
+        print(f"[merge_into_master] ✅ Saved {after} rows to {filename}")
+        return True
 
     # ------------------------------------------------------------
     # LOGGING

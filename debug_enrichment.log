@@ -2081,3 +2081,4 @@ AttributeError: 'DataFrame' object has no attribute 'log'. Did you mean: 'loc'?
 2025-10-24 10:25:15,474 [ERROR] :
 2025-10-24 10:25:15,474 [ERROR] 'DataFrame' object has no attribute 'log'
 2025-10-24 10:25:15,474 [ERROR] . Did you mean: 'loc'?
+2025-11-05 21:54:26,491 [INFO] [logging] ✅ StreamToLogger attached

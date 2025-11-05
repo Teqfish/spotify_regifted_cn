@@ -1986,17 +1986,25 @@ class MetadataEnricher:
         """
         Remaining metadata: breadth-first over years.
         For each year (descending), process up to 50 *new* artists, shows, and audiobooks.
+        Diagnostic version: adds deep logging and sanitization of seen_artists.
         """
         self.current_phase = "breadth_first"
         self._check_cancel(self.cancel_event)
-        self.log("[breadth_first] Starting…")
+        self.log("[breadth_first] Starting diagnostic phase…")
+
+        # --- Defensive cleanup of seen sets ---
+        self.seen_artists = {
+            a.strip().lower() for a in self.seen_artists
+            if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"
+        }
 
         years_music = sorted(per_art["year"].dropna().unique().tolist(), reverse=True) if not per_art.empty else []
         years_show  = sorted(per_show["year"].dropna().unique().tolist(), reverse=True) if not per_show.empty else []
         years_book  = sorted(per_book["year"].dropna().unique().tolist(), reverse=True) if not per_book.empty else []
 
         max_cycles = max(1, len(set(years_music + years_show + years_book)))
-        self.log(f"[breadth_first] Max cycles = {max_cycles}")
+        self.log(f"[breadth_first] Max cycles = {max_cycles} (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)})")
+        self.log(f"[breadth_first:debug] seen_artists init size={len(self.seen_artists)} sample={list(self.seen_artists)[:10]}")
 
         for cycle in range(1, max_cycles + 1):
             self._check_cancel(self.cancel_event)
@@ -2006,52 +2014,93 @@ class MetadataEnricher:
             for y in years_music:
                 self._check_cancel(self.cancel_event)
                 sub = per_art[per_art["year"] == y].sort_values("minutes_played", ascending=False)
-                names = [n for n in sub["artist_name"].tolist() if n not in self.seen_artists]
-                before = len(names)
+
+                self.log(f"[breadth_first][debug] Year {y} sub shape={sub.shape}")
+                if not sub.empty:
+                    self.log(f"[breadth_first][debug] Year {y} artist sample={sub['artist_name'].dropna().head(5).tolist()}")
+                else:
+                    self.log(f"[breadth_first][debug] Year {y} has no rows in per_art")
+                self.log(f"[breadth_first] seen_artists size={len(self.seen_artists)} sample={list(self.seen_artists)[:5]}")
+
+                # Step 1: initial candidate list (before filters)
+                names = [n for n in sub["artist_name"].dropna().astype(str).tolist() if n.strip()]
+                before_total = len(names)
+
+                # Step 2: remove already seen
+                names = [n for n in names if n.strip().lower() not in self.seen_artists]
+                after_seen = len(names)
+
+                self.log(f"[breadth_first] Year {y}: candidates={before_total}, after_seen={after_seen}, seen_artists={len(self.seen_artists)}")
+
+                # Step 3: secondary filter (masters)
+                names_prefilter = list(names)
                 names = self._filter_known_artists(names)
-                self.log(f"[breadth_first] Year {y} Artists before={before}, after={len(names)}")
+                after_filter = len(names)
+                self.log(f"[breadth_first] Year {y} Artists before={len(names_prefilter)}, after={after_filter}")
+
+                if before_total > 0 and after_filter == 0:
+                    self.log(f"[breadth_first][warning] ⚠️ All {before_total} artists excluded at year {y}! seen_artists or master table may be overmatching.")
+
                 batch = names[:50]
                 if batch:
                     self.fetch_and_save_artists(batch, cancel_event=self.cancel_event)
-                    self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                        detail=f"breadth_first(artists) • year={y} • +{len(batch)}")
+                    self.status.inc_status(
+                        self.user_id, self.label,
+                        add_batches=1,
+                        detail=f"breadth_first(artists) • year={y} • +{len(batch)}"
+                    )
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
-                    self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip()}
+                    # Sanitize before updating seen set
+                    self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"}
 
             # --- Shows ---
             for y in years_show:
                 self._check_cancel(self.cancel_event)
                 sub = per_show[per_show["year"] == y].sort_values("minutes_played", ascending=False)
-                names = [n for n in sub["show_name"].tolist() if n not in self.seen_shows]
+                names = [n for n in sub["show_name"].dropna().astype(str).tolist() if n.strip()]
                 before = len(names)
+                names = [n for n in names if n.strip().lower() not in self.seen_shows]
+                before_seen = len(names)
                 names = self._filter_known_shows(names)
-                self.log(f"[breadth_first] Year {y} Shows before={before}, after={len(names)}")
+                after = len(names)
+                self.log(f"[breadth_first] Year {y} Shows before={before}, after={after} (after_seen={before_seen})")
                 batch = names[:50]
                 if batch:
                     self.fetch_and_save_shows(batch, cancel_event=self.cancel_event)
-                    self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                        detail=f"breadth_first(shows) • year={y} • +{len(batch)}")
+                    self.status.inc_status(
+                        self.user_id, self.label,
+                        add_batches=1,
+                        detail=f"breadth_first(shows) • year={y} • +{len(batch)}"
+                    )
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
-                    self.seen_shows |= {s.strip().lower() for s in batch}
+                    self.seen_shows |= {s.strip().lower() for s in batch if s.strip()}
 
             # --- Audiobooks ---
             for y in years_book:
                 self._check_cancel(self.cancel_event)
                 sub = per_book[per_book["year"] == y].sort_values("minutes_played", ascending=False)
-                titles = [t for t in sub["audiobook_title"].tolist() if t not in self.seen_audiobooks]
+                titles = [t for t in sub["audiobook_title"].dropna().astype(str).tolist() if t.strip()]
                 before = len(titles)
+                titles = [t for t in titles if t.strip().lower() not in self.seen_audiobooks]
+                before_seen = len(titles)
                 titles = self._filter_known_audiobooks(titles)
-                self.log(f"[breadth_first] Year {y} Audiobooks before={before}, after={len(titles)}")
+                after = len(titles)
+                self.log(f"[breadth_first] Year {y} Audiobooks before={before}, after={after} (after_seen={before_seen})")
                 batch = titles[:50]
                 if batch:
                     self.fetch_and_save_audiobooks(batch, cancel_event=self.cancel_event)
-                    self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                        detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}")
+                    self.status.inc_status(
+                        self.user_id, self.label,
+                        add_batches=1,
+                        detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}"
+                    )
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
-                    self.seen_audiobooks |= {t.strip().lower() for t in batch}
+                    self.seen_audiobooks |= {t.strip().lower() for t in batch if t.strip()}
+
+        self.log(f"[breadth_first] Completed diagnostic phase.")
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """
@@ -2633,6 +2682,12 @@ class MetadataEnricher:
             if not self.master_artists.empty and "artist_name" in self.master_artists.columns
             else set()
         )
+
+        # --- Diagnostic logging ---
+        self.log(f"[debug:init] master_artists shape={self.master_artists.shape}")
+        self.log(f"[debug:init] master_artists head={self.master_artists.head(3).to_dict('records')}")
+        self.log(f"[debug:init] seen_artists sample={list(self.seen_artists)[:10]}")
+
         self.seen_albums = (
             set(
                 (str(a).strip().lower(), str(b).strip().lower())
@@ -2675,6 +2730,8 @@ class MetadataEnricher:
         Skip artists already present in master or already seen in this run.
         Relaxed logic: if master is empty or schema incomplete, all names are allowed.
         """
+        self.log(f"[filter:debug] incoming prefilter len={len(names)}")
+
         if not names:
             self.log("[filter_known_artists] ⚠️ No input names provided.")
             return []

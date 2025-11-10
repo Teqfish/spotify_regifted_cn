@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 from typing import Dict, Optional
+from datetime import datetime, timezone
 from dao import (
     LocalUserDataDAO,
     LocalMetadataDAO,
@@ -89,7 +90,7 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
             print("[dao_selector] ✅ Initialized Cloudflare D1 (first time this session)")
         else:
             cf_d1 = st.session_state["_d1_instance"]
-            
+
 
         return {
             "main": cf_d1,      # D1 for structured data
@@ -153,3 +154,58 @@ def load_global_daos():
         DAOS.clear()  # safer than DAOS = {} to preserve global reference
 
     return DAOS
+
+class LogDAO:
+    """
+    Unified logger for enrichment and background threads.
+    Delegates to CloudflareDAO or LocalLogDAO depending on environment.
+    """
+
+    def __init__(self, backend):
+        self.backend = backend
+
+    def log(self, user_id: str, dataset_label: str, where: str, message: str, level: str = "info"):
+        """Write both to stdout and to R2/local log file."""
+        prefix = f"[{where}] {message}"
+        print(f"[log_dao] {prefix}")
+        try:
+            log_path = f"enrichment/logs/{user_id}_{dataset_label}.log"
+            entry = f"{datetime.now(timezone.utc).isoformat()} [{level.upper()}] {prefix}\n"
+            try:
+                # Read old content if file exists
+                old_log = ""
+                try:
+                    old_log = self.backend.download_text(log_path)
+                except Exception:
+                    old_log = ""
+                new_log = old_log + entry
+                self.backend.upload_text(new_log, path=log_path)
+            except Exception as e:
+                print(f"[log_dao] ⚠️ Could not append to log file: {e}")
+        except Exception as e:
+            print(f"[log_dao] ⚠️ Failed to log remotely: {prefix} ({e})")
+            print(f"[log_dao:debug] Remote log upload failed: {type(e).__name__} — {e}")
+
+def get_log_dao() -> LogDAO:
+    """
+    Return a valid LogDAO depending on current environment.
+    """
+    import streamlit as st
+
+    try:
+        from dao_selector import DAOS
+        if not DAOS or "logs" not in DAOS:
+            load_global_daos()
+        backend = DAOS.get("logs")
+        if backend is None:
+            raise ValueError("No 'logs' DAO backend available.")
+        return LogDAO(backend)
+    except Exception as e:
+        print(f"[get_log_dao] ⚠️ Fallback to local LogDAO due to error: {e}")
+        # Fallback to local file writer if Cloudflare unavailable
+        class LocalFallback:
+            def upload_text(self, text, path):
+                os.makedirs("datasets/enrichment/logs", exist_ok=True)
+                with open(f"datasets/enrichment/logs/{os.path.basename(path)}", "a", encoding="utf-8") as f:
+                    f.write(text)
+        return LogDAO(LocalFallback())

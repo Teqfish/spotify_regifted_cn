@@ -989,23 +989,41 @@ def background_enrich(
     user_id: str,
     dataset_label: str,
     cleaned_df: pd.DataFrame,
-    log_dao,
-    cancel_event: Optional[threading.Event] = None
+    log_dao=None,
+    cancel_event: Optional[threading.Event] = None,
 ):
     """
     Background enrichment runner using DAOs.
     Writes progress via status_dao, logs via log_dao, and stores metadata in R2.
     Thread-safe and cancellation-aware.
     """
+
+    import traceback
+    from dao_selector import DAOS, get_log_dao
+
     thread_name = threading.current_thread().name
     print(f"[enrich:{thread_name}] Starting enrichment thread for {dataset_label}")
 
-    # ✅ Ensure DAOs initialized inside thread
+    # ✅ Ensure DAOs initialized inside thread context
     ensure_daos_initialized_for_thread()
+
+    # --- Ensure log_dao is a valid logging DAO ---
+    try:
+        if log_dao is None or not hasattr(log_dao, "log"):
+            print(f"[enrich:{thread_name}] ⚠️ log_dao missing or invalid — attempting to reload via dao_selector.get_log_dao()")
+            log_dao = get_log_dao()
+        if not hasattr(log_dao, "log"):
+            raise TypeError("log_dao does not implement .log(user_id, label, where, message, level)")
+    except Exception as e:
+        print(f"[enrich:{thread_name}] ❌ Failed to initialize log_dao: {e}")
+        # fallback dummy that prints instead of writing remotely
+        class DummyLogDAO:
+            def log(self, user_id, dataset_label, where, message, level="info"):
+                print(f"[log_dao:{level}] ({where}) {message}")
+        log_dao = DummyLogDAO()
 
     try:
         from dao_selector import DAOS
-
         status_dao = DAOS.get("status")
         metadata_dao = DAOS.get("r2")
 
@@ -1023,7 +1041,6 @@ def background_enrich(
         log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
         ok, msg = spotify_sanity_check(token)
         _check_cancel("spotify_sanity_check")
-
         if not ok:
             status_dao.finish_status(user_id, dataset_label, ok=False, detail=f"Spotify check failed: {msg}")
             return
@@ -1031,13 +1048,30 @@ def background_enrich(
         log_dao.log(user_id, dataset_label, "sanity", "Starting Discogs sanity check")
         ok, msg = discogs_sanity_check(DISCOGS_KEY, DISCOGS_SECRET)
         _check_cancel("discogs_sanity_check")
-
         if not ok:
             status_dao.finish_status(user_id, dataset_label, ok=False, detail=f"Discogs check failed: {msg}")
             return
 
-        # --- Initialize Enricher ---
         _check_cancel("MetadataEnricher init")
+
+        # --- Safety reload in case cleaned_df is unexpectedly empty ---
+        if cleaned_df is None or cleaned_df.empty:
+            print(f"[enrich:{thread_name}] ⚠️ cleaned_df empty — reloading from R2 before enrichment")
+            try:
+                daos = get_daos()
+                user_dao = daos.get("user_data")
+                latest = user_dao.list_datasets(user_id)
+                latest_table = dict(latest).get(dataset_label)
+                if latest_table:
+                    cleaned_df = user_dao.load_user_data(latest_table)
+                    print(f"[enrich:{thread_name}] ✅ Reloaded dataset from R2 ({len(cleaned_df)} rows)")
+            except Exception as e:
+                print(f"[enrich:{thread_name}] ❌ Failed to reload dataset: {e}")
+
+            if cleaned_df is None or cleaned_df.empty:
+                raise RuntimeError(f"cleaned_df still empty — cannot start enrichment for {dataset_label}")
+
+        # --- Proceed with enrichment ---
         enricher = MetadataEnricher(
             user_id=user_id,
             label=dataset_label,
@@ -1050,6 +1084,7 @@ def background_enrich(
             log_dao=log_dao,
         )
 
+        print(f"[debug] df columns at start of enrichment: {list(cleaned_df.columns)}")
         # --- Begin Enrichment Run ---
         log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
         status_dao.set_status(user_id, dataset_label, phase="running", detail="Executing enrichment run")
@@ -1123,6 +1158,27 @@ def spawn_enrichment_thread(user_id, label, cleaned_df, log_dao=None, cancel_eve
 
 def _maybe_start_enrichment(*, user_id, dataset_label, table_name, cleaned_df):
     import threading, time
+
+    # --- Defensive wait if dataframe isn't ready yet ---
+    attempts = 0
+    while (cleaned_df is None or cleaned_df.empty) and attempts < 5:
+        print(f"[enrich] ⏳ Waiting for cleaned_df to be ready (attempt {attempts+1})...")
+        time.sleep(1)
+        # Try reloading directly from R2 as fallback
+        try:
+            user_dao = get_daos().get("user_data")
+            if user_dao:
+                cleaned_df = user_dao.load_user_data(table_name)
+                if not cleaned_df.empty:
+                    print(f"[enrich] ✅ Reloaded dataset from R2 for {dataset_label} ({len(cleaned_df)} rows)")
+                    break
+        except Exception as e:
+            print(f"[enrich] ⚠️ Could not reload dataset yet: {e}")
+        attempts += 1
+
+    if cleaned_df is None or cleaned_df.empty:
+        print(f"[enrich] ❌ Aborting autostart — cleaned_df still empty after {attempts} attempts.")
+        return
 
     reg = st.session_state.get("_enrichment_registry", {})
     old_thread = reg.get("thread")
@@ -1208,6 +1264,156 @@ def ensure_daos_initialized_for_thread():
 
     except Exception as e:
         print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
+
+def verify_dataset_consistency(user_id: str, dataset_label: str, cleaned_df: pd.DataFrame, user_data_dao, log_dao=None):
+    """
+    Compare cached cleaned_df (post-ETL) vs. reloaded dataset from R2
+    and log/report any inconsistencies.
+    Also saves a detailed diff report as CSV in R2 with a summary verdict.
+    """
+    import datetime  # ✅ safer module-level import; avoids ambiguity in mixed environments
+
+    log_prefix = "[consistency]"
+    ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+
+    def _log(where, msg, level="info"):
+        print(f"{log_prefix} {msg}")
+        if log_dao:
+            log_dao.log(user_id, dataset_label, where=where, msg=msg, level=level)
+
+    _log("start", f"🔍 Starting dataset consistency check for {dataset_label}")
+
+    # --- Try to locate uploaded dataset on R2 ---
+    try:
+        all_keys = user_data_dao.list_objects(prefix=f"userdata/{user_id}_{dataset_label}_")
+        csv_keys = [k for k in all_keys if k.endswith("_history.csv")]
+        if not csv_keys:
+            _log("lookup", f"❌ No uploaded file found for {dataset_label}", "error")
+            return
+        latest_key = sorted(csv_keys)[-1]
+        _log("lookup", f"🧭 Using latest uploaded file: {latest_key}")
+    except Exception as e:
+        _log("lookup", f"❌ Failed to list or find uploaded dataset: {e}", "error")
+        return
+
+    # --- Reload dataset from R2 ---
+    try:
+        reloaded_df = user_data_dao.download_csv(path=latest_key)
+        _log("reload", f"📥 Reloaded dataset from R2: {len(reloaded_df)} rows, {len(reloaded_df.columns)} columns")
+    except Exception as e:
+        _log("reload", f"❌ Failed to reload dataset: {e}", "error")
+        return
+
+    # --- Compare shape ---
+    shape_match = (cleaned_df.shape == reloaded_df.shape)
+    if not shape_match:
+        _log("shape", f"⚠️ Shape mismatch: cleaned={cleaned_df.shape}, reloaded={reloaded_df.shape}", "warning")
+    else:
+        _log("shape", f"✅ Shape matches: {cleaned_df.shape}")
+
+    # --- Compare columns ---
+    cleaned_cols = set(cleaned_df.columns)
+    reloaded_cols = set(reloaded_df.columns)
+    missing_in_reload = cleaned_cols - reloaded_cols
+    missing_in_cleaned = reloaded_cols - cleaned_cols
+    if missing_in_reload or missing_in_cleaned:
+        _log("columns", f"⚠️ Column mismatch → missing_in_reload={missing_in_reload}, missing_in_cleaned={missing_in_cleaned}", "warning")
+    else:
+        _log("columns", "✅ Columns match exactly")
+
+    # --- Compare dtypes ---
+    dtype_diffs = {
+        c: (str(cleaned_df[c].dtype), str(reloaded_df[c].dtype))
+        for c in cleaned_cols & reloaded_cols
+        if str(cleaned_df[c].dtype) != str(reloaded_df[c].dtype)
+    }
+    if dtype_diffs:
+        _log("dtypes", f"⚠️ Dtype differences detected in {len(dtype_diffs)} columns", "warning")
+        for col, (t1, t2) in dtype_diffs.items():
+            _log("dtypes", f"   • {col}: {t1} vs {t2}")
+    else:
+        _log("dtypes", "✅ All dtypes match")
+
+    # --- Generate CSV diff report ---
+    try:
+        identical, report_path = _save_diff_report(user_id, dataset_label, cleaned_df, reloaded_df, user_data_dao)
+        verdict_msg = "✅ CLEANED DATASET IS IDENTICAL TO R2 COPY" if identical else "⚠️ DIFFERENCES FOUND"
+        _log("report", f"{verdict_msg} → {report_path}")
+    except Exception as e:
+        _log("report", f"⚠️ Failed to save diff report: {e}", "error")
+
+    _log("complete", f"✅ Consistency check completed for {dataset_label}")
+
+def _save_diff_report(user_id: str, dataset_label: str, cleaned_df: pd.DataFrame,
+                      reloaded_df: pd.DataFrame, user_data_dao, threshold: int = 10_000):
+    """
+    Compare cached vs. reloaded user dataset and save a CSV diff report to R2.
+    The file will be saved to:
+        userdata/{user_id}_{dataset_label}_consistency_report.csv
+    Returns: (identical: bool, report_path: str)
+    """
+    report_rows = []
+
+    # --- Basic metadata ---
+    meta = {
+        "rows_cleaned": len(cleaned_df),
+        "cols_cleaned": len(cleaned_df.columns),
+        "rows_reloaded": len(reloaded_df),
+        "cols_reloaded": len(reloaded_df.columns),
+        "column_mismatch": sorted(list(set(cleaned_df.columns) ^ set(reloaded_df.columns))),
+    }
+
+    # --- Meta summary ---
+    for k, v in meta.items():
+        report_rows.append({"section": "meta", "metric": k, "value": v})
+
+    # --- Dtype differences ---
+    shared_cols = sorted(set(cleaned_df.columns) & set(reloaded_df.columns))
+    dtype_diffs = []
+    for c in shared_cols:
+        t1, t2 = str(cleaned_df[c].dtype), str(reloaded_df[c].dtype)
+        if t1 != t2:
+            dtype_diffs.append(c)
+            report_rows.append({
+                "section": "dtype_mismatch",
+                "metric": c,
+                "value": f"{t1} != {t2}",
+            })
+
+    # --- Content mismatch sample ---
+    mismatches = []
+    compare_len = min(len(cleaned_df), len(reloaded_df), threshold)
+    for c in shared_cols:
+        try:
+            diff_mask = (cleaned_df[c].astype(str).iloc[:compare_len] != reloaded_df[c].astype(str).iloc[:compare_len])
+            if diff_mask.any():
+                mismatches.append((c, int(diff_mask.sum())))
+        except Exception:
+            mismatches.append((c, "comparison_failed"))
+
+    for col, count in mismatches:
+        report_rows.append({"section": "value_mismatch", "metric": col, "value": count})
+
+    # --- Verdict summary ---
+    identical = (
+        meta["rows_cleaned"] == meta["rows_reloaded"]
+        and meta["cols_cleaned"] == meta["cols_reloaded"]
+        and not meta["column_mismatch"]
+        and not dtype_diffs
+        and not mismatches
+    )
+
+    summary_msg = "✅ identical" if identical else "⚠️ differences_detected"
+    report_rows.append({"section": "summary", "metric": "identical", "value": summary_msg})
+
+    report_df = pd.DataFrame(report_rows)
+
+    # --- Upload to R2 ---
+    report_path = f"userdata/{user_id}_{dataset_label}_consistency_report.csv"
+    user_data_dao.upload_csv(report_df, path=report_path)
+    print(f"[consistency:report] 📊 Saved diff report → {report_path} ({len(report_df)} rows)")
+
+    return identical, report_path
 
 # --- LOGIN UI ---
 if not st.session_state.user:
@@ -1464,6 +1670,7 @@ if page == "Home":
                 try:
                     with st.spinner("Processing your data (ETL + Enrichment)…"):
                         st.session_state.etl_done = False
+                        # ⚙️ Run ETL (already handles data cleaning + upload)
                         table_name, cleaned_df = _etl_process_zip(
                             uploaded, dataset_label.strip(), user_id
                         )
@@ -1471,6 +1678,18 @@ if page == "Home":
                     if cleaned_df is None or cleaned_df.empty:
                         st.error("ETL produced no rows. Please check your ZIP export.")
                     else:
+                        # ✅ Run consistency verification (no extra upload)
+                        try:
+                            verify_dataset_consistency(
+                                user_id,
+                                dataset_label.strip(),
+                                cleaned_df,
+                                user_dao,
+                                log_dao=status_dao
+                            )
+                        except Exception as e:
+                            st.warning(f"⚠️ Consistency check failed: {e}")
+
                         # Persist session state
                         st.session_state["current_dataset_label"] = dataset_label.strip()
                         st.session_state["current_df"] = cleaned_df
@@ -1862,13 +2081,31 @@ elif page == "Overview":
         # -------------------- Genre Diversity (100% stacked area, correctly ordered) -------------------- #
         st.markdown("### Genre Diversity Over Time (Share of Total Listening)")
 
+        # --- Drop timezone (avoids 'drop timezone information' warning) ---
+        df_filtered["datetime_naive"] = df_filtered["datetime"].dt.tz_localize(None)
+
         # --- Compute monthly totals per supergenre ---
-        genre_trend = (
-            df_filtered.groupby([pd.Grouper(key="datetime", freq="M"), "supergenre"])["minutes_played"]
-            .sum()
-            .reset_index()
-        )
-        genre_trend["month"] = genre_trend["datetime"].dt.to_period("M").astype(str)
+        # Use "ME" (month-end) if available, else fallback to "M"
+        try:
+            genre_trend = (
+                df_filtered.groupby([pd.Grouper(key="datetime_naive", freq="ME"), "supergenre"])["minutes_played"]
+                .sum()
+                .reset_index()
+            )
+        except ValueError:
+            # Fallback for older pandas versions
+            genre_trend = (
+                df_filtered.groupby([pd.Grouper(key="datetime_naive", freq="M"), "supergenre"])["minutes_played"]
+                .sum()
+                .reset_index()
+            )
+
+        # --- Convert datetime to monthly period safely ---
+        try:
+            genre_trend["month"] = genre_trend["datetime_naive"].dt.to_period("ME").astype(str)
+        except ValueError:
+            # For older pandas, fall back to "M"
+            genre_trend["month"] = genre_trend["datetime_naive"].dt.to_period("M").astype(str)
 
         # --- Pivot and normalize to percentages ---
         genre_pivot = genre_trend.pivot(index="month", columns="supergenre", values="minutes_played").fillna(0)

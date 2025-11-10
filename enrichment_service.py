@@ -289,123 +289,62 @@ def get_chapters(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[
         spin_sleep(0.1)
     return out
 
-def get_monthly_user_popularity(
-    user_history: pd.DataFrame,
-    info_tracks: pd.DataFrame,
-    info_artists: pd.DataFrame,
-    log_fn: Optional[callable] = print,  # default logger
-) -> pd.DataFrame:
+def get_monthly_user_popularity(df: pd.DataFrame, info_tracks: pd.DataFrame, info_artists: pd.DataFrame, log_fn=None) -> pd.DataFrame:
     """
-    Compute monthly averages of track & artist popularity based on listening activity.
-
-    - Groups by month of listening (from a datetime-like column in user history)
-    - Merges track popularity from info_tracks using track_id
-    - Merges artist popularity from info_artists using artist_name
+    Build a monthly user popularity timeline from playback data joined with track and artist metadata.
+    Defensive version that sanitizes columns and avoids .str errors.
     """
-
     import pandas as pd
+    from datetime import datetime
 
-    def _log(msg):
+    if log_fn:
+        log_fn("[popularity_timeseries] Starting monthly popularity aggregation…")
+
+    try:
+        # ✅ Defensive column handling
+        df.columns = pd.Index([str(c).strip().lower() for c in df.columns])
+        info_tracks.columns = pd.Index([str(c).strip().lower() for c in info_tracks.columns])
+        info_artists.columns = pd.Index([str(c).strip().lower() for c in info_artists.columns])
+    except Exception as e:
         if log_fn:
-            try:
-                log_fn(msg)
-            except Exception:
-                print(msg)
+            log_fn(f"[popularity_timeseries] ⚠️ Failed to normalize column names: {e}")
 
-    if user_history.empty:
-        _log("⚠️ User history is empty.")
-        return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+    # --- Validate required columns ---
+    required_cols = {"datetime", "track_id", "minutes_played"}
+    if not required_cols.issubset(df.columns):
+        missing = required_cols - set(df.columns)
+        raise ValueError(f"Missing required columns in playback data: {missing}")
 
-    # --- Step 1: Normalize columns ---
-    for df in [user_history, info_tracks, info_artists]:
-        df.columns = df.columns.str.strip().str.lower()
+    # --- Convert datetime ---
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df["month"] = df["datetime"].dt.to_period("M")
 
-    # --- Step 2: Ensure datetime column exists ---
-    datetime_col = next(
-        (c for c in ["datetime", "played_at", "timestamp", "end_time"] if c in user_history.columns),
-        None
-    )
-    if not datetime_col:
-        _log("⚠️ No datetime-like column found in user history.")
-        return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+    # --- Merge metadata (robustly) ---
+    merged = df.merge(info_tracks, on="track_id", how="left", suffixes=("", "_track"))
+    if "artist_name" not in merged.columns and "artist_name_track" in merged.columns:
+        merged["artist_name"] = merged["artist_name_track"]
 
-    # --- Step 3: Convert datetime and derive month ---
-    user_history["month"] = (
-        pd.to_datetime(user_history[datetime_col], errors="coerce", utc=True)
-        .dt.tz_localize(None)
-        .dt.to_period("M")
-        .dt.to_timestamp()
-    )
+    merged = merged.merge(info_artists[["artist_name", "artist_popularity"]], on="artist_name", how="left")
 
-    # --- Step 4: Ensure track_id ---
-    if "spotify_track_uri" in user_history.columns and "track_id" not in user_history.columns:
-        user_history["track_id"] = (
-            user_history["spotify_track_uri"]
-            .astype(str)
-            .str.replace("spotify:track:", "", regex=False)
-            .str.strip()
-        )
-
-    if "track_id" not in user_history.columns:
-        _log("⚠️ No 'track_id' or 'spotify_track_uri' column found in user history.")
-        return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
-
-    # --- Step 5: Merge with track metadata ---
-    required_track_cols = {"track_id", "artist_name", "track_popularity"}
-    if not required_track_cols.issubset(info_tracks.columns):
-        missing = required_track_cols - set(info_tracks.columns)
-        _log(f"⚠️ Track metadata missing required columns: {missing}")
-        return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
-
-    merged = user_history.merge(
-        info_tracks[list(required_track_cols)],
-        on="track_id",
-        how="left",
-        suffixes=("", "_trackmeta")
-    )
-
-    # Fix duplicated artist_name
-    if "artist_name_trackmeta" in merged.columns:
-        merged["artist_name"] = merged["artist_name_trackmeta"]
-        merged = merged.drop(columns=["artist_name_trackmeta"], errors="ignore")
-    elif "artist_name_x" in merged.columns and "artist_name_y" in merged.columns:
-        merged["artist_name"] = merged["artist_name_y"].combine_first(merged["artist_name_x"])
-        merged = merged.drop(columns=["artist_name_x", "artist_name_y"], errors="ignore")
-
-    # --- Step 6: Merge with artist popularity ---
-    if not {"artist_name", "artist_popularity"}.issubset(info_artists.columns):
-        _log("⚠️ Artist metadata missing required columns.")
-        merged["artist_popularity"] = pd.NA
-    else:
-        merged = merged.merge(
-            info_artists[["artist_name", "artist_popularity"]],
-            on="artist_name",
-            how="left",
-            suffixes=("", "_artistmeta")
-        )
-        if "artist_popularity_artistmeta" in merged.columns:
-            merged["artist_popularity"] = merged["artist_popularity_artistmeta"]
-            merged = merged.drop(columns=["artist_popularity_artistmeta"], errors="ignore")
-
-    # --- Step 7: Compute monthly averages ---
-    monthly = (
-        merged.groupby("month")[["track_popularity", "artist_popularity"]]
-        .mean(numeric_only=True)
-        .reset_index()
-        .rename(columns={
-            "track_popularity": "avg_track_popularity",
-            "artist_popularity": "avg_artist_popularity",
+    # --- Aggregate monthly popularity ---
+    grouped = (
+        merged.groupby(["month", "artist_name"], dropna=True)
+        .agg({
+            "minutes_played": "sum",
+            "artist_popularity": "mean",
         })
+        .reset_index()
     )
 
-    # --- Step 8: Diagnostics ---
-    _log(
-        f"Matched {merged['track_id'].notna().sum()} tracks "
-        f"and {merged['artist_name'].notna().sum()} artists "
-        f"across {len(monthly)} months."
+    grouped["month"] = grouped["month"].astype(str)
+    grouped["user_popularity"] = (
+        grouped["artist_popularity"] * (grouped["minutes_played"] / grouped["minutes_played"].max())
     )
 
-    return monthly
+    if log_fn:
+        log_fn(f"[popularity_timeseries] Aggregated {len(grouped)} monthly artist popularity rows.")
+
+    return grouped
 
 # ============ Discogs fallback for missing artist genres ============
 def discogs_search_genres(
@@ -2103,18 +2042,12 @@ class MetadataEnricher:
         self.log(f"[breadth_first] Completed diagnostic phase.")
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
-        """
-        Full enrichment pipeline with detailed debug logging.
-        Also syncs progress to Cloudflare D1 every 25 batches.
-        """
-
-        # from app import set_enrichment_status, finish_enrichment_status
+        """Full enrichment pipeline with detailed debug logging, flushing after each phase."""
 
         self.cancel_event = cancel_event
         self._load_master_tables()
 
         try:
-            # 1) Plan
             total = int(self.estimate_total_batches())
             self._total_batches = total
             self._done_batches = 0
@@ -2129,17 +2062,6 @@ class MetadataEnricher:
                 total=total
             )
 
-            # set_enrichment_status(
-            #     user_id=self.user_id,
-            #     dataset_label=self.label,
-            #     status="running",
-            #     phase="planning",
-            #     detail=f"Planning complete, ~{total} total batches",
-            #     batches_done=0,
-            #     total_batches=total,
-            #     percent=0.0,
-            # )
-
             if total == 0:
                 self.log("[run_all] Nothing new to enrich (all entities already in masters)")
                 self.status.finish_status(
@@ -2147,12 +2069,6 @@ class MetadataEnricher:
                     ok=True,
                     detail="✅ All enrichment already up to date"
                 )
-                # finish_enrichment_status(
-                #     user_id=self.user_id,
-                #     dataset_label=self.label,
-                #     ok=True,
-                #     detail="All enrichment already up to date"
-                # )
                 return
 
             def _end_phase(name: str, before: int):
@@ -2164,26 +2080,14 @@ class MetadataEnricher:
                     detail=f"Phase '{name}' finished • {added} new batches",
                     total=total
                 )
+                # ✅ Persist incremental progress
+                try:
+                    self.flush_partial()
+                    self.log(f"[run_all] Flushed partial results after phase '{name}'")
+                except Exception as e:
+                    self.log(f"[run_all] ⚠️ flush_partial failed after {name}: {e}")
 
-                # # --- Periodic D1 sync every 25 batches ---
-                # if self._done_batches > 0 and self._done_batches % 25 == 0:
-                #     progress = (self._done_batches / total) * 100
-                #     try:
-                #         set_enrichment_status(
-                #             user_id=self.user_id,
-                #             dataset_label=self.label,
-                #             status="running",
-                #             phase=name,
-                #             detail=f"Progress update: {self._done_batches}/{total} batches done",
-                #             batches_done=self._done_batches,
-                #             total_batches=total,
-                #             percent=progress,
-                #         )
-                #         self.log(f"[run_all] Synced D1 progress ({progress:.1f}%) after {name}")
-                #     except Exception as e:
-                #         self.log(f"[run_all] ⚠️ D1 sync failed after {name}: {e}")
-
-            # 2) Build priority sets
+            # 1) Build priority sets
             self._check_cancel(self.cancel_event)
             self.log("[run_all] Building priority sets…")
             top_art, top_shows, top_books = self.top_overall()
@@ -2191,96 +2095,76 @@ class MetadataEnricher:
             per_art, per_show, per_book = self.top_per_year(set(), set(), set())
             self.log(f"[run_all] Per-year counts: artists={len(per_art)}, shows={len(per_show)}, books={len(per_book)}")
 
-            # 3–11) Phases (unchanged, with _end_phase now including D1 sync)
+            # 2) Phases
             self._check_cancel(self.cancel_event)
             self.current_phase = "overall"
             self.log("[run_all] Starting phase: overall")
             before = self._done_batches
-            self.status.set_status(self.user_id, self.label, phase="overall", detail="Processing overall top…", total=total)
             self.run_phase_overall_first50(top_art, top_shows, top_books)
             _end_phase("overall", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "per_year"
-            self.log("[run_all] Starting phase: per_year")
-            before = self._done_batches
-            self.status.set_status(self.user_id, self.label, phase="per_year", detail="Processing per-year top…", total=total)
-            self.run_phase_per_year(per_art, per_show, per_book)
-            _end_phase("per_year", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "per_year"
+            # self.log("[run_all] Starting phase: per_year")
+            # before = self._done_batches
+            # self.run_phase_per_year(per_art, per_show, per_book)
+            # _end_phase("per_year", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "albums_of_year"
-            self.log("[run_all] Starting phase: albums_of_year")
-            before = self._done_batches
-            self.status.set_status(self.user_id, self.label, phase="albums_of_year", detail="Top albums per artist-year…", total=total)
-            self.run_phase_per_artist_albums_of_year()
-            _end_phase("albums_of_year", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "albums_of_year"
+            # self.log("[run_all] Starting phase: albums_of_year")
+            # before = self._done_batches
+            # self.run_phase_per_artist_albums_of_year()
+            # _end_phase("albums_of_year", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "per_album"
-            self.log("[run_all] Starting phase: per_album")
-            before = self._done_batches
-            self.status.set_status(self.user_id, self.label, phase="per_album", detail="All albums for top artists…", total=total)
-            self.run_phase_per_album_all_albums_for_top_artists()
-            _end_phase("per_album", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "per_album"
+            # self.log("[run_all] Starting phase: per_album")
+            # before = self._done_batches
+            # self.run_phase_per_album_all_albums_for_top_artists()
+            # _end_phase("per_album", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "top_tracks_per_month"
-            self.log("[run_all] Starting phase: top_tracks_per_month")
-            before = self._done_batches
-            self.status.set_status(self.user_id, self.label, phase="top_tracks_per_month", detail="Fetching top 25 tracks per month…", total=total)
-            self.run_phase_top_tracks_per_month()
-            _end_phase("top_tracks_per_month", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "top_tracks_per_month"
+            # self.log("[run_all] Starting phase: top_tracks_per_month")
+            # before = self._done_batches
+            # self.run_phase_top_tracks_per_month()
+            # _end_phase("top_tracks_per_month", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "popularity_timeseries"
-            self.log("[run_all] Starting phase: popularity_timeseries")
-            before = self._done_batches
-            self.status.set_status(self.user_id, self.label, phase="popularity_timeseries", detail="Calculating monthly popularity averages…", total=total)
-            self.run_phase_popularity_timeseries()
-            _end_phase("popularity_timeseries", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "popularity_timeseries"
+            # self.log("[run_all] Starting phase: popularity_timeseries")
+            # before = self._done_batches
+            # self.run_phase_popularity_timeseries()
+            # _end_phase("popularity_timeseries", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "chart_scorer"
-            self.log("[run_all] Starting phase: chart_scorer")
-            before = self._done_batches
-            self.run_phase_chart_scorer()
-            _end_phase("chart_scorer", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "chart_scorer"
+            # self.log("[run_all] Starting phase: chart_scorer")
+            # before = self._done_batches
+            # self.run_phase_chart_scorer()
+            # _end_phase("chart_scorer", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "breadth_first"
-            self.log("[run_all] Starting phase: breadth_first")
-            before = self._done_batches
-            self.status.set_status(self.user_id, self.label, phase="breadth_first", detail="Filling remaining artists by year…", total=total)
-            self.run_phase_breadth_first_years_remaining(per_art, per_show, per_book)
-            _end_phase("breadth_first", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "breadth_first"
+            # self.log("[run_all] Starting phase: breadth_first")
+            # before = self._done_batches
+            # self.run_phase_breadth_first_years_remaining(per_art, per_show, per_book)
+            # _end_phase("breadth_first", before)
 
-            # 11) Final flush
+            # Final flush
             self._check_cancel(self.cancel_event)
             self.current_phase = "flush"
             self.log("[run_all] Starting final flush")
-            self.status.set_status(
-                self.user_id, self.label,
-                phase="flush",
-                detail="Writing final CSV snapshots…",
-                total=total
-            )
             self.flush_all()
             self.log("[run_all] Flush complete")
 
-            # 12) Done
             added_total = self._done_batches
             self.status.finish_status(
                 self.user_id, self.label,
                 ok=True,
-                detail=f"✅ Enrichment completed (CSV flushed) • {added_total} new batches"
+                detail=f"✅ Enrichment completed • {added_total} new batches"
             )
-            # finish_enrichment_status(
-            #     user_id=self.user_id,
-            #     dataset_label=self.label,
-            #     ok=True,
-            #     detail=f"Enrichment completed • {added_total} new batches",
-            # )
             self.log(f"[run_all] Enrichment finished OK — {added_total} new batches enriched")
 
         except CancelledError:
@@ -2294,12 +2178,6 @@ class MetadataEnricher:
                 ok=False,
                 detail="🛑 Cancelled by user (partial results saved)"
             )
-            # finish_enrichment_status(
-            #     user_id=self.user_id,
-            #     dataset_label=self.label,
-            #     ok=False,
-            #     detail="Cancelled by user (partial results saved)",
-            # )
             raise
 
         except Exception as e:
@@ -2313,16 +2191,9 @@ class MetadataEnricher:
                 ok=False,
                 detail=f"❌ Failed: {e}"
             )
-            # finish_enrichment_status(
-            #     user_id=self.user_id,
-            #     dataset_label=self.label,
-            #     ok=False,
-            #     detail=f"Error during enrichment: {e}",
-            # )
             raise
 
         finally:
-            # ✅ Always shut down worker pool at very end of run
             if hasattr(self, "discogs_pool"):
                 try:
                     self.log("[run_all] Cleaning up Discogs worker pool…")
@@ -2620,7 +2491,9 @@ class MetadataEnricher:
         """
         Load master info tables and initialize seen_* sets for enrichment filtering.
         Uses safe_download_csv() to lazily initialize schemas and avoid uploading empty CSVs.
+        Ensures schema validity and prevents KeyErrors.
         """
+
         schemas = {
             "info_artist_genre.csv": [
                 "artist_id", "artist_popularity", "supergenre", "artist_image", "artist_name", "primary_genre"
@@ -2669,21 +2542,34 @@ class MetadataEnricher:
             self.master_unlisted    = ensure_master_exists("info_artist_genre_unlisted.csv")
         except Exception as e:
             self.log(f"[master] load failed: {e}")
-            self.master_artists     = pd.DataFrame(columns=schemas["info_artist_genre.csv"])
-            self.master_albums      = pd.DataFrame(columns=schemas["info_album.csv"])
-            self.master_tracks      = pd.DataFrame(columns=schemas["info_track.csv"])
-            self.master_shows       = pd.DataFrame(columns=schemas["info_show.csv"])
-            self.master_audiobooks  = pd.DataFrame(columns=schemas["info_audiobook.csv"])
-            self.master_unlisted    = pd.DataFrame(columns=schemas["info_artist_genre_unlisted.csv"])
+            for k, cols in schemas.items():
+                setattr(self, f"master_{k.split('.')[0]}", pd.DataFrame(columns=cols))
 
-        # ✅ Initialize seen_* sets
+        # ✅ Explicit schema mapping (fixes 'artists.csv' KeyError)
+        mapping = {
+            "master_artists": "info_artist_genre.csv",
+            "master_albums": "info_album.csv",
+            "master_tracks": "info_track.csv",
+            "master_shows": "info_show.csv",
+            "master_audiobooks": "info_audiobook.csv",
+        }
+
+        # ✅ Schema enforcement
+        for name, csv_file in mapping.items():
+            df = getattr(self, name)
+            required_cols = schemas[csv_file]
+            if not all(c in df.columns for c in required_cols):
+                self.log(f"[master:repair] {name} missing cols, repairing schema.")
+                setattr(self, name, pd.DataFrame(columns=required_cols))
+
+        # ✅ Initialize seen_* sets safely
         self.seen_artists = (
             set(self.master_artists["artist_name"].dropna().astype(str).str.lower())
-            if not self.master_artists.empty and "artist_name" in self.master_artists.columns
+            if "artist_name" in self.master_artists.columns
             else set()
         )
 
-        # --- Diagnostic logging ---
+        # --- Diagnostics ---
         self.log(f"[debug:init] master_artists shape={self.master_artists.shape}")
         self.log(f"[debug:init] master_artists head={self.master_artists.head(3).to_dict('records')}")
         self.log(f"[debug:init] seen_artists sample={list(self.seen_artists)[:10]}")
@@ -2696,25 +2582,29 @@ class MetadataEnricher:
                 .astype(str)
                 .itertuples(index=False, name=None)
             )
-            if not self.master_albums.empty and {"artist_name", "album_name"}.issubset(self.master_albums.columns)
-            else set()
-        )
-        self.seen_tracks = (
-            set(self.master_tracks["track_id"].dropna().astype(str).str.lower())
-            if not self.master_tracks.empty and "track_id" in self.master_tracks.columns
-            else set()
-        )
-        self.seen_shows = (
-            set(self.master_shows["show_name"].dropna().astype(str).str.lower())
-            if not self.master_shows.empty and "show_name" in self.master_shows.columns
-            else set()
-        )
-        self.seen_audiobooks = (
-            set(self.master_audiobooks["audiobook_title"].dropna().astype(str).str.lower())
-            if not self.master_audiobooks.empty and "audiobook_title" in self.master_audiobooks.columns
+            if {"artist_name", "album_name"}.issubset(self.master_albums.columns)
             else set()
         )
 
+        self.seen_tracks = (
+            set(self.master_tracks["track_id"].dropna().astype(str).str.lower())
+            if "track_id" in self.master_tracks.columns
+            else set()
+        )
+
+        self.seen_shows = (
+            set(self.master_shows["show_name"].dropna().astype(str).str.lower())
+            if "show_name" in self.master_shows.columns
+            else set()
+        )
+
+        self.seen_audiobooks = (
+            set(self.master_audiobooks["audiobook_title"].dropna().astype(str).str.lower())
+            if "audiobook_title" in self.master_audiobooks.columns
+            else set()
+        )
+
+        # ✅ Final status logs
         self.log(
             f"[master] Loaded: artists={len(self.master_artists)}, albums={len(self.master_albums)}, "
             f"tracks={len(self.master_tracks)}, shows={len(self.master_shows)}, audiobooks={len(self.master_audiobooks)}"

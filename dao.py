@@ -271,6 +271,37 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             print(f"[CloudflareDAO] ❌ Failed to get {key}: {e}")
             return None
 
+    def list_objects(self, prefix: str = "", max_keys: int = 1000) -> list[str]:
+        """
+        List all object keys under the given prefix in the R2 bucket.
+        Supports pagination transparently.
+        Example: dao.list_objects("userdata/") → ["userdata/uid_label_ts_history.csv", ...]
+        """
+        keys = []
+        continuation_token = None
+
+        try:
+            while True:
+                params = {"Bucket": self.bucket, "Prefix": prefix, "MaxKeys": max_keys}
+                if continuation_token:
+                    params["ContinuationToken"] = continuation_token
+
+                response = self.r2.list_objects_v2(**params)
+                contents = response.get("Contents", [])
+                keys.extend(obj["Key"] for obj in contents if "Key" in obj)
+
+                if response.get("IsTruncated"):
+                    continuation_token = response.get("NextContinuationToken")
+                else:
+                    break
+
+            print(f"[CloudflareDAO] 📦 Listed {len(keys)} objects under prefix '{prefix}'")
+            return keys
+
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ Failed to list objects under {prefix}: {e}")
+            return []
+
     def _upload_json(self, key: str, payload: dict):
         """Internal helper for uploading JSON files."""
         body = json.dumps(payload, indent=2).encode("utf-8")
@@ -281,28 +312,105 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     # ------------------------------------------------------------
 
     def save_user_data(self, user_id: str, dataset_label: str, df: pd.DataFrame, filename: str):
-        """Save cleaned dataset to Cloudflare R2 under userdata/."""
+        """
+        Save cleaned dataset + schema to Cloudflare R2 under userdata/.
+        Creates two files:
+        - userdata/{table_name}.csv
+        - userdata/{table_name}_schema.json
+        """
+        import io, json, time
+
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
-        key = f"userdata/{table_name}.csv"
+
+        csv_key = f"userdata/{table_name}.csv"
+        schema_key = f"userdata/{table_name}_schema.json"
+
+        # --- Upload CSV ---
         buf = io.BytesIO()
         df.to_csv(buf, index=False)
-        self._put_bytes(key, buf.getvalue(), "text/csv")
-        return table_name, key
+        self._put_bytes(csv_key, buf.getvalue(), "text/csv")
+
+        # --- Build schema dictionary ---
+        schema = {}
+        for col, dtype in df.dtypes.items():
+            dtype_str = str(dtype)
+            # Normalize common types for better round-tripping
+            if "datetime" in dtype_str:
+                dtype_str = "datetime64[ns, UTC]" if getattr(df[col].dt, "tz", None) else "datetime64[ns]"
+            elif "int" in dtype_str:
+                dtype_str = "Int64"
+            elif "float" in dtype_str:
+                dtype_str = "Float64"
+            elif "bool" in dtype_str:
+                dtype_str = "boolean"
+            elif dtype_str == "object":
+                dtype_str = "string"
+            schema[col] = dtype_str
+
+        # --- Upload schema JSON ---
+        body = json.dumps(schema, indent=2).encode("utf-8")
+        self._put_bytes(schema_key, body, "application/json")
+
+        print(f"[CloudflareDAO] ✅ Uploaded dataset + schema → {csv_key}")
+        return table_name, csv_key
 
     def load_user_data(self, table_name: str) -> pd.DataFrame:
-        """Load cleaned dataset CSV from R2."""
-        key = f"userdata/{table_name}.csv"
-        csv_bytes = self._get_object(key)
+        """
+        Load cleaned dataset CSV from R2 and restore original dtypes using schema.
+        If schema is missing, falls back to best-effort parsing.
+        """
+        import io, json
+        import pandas as pd
 
-        dtype_map = {
-            "spotify_episode_uri": "string",
-            "audiobook_title": "string",
-            "audiobook_uri": "string",
-            "audiobook_chapter_uri": "string",
-        }
+        csv_key = f"userdata/{table_name}.csv"
+        schema_key = f"userdata/{table_name}_schema.json"
 
-        return pd.read_csv(io.BytesIO(csv_bytes), dtype=dtype_map, low_memory=False)
+        # --- Step 1: Load CSV ---
+        csv_bytes = self._get_object(csv_key)
+        df = pd.read_csv(io.BytesIO(csv_bytes), low_memory=False)
+
+        # --- Step 2: Load schema if available ---
+        schema = None
+        try:
+            schema_bytes = self._get_object(schema_key)
+            schema = json.loads(schema_bytes.decode("utf-8"))
+            print(f"[CloudflareDAO] 🧭 Loaded schema for {table_name} ({len(schema)} columns)")
+        except Exception:
+            print(f"[CloudflareDAO] ⚠️ No schema found for {table_name} — falling back to inference")
+
+        # --- Step 3: Apply schema if present ---
+        if schema:
+            for col, dtype in schema.items():
+                if col not in df.columns:
+                    continue
+                try:
+                    if "datetime" in dtype:
+                        df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
+                    elif dtype in ("string", "object"):
+                        df[col] = df[col].astype("string")
+                    elif dtype.lower().startswith("int"):
+                        df[col] = df[col].astype("Int64")
+                    elif dtype.lower().startswith("float"):
+                        df[col] = df[col].astype("Float64")
+                    elif dtype.lower().startswith("bool"):
+                        df[col] = df[col].astype("boolean")
+                except Exception:
+                    # Skip casting failures gracefully (e.g., all NaN)
+                    pass
+
+            print(f"[CloudflareDAO] ✅ Schema reapplied successfully for {len(schema)} columns")
+
+        # --- Step 4: Ensure UTC consistency ---
+        if "datetime" in df.columns:
+            dt = df["datetime"]
+            if pd.api.types.is_datetime64_any_dtype(dt):
+                if dt.dt.tz is None:
+                    df["datetime"] = dt.dt.tz_localize("UTC")
+                else:
+                    df["datetime"] = dt.dt.tz_convert("UTC")
+
+        return df
 
     def list_datasets(self, user_id: str) -> List[tuple[str, str]]:
         """List all datasets uploaded by this user.
@@ -668,14 +776,19 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         try:
             # Load existing log
             try:
-                existing = self._get_object(key).decode("utf-8").splitlines()
-            except FileNotFoundError:
-                existing = []
+                # Try to load existing log (non-fatal if missing)
+                existing_data = self._get_object_safe(key)
+                existing_text = existing_data.decode("utf-8") + "\n" if existing_data else ""
+            except Exception:
+                existing_text = ""
 
-            existing.append(json.dumps(entry))
-            new_body = "\n".join(existing).encode("utf-8")
+            # Append new entry
+            new_line = json.dumps(entry) + "\n"
+            body = (existing_text + new_line).encode("utf-8")
 
-            self._put_bytes(key, new_body, content_type="text/plain")
+            # Use safe uploader (temp + rename)
+            self._put_bytes_safe(key, body, "text/plain")
+
             print(f"[CloudflareDAO] 🪵 Logged ({level}) → {key} — {where}:{phase or ''} {msg[:80]}")
 
         except Exception as e:

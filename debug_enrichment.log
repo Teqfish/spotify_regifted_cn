@@ -22900,3 +22900,1778 @@ RuntimeError: Incomplete or inconsistent enrichment detected for short-phase_1-2
 2025-11-10 16:39:48,037 [INFO] [log_dao] [thread] Thread finished for short-phase_1-2
 2025-11-10 16:39:48,195 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-2.log
 2025-11-10 16:39:48,196 [INFO] [enrich:Thread-2 (background_enrich)] 💤 Thread finished for short-phase_1-2
+2025-11-10 16:45:46,728 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-10 16:45:47,108 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-10 16:45:47,108 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-10 16:46:12,850 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_short-phase_2-1_20251110-164610_history.csv
+2025-11-10 16:46:13,019 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_short-phase_2-1_20251110-164610_history_schema.json
+2025-11-10 16:46:13,019 [INFO] [CloudflareDAO] ✅ Uploaded dataset + schema → userdata/58d0bd65d3f40b92_short-phase_2-1_20251110-164610_history.csv
+2025-11-10 16:46:13,238 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:13,458 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → etl
+2025-11-10 16:46:13,650 [INFO] [upload_event] Recorded: user=58d0bd65d3f40b92, label=short-phase_2-1, status=completed
+2025-11-10 16:46:13,654 [INFO] [consistency] 🔍 Starting dataset consistency check for short-phase_2-1
+2025-11-10 16:46:13,729 [INFO] [CloudflareDAO] ℹ️ No object in R2: enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:14,215 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:14,216 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — start: 🔍 Starting dataset consistency check for short-phase_2-1
+2025-11-10 16:46:14,279 [INFO] [CloudflareDAO] 📦 Listed 2 objects under prefix 'userdata/58d0bd65d3f40b92_short-phase_2-1_'
+2025-11-10 16:46:14,280 [INFO] [consistency] 🧭 Using latest uploaded file: userdata/58d0bd65d3f40b92_short-phase_2-1_20251110-164610_history.csv
+2025-11-10 16:46:14,833 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:14,833 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — lookup: 🧭 Using latest uploaded file: userdata/58d0bd65d3f40b92_short-phase_2-1_20251110
+2025-11-10 16:46:15,562 [INFO] [consistency] 📥 Reloaded dataset from R2: 31172 rows, 25 columns
+2025-11-10 16:46:16,240 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:16,241 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — reload: 📥 Reloaded dataset from R2: 31172 rows, 25 columns
+2025-11-10 16:46:16,241 [INFO] [consistency] ✅ Shape matches: (31172, 25)
+2025-11-10 16:46:16,899 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:16,899 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — shape: ✅ Shape matches: (31172, 25)
+2025-11-10 16:46:16,899 [INFO] [consistency] ✅ Columns match exactly
+2025-11-10 16:46:17,462 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:17,463 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — columns: ✅ Columns match exactly
+2025-11-10 16:46:17,466 [INFO] [consistency] ⚠️ Dtype differences detected in 8 columns
+2025-11-10 16:46:18,167 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:18,168 [INFO] [CloudflareDAO] 🪵 Logged (warning) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes: ⚠️ Dtype differences detected in 8 columns
+2025-11-10 16:46:18,168 [INFO] [consistency]    • audiobook_title: object vs float64
+2025-11-10 16:46:18,822 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:18,823 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes:    • audiobook_title: object vs float64
+2025-11-10 16:46:18,823 [INFO] [consistency]    • datetime: datetime64[ns, UTC] vs object
+2025-11-10 16:46:19,438 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:19,439 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes:    • datetime: datetime64[ns, UTC] vs object
+2025-11-10 16:46:19,439 [INFO] [consistency]    • audiobook_chapter_title: object vs float64
+2025-11-10 16:46:20,108 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:20,109 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes:    • audiobook_chapter_title: object vs float64
+2025-11-10 16:46:20,110 [INFO] [consistency]    • month: int32 vs int64
+2025-11-10 16:46:20,905 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:20,905 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes:    • month: int32 vs int64
+2025-11-10 16:46:20,905 [INFO] [consistency]    • year: int32 vs int64
+2025-11-10 16:46:21,579 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:21,579 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes:    • year: int32 vs int64
+2025-11-10 16:46:21,579 [INFO] [consistency]    • audiobook_chapter_uri: object vs float64
+2025-11-10 16:46:22,256 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:22,257 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes:    • audiobook_chapter_uri: object vs float64
+2025-11-10 16:46:22,257 [INFO] [consistency]    • audiobook_uri: object vs float64
+2025-11-10 16:46:22,923 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:22,923 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes:    • audiobook_uri: object vs float64
+2025-11-10 16:46:22,924 [INFO] [consistency]    • day: int32 vs int64
+2025-11-10 16:46:23,559 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:23,559 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — dtypes:    • day: int32 vs int64
+2025-11-10 16:46:23,893 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_short-phase_2-1_consistency_report.csv
+2025-11-10 16:46:23,893 [INFO] [consistency:report] 📊 Saved diff report → userdata/58d0bd65d3f40b92_short-phase_2-1_consistency_report.csv (39 rows)
+2025-11-10 16:46:23,893 [INFO] [consistency] ⚠️ DIFFERENCES FOUND → userdata/58d0bd65d3f40b92_short-phase_2-1_consistency_report.csv
+2025-11-10 16:46:24,465 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:24,466 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — report: ⚠️ DIFFERENCES FOUND → userdata/58d0bd65d3f40b92_short-phase_2-1_consistency_rep
+2025-11-10 16:46:24,466 [INFO] [consistency] ✅ Consistency check completed for short-phase_2-1
+2025-11-10 16:46:25,067 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:25,067 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — complete: ✅ Consistency check completed for short-phase_2-1
+2025-11-10 16:46:25,288 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:25,515 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → etl
+2025-11-10 16:46:26,611 [INFO] [enrich:background_enrich_short-phase_2-1] Starting enrichment thread for short-phase_2-1
+2025-11-10 16:46:26,611 [INFO] [thread_monitor] 1 enrichment thread(s) active after starting new enrichment.
+2025-11-10 16:46:26,613 [INFO] [enrich] 🚀 Started enrichment thread for 'short-phase_2-1'
+2025-11-10 16:46:27,324 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:27,324 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — thread: Thread started for short-phase_2-1
+2025-11-10 16:46:27,386 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:27,386 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — sanity: Starting Spotify sanity check
+2025-11-10 16:46:28,279 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:28,279 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — sanity: Starting Discogs sanity check
+2025-11-10 16:46:28,487 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-phase_2-1_20251110-164610_history (25 columns)
+2025-11-10 16:46:28,565 [INFO] [debug] df columns at start of enrichment: ['datetime', 'ms_played', 'country', 'track_name', 'artist_name', 'album_name', 'spotify_track_uri', 'episode_name', 'episode_show_name', 'spotify_episode_uri', 'audiobook_title', 'audiobook_uri', 'audiobook_chapter_uri', 'audiobook_chapter_title', 'reason_start', 'reason_end', 'shuffle', 'skipped', 'seconds_played', 'minutes_played', 'year', 'month', 'day', 'username', 'category']
+2025-11-10 16:46:28,566 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-10 16:46:28,583 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-phase_2-1
+2025-11-10 16:46:28,583 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-11-10 16:46:28,914 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-11-10 16:46:28,984 [INFO] [verify_enrich] ⚠️ info_album.csv has only 0 rows (expected ≥100)
+2025-11-10 16:46:29,051 [INFO] [verify_enrich] ⚠️ info_track.csv has only 0 rows (expected ≥1000)
+2025-11-10 16:46:29,051 [INFO] [verify_enrich] ❌ Inconsistent enrichment for short-phase_2-1.
+2025-11-10 16:46:29,051 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-phase_2-1 (status mismatch or incomplete data).
+2025-11-10 16:46:29,113 [INFO] [enrich:Thread-4 (background_enrich)] Starting enrichment thread for short-phase_2-1
+2025-11-10 16:46:29,113 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-phase_2-1
+2025-11-10 16:46:29,114 [INFO] [enrich:Thread-4 (background_enrich)] ⚠️ log_dao missing or invalid — attempting to reload via dao_selector.get_log_dao()
+2025-11-10 16:46:29,114 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-10 16:46:29,316 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:29,316 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — enrichment: Starting run_all()
+2025-11-10 16:46:29,355 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:29,536 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-10 16:46:29,681 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:29,689 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:29,897 [INFO] [enrich:Thread-4 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-10 16:46:29,954 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → running
+2025-11-10 16:46:30,037 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,038 [INFO] [master:init] ⚠️ info_artist_genre.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,151 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,152 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,232 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,232 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,337 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_show.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,337 [INFO] [master:init] ⚠️ info_show.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,449 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,449 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,551 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,552 [INFO] [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:30,554 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists shape=(0, 6)
+2025-11-10 16:46:30,554 [INFO] [debug:init] master_artists shape=(0, 6)
+2025-11-10 16:46:30,555 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists head=[]
+2025-11-10 16:46:30,555 [INFO] [debug:init] master_artists head=[]
+2025-11-10 16:46:30,555 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] seen_artists sample=[]
+2025-11-10 16:46:30,556 [INFO] [debug:init] seen_artists sample=[]
+2025-11-10 16:46:30,561 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Loaded: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:46:30,561 [INFO] [master] Loaded: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:46:30,561 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Seen sets initialized: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:46:30,561 [INFO] [master] Seen sets initialized: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:46:30,584 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 16:46:30,584 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: int64
+2025-11-10 16:46:30,586 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 16:46:30,977 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-phase_2-1_20251110-164610_history (25 columns)
+2025-11-10 16:46:31,061 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-10 16:46:31,065 [INFO] [enrich:Thread-4 (background_enrich)] ✅ Reloaded dataset from R2 (31172 rows)
+2025-11-10 16:46:31,108 [INFO] [debug] df columns at start of enrichment: ['datetime', 'ms_played', 'country', 'track_name', 'artist_name', 'album_name', 'spotify_track_uri', 'episode_name', 'episode_show_name', 'spotify_episode_uri', 'audiobook_title', 'audiobook_uri', 'audiobook_chapter_uri', 'audiobook_chapter_title', 'reason_start', 'reason_end', 'shuffle', 'skipped', 'seconds_played', 'minutes_played', 'year', 'month', 'day', 'username', 'category']
+2025-11-10 16:46:31,109 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-10 16:46:31,307 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:31,513 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:31,796 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → running
+2025-11-10 16:46:31,897 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:31,902 [INFO] [master:init] ⚠️ info_artist_genre.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,020 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,034 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,130 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,133 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,215 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_show.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,215 [INFO] [master:init] ⚠️ info_show.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,302 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,310 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,397 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,408 [INFO] [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 16:46:32,415 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists shape=(0, 6)
+2025-11-10 16:46:32,424 [INFO] [debug:init] master_artists shape=(0, 6)
+2025-11-10 16:46:32,424 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists head=[]
+2025-11-10 16:46:32,428 [INFO] [debug:init] master_artists head=[]
+2025-11-10 16:46:32,433 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] seen_artists sample=[]
+2025-11-10 16:46:32,437 [INFO] [debug:init] seen_artists sample=[]
+2025-11-10 16:46:32,443 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Loaded: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:46:32,451 [INFO] [master] Loaded: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:46:32,453 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Seen sets initialized: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:46:32,457 [INFO] [master] Seen sets initialized: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:46:32,798 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 16:46:32,820 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: Int64
+2025-11-10 16:46:32,854 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 16:46:40,311 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 16:46:40,313 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 16:46:40,621 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:40,853 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → planning
+2025-11-10 16:46:40,853 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Building priority sets…
+2025-11-10 16:46:40,855 [INFO] [run_all] Building priority sets…
+2025-11-10 16:46:40,883 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 16:46:40,885 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 16:46:40,885 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 16:46:40,885 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: int64
+2025-11-10 16:46:40,886 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 16:46:40,952 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 16:46:40,955 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 16:46:40,955 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting phase: overall
+2025-11-10 16:46:40,955 [INFO] [run_all] Starting phase: overall
+2025-11-10 16:46:40,955 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 16:46:40,955 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 16:46:40,955 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming prefilter len=10
+2025-11-10 16:46:40,955 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-10 16:46:40,955 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:46:40,955 [INFO] [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:46:40,955 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Artists before=10, after=10
+2025-11-10 16:46:40,955 [INFO] [overall_first50] Artists before=10, after=10
+2025-11-10 16:46:40,955 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching artists: 10
+2025-11-10 16:46:40,956 [INFO] [overall_first50] Fetching artists: 10
+2025-11-10 16:46:40,958 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Starting batch with 10 names
+2025-11-10 16:46:40,958 [INFO] [fetch_and_save_artists] Starting batch with 10 names
+2025-11-10 16:46:40,958 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Resolving 10 names
+2025-11-10 16:46:40,958 [INFO] [resolve_artist_ids] Resolving 10 names
+2025-11-10 16:46:40,960 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:46:40,960 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:46:40,961 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Fallback search for 10 names
+2025-11-10 16:46:40,963 [INFO] [resolve_artist_ids] Fallback search for 10 names
+2025-11-10 16:46:41,423 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for shxcxchcxsh
+2025-11-10 16:46:41,425 [INFO] [resolve_artist_ids] Found ID for shxcxchcxsh
+2025-11-10 16:46:41,775 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for aphex twin
+2025-11-10 16:46:41,775 [INFO] [resolve_artist_ids] Found ID for aphex twin
+2025-11-10 16:46:42,138 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for travis scott
+2025-11-10 16:46:42,138 [INFO] [resolve_artist_ids] Found ID for travis scott
+2025-11-10 16:46:42,528 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the beatles
+2025-11-10 16:46:42,528 [INFO] [resolve_artist_ids] Found ID for the beatles
+2025-11-10 16:46:42,934 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for steely dan
+2025-11-10 16:46:42,936 [INFO] [resolve_artist_ids] Found ID for steely dan
+2025-11-10 16:46:43,371 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for cornelius
+2025-11-10 16:46:43,371 [INFO] [resolve_artist_ids] Found ID for cornelius
+2025-11-10 16:46:44,191 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for architectural
+2025-11-10 16:46:44,191 [INFO] [resolve_artist_ids] Found ID for architectural
+2025-11-10 16:46:44,537 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for nursery rhymes 123
+2025-11-10 16:46:44,537 [INFO] [resolve_artist_ids] Found ID for nursery rhymes 123
+2025-11-10 16:46:45,029 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for blur
+2025-11-10 16:46:45,031 [INFO] [resolve_artist_ids] Found ID for blur
+2025-11-10 16:46:45,394 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for grischa lichtenberger
+2025-11-10 16:46:45,394 [INFO] [resolve_artist_ids] Found ID for grischa lichtenberger
+2025-11-10 16:46:45,502 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Done — resolved 10 IDs so far
+2025-11-10 16:46:45,502 [INFO] [resolve_artist_ids] Done — resolved 10 IDs so far
+2025-11-10 16:46:45,504 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Resolved IDs for 10 / 10
+2025-11-10 16:46:45,504 [INFO] [fetch_and_save_artists] Resolved IDs for 10 / 10
+2025-11-10 16:46:45,504 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Calling get_artists for 10 IDs
+2025-11-10 16:46:45,504 [INFO] [fetch_and_save_artists] Calling get_artists for 10 IDs
+2025-11-10 16:46:46,264 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:46,265 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — spotify:artists: Fetched 10 artists
+2025-11-10 16:46:46,371 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Got 10 artist records back
+2025-11-10 16:46:46,371 [INFO] [fetch_and_save_artists] Got 10 artist records back
+2025-11-10 16:46:46,497 [INFO] [log_dao] ⚠️ Failed to log remotely: [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 16:46:46,497 [INFO] [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 16:46:46,501 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug] Saving 10 artists to buffer → [{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_name': 'Travis Scott'}]
+2025-11-10 16:46:46,501 [INFO] [debug] Saving 10 artists to buffer → [{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_name': 'Travis Scott'}]
+2025-11-10 16:46:46,501 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Saving 10 artists to buffer
+2025-11-10 16:46:46,503 [INFO] [fetch_and_save_artists] Saving 10 artists to buffer
+2025-11-10 16:46:46,776 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:47,048 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → planning
+2025-11-10 16:46:47,049 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Shows before=7, after=7
+2025-11-10 16:46:47,049 [INFO] [overall_first50] Shows before=7, after=7
+2025-11-10 16:46:47,049 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching shows: 7
+2025-11-10 16:46:47,049 [INFO] [overall_first50] Fetching shows: 7
+2025-11-10 16:46:47,049 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Starting batch with 7 shows
+2025-11-10 16:46:47,049 [INFO] [fetch_and_save_shows] Starting batch with 7 shows
+2025-11-10 16:46:47,051 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Resolving 7 show names
+2025-11-10 16:46:47,051 [INFO] [resolve_show_ids] Resolving 7 show names
+2025-11-10 16:46:47,051 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 16:46:47,051 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 16:46:47,052 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fetching 7 episodes via get_episodes
+2025-11-10 16:46:47,052 [INFO] [resolve_show_ids] Fetching 7 episodes via get_episodes
+2025-11-10 16:46:47,186 [INFO] [spotify:episodes] Fetched 7 episodes
+2025-11-10 16:46:47,291 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fallback search for 3 shows
+2025-11-10 16:46:47,291 [INFO] [resolve_show_ids] Fallback search for 3 shows
+2025-11-10 16:46:47,568 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 16:46:47,569 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 16:46:47,936 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for Global News Podcast
+2025-11-10 16:46:47,936 [INFO] [resolve_show_ids] Found ID for Global News Podcast
+2025-11-10 16:46:48,801 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for Daily Dad Jokes
+2025-11-10 16:46:48,801 [INFO] [resolve_show_ids] Found ID for Daily Dad Jokes
+2025-11-10 16:46:48,904 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Done — resolved 7 show IDs so far
+2025-11-10 16:46:48,905 [INFO] [resolve_show_ids] Done — resolved 7 show IDs so far
+2025-11-10 16:46:48,907 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Calling get_shows for 7 IDs
+2025-11-10 16:46:48,907 [INFO] [fetch_and_save_shows] Calling get_shows for 7 IDs
+2025-11-10 16:46:49,433 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 16:46:49,433 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 16:46:49,634 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:49,796 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → planning
+2025-11-10 16:46:49,796 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Building priority sets…
+2025-11-10 16:46:49,797 [INFO] [run_all] Building priority sets…
+2025-11-10 16:46:49,832 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 16:46:49,832 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 16:46:49,832 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 16:46:49,833 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: Int64
+2025-11-10 16:46:49,835 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 16:46:49,846 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:49,846 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — spotify:shows: Fetched 7 shows
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 16:46:49,882 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting phase: overall
+2025-11-10 16:46:49,882 [INFO] [run_all] Starting phase: overall
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 16:46:49,882 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming prefilter len=10
+2025-11-10 16:46:49,882 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:46:49,882 [INFO] [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Artists before=10, after=10
+2025-11-10 16:46:49,882 [INFO] [overall_first50] Artists before=10, after=10
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching artists: 10
+2025-11-10 16:46:49,882 [INFO] [overall_first50] Fetching artists: 10
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Starting batch with 10 names
+2025-11-10 16:46:49,882 [INFO] [fetch_and_save_artists] Starting batch with 10 names
+2025-11-10 16:46:49,882 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Resolving 10 names
+2025-11-10 16:46:49,882 [INFO] [resolve_artist_ids] Resolving 10 names
+2025-11-10 16:46:49,884 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:46:49,884 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:46:49,885 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Fallback search for 10 names
+2025-11-10 16:46:49,885 [INFO] [resolve_artist_ids] Fallback search for 10 names
+2025-11-10 16:46:49,949 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Got 7 show records back
+2025-11-10 16:46:49,949 [INFO] [fetch_and_save_shows] Got 7 show records back
+2025-11-10 16:46:49,950 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Saving 7 shows to buffer
+2025-11-10 16:46:49,950 [INFO] [fetch_and_save_shows] Saving 7 shows to buffer
+2025-11-10 16:46:50,158 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for shxcxchcxsh
+2025-11-10 16:46:50,159 [INFO] [resolve_artist_ids] Found ID for shxcxchcxsh
+2025-11-10 16:46:50,235 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:50,479 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for aphex twin
+2025-11-10 16:46:50,480 [INFO] [resolve_artist_ids] Found ID for aphex twin
+2025-11-10 16:46:50,617 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → planning
+2025-11-10 16:46:50,617 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Completed phase: overall (batches +2)
+2025-11-10 16:46:50,618 [INFO] [run_all] Completed phase: overall (batches +2)
+2025-11-10 16:46:50,799 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for travis scott
+2025-11-10 16:46:50,799 [INFO] [resolve_artist_ids] Found ID for travis scott
+2025-11-10 16:46:50,802 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:51,028 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → overall
+2025-11-10 16:46:51,032 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Starting autosave snapshot at 20251110-164651
+2025-11-10 16:46:51,032 [INFO] [flush_partial] Starting autosave snapshot at 20251110-164651
+2025-11-10 16:46:51,096 [INFO] [CloudflareDAO] ℹ️ No object in R2: enrichment/metadata/info_artist_genre.csv
+2025-11-10 16:46:51,098 [INFO] [merge_into_master] ℹ️ Starting new master for info_artist_genre.csv
+2025-11-10 16:46:51,100 [INFO] [merge_into_master] Merged 10 new → total 10 (before=0)
+2025-11-10 16:46:51,108 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the beatles
+2025-11-10 16:46:51,108 [INFO] [resolve_artist_ids] Found ID for the beatles
+2025-11-10 16:46:51,490 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for steely dan
+2025-11-10 16:46:51,491 [INFO] [resolve_artist_ids] Found ID for steely dan
+2025-11-10 16:46:51,765 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-10 16:46:51,765 [INFO] [merge_into_master] ✅ Saved 10 rows to info_artist_genre.csv
+2025-11-10 16:46:51,765 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 10 rows → info_artist_genre.csv
+2025-11-10 16:46:51,765 [INFO] [flush_partial] ✅ merged 10 rows → info_artist_genre.csv
+2025-11-10 16:46:51,868 [INFO] [CloudflareDAO] ℹ️ No object in R2: enrichment/metadata/info_show.csv
+2025-11-10 16:46:51,871 [INFO] [merge_into_master] ℹ️ Starting new master for info_show.csv
+2025-11-10 16:46:51,874 [INFO] [merge_into_master] Merged 7 new → total 7 (before=0)
+2025-11-10 16:46:51,874 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for cornelius
+2025-11-10 16:46:51,880 [INFO] [resolve_artist_ids] Found ID for cornelius
+2025-11-10 16:46:52,375 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for architectural
+2025-11-10 16:46:52,375 [INFO] [resolve_artist_ids] Found ID for architectural
+2025-11-10 16:46:52,597 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-10 16:46:52,598 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-10 16:46:52,598 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 7 rows → info_show.csv
+2025-11-10 16:46:52,599 [INFO] [flush_partial] ✅ merged 7 rows → info_show.csv
+2025-11-10 16:46:52,599 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:46:52,599 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:46:52,600 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:46:52,600 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:46:52,780 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for nursery rhymes 123
+2025-11-10 16:46:52,780 [INFO] [resolve_artist_ids] Found ID for nursery rhymes 123
+2025-11-10 16:46:52,826 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:46:52,826 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:46:52,897 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:46:52,898 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:46:52,971 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:46:52,972 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:46:53,035 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:46:53,035 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:46:53,249 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for blur
+2025-11-10 16:46:53,250 [INFO] [resolve_artist_ids] Found ID for blur
+2025-11-10 16:46:53,432 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:46:53,432 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:46:53,502 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:46:53,502 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:46:53,503 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:46:53,503 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:46:53,503 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flushed partial results after phase 'overall'
+2025-11-10 16:46:53,503 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-10 16:46:53,503 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting phase: per_year
+2025-11-10 16:46:53,503 [INFO] [run_all] Starting phase: per_year
+2025-11-10 16:46:53,506 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming prefilter len=40
+2025-11-10 16:46:53,506 [INFO] [filter:debug] incoming prefilter len=40
+2025-11-10 16:46:53,507 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:46:53,507 [INFO] [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:46:53,507 [INFO] [log_dao] ⚠️ Failed to log remotely: [per_year] Final artists before=40, after=35
+2025-11-10 16:46:53,507 [INFO] [per_year] Final artists before=40, after=35
+2025-11-10 16:46:53,507 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Starting batch with 35 names
+2025-11-10 16:46:53,507 [INFO] [fetch_and_save_artists] Starting batch with 35 names
+2025-11-10 16:46:53,507 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Resolving 35 names
+2025-11-10 16:46:53,507 [INFO] [resolve_artist_ids] Resolving 35 names
+2025-11-10 16:46:53,515 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:46:53,515 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:46:53,517 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Fallback search for 25 names
+2025-11-10 16:46:53,517 [INFO] [resolve_artist_ids] Fallback search for 25 names
+2025-11-10 16:46:53,577 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for grischa lichtenberger
+2025-11-10 16:46:53,577 [INFO] [resolve_artist_ids] Found ID for grischa lichtenberger
+2025-11-10 16:46:53,681 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Done — resolved 10 IDs so far
+2025-11-10 16:46:53,681 [INFO] [resolve_artist_ids] Done — resolved 10 IDs so far
+2025-11-10 16:46:53,683 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Resolved IDs for 10 / 10
+2025-11-10 16:46:53,683 [INFO] [fetch_and_save_artists] Resolved IDs for 10 / 10
+2025-11-10 16:46:53,683 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Calling get_artists for 10 IDs
+2025-11-10 16:46:53,683 [INFO] [fetch_and_save_artists] Calling get_artists for 10 IDs
+2025-11-10 16:46:53,800 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for late of the pier
+2025-11-10 16:46:53,801 [INFO] [resolve_artist_ids] Found ID for late of the pier
+2025-11-10 16:46:53,802 [INFO] [log_dao] [spotify:artists] Fetched 10 artists
+2025-11-10 16:46:53,991 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:54,096 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Got 10 artist records back
+2025-11-10 16:46:54,096 [INFO] [fetch_and_save_artists] Got 10 artist records back
+2025-11-10 16:46:54,206 [INFO] [log_dao] ⚠️ Failed to log remotely: [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 16:46:54,206 [INFO] [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 16:46:54,208 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug] Saving 10 artists to buffer → [{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_name': 'Travis Scott'}]
+2025-11-10 16:46:54,209 [INFO] [debug] Saving 10 artists to buffer → [{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_name': 'Travis Scott'}]
+2025-11-10 16:46:54,209 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Saving 10 artists to buffer
+2025-11-10 16:46:54,209 [INFO] [fetch_and_save_artists] Saving 10 artists to buffer
+2025-11-10 16:46:54,212 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the modern lovers
+2025-11-10 16:46:54,212 [INFO] [resolve_artist_ids] Found ID for the modern lovers
+2025-11-10 16:46:54,492 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:54,656 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for squarepusher
+2025-11-10 16:46:54,656 [INFO] [resolve_artist_ids] Found ID for squarepusher
+2025-11-10 16:46:54,703 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → overall
+2025-11-10 16:46:54,704 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Shows before=7, after=7
+2025-11-10 16:46:54,704 [INFO] [overall_first50] Shows before=7, after=7
+2025-11-10 16:46:54,704 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching shows: 7
+2025-11-10 16:46:54,704 [INFO] [overall_first50] Fetching shows: 7
+2025-11-10 16:46:54,704 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Starting batch with 7 shows
+2025-11-10 16:46:54,704 [INFO] [fetch_and_save_shows] Starting batch with 7 shows
+2025-11-10 16:46:54,704 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Resolving 7 show names
+2025-11-10 16:46:54,704 [INFO] [resolve_show_ids] Resolving 7 show names
+2025-11-10 16:46:54,704 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 16:46:54,704 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 16:46:54,712 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fetching 7 episodes via get_episodes
+2025-11-10 16:46:54,712 [INFO] [resolve_show_ids] Fetching 7 episodes via get_episodes
+2025-11-10 16:46:54,891 [INFO] [spotify:episodes] Fetched 7 episodes
+2025-11-10 16:46:54,996 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fallback search for 3 shows
+2025-11-10 16:46:54,996 [INFO] [resolve_show_ids] Fallback search for 3 shows
+2025-11-10 16:46:55,055 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for vladislav delay
+2025-11-10 16:46:55,056 [INFO] [resolve_artist_ids] Found ID for vladislav delay
+2025-11-10 16:46:55,260 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 16:46:55,261 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 16:46:55,762 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for gently tender
+2025-11-10 16:46:55,763 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for Global News Podcast
+2025-11-10 16:46:55,763 [INFO] [resolve_show_ids] Found ID for Global News Podcast
+2025-11-10 16:46:55,763 [INFO] [resolve_artist_ids] Found ID for gently tender
+2025-11-10 16:46:56,276 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the fisherman’s friends
+2025-11-10 16:46:56,277 [INFO] [resolve_artist_ids] Found ID for the fisherman’s friends
+2025-11-10 16:46:56,277 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for Daily Dad Jokes
+2025-11-10 16:46:56,278 [INFO] [resolve_show_ids] Found ID for Daily Dad Jokes
+2025-11-10 16:46:56,382 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Done — resolved 7 show IDs so far
+2025-11-10 16:46:56,382 [INFO] [resolve_show_ids] Done — resolved 7 show IDs so far
+2025-11-10 16:46:56,382 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Calling get_shows for 7 IDs
+2025-11-10 16:46:56,382 [INFO] [fetch_and_save_shows] Calling get_shows for 7 IDs
+2025-11-10 16:46:56,785 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for girls against boys
+2025-11-10 16:46:56,786 [INFO] [log_dao] [spotify:shows] Fetched 7 shows
+2025-11-10 16:46:56,787 [INFO] [resolve_artist_ids] Found ID for girls against boys
+2025-11-10 16:46:56,960 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:46:57,062 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Got 7 show records back
+2025-11-10 16:46:57,062 [INFO] [fetch_and_save_shows] Got 7 show records back
+2025-11-10 16:46:57,065 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Saving 7 shows to buffer
+2025-11-10 16:46:57,065 [INFO] [fetch_and_save_shows] Saving 7 shows to buffer
+2025-11-10 16:46:57,381 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for martyn
+2025-11-10 16:46:57,382 [INFO] [resolve_artist_ids] Found ID for martyn
+2025-11-10 16:46:57,387 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:57,635 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → overall
+2025-11-10 16:46:57,635 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Completed phase: overall (batches +2)
+2025-11-10 16:46:57,635 [INFO] [run_all] Completed phase: overall (batches +2)
+2025-11-10 16:46:57,731 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for lapalux
+2025-11-10 16:46:57,731 [INFO] [resolve_artist_ids] Found ID for lapalux
+2025-11-10 16:46:57,834 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:46:58,024 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → overall
+2025-11-10 16:46:58,026 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Starting autosave snapshot at 20251110-164658
+2025-11-10 16:46:58,027 [INFO] [flush_partial] Starting autosave snapshot at 20251110-164658
+2025-11-10 16:46:58,161 [INFO] [merge_into_master] Merged 10 new → total 10 (before=10)
+2025-11-10 16:46:58,203 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for hexstatic
+2025-11-10 16:46:58,203 [INFO] [resolve_artist_ids] Found ID for hexstatic
+2025-11-10 16:46:58,557 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for grizzly bear
+2025-11-10 16:46:58,557 [INFO] [resolve_artist_ids] Found ID for grizzly bear
+2025-11-10 16:46:58,746 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-10 16:46:58,746 [INFO] [merge_into_master] ✅ Saved 10 rows to info_artist_genre.csv
+2025-11-10 16:46:58,747 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 10 rows → info_artist_genre.csv
+2025-11-10 16:46:58,747 [INFO] [flush_partial] ✅ merged 10 rows → info_artist_genre.csv
+2025-11-10 16:46:58,818 [INFO] [merge_into_master] Merged 7 new → total 7 (before=7)
+2025-11-10 16:46:59,021 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for nick drake
+2025-11-10 16:46:59,022 [INFO] [resolve_artist_ids] Found ID for nick drake
+2025-11-10 16:46:59,346 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for lfo
+2025-11-10 16:46:59,347 [INFO] [resolve_artist_ids] Found ID for lfo
+2025-11-10 16:46:59,383 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-10 16:46:59,384 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-10 16:46:59,384 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 7 rows → info_show.csv
+2025-11-10 16:46:59,385 [INFO] [flush_partial] ✅ merged 7 rows → info_show.csv
+2025-11-10 16:46:59,385 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:46:59,385 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:46:59,385 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:46:59,385 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:46:59,556 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:46:59,556 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:46:59,633 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:46:59,633 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:46:59,708 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:46:59,708 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:46:59,778 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:46:59,778 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:46:59,839 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for yusuf / cat stevens
+2025-11-10 16:46:59,839 [INFO] [resolve_artist_ids] Found ID for yusuf / cat stevens
+2025-11-10 16:46:59,901 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:46:59,902 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:46:59,970 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:46:59,970 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:46:59,970 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:46:59,971 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:46:59,971 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flushed partial results after phase 'overall'
+2025-11-10 16:46:59,971 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-10 16:46:59,971 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting phase: per_year
+2025-11-10 16:46:59,972 [INFO] [run_all] Starting phase: per_year
+2025-11-10 16:46:59,974 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming prefilter len=40
+2025-11-10 16:46:59,974 [INFO] [filter:debug] incoming prefilter len=40
+2025-11-10 16:46:59,974 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:46:59,974 [INFO] [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:46:59,974 [INFO] [log_dao] ⚠️ Failed to log remotely: [per_year] Final artists before=40, after=35
+2025-11-10 16:46:59,974 [INFO] [per_year] Final artists before=40, after=35
+2025-11-10 16:46:59,974 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Starting batch with 35 names
+2025-11-10 16:46:59,974 [INFO] [fetch_and_save_artists] Starting batch with 35 names
+2025-11-10 16:46:59,974 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Resolving 35 names
+2025-11-10 16:46:59,974 [INFO] [resolve_artist_ids] Resolving 35 names
+2025-11-10 16:46:59,979 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:46:59,979 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:46:59,982 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Fallback search for 25 names
+2025-11-10 16:46:59,982 [INFO] [resolve_artist_ids] Fallback search for 25 names
+2025-11-10 16:47:00,369 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for late of the pier
+2025-11-10 16:47:00,370 [INFO] [resolve_artist_ids] Found ID for late of the pier
+2025-11-10 16:47:00,370 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for les mccann
+2025-11-10 16:47:00,370 [INFO] [resolve_artist_ids] Found ID for les mccann
+2025-11-10 16:47:00,699 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the modern lovers
+2025-11-10 16:47:00,700 [INFO] [resolve_artist_ids] Found ID for the modern lovers
+2025-11-10 16:47:00,780 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for television
+2025-11-10 16:47:00,780 [INFO] [resolve_artist_ids] Found ID for television
+2025-11-10 16:47:01,005 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for squarepusher
+2025-11-10 16:47:01,005 [INFO] [resolve_artist_ids] Found ID for squarepusher
+2025-11-10 16:47:01,218 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for post war years
+2025-11-10 16:47:01,219 [INFO] [resolve_artist_ids] Found ID for post war years
+2025-11-10 16:47:01,400 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for vladislav delay
+2025-11-10 16:47:01,400 [INFO] [resolve_artist_ids] Found ID for vladislav delay
+2025-11-10 16:47:01,674 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the cinematic orchestra
+2025-11-10 16:47:01,675 [INFO] [resolve_artist_ids] Found ID for the cinematic orchestra
+2025-11-10 16:47:01,836 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for gently tender
+2025-11-10 16:47:01,836 [INFO] [resolve_artist_ids] Found ID for gently tender
+2025-11-10 16:47:02,142 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for milk music
+2025-11-10 16:47:02,142 [INFO] [resolve_artist_ids] Found ID for milk music
+2025-11-10 16:47:02,232 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the fisherman’s friends
+2025-11-10 16:47:02,232 [INFO] [resolve_artist_ids] Found ID for the fisherman’s friends
+2025-11-10 16:47:02,544 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for girls against boys
+2025-11-10 16:47:02,545 [INFO] [resolve_artist_ids] Found ID for girls against boys
+2025-11-10 16:47:02,555 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for robert palmer
+2025-11-10 16:47:02,557 [INFO] [resolve_artist_ids] Found ID for robert palmer
+2025-11-10 16:47:02,877 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for martyn
+2025-11-10 16:47:02,878 [INFO] [resolve_artist_ids] Found ID for martyn
+2025-11-10 16:47:03,012 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for dj seinfeld
+2025-11-10 16:47:03,012 [INFO] [resolve_artist_ids] Found ID for dj seinfeld
+2025-11-10 16:47:03,444 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for lapalux
+2025-11-10 16:47:03,444 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for ella fitzgerald
+2025-11-10 16:47:03,445 [INFO] [resolve_artist_ids] Found ID for lapalux
+2025-11-10 16:47:03,445 [INFO] [resolve_artist_ids] Found ID for ella fitzgerald
+2025-11-10 16:47:03,817 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the cactus blossoms
+2025-11-10 16:47:03,817 [INFO] [resolve_artist_ids] Found ID for the cactus blossoms
+2025-11-10 16:47:03,821 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for hexstatic
+2025-11-10 16:47:03,821 [INFO] [resolve_artist_ids] Found ID for hexstatic
+2025-11-10 16:47:04,260 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for grizzly bear
+2025-11-10 16:47:04,260 [INFO] [resolve_artist_ids] Found ID for grizzly bear
+2025-11-10 16:47:04,267 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for mark pritchard
+2025-11-10 16:47:04,267 [INFO] [resolve_artist_ids] Found ID for mark pritchard
+2025-11-10 16:47:04,701 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for nick drake
+2025-11-10 16:47:04,701 [INFO] [resolve_artist_ids] Found ID for nick drake
+2025-11-10 16:47:04,729 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for fleet foxes
+2025-11-10 16:47:04,729 [INFO] [resolve_artist_ids] Found ID for fleet foxes
+2025-11-10 16:47:04,834 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Done — resolved 35 IDs so far
+2025-11-10 16:47:04,834 [INFO] [resolve_artist_ids] Done — resolved 35 IDs so far
+2025-11-10 16:47:04,836 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Resolved IDs for 35 / 35
+2025-11-10 16:47:04,836 [INFO] [fetch_and_save_artists] Resolved IDs for 35 / 35
+2025-11-10 16:47:04,836 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Calling get_artists for 35 IDs
+2025-11-10 16:47:04,836 [INFO] [fetch_and_save_artists] Calling get_artists for 35 IDs
+2025-11-10 16:47:05,051 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for lfo
+2025-11-10 16:47:05,051 [INFO] [resolve_artist_ids] Found ID for lfo
+2025-11-10 16:47:05,478 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for yusuf / cat stevens
+2025-11-10 16:47:05,479 [INFO] [resolve_artist_ids] Found ID for yusuf / cat stevens
+2025-11-10 16:47:05,621 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:47:05,621 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — spotify:artists: Fetched 35 artists
+2025-11-10 16:47:05,727 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Got 35 artist records back
+2025-11-10 16:47:05,728 [INFO] [fetch_and_save_artists] Got 35 artist records back
+2025-11-10 16:47:05,733 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] 2 artists missing genres → sending to Discogs pool
+2025-11-10 16:47:05,733 [INFO] [fetch_and_save_artists] 2 artists missing genres → sending to Discogs pool
+2025-11-10 16:47:05,880 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for les mccann
+2025-11-10 16:47:05,881 [INFO] [resolve_artist_ids] Found ID for les mccann
+2025-11-10 16:47:06,308 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for television
+2025-11-10 16:47:06,308 [INFO] [resolve_artist_ids] Found ID for television
+2025-11-10 16:47:06,717 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for post war years
+2025-11-10 16:47:06,718 [INFO] [resolve_artist_ids] Found ID for post war years
+2025-11-10 16:47:07,129 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the cinematic orchestra
+2025-11-10 16:47:07,132 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Discogs returned genres for 2 / 2
+2025-11-10 16:47:07,132 [INFO] [resolve_artist_ids] Found ID for the cinematic orchestra
+2025-11-10 16:47:07,133 [INFO] [fetch_and_save_artists] Discogs returned genres for 2 / 2
+2025-11-10 16:47:07,144 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug] Saving 35 artists to buffer → [{'artist_id': '5ZBQea34QfBgEDkcGEKK2b', 'artist_name': 'Late of the Pier'}, {'artist_id': '3WrFJ7ztbogyGnTHbHJFl2', 'artist_name': 'The Beatles'}, {'artist_id': '2eRdPaLHWAL4d1WcNUO9Vz', 'artist_name': 'The Modern Lovers'}]
+2025-11-10 16:47:07,145 [INFO] [debug] Saving 35 artists to buffer → [{'artist_id': '5ZBQea34QfBgEDkcGEKK2b', 'artist_name': 'Late of the Pier'}, {'artist_id': '3WrFJ7ztbogyGnTHbHJFl2', 'artist_name': 'The Beatles'}, {'artist_id': '2eRdPaLHWAL4d1WcNUO9Vz', 'artist_name': 'The Modern Lovers'}]
+2025-11-10 16:47:07,145 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Saving 35 artists to buffer
+2025-11-10 16:47:07,145 [INFO] [fetch_and_save_artists] Saving 35 artists to buffer
+2025-11-10 16:47:07,465 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for milk music
+2025-11-10 16:47:07,465 [INFO] [resolve_artist_ids] Found ID for milk music
+2025-11-10 16:47:07,468 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:07,762 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for robert palmer
+2025-11-10 16:47:07,763 [INFO] [resolve_artist_ids] Found ID for robert palmer
+2025-11-10 16:47:07,814 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → overall
+2025-11-10 16:47:07,816 [INFO] [DEBUG] per_book before sorting:
+2025-11-10 16:47:07,816 [INFO] shape:
+2025-11-10 16:47:07,816 [INFO] (0, 3)
+2025-11-10 16:47:07,816 [INFO] columns:
+2025-11-10 16:47:07,816 [INFO] ['year', 'audiobook_title', 'minutes_played']
+2025-11-10 16:47:07,816 [INFO] head:
+2025-11-10 16:47:07,817 [INFO] Empty DataFrame
+Columns: [year, audiobook_title, minutes_played]
+Index: []
+2025-11-10 16:47:07,817 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Completed phase: per_year (batches +1)
+2025-11-10 16:47:07,817 [INFO] [run_all] Completed phase: per_year (batches +1)
+2025-11-10 16:47:08,057 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:08,073 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for dj seinfeld
+2025-11-10 16:47:08,074 [INFO] [resolve_artist_ids] Found ID for dj seinfeld
+2025-11-10 16:47:08,280 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:08,283 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Starting autosave snapshot at 20251110-164708
+2025-11-10 16:47:08,283 [INFO] [flush_partial] Starting autosave snapshot at 20251110-164708
+2025-11-10 16:47:08,362 [INFO] [merge_into_master] Merged 35 new → total 35 (before=10)
+2025-11-10 16:47:08,471 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for ella fitzgerald
+2025-11-10 16:47:08,471 [INFO] [resolve_artist_ids] Found ID for ella fitzgerald
+2025-11-10 16:47:08,764 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the cactus blossoms
+2025-11-10 16:47:08,764 [INFO] [resolve_artist_ids] Found ID for the cactus blossoms
+2025-11-10 16:47:09,004 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-10 16:47:09,004 [INFO] [merge_into_master] ✅ Saved 35 rows to info_artist_genre.csv
+2025-11-10 16:47:09,005 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 35 rows → info_artist_genre.csv
+2025-11-10 16:47:09,005 [INFO] [flush_partial] ✅ merged 35 rows → info_artist_genre.csv
+2025-11-10 16:47:09,005 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:47:09,005 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:47:09,005 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:47:09,005 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:47:09,062 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for mark pritchard
+2025-11-10 16:47:09,063 [INFO] [resolve_artist_ids] Found ID for mark pritchard
+2025-11-10 16:47:09,107 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 16:47:09,107 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 16:47:09,185 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:47:09,185 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:47:09,259 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:47:09,260 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:47:09,336 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:47:09,337 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:47:09,416 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:47:09,416 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:47:09,423 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for fleet foxes
+2025-11-10 16:47:09,423 [INFO] [resolve_artist_ids] Found ID for fleet foxes
+2025-11-10 16:47:09,520 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:47:09,521 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:47:09,521 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:47:09,521 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:47:09,521 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flushed partial results after phase 'per_year'
+2025-11-10 16:47:09,522 [INFO] [run_all] Flushed partial results after phase 'per_year'
+2025-11-10 16:47:09,522 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting final flush
+2025-11-10 16:47:09,522 [INFO] [run_all] Starting final flush
+2025-11-10 16:47:09,522 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Starting global master merges at 20251110-164709
+2025-11-10 16:47:09,522 [INFO] [flush_all] Starting global master merges at 20251110-164709
+2025-11-10 16:47:09,523 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 16:47:09,523 [INFO] [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 16:47:09,523 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 16:47:09,524 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Done — resolved 35 IDs so far
+2025-11-10 16:47:09,524 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 16:47:09,524 [INFO] [resolve_artist_ids] Done — resolved 35 IDs so far
+2025-11-10 16:47:09,525 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Resolved IDs for 35 / 35
+2025-11-10 16:47:09,525 [INFO] [fetch_and_save_artists] Resolved IDs for 35 / 35
+2025-11-10 16:47:09,525 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Calling get_artists for 35 IDs
+2025-11-10 16:47:09,525 [INFO] [fetch_and_save_artists] Calling get_artists for 35 IDs
+2025-11-10 16:47:09,666 [INFO] [log_dao] [spotify:artists] Fetched 35 artists
+2025-11-10 16:47:09,920 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:47:10,024 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Got 35 artist records back
+2025-11-10 16:47:10,024 [INFO] [fetch_and_save_artists] Got 35 artist records back
+2025-11-10 16:47:10,029 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] 2 artists missing genres → sending to Discogs pool
+2025-11-10 16:47:10,029 [INFO] [fetch_and_save_artists] 2 artists missing genres → sending to Discogs pool
+2025-11-10 16:47:10,526 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Discogs pool shut down successfully.
+2025-11-10 16:47:10,526 [INFO] [flush_all] Discogs pool shut down successfully.
+2025-11-10 16:47:10,526 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Starting master consistency validation...
+2025-11-10 16:47:10,526 [INFO] [integrity] Starting master consistency validation...
+2025-11-10 16:47:10,625 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_artist_genre.csv: 35 rows, 6 columns, 0 duplicates
+2025-11-10 16:47:10,625 [INFO] [integrity] ✅ info_artist_genre.csv: 35 rows, 6 columns, 0 duplicates
+2025-11-10 16:47:10,704 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 16:47:10,704 [INFO] [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 16:47:10,834 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 16:47:10,835 [INFO] [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 16:47:10,916 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 16:47:10,916 [INFO] [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 16:47:10,984 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 16:47:10,985 [INFO] [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 16:47:10,985 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Validation complete.
+2025-11-10 16:47:10,985 [INFO] [integrity] Validation complete.
+2025-11-10 16:47:10,985 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ✅ Master integrity validated.
+2025-11-10 16:47:10,985 [INFO] [flush_all] ✅ Master integrity validated.
+2025-11-10 16:47:10,986 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:47:10,986 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:47:11,092 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 16:47:11,092 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 16:47:11,215 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:47:11,215 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:47:11,254 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Discogs returned genres for 2 / 2
+2025-11-10 16:47:11,254 [INFO] [fetch_and_save_artists] Discogs returned genres for 2 / 2
+2025-11-10 16:47:11,261 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug] Saving 35 artists to buffer → [{'artist_id': '5ZBQea34QfBgEDkcGEKK2b', 'artist_name': 'Late of the Pier'}, {'artist_id': '3WrFJ7ztbogyGnTHbHJFl2', 'artist_name': 'The Beatles'}, {'artist_id': '2eRdPaLHWAL4d1WcNUO9Vz', 'artist_name': 'The Modern Lovers'}]
+2025-11-10 16:47:11,261 [INFO] [debug] Saving 35 artists to buffer → [{'artist_id': '5ZBQea34QfBgEDkcGEKK2b', 'artist_name': 'Late of the Pier'}, {'artist_id': '3WrFJ7ztbogyGnTHbHJFl2', 'artist_name': 'The Beatles'}, {'artist_id': '2eRdPaLHWAL4d1WcNUO9Vz', 'artist_name': 'The Modern Lovers'}]
+2025-11-10 16:47:11,261 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Saving 35 artists to buffer
+2025-11-10 16:47:11,261 [INFO] [fetch_and_save_artists] Saving 35 artists to buffer
+2025-11-10 16:47:11,283 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:47:11,284 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:47:11,355 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:47:11,355 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:47:11,428 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:47:11,428 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:47:11,494 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:47:11,495 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:47:11,495 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:47:11,495 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:47:11,495 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flush complete
+2025-11-10 16:47:11,495 [INFO] [run_all] Flush complete
+2025-11-10 16:47:11,576 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:11,788 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:11,790 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:11,791 [INFO] [DEBUG] per_book before sorting:
+2025-11-10 16:47:11,792 [INFO] shape:
+2025-11-10 16:47:11,792 [INFO] (0, 3)
+2025-11-10 16:47:11,792 [INFO] columns:
+2025-11-10 16:47:11,792 [INFO] ['year', 'audiobook_title', 'minutes_played']
+2025-11-10 16:47:11,793 [INFO] head:
+2025-11-10 16:47:11,793 [INFO] Empty DataFrame
+Columns: [year, audiobook_title, minutes_played]
+Index: []
+2025-11-10 16:47:11,794 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Completed phase: per_year (batches +1)
+2025-11-10 16:47:11,795 [INFO] [run_all] Completed phase: per_year (batches +1)
+2025-11-10 16:47:11,949 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:11,949 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Enrichment finished OK — 3 new batches enriched
+2025-11-10 16:47:11,949 [INFO] [run_all] Enrichment finished OK — 3 new batches enriched
+2025-11-10 16:47:11,949 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Cleaning up Discogs worker pool…
+2025-11-10 16:47:11,949 [INFO] [run_all] Cleaning up Discogs worker pool…
+2025-11-10 16:47:11,950 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Discogs worker pool shut down successfully
+2025-11-10 16:47:11,950 [INFO] [run_all] Discogs worker pool shut down successfully
+2025-11-10 16:47:12,007 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:12,185 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 35 rows (expected ≥1000)
+2025-11-10 16:47:12,202 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:12,203 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Starting autosave snapshot at 20251110-164712
+2025-11-10 16:47:12,203 [INFO] [flush_partial] Starting autosave snapshot at 20251110-164712
+2025-11-10 16:47:12,243 [INFO] [verify_enrich] ⚠️ info_album.csv has only 0 rows (expected ≥100)
+2025-11-10 16:47:12,297 [INFO] [verify_enrich] ⚠️ info_track.csv has only 0 rows (expected ≥1000)
+2025-11-10 16:47:12,298 [INFO] [verify_enrich] ❌ Inconsistent enrichment for short-phase_2-1.
+2025-11-10 16:47:12,337 [INFO] [merge_into_master] Merged 35 new → total 35 (before=35)
+2025-11-10 16:47:12,997 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-10 16:47:12,998 [INFO] [merge_into_master] ✅ Saved 35 rows to info_artist_genre.csv
+2025-11-10 16:47:12,999 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 35 rows → info_artist_genre.csv
+2025-11-10 16:47:12,999 [INFO] [flush_partial] ✅ merged 35 rows → info_artist_genre.csv
+2025-11-10 16:47:12,999 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:47:12,999 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:47:13,000 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:47:13,000 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:47:13,053 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:47:13,053 [INFO] [CloudflareDAO] 🪵 Logged (warning) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — enrichment: Incomplete or inconsistent enrichment detected for short-phase_2-1. Forcing re-r
+2025-11-10 16:47:13,110 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 16:47:13,110 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 16:47:13,233 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:47:13,234 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:47:13,266 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:13,345 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:47:13,345 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:47:13,423 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:13,425 [INFO] [enrich:background_enrich_short-phase_2-1] ❌ Exception: Incomplete or inconsistent enrichment detected for short-phase_2-1. Forcing re-run.
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1102, in background_enrich
+    raise RuntimeError(msg)
+RuntimeError: Incomplete or inconsistent enrichment detected for short-phase_2-1. Forcing re-run.
+2025-11-10 16:47:13,429 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:47:13,429 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:47:13,546 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:47:13,547 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:47:13,629 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:47:13,629 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:47:13,630 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:47:13,630 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:47:13,630 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flushed partial results after phase 'per_year'
+2025-11-10 16:47:13,630 [INFO] [run_all] Flushed partial results after phase 'per_year'
+2025-11-10 16:47:13,630 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting final flush
+2025-11-10 16:47:13,630 [INFO] [run_all] Starting final flush
+2025-11-10 16:47:13,631 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Starting global master merges at 20251110-164713
+2025-11-10 16:47:13,631 [INFO] [flush_all] Starting global master merges at 20251110-164713
+2025-11-10 16:47:13,632 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 16:47:13,632 [INFO] [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 16:47:13,632 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 16:47:13,632 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 16:47:13,633 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Discogs pool shut down successfully.
+2025-11-10 16:47:13,633 [INFO] [flush_all] Discogs pool shut down successfully.
+2025-11-10 16:47:13,633 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Starting master consistency validation...
+2025-11-10 16:47:13,633 [INFO] [integrity] Starting master consistency validation...
+2025-11-10 16:47:13,717 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_artist_genre.csv: 35 rows, 6 columns, 0 duplicates
+2025-11-10 16:47:13,717 [INFO] [integrity] ✅ info_artist_genre.csv: 35 rows, 6 columns, 0 duplicates
+2025-11-10 16:47:13,743 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:13,786 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 16:47:13,787 [INFO] [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 16:47:13,866 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 16:47:13,867 [INFO] [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 16:47:13,909 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:13,956 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 16:47:13,956 [INFO] [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 16:47:14,073 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 16:47:14,074 [INFO] [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 16:47:14,074 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Validation complete.
+2025-11-10 16:47:14,074 [INFO] [integrity] Validation complete.
+2025-11-10 16:47:14,075 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ✅ Master integrity validated.
+2025-11-10 16:47:14,075 [INFO] [flush_all] ✅ Master integrity validated.
+2025-11-10 16:47:14,075 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:47:14,075 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:47:14,171 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 16:47:14,171 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 16:47:14,272 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:47:14,273 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:47:14,344 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:47:14,345 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:47:14,428 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:47:14,429 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:47:14,516 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:47:14,517 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:47:14,539 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:47:14,540 [INFO] [CloudflareDAO] 🪵 Logged (error) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — enrichment: Exception in background_enrich: Incomplete or inconsistent enrichment detected f
+2025-11-10 16:47:14,540 [INFO] [thread_monitor] 2 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-10 16:47:14,594 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:47:14,594 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:47:14,594 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:47:14,594 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:47:14,594 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flush complete
+2025-11-10 16:47:14,595 [INFO] [run_all] Flush complete
+2025-11-10 16:47:14,947 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:15,115 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:15,115 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Enrichment finished OK — 3 new batches enriched
+2025-11-10 16:47:15,115 [INFO] [run_all] Enrichment finished OK — 3 new batches enriched
+2025-11-10 16:47:15,116 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Cleaning up Discogs worker pool…
+2025-11-10 16:47:15,116 [INFO] [run_all] Cleaning up Discogs worker pool…
+2025-11-10 16:47:15,116 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Discogs worker pool shut down successfully
+2025-11-10 16:47:15,116 [INFO] [run_all] Discogs worker pool shut down successfully
+2025-11-10 16:47:15,180 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:47:15,181 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log — thread: Thread finished for short-phase_2-1
+2025-11-10 16:47:15,181 [INFO] [enrich:background_enrich_short-phase_2-1] 💤 Thread finished for short-phase_2-1
+2025-11-10 16:47:15,374 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 35 rows (expected ≥1000)
+2025-11-10 16:47:15,436 [INFO] [verify_enrich] ⚠️ info_album.csv has only 0 rows (expected ≥100)
+2025-11-10 16:47:15,494 [INFO] [verify_enrich] ⚠️ info_track.csv has only 0 rows (expected ≥1000)
+2025-11-10 16:47:15,495 [INFO] [verify_enrich] ❌ Inconsistent enrichment for short-phase_2-1.
+2025-11-10 16:47:15,495 [INFO] [log_dao] [enrichment] Incomplete or inconsistent enrichment detected for short-phase_2-1. Forcing re-run.
+2025-11-10 16:47:15,674 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:47:15,928 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:16,374 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:16,374 [INFO] [enrich:Thread-4 (background_enrich)] ❌ Exception: Incomplete or inconsistent enrichment detected for short-phase_2-1. Forcing re-run.
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1102, in background_enrich
+    raise RuntimeError(msg)
+RuntimeError: Incomplete or inconsistent enrichment detected for short-phase_2-1. Forcing re-run.
+2025-11-10 16:47:16,752 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_2-1_status.json
+2025-11-10 16:47:17,162 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_2-1 → per_year
+2025-11-10 16:47:17,162 [INFO] [log_dao] [enrichment] Exception in background_enrich: Incomplete or inconsistent enrichment detected for short-phase_2-1. Forcing re-run.
+2025-11-10 16:47:17,386 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:47:17,387 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-10 16:47:17,387 [INFO] [log_dao] [thread] Thread finished for short-phase_2-1
+2025-11-10 16:47:17,605 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_2-1.log
+2025-11-10 16:47:17,606 [INFO] [enrich:Thread-4 (background_enrich)] 💤 Thread finished for short-phase_2-1
+2025-11-10 16:56:55,144 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-10 16:56:55,439 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-10 16:56:55,439 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-10 16:56:55,723 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-10 16:56:56,108 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-10 16:56:56,109 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-10 16:57:08,039 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_short-phase_1-3_20251110-165705_history.csv
+2025-11-10 16:57:08,195 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_short-phase_1-3_20251110-165705_history_schema.json
+2025-11-10 16:57:08,195 [INFO] [CloudflareDAO] ✅ Uploaded dataset + schema → userdata/58d0bd65d3f40b92_short-phase_1-3_20251110-165705_history.csv
+2025-11-10 16:57:08,407 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:08,630 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → etl
+2025-11-10 16:57:08,905 [INFO] [upload_event] Recorded: user=58d0bd65d3f40b92, label=short-phase_1-3, status=completed
+2025-11-10 16:57:08,909 [INFO] [consistency] 🔍 Starting dataset consistency check for short-phase_1-3
+2025-11-10 16:57:08,979 [INFO] [CloudflareDAO] ℹ️ No object in R2: enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:09,513 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:09,514 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — start: 🔍 Starting dataset consistency check for short-phase_1-3
+2025-11-10 16:57:09,578 [INFO] [CloudflareDAO] 📦 Listed 2 objects under prefix 'userdata/58d0bd65d3f40b92_short-phase_1-3_'
+2025-11-10 16:57:09,579 [INFO] [consistency] 🧭 Using latest uploaded file: userdata/58d0bd65d3f40b92_short-phase_1-3_20251110-165705_history.csv
+2025-11-10 16:57:10,315 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:10,315 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — lookup: 🧭 Using latest uploaded file: userdata/58d0bd65d3f40b92_short-phase_1-3_20251110
+2025-11-10 16:57:11,226 [INFO] [consistency] 📥 Reloaded dataset from R2: 31172 rows, 25 columns
+2025-11-10 16:57:11,874 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:11,875 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — reload: 📥 Reloaded dataset from R2: 31172 rows, 25 columns
+2025-11-10 16:57:11,875 [INFO] [consistency] ✅ Shape matches: (31172, 25)
+2025-11-10 16:57:12,481 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:12,482 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — shape: ✅ Shape matches: (31172, 25)
+2025-11-10 16:57:12,482 [INFO] [consistency] ✅ Columns match exactly
+2025-11-10 16:57:13,082 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:13,082 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — columns: ✅ Columns match exactly
+2025-11-10 16:57:13,084 [INFO] [consistency] ⚠️ Dtype differences detected in 8 columns
+2025-11-10 16:57:13,631 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:13,631 [INFO] [CloudflareDAO] 🪵 Logged (warning) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes: ⚠️ Dtype differences detected in 8 columns
+2025-11-10 16:57:13,631 [INFO] [consistency]    • audiobook_title: object vs float64
+2025-11-10 16:57:14,290 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:14,291 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes:    • audiobook_title: object vs float64
+2025-11-10 16:57:14,291 [INFO] [consistency]    • datetime: datetime64[ns, UTC] vs object
+2025-11-10 16:57:14,911 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:14,912 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes:    • datetime: datetime64[ns, UTC] vs object
+2025-11-10 16:57:14,912 [INFO] [consistency]    • audiobook_chapter_title: object vs float64
+2025-11-10 16:57:15,575 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:15,575 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes:    • audiobook_chapter_title: object vs float64
+2025-11-10 16:57:15,576 [INFO] [consistency]    • month: int32 vs int64
+2025-11-10 16:57:16,253 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:16,254 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes:    • month: int32 vs int64
+2025-11-10 16:57:16,255 [INFO] [consistency]    • year: int32 vs int64
+2025-11-10 16:57:16,972 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:16,972 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes:    • year: int32 vs int64
+2025-11-10 16:57:16,972 [INFO] [consistency]    • audiobook_chapter_uri: object vs float64
+2025-11-10 16:57:17,651 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:17,651 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes:    • audiobook_chapter_uri: object vs float64
+2025-11-10 16:57:17,652 [INFO] [consistency]    • audiobook_uri: object vs float64
+2025-11-10 16:57:18,442 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:18,442 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes:    • audiobook_uri: object vs float64
+2025-11-10 16:57:18,442 [INFO] [consistency]    • day: int32 vs int64
+2025-11-10 16:57:19,117 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:19,118 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — dtypes:    • day: int32 vs int64
+2025-11-10 16:57:19,437 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_short-phase_1-3_consistency_report.csv
+2025-11-10 16:57:19,437 [INFO] [consistency:report] 📊 Saved diff report → userdata/58d0bd65d3f40b92_short-phase_1-3_consistency_report.csv (39 rows)
+2025-11-10 16:57:19,438 [INFO] [consistency] ⚠️ DIFFERENCES FOUND → userdata/58d0bd65d3f40b92_short-phase_1-3_consistency_report.csv
+2025-11-10 16:57:20,388 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:20,388 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — report: ⚠️ DIFFERENCES FOUND → userdata/58d0bd65d3f40b92_short-phase_1-3_consistency_rep
+2025-11-10 16:57:20,388 [INFO] [consistency] ✅ Consistency check completed for short-phase_1-3
+2025-11-10 16:57:20,989 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:20,990 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — complete: ✅ Consistency check completed for short-phase_1-3
+2025-11-10 16:57:21,170 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:21,373 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → etl
+2025-11-10 16:57:22,283 [INFO] [enrich:background_enrich_short-phase_1-3] Starting enrichment thread for short-phase_1-3
+2025-11-10 16:57:22,283 [INFO] [thread_monitor] 1 enrichment thread(s) active after starting new enrichment.
+2025-11-10 16:57:22,285 [INFO] [enrich] 🚀 Started enrichment thread for 'short-phase_1-3'
+2025-11-10 16:57:22,950 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:22,950 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — sanity: Starting Spotify sanity check
+2025-11-10 16:57:22,988 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:22,988 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — thread: Thread started for short-phase_1-3
+2025-11-10 16:57:23,860 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-phase_1-3_20251110-165705_history (25 columns)
+2025-11-10 16:57:23,911 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:23,918 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — sanity: Starting Discogs sanity check
+2025-11-10 16:57:23,922 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-10 16:57:23,939 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-phase_1-3
+2025-11-10 16:57:23,939 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-11-10 16:57:24,174 [INFO] [debug] df columns at start of enrichment: ['datetime', 'ms_played', 'country', 'track_name', 'artist_name', 'album_name', 'spotify_track_uri', 'episode_name', 'episode_show_name', 'spotify_episode_uri', 'audiobook_title', 'audiobook_uri', 'audiobook_chapter_uri', 'audiobook_chapter_title', 'reason_start', 'reason_end', 'shuffle', 'skipped', 'seconds_played', 'minutes_played', 'year', 'month', 'day', 'username', 'category']
+2025-11-10 16:57:24,291 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 0 rows (expected ≥1000)
+2025-11-10 16:57:24,381 [INFO] [verify_enrich] ⚠️ info_album.csv has only 0 rows (expected ≥100)
+2025-11-10 16:57:24,447 [INFO] [verify_enrich] ⚠️ info_track.csv has only 0 rows (expected ≥1000)
+2025-11-10 16:57:24,447 [INFO] [verify_enrich] ❌ Inconsistent enrichment for short-phase_1-3.
+2025-11-10 16:57:24,447 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-phase_1-3 (status mismatch or incomplete data).
+2025-11-10 16:57:24,512 [INFO] [enrich:Thread-6 (background_enrich)] Starting enrichment thread for short-phase_1-3
+2025-11-10 16:57:24,512 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-phase_1-3
+2025-11-10 16:57:24,512 [INFO] [enrich:Thread-6 (background_enrich)] ⚠️ log_dao missing or invalid — attempting to reload via dao_selector.get_log_dao()
+2025-11-10 16:57:24,514 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-10 16:57:24,751 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:24,751 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — enrichment: Starting run_all()
+2025-11-10 16:57:24,776 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:24,954 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:24,990 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-10 16:57:25,134 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → running
+2025-11-10 16:57:25,139 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:25,207 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,207 [INFO] [master:init] ⚠️ info_artist_genre.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,324 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,325 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,344 [INFO] [enrich:Thread-6 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-10 16:57:25,384 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,384 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,437 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_show.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,437 [INFO] [master:init] ⚠️ info_show.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,503 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,503 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,599 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,599 [INFO] [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:25,601 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists shape=(0, 6)
+2025-11-10 16:57:25,601 [INFO] [debug:init] master_artists shape=(0, 6)
+2025-11-10 16:57:25,602 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists head=[]
+2025-11-10 16:57:25,602 [INFO] [debug:init] master_artists head=[]
+2025-11-10 16:57:25,603 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] seen_artists sample=[]
+2025-11-10 16:57:25,603 [INFO] [debug:init] seen_artists sample=[]
+2025-11-10 16:57:25,605 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Loaded: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:57:25,606 [INFO] [master] Loaded: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:57:25,606 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Seen sets initialized: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:57:25,606 [INFO] [master] Seen sets initialized: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:57:25,633 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 16:57:25,634 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: int64
+2025-11-10 16:57:25,636 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 16:57:26,376 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-phase_1-3_20251110-165705_history (25 columns)
+2025-11-10 16:57:26,463 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-10 16:57:26,474 [INFO] [enrich:Thread-6 (background_enrich)] ✅ Reloaded dataset from R2 (31172 rows)
+2025-11-10 16:57:26,547 [INFO] [debug] df columns at start of enrichment: ['datetime', 'ms_played', 'country', 'track_name', 'artist_name', 'album_name', 'spotify_track_uri', 'episode_name', 'episode_show_name', 'spotify_episode_uri', 'audiobook_title', 'audiobook_uri', 'audiobook_chapter_uri', 'audiobook_chapter_title', 'reason_start', 'reason_end', 'shuffle', 'skipped', 'seconds_played', 'minutes_played', 'year', 'month', 'day', 'username', 'category']
+2025-11-10 16:57:26,561 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-10 16:57:26,748 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:27,074 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:27,373 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → running
+2025-11-10 16:57:27,458 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,460 [INFO] [master:init] ⚠️ info_artist_genre.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,520 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,528 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,618 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,632 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,685 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_show.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,686 [INFO] [master:init] ⚠️ info_show.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,762 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,771 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,860 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,864 [INFO] [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 16:57:27,866 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists shape=(0, 6)
+2025-11-10 16:57:27,873 [INFO] [debug:init] master_artists shape=(0, 6)
+2025-11-10 16:57:27,873 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists head=[]
+2025-11-10 16:57:27,875 [INFO] [debug:init] master_artists head=[]
+2025-11-10 16:57:27,876 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] seen_artists sample=[]
+2025-11-10 16:57:27,876 [INFO] [debug:init] seen_artists sample=[]
+2025-11-10 16:57:27,877 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Loaded: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:57:27,877 [INFO] [master] Loaded: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:57:27,877 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Seen sets initialized: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:57:27,877 [INFO] [master] Seen sets initialized: artists=0, albums=0, tracks=0, shows=0, audiobooks=0
+2025-11-10 16:57:28,322 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 16:57:28,331 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: Int64
+2025-11-10 16:57:28,341 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 16:57:35,759 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 16:57:35,761 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 16:57:35,925 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:36,122 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:36,123 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Building priority sets…
+2025-11-10 16:57:36,125 [INFO] [run_all] Building priority sets…
+2025-11-10 16:57:36,151 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 16:57:36,152 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 16:57:36,152 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 16:57:36,154 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: int64
+2025-11-10 16:57:36,155 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 16:57:36,220 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 16:57:36,221 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 16:57:36,221 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting phase: overall
+2025-11-10 16:57:36,221 [INFO] [run_all] Starting phase: overall
+2025-11-10 16:57:36,221 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 16:57:36,221 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 16:57:36,221 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming prefilter len=10
+2025-11-10 16:57:36,221 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-10 16:57:36,221 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:57:36,222 [INFO] [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:57:36,222 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Artists before=10, after=10
+2025-11-10 16:57:36,223 [INFO] [overall_first50] Artists before=10, after=10
+2025-11-10 16:57:36,223 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching artists: 10
+2025-11-10 16:57:36,223 [INFO] [overall_first50] Fetching artists: 10
+2025-11-10 16:57:36,223 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Starting batch with 10 names
+2025-11-10 16:57:36,223 [INFO] [fetch_and_save_artists] Starting batch with 10 names
+2025-11-10 16:57:36,223 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Resolving 10 names
+2025-11-10 16:57:36,223 [INFO] [resolve_artist_ids] Resolving 10 names
+2025-11-10 16:57:36,226 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:57:36,228 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:57:36,229 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Fallback search for 10 names
+2025-11-10 16:57:36,232 [INFO] [resolve_artist_ids] Fallback search for 10 names
+2025-11-10 16:57:36,449 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for shxcxchcxsh
+2025-11-10 16:57:36,449 [INFO] [resolve_artist_ids] Found ID for shxcxchcxsh
+2025-11-10 16:57:36,870 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for aphex twin
+2025-11-10 16:57:36,871 [INFO] [resolve_artist_ids] Found ID for aphex twin
+2025-11-10 16:57:37,313 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for travis scott
+2025-11-10 16:57:37,314 [INFO] [resolve_artist_ids] Found ID for travis scott
+2025-11-10 16:57:37,622 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the beatles
+2025-11-10 16:57:37,624 [INFO] [resolve_artist_ids] Found ID for the beatles
+2025-11-10 16:57:37,997 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for steely dan
+2025-11-10 16:57:37,998 [INFO] [resolve_artist_ids] Found ID for steely dan
+2025-11-10 16:57:38,333 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for cornelius
+2025-11-10 16:57:38,335 [INFO] [resolve_artist_ids] Found ID for cornelius
+2025-11-10 16:57:38,742 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for architectural
+2025-11-10 16:57:38,743 [INFO] [resolve_artist_ids] Found ID for architectural
+2025-11-10 16:57:39,152 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for nursery rhymes 123
+2025-11-10 16:57:39,154 [INFO] [resolve_artist_ids] Found ID for nursery rhymes 123
+2025-11-10 16:57:39,531 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for blur
+2025-11-10 16:57:39,531 [INFO] [resolve_artist_ids] Found ID for blur
+2025-11-10 16:57:39,813 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for grischa lichtenberger
+2025-11-10 16:57:39,813 [INFO] [resolve_artist_ids] Found ID for grischa lichtenberger
+2025-11-10 16:57:39,920 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Done — resolved 10 IDs so far
+2025-11-10 16:57:39,921 [INFO] [resolve_artist_ids] Done — resolved 10 IDs so far
+2025-11-10 16:57:39,923 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Resolved IDs for 10 / 10
+2025-11-10 16:57:39,923 [INFO] [fetch_and_save_artists] Resolved IDs for 10 / 10
+2025-11-10 16:57:39,925 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Calling get_artists for 10 IDs
+2025-11-10 16:57:39,925 [INFO] [fetch_and_save_artists] Calling get_artists for 10 IDs
+2025-11-10 16:57:40,611 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:40,613 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — spotify:artists: Fetched 10 artists
+2025-11-10 16:57:40,722 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Got 10 artist records back
+2025-11-10 16:57:40,722 [INFO] [fetch_and_save_artists] Got 10 artist records back
+2025-11-10 16:57:40,810 [INFO] [log_dao] ⚠️ Failed to log remotely: [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 16:57:40,812 [INFO] [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 16:57:40,813 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug] Saving 10 artists to buffer → [{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_name': 'Travis Scott'}]
+2025-11-10 16:57:40,813 [INFO] [debug] Saving 10 artists to buffer → [{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_name': 'Travis Scott'}]
+2025-11-10 16:57:40,814 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Saving 10 artists to buffer
+2025-11-10 16:57:40,814 [INFO] [fetch_and_save_artists] Saving 10 artists to buffer
+2025-11-10 16:57:41,070 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:41,266 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:41,268 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Shows before=7, after=7
+2025-11-10 16:57:41,269 [INFO] [overall_first50] Shows before=7, after=7
+2025-11-10 16:57:41,271 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching shows: 7
+2025-11-10 16:57:41,271 [INFO] [overall_first50] Fetching shows: 7
+2025-11-10 16:57:41,271 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Starting batch with 7 shows
+2025-11-10 16:57:41,273 [INFO] [fetch_and_save_shows] Starting batch with 7 shows
+2025-11-10 16:57:41,274 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Resolving 7 show names
+2025-11-10 16:57:41,276 [INFO] [resolve_show_ids] Resolving 7 show names
+2025-11-10 16:57:41,276 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 16:57:41,276 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 16:57:41,280 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fetching 7 episodes via get_episodes
+2025-11-10 16:57:41,281 [INFO] [resolve_show_ids] Fetching 7 episodes via get_episodes
+2025-11-10 16:57:41,473 [INFO] [spotify:episodes] Fetched 7 episodes
+2025-11-10 16:57:41,579 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fallback search for 3 shows
+2025-11-10 16:57:41,579 [INFO] [resolve_show_ids] Fallback search for 3 shows
+2025-11-10 16:57:41,773 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 16:57:41,774 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 16:57:42,134 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for Global News Podcast
+2025-11-10 16:57:42,134 [INFO] [resolve_show_ids] Found ID for Global News Podcast
+2025-11-10 16:57:42,736 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for Daily Dad Jokes
+2025-11-10 16:57:42,738 [INFO] [resolve_show_ids] Found ID for Daily Dad Jokes
+2025-11-10 16:57:42,844 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Done — resolved 7 show IDs so far
+2025-11-10 16:57:42,844 [INFO] [resolve_show_ids] Done — resolved 7 show IDs so far
+2025-11-10 16:57:42,846 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Calling get_shows for 7 IDs
+2025-11-10 16:57:42,847 [INFO] [fetch_and_save_shows] Calling get_shows for 7 IDs
+2025-11-10 16:57:43,860 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:43,863 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — spotify:shows: Fetched 7 shows
+2025-11-10 16:57:43,969 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Got 7 show records back
+2025-11-10 16:57:43,970 [INFO] [fetch_and_save_shows] Got 7 show records back
+2025-11-10 16:57:43,972 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Saving 7 shows to buffer
+2025-11-10 16:57:43,972 [INFO] [fetch_and_save_shows] Saving 7 shows to buffer
+2025-11-10 16:57:44,235 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:44,382 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:44,382 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Completed phase: overall (batches +2)
+2025-11-10 16:57:44,382 [INFO] [run_all] Completed phase: overall (batches +2)
+2025-11-10 16:57:44,525 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:44,766 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → overall
+2025-11-10 16:57:44,766 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Starting autosave snapshot at 20251110-165744
+2025-11-10 16:57:44,766 [INFO] [flush_partial] Starting autosave snapshot at 20251110-165744
+2025-11-10 16:57:44,830 [INFO] [CloudflareDAO] ℹ️ No object in R2: enrichment/metadata/info_artist_genre.csv
+2025-11-10 16:57:44,830 [INFO] [merge_into_master] ℹ️ Starting new master for info_artist_genre.csv
+2025-11-10 16:57:44,831 [INFO] [merge_into_master] Merged 10 new → total 10 (before=0)
+2025-11-10 16:57:45,084 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 16:57:45,084 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 16:57:45,268 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:45,284 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-10 16:57:45,284 [INFO] [merge_into_master] ✅ Saved 10 rows to info_artist_genre.csv
+2025-11-10 16:57:45,284 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 10 rows → info_artist_genre.csv
+2025-11-10 16:57:45,284 [INFO] [flush_partial] ✅ merged 10 rows → info_artist_genre.csv
+2025-11-10 16:57:45,338 [INFO] [CloudflareDAO] ℹ️ No object in R2: enrichment/metadata/info_show.csv
+2025-11-10 16:57:45,339 [INFO] [merge_into_master] ℹ️ Starting new master for info_show.csv
+2025-11-10 16:57:45,341 [INFO] [merge_into_master] Merged 7 new → total 7 (before=0)
+2025-11-10 16:57:45,458 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:45,458 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Building priority sets…
+2025-11-10 16:57:45,458 [INFO] [run_all] Building priority sets…
+2025-11-10 16:57:45,536 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 16:57:45,536 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 16:57:45,536 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 16:57:45,537 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: Int64
+2025-11-10 16:57:45,538 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 16:57:45,576 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting phase: overall
+2025-11-10 16:57:45,576 [INFO] [run_all] Starting phase: overall
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 16:57:45,576 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming prefilter len=10
+2025-11-10 16:57:45,576 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:57:45,576 [INFO] [filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Artists before=10, after=10
+2025-11-10 16:57:45,576 [INFO] [overall_first50] Artists before=10, after=10
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching artists: 10
+2025-11-10 16:57:45,576 [INFO] [overall_first50] Fetching artists: 10
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Starting batch with 10 names
+2025-11-10 16:57:45,576 [INFO] [fetch_and_save_artists] Starting batch with 10 names
+2025-11-10 16:57:45,576 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Resolving 10 names
+2025-11-10 16:57:45,576 [INFO] [resolve_artist_ids] Resolving 10 names
+2025-11-10 16:57:45,578 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:57:45,578 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 16:57:45,578 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Fallback search for 10 names
+2025-11-10 16:57:45,578 [INFO] [resolve_artist_ids] Fallback search for 10 names
+2025-11-10 16:57:45,778 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for shxcxchcxsh
+2025-11-10 16:57:45,778 [INFO] [resolve_artist_ids] Found ID for shxcxchcxsh
+2025-11-10 16:57:46,098 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-10 16:57:46,099 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-10 16:57:46,100 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 7 rows → info_show.csv
+2025-11-10 16:57:46,100 [INFO] [flush_partial] ✅ merged 7 rows → info_show.csv
+2025-11-10 16:57:46,100 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:57:46,100 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:57:46,101 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:57:46,101 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:57:46,141 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for aphex twin
+2025-11-10 16:57:46,141 [INFO] [resolve_artist_ids] Found ID for aphex twin
+2025-11-10 16:57:46,189 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:57:46,189 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:57:46,263 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:57:46,263 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:57:46,331 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:57:46,332 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:57:46,384 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:57:46,384 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:57:46,456 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:57:46,456 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:57:46,507 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:57:46,507 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:57:46,507 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:57:46,507 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:57:46,507 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flushed partial results after phase 'overall'
+2025-11-10 16:57:46,508 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-10 16:57:46,508 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting final flush
+2025-11-10 16:57:46,508 [INFO] [run_all] Starting final flush
+2025-11-10 16:57:46,508 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Starting global master merges at 20251110-165746
+2025-11-10 16:57:46,508 [INFO] [flush_all] Starting global master merges at 20251110-165746
+2025-11-10 16:57:46,509 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 16:57:46,509 [INFO] [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 16:57:46,509 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 16:57:46,509 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 16:57:46,573 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for travis scott
+2025-11-10 16:57:46,574 [INFO] [resolve_artist_ids] Found ID for travis scott
+2025-11-10 16:57:47,242 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for the beatles
+2025-11-10 16:57:47,242 [INFO] [resolve_artist_ids] Found ID for the beatles
+2025-11-10 16:57:47,317 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Discogs pool shut down successfully.
+2025-11-10 16:57:47,318 [INFO] [flush_all] Discogs pool shut down successfully.
+2025-11-10 16:57:47,318 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Starting master consistency validation...
+2025-11-10 16:57:47,318 [INFO] [integrity] Starting master consistency validation...
+2025-11-10 16:57:47,377 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_artist_genre.csv: 10 rows, 6 columns, 0 duplicates
+2025-11-10 16:57:47,377 [INFO] [integrity] ✅ info_artist_genre.csv: 10 rows, 6 columns, 0 duplicates
+2025-11-10 16:57:47,448 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 16:57:47,448 [INFO] [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 16:57:47,501 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 16:57:47,502 [INFO] [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 16:57:47,565 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 16:57:47,565 [INFO] [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 16:57:47,574 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for steely dan
+2025-11-10 16:57:47,574 [INFO] [resolve_artist_ids] Found ID for steely dan
+2025-11-10 16:57:47,628 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 16:57:47,628 [INFO] [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 16:57:47,628 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Validation complete.
+2025-11-10 16:57:47,628 [INFO] [integrity] Validation complete.
+2025-11-10 16:57:47,628 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ✅ Master integrity validated.
+2025-11-10 16:57:47,628 [INFO] [flush_all] ✅ Master integrity validated.
+2025-11-10 16:57:47,628 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:57:47,628 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:57:47,687 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:57:47,688 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:57:47,747 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:57:47,747 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:57:47,796 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:57:47,797 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:57:47,861 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:57:47,862 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:57:47,923 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:57:47,923 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:57:47,943 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for cornelius
+2025-11-10 16:57:47,943 [INFO] [resolve_artist_ids] Found ID for cornelius
+2025-11-10 16:57:47,977 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:57:47,977 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:57:47,977 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:57:47,977 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:57:47,977 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flush complete
+2025-11-10 16:57:47,977 [INFO] [run_all] Flush complete
+2025-11-10 16:57:48,255 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:48,299 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for architectural
+2025-11-10 16:57:48,299 [INFO] [resolve_artist_ids] Found ID for architectural
+2025-11-10 16:57:48,508 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:48,508 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Enrichment finished OK — 2 new batches enriched
+2025-11-10 16:57:48,508 [INFO] [run_all] Enrichment finished OK — 2 new batches enriched
+2025-11-10 16:57:48,508 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Cleaning up Discogs worker pool…
+2025-11-10 16:57:48,509 [INFO] [run_all] Cleaning up Discogs worker pool…
+2025-11-10 16:57:48,509 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Discogs worker pool shut down successfully
+2025-11-10 16:57:48,509 [INFO] [run_all] Discogs worker pool shut down successfully
+2025-11-10 16:57:48,650 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for nursery rhymes 123
+2025-11-10 16:57:48,651 [INFO] [resolve_artist_ids] Found ID for nursery rhymes 123
+2025-11-10 16:57:48,819 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 10 rows (expected ≥1000)
+2025-11-10 16:57:48,883 [INFO] [verify_enrich] ⚠️ info_album.csv has only 0 rows (expected ≥100)
+2025-11-10 16:57:48,933 [INFO] [verify_enrich] ⚠️ info_track.csv has only 0 rows (expected ≥1000)
+2025-11-10 16:57:48,934 [INFO] [verify_enrich] ❌ Inconsistent enrichment for short-phase_1-3.
+2025-11-10 16:57:49,060 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for blur
+2025-11-10 16:57:49,060 [INFO] [resolve_artist_ids] Found ID for blur
+2025-11-10 16:57:49,363 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Found ID for grischa lichtenberger
+2025-11-10 16:57:49,364 [INFO] [resolve_artist_ids] Found ID for grischa lichtenberger
+2025-11-10 16:57:49,465 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Done — resolved 10 IDs so far
+2025-11-10 16:57:49,465 [INFO] [resolve_artist_ids] Done — resolved 10 IDs so far
+2025-11-10 16:57:49,466 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Resolved IDs for 10 / 10
+2025-11-10 16:57:49,467 [INFO] [fetch_and_save_artists] Resolved IDs for 10 / 10
+2025-11-10 16:57:49,467 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Calling get_artists for 10 IDs
+2025-11-10 16:57:49,467 [INFO] [fetch_and_save_artists] Calling get_artists for 10 IDs
+2025-11-10 16:57:49,599 [INFO] [log_dao] [spotify:artists] Fetched 10 artists
+2025-11-10 16:57:49,633 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:49,633 [INFO] [CloudflareDAO] 🪵 Logged (warning) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — enrichment: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-r
+2025-11-10 16:57:49,860 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:49,879 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:49,984 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Got 10 artist records back
+2025-11-10 16:57:49,985 [INFO] [fetch_and_save_artists] Got 10 artist records back
+2025-11-10 16:57:50,011 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:50,012 [INFO] [enrich:background_enrich_short-phase_1-3] ❌ Exception: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1102, in background_enrich
+    raise RuntimeError(msg)
+RuntimeError: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+2025-11-10 16:57:50,097 [INFO] [log_dao] ⚠️ Failed to log remotely: [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 16:57:50,098 [INFO] [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 16:57:50,100 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug] Saving 10 artists to buffer → [{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_name': 'Travis Scott'}]
+2025-11-10 16:57:50,100 [INFO] [debug] Saving 10 artists to buffer → [{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_name': 'Travis Scott'}]
+2025-11-10 16:57:50,100 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Saving 10 artists to buffer
+2025-11-10 16:57:50,100 [INFO] [fetch_and_save_artists] Saving 10 artists to buffer
+2025-11-10 16:57:50,273 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:50,361 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:50,511 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:50,512 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Shows before=7, after=7
+2025-11-10 16:57:50,512 [INFO] [overall_first50] Shows before=7, after=7
+2025-11-10 16:57:50,512 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching shows: 7
+2025-11-10 16:57:50,512 [INFO] [overall_first50] Fetching shows: 7
+2025-11-10 16:57:50,512 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Starting batch with 7 shows
+2025-11-10 16:57:50,512 [INFO] [fetch_and_save_shows] Starting batch with 7 shows
+2025-11-10 16:57:50,512 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Resolving 7 show names
+2025-11-10 16:57:50,513 [INFO] [resolve_show_ids] Resolving 7 show names
+2025-11-10 16:57:50,513 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 16:57:50,513 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 16:57:50,520 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fetching 7 episodes via get_episodes
+2025-11-10 16:57:50,520 [INFO] [resolve_show_ids] Fetching 7 episodes via get_episodes
+2025-11-10 16:57:50,614 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:50,787 [INFO] [spotify:episodes] Fetched 7 episodes
+2025-11-10 16:57:50,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fallback search for 3 shows
+2025-11-10 16:57:50,888 [INFO] [resolve_show_ids] Fallback search for 3 shows
+2025-11-10 16:57:51,093 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 16:57:51,093 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 16:57:51,334 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:51,335 [INFO] [CloudflareDAO] 🪵 Logged (error) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — enrichment: Exception in background_enrich: Incomplete or inconsistent enrichment detected f
+2025-11-10 16:57:51,335 [INFO] [thread_monitor] 2 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-10 16:57:51,459 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for Global News Podcast
+2025-11-10 16:57:51,459 [INFO] [resolve_show_ids] Found ID for Global News Podcast
+2025-11-10 16:57:51,905 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:51,905 [INFO] [CloudflareDAO] 🪵 Logged (info) → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log — thread: Thread finished for short-phase_1-3
+2025-11-10 16:57:51,905 [INFO] [enrich:background_enrich_short-phase_1-3] 💤 Thread finished for short-phase_1-3
+2025-11-10 16:57:52,050 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for Daily Dad Jokes
+2025-11-10 16:57:52,050 [INFO] [resolve_show_ids] Found ID for Daily Dad Jokes
+2025-11-10 16:57:52,156 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Done — resolved 7 show IDs so far
+2025-11-10 16:57:52,156 [INFO] [resolve_show_ids] Done — resolved 7 show IDs so far
+2025-11-10 16:57:52,157 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Calling get_shows for 7 IDs
+2025-11-10 16:57:52,157 [INFO] [fetch_and_save_shows] Calling get_shows for 7 IDs
+2025-11-10 16:57:52,385 [INFO] [log_dao] [spotify:shows] Fetched 7 shows
+2025-11-10 16:57:52,533 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:52,635 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Got 7 show records back
+2025-11-10 16:57:52,636 [INFO] [fetch_and_save_shows] Got 7 show records back
+2025-11-10 16:57:52,638 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Saving 7 shows to buffer
+2025-11-10 16:57:52,639 [INFO] [fetch_and_save_shows] Saving 7 shows to buffer
+2025-11-10 16:57:52,871 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:53,038 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 16:57:53,038 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Completed phase: overall (batches +2)
+2025-11-10 16:57:53,038 [INFO] [run_all] Completed phase: overall (batches +2)
+2025-11-10 16:57:53,172 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:53,355 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → overall
+2025-11-10 16:57:53,357 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Starting autosave snapshot at 20251110-165753
+2025-11-10 16:57:53,357 [INFO] [flush_partial] Starting autosave snapshot at 20251110-165753
+2025-11-10 16:57:53,415 [INFO] [merge_into_master] Merged 10 new → total 10 (before=10)
+2025-11-10 16:57:54,004 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-10 16:57:54,005 [INFO] [merge_into_master] ✅ Saved 10 rows to info_artist_genre.csv
+2025-11-10 16:57:54,005 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 10 rows → info_artist_genre.csv
+2025-11-10 16:57:54,005 [INFO] [flush_partial] ✅ merged 10 rows → info_artist_genre.csv
+2025-11-10 16:57:54,061 [INFO] [merge_into_master] Merged 7 new → total 7 (before=7)
+2025-11-10 16:57:54,540 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-10 16:57:54,540 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-10 16:57:54,541 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 7 rows → info_show.csv
+2025-11-10 16:57:54,541 [INFO] [flush_partial] ✅ merged 7 rows → info_show.csv
+2025-11-10 16:57:54,541 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:57:54,541 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-10 16:57:54,542 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:57:54,542 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:57:54,625 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:57:54,626 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:57:54,678 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:57:54,679 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:57:54,724 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:57:54,724 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:57:54,776 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:57:54,777 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:57:54,855 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:57:54,856 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:57:54,906 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:57:54,906 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:57:54,906 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:57:54,906 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:57:54,906 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flushed partial results after phase 'overall'
+2025-11-10 16:57:54,906 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-10 16:57:54,906 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting final flush
+2025-11-10 16:57:54,907 [INFO] [run_all] Starting final flush
+2025-11-10 16:57:54,907 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Starting global master merges at 20251110-165754
+2025-11-10 16:57:54,907 [INFO] [flush_all] Starting global master merges at 20251110-165754
+2025-11-10 16:57:54,908 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 16:57:54,908 [INFO] [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 16:57:54,908 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 16:57:54,908 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 16:57:54,908 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Discogs pool shut down successfully.
+2025-11-10 16:57:54,908 [INFO] [flush_all] Discogs pool shut down successfully.
+2025-11-10 16:57:54,908 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Starting master consistency validation...
+2025-11-10 16:57:54,908 [INFO] [integrity] Starting master consistency validation...
+2025-11-10 16:57:54,964 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_artist_genre.csv: 10 rows, 6 columns, 0 duplicates
+2025-11-10 16:57:54,964 [INFO] [integrity] ✅ info_artist_genre.csv: 10 rows, 6 columns, 0 duplicates
+2025-11-10 16:57:55,014 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 16:57:55,015 [INFO] [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 16:57:55,061 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 16:57:55,062 [INFO] [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 16:57:55,126 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 16:57:55,126 [INFO] [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 16:57:55,181 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 16:57:55,181 [INFO] [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 16:57:55,181 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Validation complete.
+2025-11-10 16:57:55,181 [INFO] [integrity] Validation complete.
+2025-11-10 16:57:55,181 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ✅ Master integrity validated.
+2025-11-10 16:57:55,181 [INFO] [flush_all] ✅ Master integrity validated.
+2025-11-10 16:57:55,182 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:57:55,182 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 16:57:55,242 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:57:55,242 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 16:57:55,287 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:57:55,287 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 16:57:55,338 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:57:55,339 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 16:57:55,390 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:57:55,390 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 16:57:55,441 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:57:55,441 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 16:57:55,486 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:57:55,486 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 16:57:55,486 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:57:55,486 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 16:57:55,487 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flush complete
+2025-11-10 16:57:55,487 [INFO] [run_all] Flush complete
+2025-11-10 16:57:55,715 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:55,916 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → overall
+2025-11-10 16:57:55,916 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Enrichment finished OK — 2 new batches enriched
+2025-11-10 16:57:55,916 [INFO] [run_all] Enrichment finished OK — 2 new batches enriched
+2025-11-10 16:57:55,916 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Cleaning up Discogs worker pool…
+2025-11-10 16:57:55,917 [INFO] [run_all] Cleaning up Discogs worker pool…
+2025-11-10 16:57:55,917 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Discogs worker pool shut down successfully
+2025-11-10 16:57:55,917 [INFO] [run_all] Discogs worker pool shut down successfully
+2025-11-10 16:57:56,102 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 10 rows (expected ≥1000)
+2025-11-10 16:57:56,150 [INFO] [verify_enrich] ⚠️ info_album.csv has only 0 rows (expected ≥100)
+2025-11-10 16:57:56,208 [INFO] [verify_enrich] ⚠️ info_track.csv has only 0 rows (expected ≥1000)
+2025-11-10 16:57:56,208 [INFO] [verify_enrich] ❌ Inconsistent enrichment for short-phase_1-3.
+2025-11-10 16:57:56,209 [INFO] [log_dao] [enrichment] Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+2025-11-10 16:57:56,349 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:56,552 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:56,786 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → overall
+2025-11-10 16:57:56,786 [INFO] [enrich:Thread-6 (background_enrich)] ❌ Exception: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1102, in background_enrich
+    raise RuntimeError(msg)
+RuntimeError: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+2025-11-10 16:57:57,080 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 16:57:57,235 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → overall
+2025-11-10 16:57:57,236 [INFO] [log_dao] [enrichment] Exception in background_enrich: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+2025-11-10 16:57:57,389 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:57,390 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-10 16:57:57,390 [INFO] [log_dao] [thread] Thread finished for short-phase_1-3
+2025-11-10 16:57:57,525 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 16:57:57,525 [INFO] [enrich:Thread-6 (background_enrich)] 💤 Thread finished for short-phase_1-3
+2025-11-10 17:02:27,079 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-10 17:02:27,466 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-10 17:02:27,466 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-10 17:02:28,450 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-phase_1-3_20251110-165705_history (25 columns)
+2025-11-10 17:02:28,504 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-10 17:02:28,518 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-phase_1-3
+2025-11-10 17:02:28,518 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>, metadata=<class 'dao.CloudflareDAOs'>
+2025-11-10 17:02:28,856 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 10 rows (expected ≥1000)
+2025-11-10 17:02:28,923 [INFO] [verify_enrich] ⚠️ info_album.csv has only 0 rows (expected ≥100)
+2025-11-10 17:02:28,971 [INFO] [verify_enrich] ⚠️ info_track.csv has only 0 rows (expected ≥1000)
+2025-11-10 17:02:28,972 [INFO] [verify_enrich] ❌ Inconsistent enrichment for short-phase_1-3.
+2025-11-10 17:02:28,972 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-phase_1-3 (status mismatch or incomplete data).
+2025-11-10 17:02:29,023 [INFO] [enrich:Thread-7 (background_enrich)] Starting enrichment thread for short-phase_1-3
+2025-11-10 17:02:29,023 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-phase_1-3
+2025-11-10 17:02:29,023 [INFO] [enrich:Thread-7 (background_enrich)] ⚠️ log_dao missing or invalid — attempting to reload via dao_selector.get_log_dao()
+2025-11-10 17:02:29,024 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-10 17:02:29,328 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 17:02:29,623 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-10 17:02:29,791 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 17:02:30,017 [INFO] [enrich:Thread-7 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-10 17:02:30,857 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-phase_1-3_20251110-165705_history (25 columns)
+2025-11-10 17:02:30,914 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-10 17:02:30,915 [INFO] [enrich:Thread-7 (background_enrich)] ✅ Reloaded dataset from R2 (31172 rows)
+2025-11-10 17:02:30,926 [INFO] [debug] df columns at start of enrichment: ['datetime', 'ms_played', 'country', 'track_name', 'artist_name', 'album_name', 'spotify_track_uri', 'episode_name', 'episode_show_name', 'spotify_episode_uri', 'audiobook_title', 'audiobook_uri', 'audiobook_chapter_uri', 'audiobook_chapter_title', 'reason_start', 'reason_end', 'shuffle', 'skipped', 'seconds_played', 'minutes_played', 'year', 'month', 'day', 'username', 'category']
+2025-11-10 17:02:30,926 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-10 17:02:31,092 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 17:02:31,236 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:31,443 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → running
+2025-11-10 17:02:31,583 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 17:02:31,583 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-10 17:02:31,643 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 17:02:31,643 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-10 17:02:31,760 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 17:02:31,760 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-10 17:02:31,822 [INFO] [log_dao] ⚠️ Failed to log remotely: [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 17:02:31,822 [INFO] [master:init] ⚠️ info_artist_genre_unlisted.csv empty or missing — initializing in memory only.
+2025-11-10 17:02:31,824 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists shape=(10, 6)
+2025-11-10 17:02:31,824 [INFO] [debug:init] master_artists shape=(10, 6)
+2025-11-10 17:02:31,825 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] master_artists head=[{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb91bc18ece360bee56573115e', 'supergenre': 'Techno & Trance', 'artist_popularity': 24, 'primary_genre': 'dub techno', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5ebaa3c91d792eb520a5d58daa5', 'supergenre': 'Ambient & Experimental Electronic', 'artist_popularity': 65, 'primary_genre': 'idm', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb19c2790744c792d05570bb71', 'supergenre': 'Hip Hop/Rap', 'artist_popularity': 90, 'primary_genre': 'rap', 'artist_name': 'Travis Scott'}]
+2025-11-10 17:02:31,825 [INFO] [debug:init] master_artists head=[{'artist_id': '6s1SjCXRjeNAa3aRNiYROK', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb91bc18ece360bee56573115e', 'supergenre': 'Techno & Trance', 'artist_popularity': 24, 'primary_genre': 'dub techno', 'artist_name': 'SHXCXCHCXSH'}, {'artist_id': '6kBDZFXuLrZgHnvmPu9NsG', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5ebaa3c91d792eb520a5d58daa5', 'supergenre': 'Ambient & Experimental Electronic', 'artist_popularity': 65, 'primary_genre': 'idm', 'artist_name': 'Aphex Twin'}, {'artist_id': '0Y5tJX1MQlPlqiwlOH1tJY', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb19c2790744c792d05570bb71', 'supergenre': 'Hip Hop/Rap', 'artist_popularity': 90, 'primary_genre': 'rap', 'artist_name': 'Travis Scott'}]
+2025-11-10 17:02:31,825 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug:init] seen_artists sample=['shxcxchcxsh', 'aphex twin', 'travis scott', 'the beatles', 'steely dan', 'cornelius', 'architectural', 'nursery rhymes 123', 'blur', 'grischa lichtenberger']
+2025-11-10 17:02:31,826 [INFO] [debug:init] seen_artists sample=['shxcxchcxsh', 'aphex twin', 'travis scott', 'the beatles', 'steely dan', 'cornelius', 'architectural', 'nursery rhymes 123', 'blur', 'grischa lichtenberger']
+2025-11-10 17:02:31,833 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Loaded: artists=10, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-10 17:02:31,834 [INFO] [master] Loaded: artists=10, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-10 17:02:31,834 [INFO] [log_dao] ⚠️ Failed to log remotely: [master] Seen sets initialized: artists=10, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-10 17:02:31,835 [INFO] [master] Seen sets initialized: artists=10, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-10 17:02:31,869 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 17:02:31,870 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: Int64
+2025-11-10 17:02:31,872 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 17:02:41,384 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 17:02:41,384 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-10 17:02:41,609 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:41,803 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 17:02:41,803 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Building priority sets…
+2025-11-10 17:02:41,804 [INFO] [run_all] Building priority sets…
+2025-11-10 17:02:41,838 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 17:02:41,838 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-10 17:02:41,838 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-10 17:02:41,838 [INFO] category
+music      31160
+podcast       12
+Name: count, dtype: Int64
+2025-11-10 17:02:41,840 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-10 17:02:41,886 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 17:02:41,886 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-10 17:02:41,886 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting phase: overall
+2025-11-10 17:02:41,886 [INFO] [run_all] Starting phase: overall
+2025-11-10 17:02:41,886 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 17:02:41,886 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming prefilter len=10
+2025-11-10 17:02:41,887 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter] Artists filtered out: 10/10 (remaining=0)
+2025-11-10 17:02:41,887 [INFO] [filter] Artists filtered out: 10/10 (remaining=0)
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] master_artists shape=(10, 6)
+2025-11-10 17:02:41,887 [INFO] [filter:debug] master_artists shape=(10, 6)
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] sample master artist names: ['SHXCXCHCXSH', 'Aphex Twin', 'Travis Scott', 'The Beatles', 'Steely Dan']
+2025-11-10 17:02:41,887 [INFO] [filter:debug] sample master artist names: ['SHXCXCHCXSH', 'Aphex Twin', 'Travis Scott', 'The Beatles', 'Steely Dan']
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming artist sample: ['The Beatles', 'Nursery Rhymes 123', 'SHXCXCHCXSH', 'Steely Dan', 'Travis Scott']
+2025-11-10 17:02:41,887 [INFO] [filter:debug] incoming artist sample: ['The Beatles', 'Nursery Rhymes 123', 'SHXCXCHCXSH', 'Steely Dan', 'Travis Scott']
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] seen_artists count=10
+2025-11-10 17:02:41,887 [INFO] [filter:debug] seen_artists count=10
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Artists before=10, after=0
+2025-11-10 17:02:41,887 [INFO] [overall_first50] Artists before=10, after=0
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter] Shows filtered out: 6/7
+2025-11-10 17:02:41,887 [INFO] [filter] Shows filtered out: 6/7
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Shows before=7, after=1
+2025-11-10 17:02:41,887 [INFO] [overall_first50] Shows before=7, after=1
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [overall_first50] Fetching shows: 1
+2025-11-10 17:02:41,887 [INFO] [overall_first50] Fetching shows: 1
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-10 17:02:41,887 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Resolving 1 show names
+2025-11-10 17:02:41,887 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-10 17:02:41,887 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 17:02:41,887 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-10 17:02:41,890 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-10 17:02:41,890 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-10 17:02:42,040 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-10 17:02:42,145 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Fallback search for 1 shows
+2025-11-10 17:02:42,146 [INFO] [resolve_show_ids] Fallback search for 1 shows
+2025-11-10 17:02:42,467 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 17:02:42,467 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-10 17:02:42,572 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-10 17:02:42,572 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-10 17:02:42,572 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-10 17:02:42,572 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-10 17:02:42,703 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-10 17:02:42,897 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 17:02:43,001 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Got 1 show records back
+2025-11-10 17:02:43,002 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-10 17:02:43,004 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-10 17:02:43,004 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-10 17:02:43,242 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:43,602 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → planning
+2025-11-10 17:02:43,603 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Completed phase: overall (batches +1)
+2025-11-10 17:02:43,603 [INFO] [run_all] Completed phase: overall (batches +1)
+2025-11-10 17:02:43,770 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:43,939 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → overall
+2025-11-10 17:02:43,942 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Starting autosave snapshot at 20251110-170243
+2025-11-10 17:02:43,942 [INFO] [flush_partial] Starting autosave snapshot at 20251110-170243
+2025-11-10 17:02:43,999 [INFO] [merge_into_master] Merged 1 new → total 7 (before=7)
+2025-11-10 17:02:44,496 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-10 17:02:44,496 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-10 17:02:44,497 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-10 17:02:44,497 [INFO] [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-10 17:02:44,497 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Buffers cleared after successful merge.
+2025-11-10 17:02:44,498 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-10 17:02:44,498 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 17:02:44,498 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 17:02:44,552 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 17:02:44,552 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 10 rows
+2025-11-10 17:02:44,608 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 17:02:44,609 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 17:02:44,664 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 17:02:44,664 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 17:02:44,713 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 17:02:44,713 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 17:02:44,782 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 17:02:44,782 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 17:02:44,834 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 17:02:44,834 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 17:02:44,834 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 17:02:44,834 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 17:02:44,834 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flushed partial results after phase 'overall'
+2025-11-10 17:02:44,834 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-10 17:02:44,834 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting phase: per_year
+2025-11-10 17:02:44,834 [INFO] [run_all] Starting phase: per_year
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming prefilter len=40
+2025-11-10 17:02:44,835 [INFO] [filter:debug] incoming prefilter len=40
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter] Artists filtered out: 15/40 (remaining=25)
+2025-11-10 17:02:44,835 [INFO] [filter] Artists filtered out: 15/40 (remaining=25)
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] master_artists shape=(10, 6)
+2025-11-10 17:02:44,835 [INFO] [filter:debug] master_artists shape=(10, 6)
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] sample master artist names: ['SHXCXCHCXSH', 'Aphex Twin', 'Travis Scott', 'The Beatles', 'Steely Dan']
+2025-11-10 17:02:44,835 [INFO] [filter:debug] sample master artist names: ['SHXCXCHCXSH', 'Aphex Twin', 'Travis Scott', 'The Beatles', 'Steely Dan']
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] incoming artist sample: ['The Cinematic Orchestra', 'Grizzly Bear', 'Hexstatic', 'Television', 'Post War Years']
+2025-11-10 17:02:44,835 [INFO] [filter:debug] incoming artist sample: ['The Cinematic Orchestra', 'Grizzly Bear', 'Hexstatic', 'Television', 'Post War Years']
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter:debug] seen_artists count=10
+2025-11-10 17:02:44,835 [INFO] [filter:debug] seen_artists count=10
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [per_year] Final artists before=40, after=25
+2025-11-10 17:02:44,835 [INFO] [per_year] Final artists before=40, after=25
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Starting batch with 25 names
+2025-11-10 17:02:44,835 [INFO] [fetch_and_save_artists] Starting batch with 25 names
+2025-11-10 17:02:44,835 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Resolving 25 names
+2025-11-10 17:02:44,835 [INFO] [resolve_artist_ids] Resolving 25 names
+2025-11-10 17:02:44,838 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 17:02:44,838 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-10 17:02:44,840 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Fetching 25 tracks via get_tracks
+2025-11-10 17:02:44,840 [INFO] [resolve_artist_ids] Fetching 25 tracks via get_tracks
+2025-11-10 17:02:45,128 [INFO] [spotify:tracks] Fetched 25 tracks
+2025-11-10 17:02:45,234 [INFO] [log_dao] ⚠️ Failed to log remotely: [resolve_artist_ids] Done — resolved 25 IDs so far
+2025-11-10 17:02:45,234 [INFO] [resolve_artist_ids] Done — resolved 25 IDs so far
+2025-11-10 17:02:45,234 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Resolved IDs for 25 / 25
+2025-11-10 17:02:45,234 [INFO] [fetch_and_save_artists] Resolved IDs for 25 / 25
+2025-11-10 17:02:45,234 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Calling get_artists for 25 IDs
+2025-11-10 17:02:45,234 [INFO] [fetch_and_save_artists] Calling get_artists for 25 IDs
+2025-11-10 17:02:45,340 [INFO] [log_dao] [spotify:artists] Fetched 25 artists
+2025-11-10 17:02:45,504 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 17:02:45,610 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Got 25 artist records back
+2025-11-10 17:02:45,611 [INFO] [fetch_and_save_artists] Got 25 artist records back
+2025-11-10 17:02:45,615 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] 3 artists missing genres → sending to Discogs pool
+2025-11-10 17:02:45,615 [INFO] [fetch_and_save_artists] 3 artists missing genres → sending to Discogs pool
+2025-11-10 17:02:47,854 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Discogs returned genres for 3 / 3
+2025-11-10 17:02:47,854 [INFO] [fetch_and_save_artists] Discogs returned genres for 3 / 3
+2025-11-10 17:02:47,944 [INFO] [log_dao] ⚠️ Failed to log remotely: [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 17:02:47,944 [INFO] [init] Loaded 6421 supergenre mappings from storage.
+2025-11-10 17:02:47,945 [INFO] [log_dao] ⚠️ Failed to log remotely: [debug] Saving 25 artists to buffer → [{'artist_id': '32ogthv0BdaSMPml02X9YB', 'artist_name': 'The Cinematic Orchestra'}, {'artist_id': '2Jv5eshHtLycR6R8KQCdc4', 'artist_name': 'Grizzly Bear'}, {'artist_id': '3H24Sx4OTtMrkpQlcpGLtu', 'artist_name': 'Hexstatic'}]
+2025-11-10 17:02:47,945 [INFO] [debug] Saving 25 artists to buffer → [{'artist_id': '32ogthv0BdaSMPml02X9YB', 'artist_name': 'The Cinematic Orchestra'}, {'artist_id': '2Jv5eshHtLycR6R8KQCdc4', 'artist_name': 'Grizzly Bear'}, {'artist_id': '3H24Sx4OTtMrkpQlcpGLtu', 'artist_name': 'Hexstatic'}]
+2025-11-10 17:02:47,945 [INFO] [log_dao] ⚠️ Failed to log remotely: [fetch_and_save_artists] Saving 25 artists to buffer
+2025-11-10 17:02:47,945 [INFO] [fetch_and_save_artists] Saving 25 artists to buffer
+2025-11-10 17:02:48,310 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:48,518 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → overall
+2025-11-10 17:02:48,522 [INFO] [log_dao] ⚠️ Failed to log remotely: [filter] Shows filtered out: 7/7
+2025-11-10 17:02:48,522 [INFO] [filter] Shows filtered out: 7/7
+2025-11-10 17:02:48,522 [INFO] [log_dao] ⚠️ Failed to log remotely: [per_year] Final shows before=7, after=0
+2025-11-10 17:02:48,522 [INFO] [per_year] Final shows before=7, after=0
+2025-11-10 17:02:48,522 [INFO] [DEBUG] per_book before sorting:
+2025-11-10 17:02:48,523 [INFO] shape:
+2025-11-10 17:02:48,523 [INFO] (0, 3)
+2025-11-10 17:02:48,523 [INFO] columns:
+2025-11-10 17:02:48,523 [INFO] ['year', 'audiobook_title', 'minutes_played']
+2025-11-10 17:02:48,524 [INFO] head:
+2025-11-10 17:02:48,524 [INFO] Empty DataFrame
+Columns: [year, audiobook_title, minutes_played]
+Index: []
+2025-11-10 17:02:48,524 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Completed phase: per_year (batches +1)
+2025-11-10 17:02:48,525 [INFO] [run_all] Completed phase: per_year (batches +1)
+2025-11-10 17:02:48,674 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:49,124 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → per_year
+2025-11-10 17:02:49,127 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Starting autosave snapshot at 20251110-170249
+2025-11-10 17:02:49,127 [INFO] [flush_partial] Starting autosave snapshot at 20251110-170249
+2025-11-10 17:02:49,184 [INFO] [merge_into_master] Merged 25 new → total 35 (before=10)
+2025-11-10 17:02:49,666 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-10 17:02:49,667 [INFO] [merge_into_master] ✅ Saved 35 rows to info_artist_genre.csv
+2025-11-10 17:02:49,667 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] ✅ merged 25 rows → info_artist_genre.csv
+2025-11-10 17:02:49,667 [INFO] [flush_partial] ✅ merged 25 rows → info_artist_genre.csv
+2025-11-10 17:02:49,667 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_partial] Buffers cleared after successful merge.
+2025-11-10 17:02:49,668 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-10 17:02:49,668 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 17:02:49,668 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 17:02:49,736 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 17:02:49,737 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 17:02:49,787 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 17:02:49,787 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 17:02:49,837 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 17:02:49,837 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 17:02:49,888 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 17:02:49,888 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 17:02:49,945 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 17:02:49,945 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 17:02:49,999 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 17:02:49,999 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 17:02:49,999 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 17:02:49,999 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 17:02:49,999 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flushed partial results after phase 'per_year'
+2025-11-10 17:02:49,999 [INFO] [run_all] Flushed partial results after phase 'per_year'
+2025-11-10 17:02:49,999 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Starting final flush
+2025-11-10 17:02:49,999 [INFO] [run_all] Starting final flush
+2025-11-10 17:02:49,999 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Starting global master merges at 20251110-170249
+2025-11-10 17:02:50,000 [INFO] [flush_all] Starting global master merges at 20251110-170249
+2025-11-10 17:02:50,000 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 17:02:50,000 [INFO] [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-10 17:02:50,000 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 17:02:50,000 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-10 17:02:50,860 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] Discogs pool shut down successfully.
+2025-11-10 17:02:50,860 [INFO] [flush_all] Discogs pool shut down successfully.
+2025-11-10 17:02:50,860 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Starting master consistency validation...
+2025-11-10 17:02:50,860 [INFO] [integrity] Starting master consistency validation...
+2025-11-10 17:02:50,910 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_artist_genre.csv: 35 rows, 6 columns, 0 duplicates
+2025-11-10 17:02:50,910 [INFO] [integrity] ✅ info_artist_genre.csv: 35 rows, 6 columns, 0 duplicates
+2025-11-10 17:02:50,983 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 17:02:50,983 [INFO] [integrity] ℹ️ info_album.csv not found or empty (skipping).
+2025-11-10 17:02:51,032 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 17:02:51,033 [INFO] [integrity] ℹ️ info_track.csv not found or empty (skipping).
+2025-11-10 17:02:51,092 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 17:02:51,092 [INFO] [integrity] ✅ info_show.csv: 7 rows, 5 columns, 0 duplicates
+2025-11-10 17:02:51,161 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 17:02:51,161 [INFO] [integrity] ℹ️ info_audiobook.csv not found or empty (skipping).
+2025-11-10 17:02:51,161 [INFO] [log_dao] ⚠️ Failed to log remotely: [integrity] Validation complete.
+2025-11-10 17:02:51,161 [INFO] [integrity] Validation complete.
+2025-11-10 17:02:51,161 [INFO] [log_dao] ⚠️ Failed to log remotely: [flush_all] ✅ Master integrity validated.
+2025-11-10 17:02:51,161 [INFO] [flush_all] ✅ Master integrity validated.
+2025-11-10 17:02:51,161 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 17:02:51,161 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-10 17:02:51,207 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 17:02:51,207 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 35 rows
+2025-11-10 17:02:51,257 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 17:02:51,257 [INFO] [summarize_master_counts] ⚠️ info_artist_genre_unlisted.csv: found but empty
+2025-11-10 17:02:51,304 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 17:02:51,304 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-10 17:02:51,347 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 17:02:51,347 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-10 17:02:51,401 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 17:02:51,401 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-10 17:02:51,456 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 17:02:51,456 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-10 17:02:51,456 [INFO] [log_dao] ⚠️ Failed to log remotely: [summarize_master_counts] ✅ Summary complete.
+2025-11-10 17:02:51,456 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-10 17:02:51,456 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Flush complete
+2025-11-10 17:02:51,456 [INFO] [run_all] Flush complete
+2025-11-10 17:02:51,674 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:51,853 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → per_year
+2025-11-10 17:02:51,853 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Enrichment finished OK — 2 new batches enriched
+2025-11-10 17:02:51,853 [INFO] [run_all] Enrichment finished OK — 2 new batches enriched
+2025-11-10 17:02:51,853 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Cleaning up Discogs worker pool…
+2025-11-10 17:02:51,853 [INFO] [run_all] Cleaning up Discogs worker pool…
+2025-11-10 17:02:51,854 [INFO] [log_dao] ⚠️ Failed to log remotely: [run_all] Discogs worker pool shut down successfully
+2025-11-10 17:02:51,854 [INFO] [run_all] Discogs worker pool shut down successfully
+2025-11-10 17:02:52,024 [INFO] [verify_enrich] ⚠️ info_artist_genre.csv has only 35 rows (expected ≥1000)
+2025-11-10 17:02:52,073 [INFO] [verify_enrich] ⚠️ info_album.csv has only 0 rows (expected ≥100)
+2025-11-10 17:02:52,116 [INFO] [verify_enrich] ⚠️ info_track.csv has only 0 rows (expected ≥1000)
+2025-11-10 17:02:52,117 [INFO] [verify_enrich] ❌ Inconsistent enrichment for short-phase_1-3.
+2025-11-10 17:02:52,117 [INFO] [log_dao] [enrichment] Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+2025-11-10 17:02:52,250 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 17:02:52,448 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:52,659 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → per_year
+2025-11-10 17:02:52,660 [INFO] [enrich:Thread-7 (background_enrich)] ❌ Exception: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+Traceback (most recent call last):
+  File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1102, in background_enrich
+    raise RuntimeError(msg)
+RuntimeError: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+2025-11-10 17:02:52,912 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-phase_1-3_status.json
+2025-11-10 17:02:53,128 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-phase_1-3 → per_year
+2025-11-10 17:02:53,128 [INFO] [log_dao] [enrichment] Exception in background_enrich: Incomplete or inconsistent enrichment detected for short-phase_1-3. Forcing re-run.
+2025-11-10 17:02:53,273 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 17:02:53,274 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-10 17:02:53,274 [INFO] [log_dao] [thread] Thread finished for short-phase_1-3
+2025-11-10 17:02:53,456 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/logs/58d0bd65d3f40b92_short-phase_1-3.log
+2025-11-10 17:02:53,457 [INFO] [enrich:Thread-7 (background_enrich)] 💤 Thread finished for short-phase_1-3

@@ -2103,12 +2103,12 @@ class MetadataEnricher:
             self.run_phase_overall_first50(top_art, top_shows, top_books)
             _end_phase("overall", before)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "per_year"
-            # self.log("[run_all] Starting phase: per_year")
-            # before = self._done_batches
-            # self.run_phase_per_year(per_art, per_show, per_book)
-            # _end_phase("per_year", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_year"
+            self.log("[run_all] Starting phase: per_year")
+            before = self._done_batches
+            self.run_phase_per_year(per_art, per_show, per_book)
+            _end_phase("per_year", before)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "albums_of_year"

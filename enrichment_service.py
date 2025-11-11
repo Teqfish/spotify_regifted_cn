@@ -2185,12 +2185,12 @@ class MetadataEnricher:
             self.run_phase_per_album_all_albums_for_top_artists()
             _end_phase("per_album", before)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "top_tracks_per_month"
-            # self.log("[run_all] Starting phase: top_tracks_per_month")
-            # before = self._done_batches
-            # self.run_phase_top_tracks_per_month()
-            # _end_phase("top_tracks_per_month", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "top_tracks_per_month"
+            self.log("[run_all] Starting phase: top_tracks_per_month")
+            before = self._done_batches
+            self.run_phase_top_tracks_per_month()
+            _end_phase("top_tracks_per_month", before)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "popularity_timeseries"

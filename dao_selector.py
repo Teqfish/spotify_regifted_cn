@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import time
 from typing import Dict, Optional
 from datetime import datetime, timezone
 from dao import (
@@ -156,56 +157,82 @@ def load_global_daos():
     return DAOS
 
 class LogDAO:
-    """
-    Unified logger for enrichment and background threads.
-    Delegates to CloudflareDAO or LocalLogDAO depending on environment.
-    """
-
-    def __init__(self, backend):
+    def __init__(self, backend, flush_interval=5):
         self.backend = backend
+        self.buffer = []
+        self.last_flush = time.time()
+        self.flush_interval = flush_interval
 
-    def log(self, user_id: str, dataset_label: str, where: str, message: str, level: str = "info"):
-        """Write both to stdout and to R2/local log file."""
+    def log(self, user_id, dataset_label, where, message, level="info"):
         prefix = f"[{where}] {message}"
         print(f"[log_dao] {prefix}")
+        entry = f"{datetime.now(timezone.utc).isoformat()} [{level.upper()}] {prefix}\n"
+        self.buffer.append((user_id, dataset_label, entry))
+        if time.time() - self.last_flush >= self.flush_interval:
+            self.flush()
+
+    def flush(self):
+        if not self.buffer:
+            return
+        all_lines = "".join([entry for _, _, entry in self.buffer])
+        self.buffer = []
         try:
-            log_path = f"enrichment/logs/{user_id}_{dataset_label}.log"
-            entry = f"{datetime.now(timezone.utc).isoformat()} [{level.upper()}] {prefix}\n"
-            try:
-                # Read old content if file exists
-                old_log = ""
-                try:
-                    old_log = self.backend.download_text(log_path)
-                except Exception:
-                    old_log = ""
-                new_log = old_log + entry
-                self.backend.upload_text(new_log, path=log_path)
-            except Exception as e:
-                print(f"[log_dao] ⚠️ Could not append to log file: {e}")
+            # We can’t use self.user_id / self.label here directly — those belong to the enricher, not the DAO.
+            # Instead, flush uses whatever user_id/label pairs are in the buffer.
+            grouped = {}
+            for user_id, label, entry in self.buffer:
+                grouped.setdefault((user_id, label), []).append(entry)
+            for (user_id, label), lines in grouped.items():
+                log_path = f"enrichment/logs/{user_id}_{label}.log"
+                chunk = "".join(lines)
+                self.backend.upload_text(chunk, path=log_path)
         except Exception as e:
-            print(f"[log_dao] ⚠️ Failed to log remotely: {prefix} ({e})")
-            print(f"[log_dao:debug] Remote log upload failed: {type(e).__name__} — {e}")
+            print(f"[log_dao] ⚠️ periodic upload failed: {e}")
+
+    def close(self):
+        """Ensure any remaining buffered logs are written before shutdown."""
+        try:
+            self.flush()
+        except Exception:
+            pass
+
 
 def get_log_dao() -> LogDAO:
     """
     Return a valid LogDAO depending on current environment.
+    Always ensures append_text compatibility.
     """
     import streamlit as st
+    import dao_selector
 
     try:
-        from dao_selector import DAOS
+        from dao_selector import DAOS, load_global_daos
         if not DAOS or "logs" not in DAOS:
             load_global_daos()
         backend = DAOS.get("logs")
         if backend is None:
             raise ValueError("No 'logs' DAO backend available.")
+
+        # ✅ Ensure the backend has append_text, add dynamically if missing
+        if not hasattr(backend, "append_text"):
+            def append_text(new_line: str, *, path: str):
+                try:
+                    existing = backend._get_object_safe(path)
+                    new_bytes = (existing or b"") + new_line.encode("utf-8")
+                    backend._put_bytes_safe(path, new_bytes, "text/plain")
+                except Exception as e:
+                    print(f"[CloudflareDAO] ⚠️ append_text failed for {path}: {e}")
+            backend.append_text = append_text
+
         return LogDAO(backend)
+
     except Exception as e:
         print(f"[get_log_dao] ⚠️ Fallback to local LogDAO due to error: {e}")
-        # Fallback to local file writer if Cloudflare unavailable
+
         class LocalFallback:
-            def upload_text(self, text, path):
+            def append_text(self, text, *, path):
                 os.makedirs("datasets/enrichment/logs", exist_ok=True)
                 with open(f"datasets/enrichment/logs/{os.path.basename(path)}", "a", encoding="utf-8") as f:
                     f.write(text)
+
         return LogDAO(LocalFallback())

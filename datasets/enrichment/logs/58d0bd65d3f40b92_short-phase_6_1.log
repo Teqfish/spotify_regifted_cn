@@ -1,0 +1,4 @@
+2025-11-11T01:57:46.719077+00:00 [INFO] [sanity] Starting Spotify sanity check
+2025-11-11T01:57:46.994111+00:00 [INFO] [sanity] Starting Discogs sanity check
+2025-11-11T01:57:48.153798+00:00 [INFO] [enrichment] Starting run_all()
+2025-11-11T01:57:48.154555+00:00 [INFO] [thread] Thread finished for short-phase_6_1

@@ -534,9 +534,9 @@ class MetadataEnricher:
         if hasattr(log_dao, "log") and callable(getattr(log_dao, "log")):
             def _log(msg, level="info"):
                 try:
-                    log_dao.log(level, msg, user_id=self.user_id, label=self.label)
+                    log_dao.log(user_id=self.user_id,dataset_label=self.label,where="init",message=msg,level=level)
                 except Exception:
-                    print(f"[log_dao] ⚠️ Failed to log remotely: {msg}")
+                    print(f"[log_dao] ⚠️ Failed to log remotely(init): {msg}")
                     print(msg)
             self.log = _log
         else:
@@ -1403,85 +1403,6 @@ class MetadataEnricher:
         self.buf_audiobooks.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
         self.seen_audiobooks.update(titles)
 
-    # ---------- Chart scorer helpers ----------
-    def run_phase_chart_scorer(self):
-        """
-        Compute per-user chart scorer (Fri→Fri, 5-week decay) after enrichment.
-
-        Uses CloudflareDAO (or local equivalent) for all file I/O.
-        Writes to: enrichment/chart_scorer/
-        Reads charts from: reference/info_charts.csv
-        """
-        from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
-
-        self._check_cancel(self.cancel_event)
-
-        # Use clean bucket paths (no local 'datasets/' prefix)
-        charts_path = "reference/info_charts.csv"
-        output_dir = "enrichment/chart_scorer"
-
-        # Derive label & timestamp for naming, preferably from dataset filename
-        label, ts_str = None, None
-        table_name = getattr(self, "table_name", None) or getattr(self, "input_table_name", None)
-        if table_name:
-            label, ts_str = parse_label_ts_from_table_name(table_name)
-
-        if not label:
-            label = getattr(self, "label", "unknown")
-        if not ts_str:
-            ts_str = pd.Timestamp.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-
-        # Minimal listening view
-        cols = [c for c in ["datetime", "artist_name", "track_name"] if c in self.df.columns]
-        listening_view = self.df.loc[:, cols].copy()
-
-        # Update enrichment status
-        self.status.set_status(
-            self.user_id, self.label,
-            phase="chart_scorer",
-            detail=f"Scoring UK Top 50 (Fri→Fri, decay=10) [{label} {ts_str}]",
-            total=self._total_batches
-        )
-
-        # --- Load reference chart data ---
-        try:
-            # CloudflareDAO supports CSV read directly from R2
-            charts_df = self.storage.download_csv(path=charts_path)
-            print(f"[ChartScorer] ✅ Loaded charts from R2: {charts_path}")
-        except Exception as e:
-            raise RuntimeError(f"Failed to load reference charts from R2: {charts_path} ({e})")
-
-        # --- Compute results entirely in-memory ---
-        points_df, global_df = compute_chart_scorer_if_missing(
-            user_id=self.user_id,
-            label=label,
-            ts_str=ts_str,
-            listening=listening_view,
-            charts=charts_df,
-            output_dir=None,  # prevents local writes
-            anchor_weekday=4,
-            max_weeks=5,
-            weekly_decay=10,
-            use_weighting_if_present=True,
-            overwrite=False,
-            cancel_event=self.cancel_event,
-            return_dataframes=True,
-        )
-
-        # --- Upload results to Cloudflare ---
-        user_parquet_key = f"enrichment/chart_scorer/{self.user_id}_{label}_chart-scores.parquet"
-        global_parquet_key = "enrichment/chart_scorer/global_chart-summaries.parquet"
-
-        if hasattr(self.storage, "upload_parquet"):
-            self.storage.upload_parquet(points_df, path=user_parquet_key, overwrite=True)
-            self.storage.upload_parquet(global_df, path=global_parquet_key, overwrite=True)
-        else:
-            self.storage.upload_csv(points_df, path=user_parquet_key.replace(".parquet", ".csv"))
-            self.storage.upload_csv(global_df, path=global_parquet_key.replace(".parquet", ".csv"))
-
-        self._done_batches += 1
-        self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
-
     # --- phases called by run_all() ---
     def run_phase_overall_first50(self, top_art: pd.DataFrame, top_shows: pd.DataFrame, top_books: pd.DataFrame):
         """
@@ -1543,6 +1464,10 @@ class MetadataEnricher:
         Per-year top 10 (descending years), excluding already-seen and already in master tables.
         Batch by 50 per content type; fire each batch as it fills.
         """
+
+        self._load_master("albums")
+        self._load_master("tracks")
+
         # ---------- Artists ----------
         batch, fired = [], 0
         for _, r in per_art.sort_values(["year"], ascending=False).iterrows():
@@ -1653,6 +1578,8 @@ class MetadataEnricher:
 
         self.current_phase = "albums_of_year"
         self.log("[albums_of_year] Starting…")
+        self._load_master("albums")
+        self._load_master("tracks")
 
         # --- Safety: ensure we have valid music subset
         music = self.df[self.df["category"] == "music"].copy()
@@ -1739,6 +1666,8 @@ class MetadataEnricher:
         self.current_phase = "per_album"
         self._check_cancel(self.cancel_event)
         self.log("[per_album] Starting…")
+        self._load_master("albums")
+        self._load_master("tracks")
 
         music = self.df[self.df["category"] == "music"]
         top_artists = (
@@ -1786,6 +1715,8 @@ class MetadataEnricher:
         self.current_phase = "top_tracks_per_year"
         self._check_cancel(self.cancel_event)
         self.log("[top_tracks_per_year] Starting…")
+        self._load_master("albums")
+        self._load_master("tracks")
 
         df = self.df[self.df["category"] == "music"].copy()
         df["year"] = pd.to_datetime(df["datetime"], errors="coerce").dt.year
@@ -1842,6 +1773,8 @@ class MetadataEnricher:
         self.current_phase = "top_tracks_per_month"
         self._check_cancel(self.cancel_event)
         self.log("[top_tracks_per_month] Starting…")
+        self._load_master("albums")
+        self._load_master("tracks")
 
         df = self.df[self.df["category"] == "music"].copy()
         df["month"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
@@ -1982,6 +1915,84 @@ class MetadataEnricher:
         self._done_batches += 1
         self._maybe_autosave(self._done_batches, self._total_batches)
 
+    def run_phase_chart_scorer(self):
+        """
+        Compute per-user chart scorer (Fri→Fri, 5-week decay) after enrichment.
+
+        Uses CloudflareDAO (or local equivalent) for all file I/O.
+        Writes to: enrichment/chart_scorer/
+        Reads charts from: reference/info_charts.csv
+        """
+        from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
+
+        self._check_cancel(self.cancel_event)
+
+        # Use clean bucket paths (no local 'datasets/' prefix)
+        charts_path = "reference/info_charts.csv"
+        output_dir = "enrichment/chart_scorer"
+
+        # Derive label & timestamp for naming, preferably from dataset filename
+        label, ts_str = None, None
+        table_name = getattr(self, "table_name", None) or getattr(self, "input_table_name", None)
+        if table_name:
+            label, ts_str = parse_label_ts_from_table_name(table_name)
+
+        if not label:
+            label = getattr(self, "label", "unknown")
+        if not ts_str:
+            ts_str = pd.Timestamp.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+
+        # Minimal listening view
+        cols = [c for c in ["datetime", "artist_name", "track_name"] if c in self.df.columns]
+        listening_view = self.df.loc[:, cols].copy()
+
+        # Update enrichment status
+        self.status.set_status(
+            self.user_id, self.label,
+            phase="chart_scorer",
+            detail=f"Scoring UK Top 50 (Fri→Fri, decay=10) [{label} {ts_str}]",
+            total=self._total_batches
+        )
+
+        # --- Load reference chart data ---
+        try:
+            # CloudflareDAO supports CSV read directly from R2
+            charts_df = self.storage.download_csv(path=charts_path)
+            print(f"[ChartScorer] ✅ Loaded charts from R2: {charts_path}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to load reference charts from R2: {charts_path} ({e})")
+
+        # --- Compute results entirely in-memory ---
+        points_df, global_df = compute_chart_scorer_if_missing(
+            user_id=self.user_id,
+            label=label,
+            ts_str=ts_str,
+            listening=listening_view,
+            charts=charts_df,
+            output_dir=None,  # prevents local writes
+            anchor_weekday=4,
+            max_weeks=5,
+            weekly_decay=10,
+            use_weighting_if_present=True,
+            overwrite=False,
+            cancel_event=self.cancel_event,
+            return_dataframes=True,
+        )
+
+        # --- Upload results to Cloudflare ---
+        user_parquet_key = f"enrichment/chart_scorer/{self.user_id}_{label}_chart-scores.parquet"
+        global_parquet_key = "enrichment/chart_scorer/global_chart-summaries.parquet"
+
+        if hasattr(self.storage, "upload_parquet"):
+            self.storage.upload_parquet(points_df, path=user_parquet_key, overwrite=True)
+            self.storage.upload_parquet(global_df, path=global_parquet_key, overwrite=True)
+        else:
+            self.storage.upload_csv(points_df, path=user_parquet_key.replace(".parquet", ".csv"))
+            self.storage.upload_csv(global_df, path=global_parquet_key.replace(".parquet", ".csv"))
+
+        self._done_batches += 1
+        self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
+
     def run_phase_breadth_first_years_remaining(self, per_art: pd.DataFrame, per_show: pd.DataFrame, per_book: pd.DataFrame):
         """
         Remaining metadata: breadth-first over years.
@@ -1991,6 +2002,8 @@ class MetadataEnricher:
         self.current_phase = "breadth_first"
         self._check_cancel(self.cancel_event)
         self.log("[breadth_first] Starting diagnostic phase…")
+        self._load_master("albums")
+        self._load_master("tracks")
 
         # --- Defensive cleanup of seen sets ---
         self.seen_artists = {
@@ -2303,7 +2316,7 @@ class MetadataEnricher:
             # Non-fatal, keep going
             print(f"[autosave] flush_partial failed: {e}")
 
-    def validate_master_integrity(self):
+    # def validate_master_integrity(self):
         """
         Perform lightweight consistency checks on master metadata files in Cloudflare.
         - Ensures required columns exist
@@ -2500,11 +2513,11 @@ class MetadataEnricher:
                     self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed: {e}")
 
         # Optional post-validation
-        try:
-            self.validate_master_integrity()
-            self.log("[flush_all] ✅ Master integrity validated.")
-        except Exception as e:
-            self.log(f"[flush_all] ⚠️ validate_master_integrity failed: {e}")
+        # try:
+        #     self.validate_master_integrity()
+        #     self.log("[flush_all] ✅ Master integrity validated.")
+        # except Exception as e:
+        #     self.log(f"[flush_all] ⚠️ validate_master_integrity failed: {e}")
 
         # Log R2 master counts for visibility
         try:
@@ -2676,13 +2689,23 @@ class MetadataEnricher:
             f"tracks={len(self.seen_tracks)}, shows={len(self.seen_shows)}, audiobooks={len(self.seen_audiobooks)}"
         )
 
-    def _filter_known_artists(self, names: list[str]) -> list[str]:
+    def _load_master(self, *args, **kwargs):
         """
-        Skip artists already present in master or already seen in this run.
-        Relaxed logic: if master is empty or schema incomplete, all names are allowed.
+        Compatibility shim:
+        Allows calling _load_master_tables() with arbitrary arguments
+        (e.g., '_load_master("albums")' or '_load_master_tables("tracks")')
+        without raising TypeError.
         """
-        self.log(f"[filter:debug] incoming prefilter len={len(names)}")
+        try:
+            self._load_master_tables()
+            if args:
+                self.log(f"[master] Reloaded master tables (triggered by args={args})")
+        except Exception as e:
+            self.log(f"[master] ⚠️ _load_master_tables() failed: {type(e).__name__}: {e}")
 
+    def _filter_known_artists(self, names: list[str]) -> list[str]:
+        """Skip artists already present in master or already seen in this run."""
+        self.log(f"[filter:debug] incoming prefilter len={len(names)}")
         if not names:
             self.log("[filter_known_artists] ⚠️ No input names provided.")
             return []
@@ -2690,85 +2713,118 @@ class MetadataEnricher:
         before = len(names)
         normalized_names = {str(n).strip().lower() for n in names if isinstance(n, str) and n.strip()}
 
-        # If master table invalid, bypass filtering
+        # 🔄 Failsafe refresh if master missing or invalid
+        if not hasattr(self, "master_artists") or self.master_artists.empty or "artist_name" not in self.master_artists.columns:
+            self.log("[filter_known_artists] ⚠️ Master artist table empty or invalid — reloading tables…")
+            self._load_master_tables()
+
         if self.master_artists.empty or "artist_name" not in self.master_artists.columns:
-            self.log("[filter_known_artists] ⚠️ Master artist table empty or invalid — skipping filter.")
+            self.log("[filter_known_artists] ⚠️ Reload failed or master still empty — skipping filter.")
             return list(normalized_names)
 
         known = set(self.seen_artists)
         known |= set(self.master_artists["artist_name"].dropna().astype(str).str.strip().str.lower())
-
         out = [n for n in names if str(n).strip().lower() not in known]
+
         filtered = before - len(out)
-
-        if filtered > 0:
-            self.log(f"[filter] Artists filtered out: {filtered}/{before} (remaining={len(out)})")
-        else:
-            self.log(f"[filter] No artists filtered (all {before} retained).")
-
-        # Debug diagnostics
-        self.log(f"[filter:debug] master_artists shape={self.master_artists.shape}")
-        self.log(f"[filter:debug] sample master artist names: {self.master_artists['artist_name'].head(5).tolist() if 'artist_name' in self.master_artists.columns else 'missing col'}")
-        self.log(f"[filter:debug] incoming artist sample: {names[:5]}")
-        self.log(f"[filter:debug] seen_artists count={len(self.seen_artists)}")
-
+        self.log(f"[filter] Artists filtered out: {filtered}/{before} (remaining={len(out)})")
         return out
 
     def _filter_known_album_pairs(self, pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
         """Skip (artist, album) pairs already present in master or already seen in this run."""
+        if not pairs:
+            return []
+
         before = len(pairs)
-        known_pairs = set((a.strip().lower(), b.strip().lower()) for a, b in self.seen_albums if a and b)
+        known_pairs = set()
+
+        # 🔄 Failsafe reload if master missing or invalid
+        if not hasattr(self, "master_albums") or self.master_albums.empty or not {"artist_name", "album_name"}.issubset(self.master_albums.columns):
+            self.log("[filter_known_album_pairs] ⚠️ Master album table missing or invalid — reloading tables…")
+            self._load_master_tables()
+
+        # Add all seen pairs from this session
+        for a, b in getattr(self, "seen_albums", set()):
+            if isinstance(a, str) and isinstance(b, str):
+                known_pairs.add((a.strip().lower(), b.strip().lower()))
+
+        # Add from master if valid
         if not self.master_albums.empty and {"artist_name", "album_name"}.issubset(self.master_albums.columns):
-            known_pairs |= set(
+            master_pairs = set(
                 (str(a).strip().lower(), str(b).strip().lower())
                 for a, b in self.master_albums[["artist_name", "album_name"]]
                 .dropna()
                 .astype(str)
                 .itertuples(index=False, name=None)
             )
-        out = [
-            (a, b) for a, b in pairs
-            if isinstance(a, str) and isinstance(b, str) and (a.strip().lower(), b.strip().lower()) not in known_pairs
-        ]
+            known_pairs |= master_pairs
+
+        out = [(a, b) for a, b in pairs if (a and b) and (a.strip().lower(), b.strip().lower()) not in known_pairs]
         filtered = before - len(out)
-        if filtered > 0:
-            self.log(f"[filter] Albums filtered out: {filtered}/{before}")
+        self.log(f"[filter] Albums filtered out: {filtered}/{before} (remaining={len(out)})")
         return out
 
     def _filter_known_tracks(self, ids: list[str]) -> list[str]:
         """Skip tracks already present in master or already seen in this run."""
+        if not ids:
+            return []
+
         before = len(ids)
         known = set(t.lower() for t in getattr(self, "seen_tracks", set()) if isinstance(t, str))
-        if hasattr(self, "master_tracks") and not self.master_tracks.empty and "track_id" in self.master_tracks.columns:
+
+        # 🔄 Failsafe reload if master missing or invalid
+        if not hasattr(self, "master_tracks") or self.master_tracks.empty or "track_id" not in self.master_tracks.columns:
+            self.log("[filter_known_tracks] ⚠️ Master track table missing or invalid — reloading tables…")
+            self._load_master_tables()
+
+        if not self.master_tracks.empty and "track_id" in self.master_tracks.columns:
             known |= set(self.master_tracks["track_id"].dropna().astype(str).str.lower())
+
         out = [t for t in ids if isinstance(t, str) and t.strip() and t.lower() not in known]
         filtered = before - len(out)
-        if filtered > 0:
-            self.log(f"[filter] Tracks filtered out: {filtered}/{before}")
+        self.log(f"[filter] Tracks filtered out: {filtered}/{before} (remaining={len(out)})")
         return out
 
     def _filter_known_shows(self, names: list[str]) -> list[str]:
         """Skip shows already present in master or already seen in this run."""
+        if not names:
+            return []
+
         before = len(names)
         known = set(n.lower() for n in self.seen_shows if isinstance(n, str))
-        if hasattr(self, "master_shows") and not self.master_shows.empty and "show_name" in self.master_shows.columns:
+
+        # 🔄 Failsafe reload if master missing or invalid
+        if not hasattr(self, "master_shows") or self.master_shows.empty or "show_name" not in self.master_shows.columns:
+            self.log("[filter_known_shows] ⚠️ Master show table missing or invalid — reloading tables…")
+            self._load_master_tables()
+
+        if not self.master_shows.empty and "show_name" in self.master_shows.columns:
             known |= set(self.master_shows["show_name"].dropna().astype(str).str.lower())
+
         out = [n for n in names if isinstance(n, str) and n.strip() and n.lower() not in known]
         filtered = before - len(out)
-        if filtered > 0:
-            self.log(f"[filter] Shows filtered out: {filtered}/{before}")
+        self.log(f"[filter] Shows filtered out: {filtered}/{before} (remaining={len(out)})")
         return out
 
     def _filter_known_audiobooks(self, titles: list[str]) -> list[str]:
         """Skip audiobooks already present in master or already seen in this run."""
+        if not titles:
+            return []
+
         before = len(titles)
         known = set(t.lower() for t in self.seen_audiobooks if isinstance(t, str))
-        if hasattr(self, "master_audiobooks") and not self.master_audiobooks.empty and "audiobook_title" in self.master_audiobooks.columns:
+
+        # 🔄 Failsafe reload if master missing or invalid
+        if not hasattr(self, "master_audiobooks") or self.master_audiobooks.empty or "audiobook_title" not in self.master_audiobooks.columns:
+            self.log("[filter_known_audiobooks] ⚠️ Master audiobook table missing or invalid — reloading tables…")
+            self._load_master_tables()
+
+        if not self.master_audiobooks.empty and "audiobook_title" in self.master_audiobooks.columns:
             known |= set(self.master_audiobooks["audiobook_title"].dropna().astype(str).str.lower())
+
         out = [t for t in titles if isinstance(t, str) and t.strip() and t.lower() not in known]
         filtered = before - len(out)
-        if filtered > 0:
-            self.log(f"[filter] Audiobooks filtered out: {filtered}/{before}")
+        self.log(f"[filter] Audiobooks filtered out: {filtered}/{before} (remaining={len(out)})")
         return out
 
     # --- Restarter ---

@@ -649,6 +649,36 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     def upload_text(self, text: str, *, path: str):
         self._put_bytes(path, text.encode("utf-8"), "text/plain")
 
+    def download_text(self, path: str) -> str:
+        """Download plain text from R2 safely, returns empty string if missing."""
+        key = path.lstrip("/")
+        try:
+            obj = self.r2.get_object(Bucket=self.bucket, Key=key)
+            return obj["Body"].read().decode("utf-8")
+        except self.r2.exceptions.NoSuchKey:
+            return ""
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ Failed to download text {key}: {e}")
+            return ""
+
+    def append_text(self, text: str, *, path: str):
+        """Append text to an existing R2 log object without reuploading the whole file."""
+        key = path.lstrip("/")
+        tmp_key = f"{key}.tmp"
+        try:
+            # upload the new chunk first
+            self.r2.put_object(Bucket=self.bucket, Key=tmp_key, Body=text.encode("utf-8"), ContentType="text/plain")
+            # compose/concatenate tmp onto main (R2 supports multi-part copy)
+            self.r2.upload_part_copy(
+                Bucket=self.bucket,
+                CopySource={"Bucket": self.bucket, "Key": tmp_key},
+                Key=key,
+                UploadId=self._start_or_get_upload_id(key)
+            )
+            self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ append_text failed for {key}: {e}")
+
     def save_checkpoint(self, user_id: str, label: str, state: dict):
         key = f"enrichment/checkpoints/{user_id}_{label}.json"
         self._upload_json(key, state)

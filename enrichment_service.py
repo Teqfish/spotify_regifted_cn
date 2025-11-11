@@ -1847,21 +1847,21 @@ class MetadataEnricher:
 
     def run_phase_popularity_timeseries(self):
         """
-        Compute monthly average popularity (track & artist) for the current user.
-        Saves to datasets/enrichment/metadata/info_popularity.csv in long format.
+        Compute monthly average artist popularity for the current user.
+        Saves to enrichment/metadata/info_popularity.csv in long format.
         """
         self.current_phase = "popularity_timeseries"
         self._check_cancel(self.cancel_event)
         self.log("[popularity_timeseries] Starting…")
 
+        # --- Step 1: Filter and prep dataset ---
         df = self.df[self.df["category"] == "music"].copy()
-
         if df.empty:
             self.log("[popularity_timeseries] No music data found, skipping phase.")
             return
 
-        # Ensure proper datetime and track_id fields
         df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
+
         if "track_id" not in df.columns and "spotify_track_uri" in df.columns:
             df["track_id"] = (
                 df["spotify_track_uri"]
@@ -1870,47 +1870,59 @@ class MetadataEnricher:
                 .str.strip()
             )
 
-        # Load reference metadata
+        # --- Step 2: Load metadata masters ---
         info_tracks = self.storage.get_master("info_track.csv")
         info_artists = self.storage.get_master("info_artist_genre.csv")
 
-        # --- Step 1: Compute monthly popularity for this user ---
+        # --- Step 3: Compute monthly popularity ---
         monthly = get_monthly_user_popularity(df, info_tracks, info_artists, log_fn=self.log)
 
         if monthly.empty:
             self.log("[popularity_timeseries] No popularity data computed for this user.")
             return
 
-        # --- Step 2: Convert to long format ---
-        track_df = monthly[["month", "avg_track_popularity"]].rename(
-            columns={"avg_track_popularity": "avg_popularity"}
-        )
-        track_df["type"] = "track"
+        # --- Step 4: Normalize expected columns ---
+        # get_monthly_user_popularity() currently produces:
+        # ["month", "artist_name", "minutes_played", "artist_popularity", "user_popularity"]
+        # We'll use "user_popularity" as our main metric.
+        if "user_popularity" not in monthly.columns:
+            self.log("[popularity_timeseries] ⚠️ 'user_popularity' column missing — skipping phase.")
+            return
 
-        artist_df = monthly[["month", "avg_artist_popularity"]].rename(
-            columns={"avg_artist_popularity": "avg_popularity"}
+        # --- Step 5: Convert to long format ---
+        artist_df = monthly[["month", "artist_name", "user_popularity"]].rename(
+            columns={"user_popularity": "avg_popularity"}
         )
         artist_df["type"] = "artist"
 
-        long_df = pd.concat([track_df, artist_df], ignore_index=True)
-        long_df["user_id"] = self.user_id
+        # Optional: include artist_popularity separately if you want to track it
+        if "artist_popularity" in monthly.columns:
+            artist_pop_df = monthly[["month", "artist_name", "artist_popularity"]].rename(
+                columns={"artist_popularity": "avg_popularity"}
+            )
+            artist_pop_df["type"] = "artist_baseline"
+            long_df = pd.concat([artist_df, artist_pop_df], ignore_index=True)
+        else:
+            long_df = artist_df.copy()
 
-        # --- Step 3: Normalize month format and deduplicate ---
+        # --- Step 6: Normalize and finalize ---
+        long_df["user_id"] = self.user_id
         long_df["month"] = pd.to_datetime(long_df["month"], errors="coerce").dt.strftime("%Y-%m-%d")
         long_df = long_df.drop_duplicates(subset=["user_id", "month", "type"])
 
-        # --- Step 4: Merge into master ---
+        # --- Step 7: Merge into master ---
         self.storage.merge_into_master(
             df_new=long_df,
             filename="info_popularity.csv",
-            keys=["user_id", "month", "type"]
+            keys=["user_id", "month", "type"],
         )
 
         self.log(f"[popularity_timeseries] Added {len(long_df)} monthly popularity rows for user {self.user_id}.")
         self.status.inc_status(
-            self.user_id, self.label,
+            self.user_id,
+            self.label,
             add_batches=1,
-            detail=f"Popularity timeseries saved • +{len(long_df)}"
+            detail=f"Popularity timeseries saved • +{len(long_df)}",
         )
         self._done_batches += 1
         self._maybe_autosave(self._done_batches, self._total_batches)
@@ -2205,12 +2217,12 @@ class MetadataEnricher:
             self.run_phase_top_tracks_per_month()
             _end_phase("top_tracks_per_month", before)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "popularity_timeseries"
-            # self.log("[run_all] Starting phase: popularity_timeseries")
-            # before = self._done_batches
-            # self.run_phase_popularity_timeseries()
-            # _end_phase("popularity_timeseries", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "popularity_timeseries"
+            self.log("[run_all] Starting phase: popularity_timeseries")
+            before = self._done_batches
+            self.run_phase_popularity_timeseries()
+            _end_phase("popularity_timeseries", before)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "chart_scorer"

@@ -1053,8 +1053,14 @@ class MetadataEnricher:
 
         self._check_cancel(ce)
         self.log(f"[fetch_and_save_artists] Calling get_artists for {len(ids)} IDs")
-        info = get_artists(ids, token=self.token, cancel_event=ce,
-                        user_id=self.user_id, dataset_label=self.label, log_dao=self.log_dao)
+        info = get_artists(
+            ids,
+            token=self.token,
+            cancel_event=ce,
+            user_id=self.user_id,
+            dataset_label=self.label,
+            log_dao=self.log_dao
+        )
         self.log(f"[fetch_and_save_artists] Got {len(info) if info else 0} artist records back")
 
         df_art = pd.json_normalize(info)
@@ -1062,6 +1068,7 @@ class MetadataEnricher:
         # Fill missing genres from Discogs (via worker pool)
         df_art["genres"] = df_art.get("genres", pd.Series([[]] * len(df_art))).apply(lambda x: x or [])
         missing = df_art[df_art["genres"].apply(len) == 0]["name"].tolist()
+
         if missing:
             self._check_cancel(ce)
             self.log(f"[fetch_and_save_artists] {len(missing)} artists missing genres → sending to Discogs pool")
@@ -1071,12 +1078,27 @@ class MetadataEnricher:
 
             # Gather results
             df_disc = self.discogs_pool.gather(len(missing), timeout=600)
+
+            # --- 🧩 Diagnostic block ---
+            self.log(
+                f"[fetch_and_save_artists:debug] Discogs gather returned "
+                f"shape={df_disc.shape}, cols={list(df_disc.columns)}, "
+                f"head={df_disc.head(2).to_dict('records') if not df_disc.empty else '[]'}"
+            )
+
+            # --- Defensive schema fallback ---
+            if "artist_name" not in df_disc.columns or "discogs_genre" not in df_disc.columns:
+                self.log("[fetch_and_save_artists:debug] ⚠️ Discogs result missing expected columns — forcing empty schema fallback.")
+                df_disc = pd.DataFrame(columns=["artist_name", "discogs_genre"])
+
+            # --- Safe usage continues ---
             self.log(f"[fetch_and_save_artists] Discogs returned genres for {df_disc['discogs_genre'].astype(bool).sum()} / {len(missing)}")
 
             # Merge back into artist DataFrame
             df_art = df_art.merge(df_disc, left_on="name", right_on="artist_name", how="left")
             df_art["genres"] = df_art.apply(
-                lambda r: r["genres"] if r["genres"] else (r.get("discogs_genre") or []), axis=1
+                lambda r: r["genres"] if r["genres"] else (r.get("discogs_genre") or []),
+                axis=1
             )
             df_art = df_art.drop(columns=["artist_name", "discogs_genre"], errors="ignore")
 
@@ -1119,8 +1141,6 @@ class MetadataEnricher:
         unlisted_mask = out["supergenre"].isna()
         out.loc[unlisted_mask, "supergenre"] = "Unlisted"
 
-        self.log(f"[debug] Saving {len(out)} artists to buffer → {out[['artist_id','artist_name']].head(3).to_dict('records')}")
-
         # Save unlisted separately into buffer
         if not hasattr(self, "buf_artists_unlisted"):
             self.buf_artists_unlisted = []
@@ -1131,7 +1151,11 @@ class MetadataEnricher:
             )
             self.log(f"[fetch_and_save_artists] {len(unlisted_df)} artists marked as Unlisted")
 
-        self.log(f"[fetch_and_save_artists] Saving {len(out)} artists to buffer")
+        # Final debug snapshot and save
+        self.log(
+            f"[fetch_and_save_artists:debug] Saving {len(out)} artists to buffer → "
+            f"{out[['artist_id','artist_name']].head(3).to_dict('records')}"
+        )
         self.buf_artists.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
         self.seen_artists.update(names)
 
@@ -1621,51 +1645,88 @@ class MetadataEnricher:
 
     def run_phase_per_artist_albums_of_year(self):
         """
-        Most listened album each year for top artists (descending). Fire up to two batches of 50.
-        Applies master/seen filters and logs before/after counts.
+        Phase 3 — Find the most-listened album for each top artist per year.
+        Fetches album metadata (artwork, release date, etc.) and stores in buf_albums.
+        This version no longer restricts to self.seen_artists — it processes all top artists,
+        using seen_artists only to avoid re-fetching duplicates.
         """
+
         self.current_phase = "albums_of_year"
         self.log("[albums_of_year] Starting…")
 
-        music = self.df[self.df["category"] == "music"]
+        # --- Safety: ensure we have valid music subset
+        music = self.df[self.df["category"] == "music"].copy()
+        if music.empty:
+            self.log("[albums_of_year] ⚠️ No music rows found — skipping phase.")
+            return
+
+        # --- Normalize critical columns ---
+        music.columns = [c.strip().lower() for c in music.columns]
+        if "album" in music.columns and "album_name" not in music.columns:
+            music.rename(columns={"album": "album_name"}, inplace=True)
+        if not pd.api.types.is_datetime64_any_dtype(music["datetime"]):
+            music["datetime"] = pd.to_datetime(music["datetime"], errors="coerce")
+
+        # --- Diagnostics ---
+        self.log(
+            f"[albums_of_year:debug] music.shape={music.shape}, "
+            f"nulls(album_name)={music['album_name'].isna().sum() if 'album_name' in music else 'N/A'}, "
+            f"unique artists={music['artist_name'].nunique() if 'artist_name' in music else 'N/A'}, "
+            f"seen_artists={len(self.seen_artists)}, seen_albums={len(self.seen_albums)}"
+        )
+
+        # --- Build ranked artist list (no restriction to seen_artists) ---
         top_artists = (
             music.groupby("artist_name")["minutes_played"]
-            .sum().sort_values(ascending=False).index.tolist()
+            .sum()
+            .sort_values(ascending=False)
+            .index.tolist()
         )
-        top_artists = [a for a in top_artists if a in self.seen_artists]
+
+        self.log(f"[albums_of_year] Processing {len(top_artists)} total artists (top by minutes_played)")
 
         pairs = []
         for artist in top_artists:
             sub = music[music["artist_name"] == artist].copy()
             if sub.empty:
                 continue
-            sub["year"] = pd.to_datetime(sub["datetime"]).dt.year
+            sub["year"] = pd.to_datetime(sub["datetime"], errors="coerce").dt.year
             best = (
                 sub.groupby(["year", "album_name"])["minutes_played"].sum()
                 .reset_index()
                 .sort_values(["year", "minutes_played"], ascending=[False, False])
-                .groupby("year").head(1)
+                .groupby("year")
+                .head(1)
             )
             for _, r in best.iterrows():
                 pair = (artist, r["album_name"])
-                if pair not in self.seen_albums:
-                    pairs.append(pair)
+                if pair in self.seen_albums:
+                    continue
+                pairs.append(pair)
 
         before = len(pairs)
         if hasattr(self, "_filter_known_album_pairs"):
             pairs = self._filter_known_album_pairs(pairs)
-        self.log(f"[albums_of_year] Album pairs before={before}, after={len(pairs)}")
+        after = len(pairs)
 
+        self.log(f"[albums_of_year] Album pairs before={before}, after={after}")
+
+        if not pairs:
+            self.log("[albums_of_year] ⚠️ No album pairs to process — exiting phase.")
+            return
+
+        # --- Split into up to 2 batches of 50 ---
         batches = list(batched(pairs, 50))[:2]
         self.log(f"[albums_of_year] Built {len(batches)} batches (up to 2)")
 
         for i, b in enumerate(batches, 1):
-            self.log(f"[albums_of_year] Fetching batch {i}/{len(batches)} • {len(b)} pairs")
+            self.log(f"[albums_of_year] Fetching batch {i}/{len(batches)} • {len(b)} artist/album pairs")
             self.fetch_and_save_albums_by_pairs(b, cancel_event=self.cancel_event)
             self.status.inc_status(
-                self.user_id, self.label,
+                self.user_id,
+                self.label,
                 add_batches=1,
-                detail=f"Per-artist albums batch {i}/{len(batches)} • +{len(b)}"
+                detail=f"Per-artist albums batch {i}/{len(batches)} • +{len(b)}",
             )
             self._done_batches += 1
             self._maybe_autosave(self._done_batches, self._total_batches)
@@ -2110,12 +2171,12 @@ class MetadataEnricher:
             self.run_phase_per_year(per_art, per_show, per_book)
             _end_phase("per_year", before)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "albums_of_year"
-            # self.log("[run_all] Starting phase: albums_of_year")
-            # before = self._done_batches
-            # self.run_phase_per_artist_albums_of_year()
-            # _end_phase("albums_of_year", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "albums_of_year"
+            self.log("[run_all] Starting phase: albums_of_year")
+            before = self._done_batches
+            self.run_phase_per_artist_albums_of_year()
+            _end_phase("albums_of_year", before)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "per_album"
@@ -2882,17 +2943,19 @@ class MetadataEnricher:
         )
         self.log(f"[resume_from_phase] Completed resumed enrichment from '{phase_name}'")
 
+import threading, queue, time, requests, pandas as pd
+
 class DiscogsWorkerPool:
     def __init__(self, num_workers: int = 5):
         self.job_queue = queue.Queue()
         self.result_queue = queue.Queue()
         self.shutdown_event = threading.Event()
 
-        # Global rate limit lock
+        # Global rate limit lock (Discogs API → 1 req/sec)
         self.rate_lock = threading.Lock()
         self.last_call = 0.0
 
-        # Spin up workers
+        # Spin up worker threads
         self.workers = []
         for i in range(num_workers):
             t = threading.Thread(target=self._worker, name=f"discogs-worker-{i}", daemon=True)
@@ -2900,6 +2963,7 @@ class DiscogsWorkerPool:
             self.workers.append(t)
 
     def _worker(self):
+        """Background worker fetching genres from Discogs."""
         while not self.shutdown_event.is_set():
             try:
                 name, meta = self.job_queue.get(timeout=1)
@@ -2908,9 +2972,10 @@ class DiscogsWorkerPool:
 
             retries = 0
             genres = []
-            while retries < 10:
+
+            while retries < 10 and not self.shutdown_event.is_set():
                 try:
-                    # Respect global 1 call/sec
+                    # --- Rate limit: 1 call/second globally ---
                     with self.rate_lock:
                         elapsed = time.time() - self.last_call
                         if elapsed < 1.0:
@@ -2919,12 +2984,18 @@ class DiscogsWorkerPool:
 
                         r = requests.get(
                             "https://api.discogs.com/database/search",
-                            params={"artist": name, "key": DISCOGS_KEY, "secret": DISCOGS_SECRET},
+                            params={
+                                "artist": name,
+                                "key": DISCOGS_KEY,
+                                "secret": DISCOGS_SECRET,
+                            },
                             timeout=15,
                         )
 
+                    # --- Handle rate limiting gracefully ---
                     if r.status_code == 429:
                         retry_after = int(r.headers.get("Retry-After", "1"))
+                        print(f"[DiscogsWorkerPool] ⏳ Rate limited for '{name}', sleeping {retry_after + 1}s")
                         time.sleep(retry_after + 1)
                         retries += 1
                         continue
@@ -2936,12 +3007,14 @@ class DiscogsWorkerPool:
                     genre = first.get("genre") or []
                     style = first.get("style") or []
                     genres = (genre or []) + (style or [])
-                    break  # success
-                except Exception:
+                    break  # ✅ success — exit retry loop
+
+                except Exception as e:
                     retries += 1
+                    print(f"[DiscogsWorkerPool] ⚠️ Attempt {retries}/10 failed for '{name}': {e}")
                     time.sleep(1.0)
 
-            # Always push a result (empty genres if failed)
+            # --- Always push a result, even if empty ---
             self.result_queue.put({
                 "artist_name": name,
                 "discogs_genre": genres,
@@ -2949,25 +3022,49 @@ class DiscogsWorkerPool:
             })
             self.job_queue.task_done()
 
-    def submit(self, names: List[str], meta: Optional[Dict] = None):
+    def submit(self, names: list[str], meta: dict | None = None):
         """Queue up artist lookups. Meta carries user_id/dataset_label for logs."""
         for n in names:
             self.job_queue.put((n, meta or {}))
 
     def gather(self, expected: int, timeout: int = 300) -> pd.DataFrame:
-        """Block until expected results are back or timeout reached."""
+        """
+        Block until expected results are received or timeout reached.
+        Always returns a DataFrame with columns ['artist_name', 'discogs_genre'].
+        """
         rows = []
         deadline = time.time() + timeout
+
         while len(rows) < expected and time.time() < deadline:
+            if self.shutdown_event.is_set():
+                print("[DiscogsWorkerPool] ⚠️ Shutdown detected mid-gather — stopping early.")
+                break
+
             try:
                 res = self.result_queue.get(timeout=1)
-                rows.append({"artist_name": res["artist_name"], "discogs_genre": res["discogs_genre"]})
+                rows.append({
+                    "artist_name": res.get("artist_name"),
+                    "discogs_genre": res.get("discogs_genre", []),
+                })
                 self.result_queue.task_done()
             except queue.Empty:
                 continue
+
+        # --- Report if incomplete ---
+        if len(rows) < expected:
+            print(f"[DiscogsWorkerPool] ⚠️ Only got {len(rows)}/{expected} results before timeout ({timeout}s).")
+
+        # --- Guarantee schema even if no results ---
+        if not rows:
+            return pd.DataFrame(columns=["artist_name", "discogs_genre"])
+
         return pd.DataFrame(rows)
 
     def shutdown(self):
+        """Signal all workers to stop and wait for clean exit."""
         self.shutdown_event.set()
         for t in self.workers:
-            t.join(timeout=1)
+            try:
+                t.join(timeout=1)
+            except Exception as e:
+                print(f"[DiscogsWorkerPool] ⚠️ Failed to join worker {t.name}: {e}")

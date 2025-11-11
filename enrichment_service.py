@@ -2178,12 +2178,12 @@ class MetadataEnricher:
             self.run_phase_per_artist_albums_of_year()
             _end_phase("albums_of_year", before)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "per_album"
-            # self.log("[run_all] Starting phase: per_album")
-            # before = self._done_batches
-            # self.run_phase_per_album_all_albums_for_top_artists()
-            # _end_phase("per_album", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_album"
+            self.log("[run_all] Starting phase: per_album")
+            before = self._done_batches
+            self.run_phase_per_album_all_albums_for_top_artists()
+            _end_phase("per_album", before)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "top_tracks_per_month"

@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import time
+import inspect, threading
 from typing import Dict, Optional
 from datetime import datetime, timezone
 from dao import (
@@ -157,13 +158,20 @@ def load_global_daos():
     return DAOS
 
 class LogDAO:
+
     def __init__(self, backend, flush_interval=5):
         self.backend = backend
         self.buffer = []
         self.last_flush = time.time()
         self.flush_interval = flush_interval
 
-    def log(self, user_id, dataset_label, where, message, level="info"):
+    def log(self, user_id, dataset_label, phase, where, message, level="info"):
+
+        stack = inspect.stack()
+        caller = stack[1].function
+        thread = threading.current_thread().name
+        print(f"[TRACE log_dao] {thread} called log() from {caller} → {phase}: {message}")
+
         prefix = f"[{where}] {message}"
         print(f"[log_dao] {prefix}")
         entry = f"{datetime.now(timezone.utc).isoformat()} [{level.upper()}] {prefix}\n"

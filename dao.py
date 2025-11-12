@@ -207,43 +207,131 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     # ------------------------------------------------------------
 
     def _put_bytes(self, key: str, body: bytes, content_type: str):
-        """Upload raw bytes to R2."""
+        """
+        Upload raw bytes to R2 with exponential backoff and automatic safe-upload fallback.
+        Falls back to _put_bytes_safe() after repeated InternalErrors.
+        """
+        import time
+        from botocore.exceptions import ClientError
+
         key = key.lstrip("/")
-        self.r2.put_object(
-            Bucket=self.bucket,
-            Key=key,
-            Body=body,
-            ContentType=content_type,
-        )
-        print(f"[CloudflareDAO] ✅ Uploaded → {key}")
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                self.r2.put_object(
+                    Bucket=self.bucket,
+                    Key=key,
+                    Body=body,
+                    ContentType=content_type,
+                )
+                print(f"[CloudflareDAO] ✅ Uploaded → {key}")
+                return True
+
+            except ClientError as e:
+                err_msg = str(e)
+                if "InternalError" in err_msg or "SlowDown" in err_msg:
+                    # R2 internal hiccup or throttling → backoff and retry
+                    if attempt < max_attempts - 1:
+                        wait = min(2 ** attempt, 30)
+                        print(f"[CloudflareDAO] ⚠️ InternalError on PutObject ({attempt+1}/{max_attempts}), retrying in {wait}s…")
+                        time.sleep(wait)
+                        continue
+                    else:
+                        print(f"[CloudflareDAO] ❌ Persistent InternalError after {max_attempts} attempts, falling back to safe upload for {key}")
+                        # Fallback: use the atomic safe upload method
+                        return self._put_bytes_safe(key, body, content_type)
+
+                # Any other known transient
+                if "RequestTimeout" in err_msg or "ServiceUnavailable" in err_msg:
+                    if attempt < max_attempts - 1:
+                        wait = min(2 ** attempt, 30)
+                        print(f"[CloudflareDAO] ⚠️ Transient {err_msg[:50]}..., retrying in {wait}s…")
+                        time.sleep(wait)
+                        continue
+                    else:
+                        print(f"[CloudflareDAO] ❌ Max retries reached for {key}")
+                        raise
+
+                # Unknown error → escalate
+                print(f"[CloudflareDAO] ❌ Unexpected error uploading {key}: {e}")
+                raise
+
+            except Exception as e:
+                # Non-ClientError exceptions (network hiccups, etc.)
+                if attempt < max_attempts - 1:
+                    wait = min(2 ** attempt, 30)
+                    print(f"[CloudflareDAO] ⚠️ Unexpected upload error ({attempt+1}/{max_attempts}) for {key}: {e}, retrying in {wait}s…")
+                    time.sleep(wait)
+                    continue
+                else:
+                    print(f"[CloudflareDAO] ❌ Persistent failure, falling back to safe upload for {key}")
+                    return self._put_bytes_safe(key, body, content_type)
+
+        print(f"[CloudflareDAO] ❌ Upload ultimately failed for {key}")
+        return False
 
     def _put_bytes_safe(self, key: str, body: bytes, content_type: str) -> bool:
         """
-        Safe upload to R2: writes to a temp key first, then renames on success.
+        Safe upload to R2 with retries and exponential backoff.
+        Writes to a temp key first, verifies non-zero size, then atomically renames.
         Returns True on success, False on failure.
         """
+        import time
+        from botocore.exceptions import ClientError
+
         key = key.lstrip("/")
         tmp_key = f"{key}.tmp"
-        try:
-            # Stage temporary upload
-            self.r2.put_object(Bucket=self.bucket, Key=tmp_key, Body=body, ContentType=content_type)
+        max_attempts = 4
 
-            # Verify size > 0
-            head = self.r2.head_object(Bucket=self.bucket, Key=tmp_key)
-            if head["ContentLength"] == 0:
-                print(f"[CloudflareDAO] ⚠️ Temp upload empty: {tmp_key}")
+        for attempt in range(max_attempts):
+            try:
+                # Stage temporary upload
+                self.r2.put_object(Bucket=self.bucket, Key=tmp_key, Body=body, ContentType=content_type)
+
+                # Verify uploaded size
+                head = self.r2.head_object(Bucket=self.bucket, Key=tmp_key)
+                if head.get("ContentLength", 0) == 0:
+                    print(f"[CloudflareDAO] ⚠️ Temp upload empty: {tmp_key}")
+                    self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
+                    return False
+
+                # Replace original
+                self.r2.copy_object(
+                    Bucket=self.bucket,
+                    CopySource={"Bucket": self.bucket, "Key": tmp_key},
+                    Key=key,
+                )
                 self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
-                return False
+                print(f"[CloudflareDAO] ✅ Atomic upload → {key}")
+                return True
 
-            # Replace original
-            self.r2.copy_object(Bucket=self.bucket, CopySource={"Bucket": self.bucket, "Key": tmp_key}, Key=key)
-            self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
-            print(f"[CloudflareDAO] ✅ Atomic upload → {key}")
-            return True
+            except ClientError as e:
+                err = str(e)
+                if "InternalError" in err or "SlowDown" in err or "ServiceUnavailable" in err:
+                    if attempt < max_attempts - 1:
+                        wait = min(2 ** attempt, 20)
+                        print(f"[CloudflareDAO] ⚠️ R2 InternalError during safe upload ({attempt+1}/{max_attempts}), retrying in {wait}s…")
+                        time.sleep(wait)
+                        continue
+                    else:
+                        print(f"[CloudflareDAO] ❌ Safe upload failed after {max_attempts} attempts for {key}")
+                        return False
+                else:
+                    print(f"[CloudflareDAO] ❌ Unexpected R2 error during safe upload: {e}")
+                    return False
 
-        except Exception as e:
-            print(f"[CloudflareDAO] ❌ Safe upload failed for {key}: {e}")
-            return False
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    wait = min(2 ** attempt, 20)
+                    print(f"[CloudflareDAO] ⚠️ Safe upload transient error ({attempt+1}/{max_attempts}) for {key}: {e}, retrying in {wait}s…")
+                    time.sleep(wait)
+                    continue
+                else:
+                    print(f"[CloudflareDAO] ❌ Safe upload persistent failure for {key}: {e}")
+                    return False
+
+        print(f"[CloudflareDAO] ❌ Safe upload ultimately failed for {key}")
+        return False
 
     def _get_object(self, key: str) -> bytes:
         """Retrieve object contents as bytes, or raise FileNotFoundError."""

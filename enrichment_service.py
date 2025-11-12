@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Iterable, Set
+from collections import deque, defaultdict
 
 from dao import StatusDAO, StorageDAO, InfoTableDAO
 
@@ -168,12 +169,23 @@ def check_cancel(cancel_event: Optional[threading.Event]) -> None:
     if cancel_event is not None and cancel_event.is_set():
         raise CancelledError()
 
+# ---- Global Spotify rate tracking ----
+SPOTIFY_CALL_LOCK = threading.Lock()
+SPOTIFY_CALL_COUNT = 0
+SPOTIFY_CALL_TIMES = deque()       # timestamps of all recent calls (for rolling rate window)
+SPOTIFY_CALLS_PER_ENDPOINT = defaultdict(int)  # e.g. {"tracks": 230, "albums": 120}
+SPOTIFY_MAX_RATE = 3.0             # max avg requests/sec across all threads
+SPOTIFY_WINDOW_SEC = 30.0          # rolling window in seconds
+
 # ----- Typed helpers (all dependency-injected with token) -----
-def get_several(endpoint: str, ids: List[str], *, token: SpotifyToken,
-                user_id: str = None, dataset_label: str = None, log_dao=None) -> dict:
+def get_several(endpoint: str, ids: list[str], *, token, user_id: str = None,
+                dataset_label: str = None, log_dao=None) -> dict:
     """
-    Generic 'several' fetcher for endpoints that accept ?ids=...
-    Example endpoints: 'artists', 'tracks', 'albums', 'shows', 'episodes', 'audiobooks', 'chapters'
+    Generic 'several' fetcher for Spotify endpoints that accept ?ids=...
+    Adds:
+      • global + per-endpoint counters
+      • rolling 30-second rate tracking
+      • automatic throttling (<=3 req/sec default)
     """
     if not ids:
         return {}
@@ -182,10 +194,27 @@ def get_several(endpoint: str, ids: List[str], *, token: SpotifyToken,
 
     def _log(msg: str, level: str = "info"):
         if log_dao and user_id and dataset_label:
-            log_dao.log(user_id, dataset_label, f"spotify:{endpoint}", msg, level=level)
+            try:
+                log_dao.log(user_id, dataset_label, f"spotify:{endpoint}", msg, level=level)
+            except Exception:
+                print(f"[spotify:{endpoint}] ⚠️ Failed remote log: {msg}")
         else:
             print(f"[spotify:{endpoint}] {msg}")
 
+    # ---- global rate limiter ----
+    with SPOTIFY_CALL_LOCK:
+        global SPOTIFY_CALL_COUNT, SPOTIFY_CALL_TIMES
+        now = time.time()
+        while SPOTIFY_CALL_TIMES and now - SPOTIFY_CALL_TIMES[0] > SPOTIFY_WINDOW_SEC:
+            SPOTIFY_CALL_TIMES.popleft()
+
+        current_rate = len(SPOTIFY_CALL_TIMES) / SPOTIFY_WINDOW_SEC
+        if current_rate > SPOTIFY_MAX_RATE:
+            sleep_time = 1.0 / SPOTIFY_MAX_RATE
+            _log(f"⏸️ Throttling Spotify API: {current_rate:.2f} req/s > {SPOTIFY_MAX_RATE}, sleeping {sleep_time:.2f}s", level="warning")
+            time.sleep(sleep_time)
+
+    # ---- attempt Spotify fetch with retries ----
     for attempt in range(3):  # up to 3 tries
         hdrs = make_auth_header(token)
         try:
@@ -194,19 +223,50 @@ def get_several(endpoint: str, ids: List[str], *, token: SpotifyToken,
             _log(f"safe_process exception: {e}", level="error")
             raise
 
+        # --- rate limited (HTTP 429) ---
         if r.status_code == 429:
-            retry = int(r.headers.get("Retry-After", "1"))
-            _log(f"Rate limited, sleeping {retry+1}s", level="warning")
-            time.sleep(retry + 1)
+            retry_after = r.headers.get("Retry-After")
+            try:
+                delay = float(retry_after)
+                if delay > 3600:
+                    raise ValueError("Retry-After too high")
+            except Exception:
+                delay = 5.0
+            delay = max(1.0, min(delay + 1.0, 60.0))  # +1s cushion, clamp 1–60s
+            _log(f"⚠️ Rate limited (HTTP 429), sleeping {delay:.1f}s", level="warning")
+            time.sleep(delay)
             continue
 
+        # --- transient server errors ---
         if r.status_code in {500, 502, 503, 504}:
-            _log(f"Transient {r.status_code}, backoff {2**attempt}s", level="warning")
-            time.sleep(2 ** attempt)
+            backoff = 2 ** attempt
+            _log(f"Transient {r.status_code}, backoff {backoff}s", level="warning")
+            time.sleep(backoff)
             continue
 
+        # --- success ---
         r.raise_for_status()
         payload = r.json()
+
+        # ---- update global + per-endpoint counters ----
+        with SPOTIFY_CALL_LOCK:
+            global SPOTIFY_CALL_COUNT, SPOTIFY_CALLS_PER_ENDPOINT
+            SPOTIFY_CALL_COUNT += 1
+            SPOTIFY_CALLS_PER_ENDPOINT[endpoint] += 1
+            now = time.time()
+            SPOTIFY_CALL_TIMES.append(now)
+            while SPOTIFY_CALL_TIMES and now - SPOTIFY_CALL_TIMES[0] > SPOTIFY_WINDOW_SEC:
+                SPOTIFY_CALL_TIMES.popleft()
+
+            rate = len(SPOTIFY_CALL_TIMES) / SPOTIFY_WINDOW_SEC
+            if SPOTIFY_CALL_COUNT % 10 == 0:
+                # Compose short endpoint summary
+                ep_summary = ", ".join(
+                    f"{ep}:{cnt}" for ep, cnt in sorted(SPOTIFY_CALLS_PER_ENDPOINT.items())
+                )
+                _log(f"📈 Spotify calls so far: total={SPOTIFY_CALL_COUNT:,} "
+                     f"• rate≈{rate:.2f}/s • per-endpoint=({ep_summary})")
+
         _log(f"Fetched {len(payload.get(endpoint, []))} {endpoint}")
         return payload
 
@@ -289,62 +349,125 @@ def get_chapters(ids: List[str], *, token: SpotifyToken, cancel_event: Optional[
         spin_sleep(0.1)
     return out
 
-def get_monthly_user_popularity(df: pd.DataFrame, info_tracks: pd.DataFrame, info_artists: pd.DataFrame, log_fn=None) -> pd.DataFrame:
+def get_monthly_user_popularity(
+    df: pd.DataFrame,
+    info_tracks: pd.DataFrame,
+    info_artists: pd.DataFrame,
+    log_fn=None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Build a monthly user popularity timeline from playback data joined with track and artist metadata.
-    Defensive version that sanitizes columns and avoids .str errors.
+    Build monthly user popularity timelines for both artists and tracks.
+
+    Returns:
+        (artist_monthly, track_monthly)
+        where each is a DataFrame with:
+          - month
+          - artist_name / track_name
+          - minutes_played
+          - spotify_*_popularity (raw Spotify popularity)
+          - weighted_*_popularity (popularity weighted by listening time)
     """
     import pandas as pd
-    from datetime import datetime
+
+    # --- Step 1. Normalize column names ---
+    for d in (df, info_tracks, info_artists):
+        d.columns = pd.Index([str(c).strip().lower() for c in d.columns])
 
     if log_fn:
-        log_fn("[popularity_timeseries] Starting monthly popularity aggregation…")
+        log_fn("[popularity_timeseries] Starting monthly artist + track popularity aggregation…")
 
-    try:
-        # ✅ Defensive column handling
-        df.columns = pd.Index([str(c).strip().lower() for c in df.columns])
-        info_tracks.columns = pd.Index([str(c).strip().lower() for c in info_tracks.columns])
-        info_artists.columns = pd.Index([str(c).strip().lower() for c in info_artists.columns])
-    except Exception as e:
-        if log_fn:
-            log_fn(f"[popularity_timeseries] ⚠️ Failed to normalize column names: {e}")
+    # --- Step 2. Validate datetime and convert month ---
+    if "datetime" not in df.columns:
+        if log_fn: log_fn("[popularity_timeseries] ⚠️ Missing 'datetime' in playback data.")
+        return pd.DataFrame(), pd.DataFrame()
 
-    # --- Validate required columns ---
-    required_cols = {"datetime", "track_id", "minutes_played"}
-    if not required_cols.issubset(df.columns):
-        missing = required_cols - set(df.columns)
-        raise ValueError(f"Missing required columns in playback data: {missing}")
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
+    df["month"] = df["datetime"].dt.to_period("M").dt.to_timestamp()
 
-    # --- Convert datetime ---
-    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-    df["month"] = df["datetime"].dt.to_period("M")
+    # --- Step 3. Ensure track_id ---
+    if "track_id" not in df.columns and "spotify_track_uri" in df.columns:
+        df["track_id"] = (
+            df["spotify_track_uri"]
+            .astype(str)
+            .str.replace("spotify:track:", "", regex=False)
+            .str.strip()
+        )
 
-    # --- Merge metadata (robustly) ---
-    merged = df.merge(info_tracks, on="track_id", how="left", suffixes=("", "_track"))
-    if "artist_name" not in merged.columns and "artist_name_track" in merged.columns:
-        merged["artist_name"] = merged["artist_name_track"]
+    if "track_id" not in df.columns:
+        if log_fn: log_fn("[popularity_timeseries] ⚠️ Missing 'track_id' — skipping popularity calculation.")
+        return pd.DataFrame(), pd.DataFrame()
 
-    merged = merged.merge(info_artists[["artist_name", "artist_popularity"]], on="artist_name", how="left")
+    # --- Step 4. Merge with track metadata (get track_name, artist_name, track_popularity) ---
+    required_track_cols = {"track_id", "artist_name", "track_popularity"}
+    if not required_track_cols.issubset(info_tracks.columns):
+        if log_fn: log_fn(f"[popularity_timeseries] ⚠️ Track metadata missing columns: {required_track_cols - set(info_tracks.columns)}")
+        return pd.DataFrame(), pd.DataFrame()
 
-    # --- Aggregate monthly popularity ---
-    grouped = (
+    merged = df.merge(
+        info_tracks[["track_id", "track_name", "artist_name", "track_popularity"]],
+        on="track_id",
+        how="left",
+        suffixes=("", "_trackmeta")
+    )
+
+    # --- Step 5. Normalize artist names and merge artist popularity ---
+    merged["artist_name"] = merged["artist_name"].astype(str).str.strip().str.lower()
+    info_artists["artist_name"] = info_artists["artist_name"].astype(str).str.strip().str.lower()
+
+    merged = merged.merge(
+        info_artists[["artist_name", "artist_popularity"]],
+        on="artist_name",
+        how="left"
+    )
+
+    # Rename for clarity
+    merged.rename(columns={
+        "track_popularity": "spotify_track_popularity",
+        "artist_popularity": "spotify_artist_popularity",
+    }, inplace=True)
+
+    # --- Step 6. Aggregate listening time ---
+    merged["minutes_played"] = pd.to_numeric(merged.get("minutes_played", 0), errors="coerce").fillna(0)
+
+    # --- Step 7. Compute per-artist monthly aggregates ---
+    artist_grouped = (
         merged.groupby(["month", "artist_name"], dropna=True)
         .agg({
             "minutes_played": "sum",
-            "artist_popularity": "mean",
+            "spotify_artist_popularity": "mean"
         })
         .reset_index()
     )
 
-    grouped["month"] = grouped["month"].astype(str)
-    grouped["user_popularity"] = (
-        grouped["artist_popularity"] * (grouped["minutes_played"] / grouped["minutes_played"].max())
+    if not artist_grouped.empty:
+        max_mins = artist_grouped["minutes_played"].max() or 1
+        artist_grouped["weighted_artist_popularity"] = (
+            artist_grouped["spotify_artist_popularity"] *
+            (artist_grouped["minutes_played"] / max_mins)
+        )
+
+    # --- Step 8. Compute per-track monthly aggregates ---
+    track_grouped = (
+        merged.groupby(["month", "track_name", "artist_name"], dropna=True)
+        .agg({
+            "minutes_played": "sum",
+            "spotify_track_popularity": "mean"
+        })
+        .reset_index()
     )
 
-    if log_fn:
-        log_fn(f"[popularity_timeseries] Aggregated {len(grouped)} monthly artist popularity rows.")
+    if not track_grouped.empty:
+        max_mins_t = track_grouped["minutes_played"].max() or 1
+        track_grouped["weighted_track_popularity"] = (
+            track_grouped["spotify_track_popularity"] *
+            (track_grouped["minutes_played"] / max_mins_t)
+        )
 
-    return grouped
+    if log_fn:
+        log_fn(f"[popularity_timeseries] Aggregated {len(artist_grouped)} artist-month rows "
+               f"and {len(track_grouped)} track-month rows.")
+
+    return artist_grouped, track_grouped
 
 # ============ Discogs fallback for missing artist genres ============
 def discogs_search_genres(
@@ -1847,21 +1970,24 @@ class MetadataEnricher:
 
     def run_phase_popularity_timeseries(self):
         """
-        Compute monthly average artist popularity for the current user.
-        Saves to enrichment/metadata/info_popularity.csv in long format.
+        Compute monthly artist & track popularity metrics for the current user.
+        Generates:
+        - info_popularity_artists.csv  → detailed artist-level monthly metrics
+        - info_popularity_tracks.csv   → detailed track-level monthly metrics
+        - info_popularity.csv          → long-format combined file for dashboard
         """
         self.current_phase = "popularity_timeseries"
         self._check_cancel(self.cancel_event)
         self.log("[popularity_timeseries] Starting…")
 
-        # --- Step 1: Filter and prep dataset ---
+        # --- Step 1: Filter user dataset ---
         df = self.df[self.df["category"] == "music"].copy()
         if df.empty:
             self.log("[popularity_timeseries] No music data found, skipping phase.")
             return
 
+        # --- Step 2: Prepare IDs and datetime ---
         df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
-
         if "track_id" not in df.columns and "spotify_track_uri" in df.columns:
             df["track_id"] = (
                 df["spotify_track_uri"]
@@ -1870,60 +1996,79 @@ class MetadataEnricher:
                 .str.strip()
             )
 
-        # --- Step 2: Load metadata masters ---
+        # --- Step 3: Load master metadata ---
         info_tracks = self.storage.get_master("info_track.csv")
         info_artists = self.storage.get_master("info_artist_genre.csv")
 
-        # --- Step 3: Compute monthly popularity ---
-        monthly = get_monthly_user_popularity(df, info_tracks, info_artists, log_fn=self.log)
+        # --- Step 4: Compute artist + track popularity ---
+        artist_df, track_df = get_monthly_user_popularity(
+            df, info_tracks, info_artists, log_fn=self.log
+        )
 
-        if monthly.empty:
+        if artist_df.empty and track_df.empty:
             self.log("[popularity_timeseries] No popularity data computed for this user.")
             return
 
-        # --- Step 4: Normalize expected columns ---
-        # get_monthly_user_popularity() currently produces:
-        # ["month", "artist_name", "minutes_played", "artist_popularity", "user_popularity"]
-        # We'll use "user_popularity" as our main metric.
-        if "user_popularity" not in monthly.columns:
-            self.log("[popularity_timeseries] ⚠️ 'user_popularity' column missing — skipping phase.")
-            return
-
-        # --- Step 5: Convert to long format ---
-        artist_df = monthly[["month", "artist_name", "user_popularity"]].rename(
-            columns={"user_popularity": "avg_popularity"}
-        )
-        artist_df["type"] = "artist"
-
-        # Optional: include artist_popularity separately if you want to track it
-        if "artist_popularity" in monthly.columns:
-            artist_pop_df = monthly[["month", "artist_name", "artist_popularity"]].rename(
-                columns={"artist_popularity": "avg_popularity"}
+        # --- Step 5: Save raw detailed outputs ---
+        if not artist_df.empty:
+            self.storage.merge_into_master(
+                df_new=artist_df,
+                filename="info_popularity_artists.csv",
+                keys=["month", "artist_name"],
             )
-            artist_pop_df["type"] = "artist_baseline"
-            long_df = pd.concat([artist_df, artist_pop_df], ignore_index=True)
+            self.log(f"[popularity_timeseries] ✅ Saved {len(artist_df)} artist popularity rows.")
+
+        if not track_df.empty:
+            self.storage.merge_into_master(
+                df_new=track_df,
+                filename="info_popularity_tracks.csv",
+                keys=["month", "track_name"],
+            )
+            self.log(f"[popularity_timeseries] ✅ Saved {len(track_df)} track popularity rows.")
+
+        # --- Step 6: Build unified long-format DataFrame for dashboard ---
+        long_parts = []
+
+        if not artist_df.empty:
+            for col in ["spotify_artist_popularity", "weighted_artist_popularity"]:
+                if col in artist_df.columns:
+                    temp = artist_df[["month", col]].rename(columns={col: "avg_popularity"})
+                    temp["type"] = col.replace("_artist_popularity", "_artist")
+                    long_parts.append(temp)
+
+        if not track_df.empty:
+            for col in ["spotify_track_popularity", "weighted_track_popularity"]:
+                if col in track_df.columns:
+                    temp = track_df[["month", col]].rename(columns={col: "avg_popularity"})
+                    temp["type"] = col.replace("_track_popularity", "_track")
+                    long_parts.append(temp)
+
+        # Combine and clean
+        if long_parts:
+            long_df = pd.concat(long_parts, ignore_index=True)
+            long_df["user_id"] = self.user_id
+            long_df["month"] = pd.to_datetime(long_df["month"], errors="coerce").dt.strftime("%Y-%m-%d")
+            long_df = long_df.drop_duplicates(subset=["user_id", "month", "type"])
+
+            # --- Step 7: Merge unified long-format file ---
+            self.storage.merge_into_master(
+                df_new=long_df,
+                filename="info_popularity.csv",
+                keys=["user_id", "month", "type"],
+            )
+
+            self.log(f"[popularity_timeseries] ✅ Added {len(long_df)} combined popularity rows for user {self.user_id}.")
         else:
-            long_df = artist_df.copy()
+            self.log("[popularity_timeseries] ⚠️ No long-format popularity data generated.")
 
-        # --- Step 6: Normalize and finalize ---
-        long_df["user_id"] = self.user_id
-        long_df["month"] = pd.to_datetime(long_df["month"], errors="coerce").dt.strftime("%Y-%m-%d")
-        long_df = long_df.drop_duplicates(subset=["user_id", "month", "type"])
-
-        # --- Step 7: Merge into master ---
-        self.storage.merge_into_master(
-            df_new=long_df,
-            filename="info_popularity.csv",
-            keys=["user_id", "month", "type"],
-        )
-
-        self.log(f"[popularity_timeseries] Added {len(long_df)} monthly popularity rows for user {self.user_id}.")
+        # --- Step 8: Update progress/status ---
         self.status.inc_status(
             self.user_id,
             self.label,
             add_batches=1,
-            detail=f"Popularity timeseries saved • +{len(long_df)}",
+            detail="Popularity timeseries saved"
         )
+
         self._done_batches += 1
         self._maybe_autosave(self._done_batches, self._total_batches)
 
@@ -2181,48 +2326,48 @@ class MetadataEnricher:
             per_art, per_show, per_book = self.top_per_year(set(), set(), set())
             self.log(f"[run_all] Per-year counts: artists={len(per_art)}, shows={len(per_show)}, books={len(per_book)}")
 
-            # 2) Phases
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "overall"
-            self.log("[run_all] Starting phase: overall")
-            before = self._done_batches
-            self.run_phase_overall_first50(top_art, top_shows, top_books)
-            _end_phase("overall", before)
+            # # 2) Phases
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "overall"
+            # self.log("[run_all] Starting phase: overall")
+            # before = self._done_batches
+            # self.run_phase_overall_first50(top_art, top_shows, top_books)
+            # _end_phase("overall", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "per_year"
-            self.log("[run_all] Starting phase: per_year")
-            before = self._done_batches
-            self.run_phase_per_year(per_art, per_show, per_book)
-            _end_phase("per_year", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "per_year"
+            # self.log("[run_all] Starting phase: per_year")
+            # before = self._done_batches
+            # self.run_phase_per_year(per_art, per_show, per_book)
+            # _end_phase("per_year", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "albums_of_year"
-            self.log("[run_all] Starting phase: albums_of_year")
-            before = self._done_batches
-            self.run_phase_per_artist_albums_of_year()
-            _end_phase("albums_of_year", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "albums_of_year"
+            # self.log("[run_all] Starting phase: albums_of_year")
+            # before = self._done_batches
+            # self.run_phase_per_artist_albums_of_year()
+            # _end_phase("albums_of_year", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "per_album"
-            self.log("[run_all] Starting phase: per_album")
-            before = self._done_batches
-            self.run_phase_per_album_all_albums_for_top_artists()
-            _end_phase("per_album", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "per_album"
+            # self.log("[run_all] Starting phase: per_album")
+            # before = self._done_batches
+            # self.run_phase_per_album_all_albums_for_top_artists()
+            # _end_phase("per_album", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "top_tracks_per_month"
-            self.log("[run_all] Starting phase: top_tracks_per_month")
-            before = self._done_batches
-            self.run_phase_top_tracks_per_month()
-            _end_phase("top_tracks_per_month", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "top_tracks_per_month"
+            # self.log("[run_all] Starting phase: top_tracks_per_month")
+            # before = self._done_batches
+            # self.run_phase_top_tracks_per_month()
+            # _end_phase("top_tracks_per_month", before)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "popularity_timeseries"
-            self.log("[run_all] Starting phase: popularity_timeseries")
-            before = self._done_batches
-            self.run_phase_popularity_timeseries()
-            _end_phase("popularity_timeseries", before)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "popularity_timeseries"
+            # self.log("[run_all] Starting phase: popularity_timeseries")
+            # before = self._done_batches
+            # self.run_phase_popularity_timeseries()
+            # _end_phase("popularity_timeseries", before)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "chart_scorer"

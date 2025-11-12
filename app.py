@@ -104,7 +104,7 @@ else:
     INFO_HEADLINE = storage_dao.safe_download_csv("reference/info_headline.csv")
     INFO_SHOW = storage_dao.safe_download_csv("enrichment/metadata/info_show.csv")
     INFO_AUDIOBOOK = storage_dao.safe_download_csv("enrichment/metadata/info_audiobook.csv")
-    INFO_SUPERGENRE = storage_dao.safe_download_csv("reference/supergenre_map.csv")
+    INFO_SUPERGENRE = storage_dao.safe_download_csv("reference/info_supergenre_map.csv")
 
 LOGO_BLACK = "media/assets/logo_black.svg"
 LOGO_LIGHTGREY= "media/assets/logo_lightgrey.svg"
@@ -329,28 +329,37 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
 
 def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     """
-    Displays a persistent, single-line enrichment progress message in the sidebar.
-    Checks D1 first, falls back to R2 JSON.
+    Display live enrichment progress in the sidebar.
+    Pulls from D1 (preferred) or R2 JSON fallback.
+    Shows:
+      - current phase
+      - batches done / total
+      - % complete
+      - number of enrichment threads
     """
-    import json
-    from datetime import datetime
+    import json, threading
     import streamlit as st
+    from datetime import datetime
     from dao_selector import DAOS, load_global_daos
 
-    # Make sure DAOs are ready
+    # --- Ensure DAOs ready ---
     if not DAOS or "main" not in DAOS:
         load_global_daos()
 
     d1 = DAOS.get("main")
     r2 = DAOS.get("r2")
-
     status_row = None
 
-    # --- Prefer D1 ---
+    # --- Try D1 first ---
     try:
         if d1:
             rows = d1._query(
-                "SELECT status, phase, detail, batches_done, total_batches, percent FROM enrichment_status WHERE user_id=? AND dataset_label=?",
+                """
+                SELECT status, phase, detail, batches_done, total_batches, percent
+                FROM enrichment_status
+                WHERE user_id=? AND dataset_label=?
+                ORDER BY updated_at DESC LIMIT 1
+                """,
                 [user_id, dataset_label],
             )
             if rows:
@@ -361,7 +370,7 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     # --- Fallback to R2 JSON ---
     if not status_row and r2:
         try:
-            key = f"enrichment/status/{user_id}_{dataset_label}.json"
+            key = f"enrichment/status/{user_id}_{dataset_label}_status.json"
             data = json.loads(r2._get_object(key))
             status_row = {
                 "status": data.get("status"),
@@ -374,30 +383,48 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
         except Exception as e:
             print(f"[sidebar_status] ⚠️ Failed to read R2 JSON: {e}")
 
-    # --- Show nothing if missing ---
+    # --- Bail out if nothing found ---
     if not status_row:
+        with st.sidebar:
+            st.caption("ℹ️ No enrichment status found for this dataset yet.")
         return
 
-    # --- Format message ---
+    # --- Parse + normalize ---
     status = (status_row.get("status") or "").lower()
     phase = (status_row.get("phase") or "init").capitalize()
-    percent = status_row.get("percent") or 0
-    done = status_row.get("batches_done") or 0
-    total = status_row.get("total_batches") or "?"
     detail = status_row.get("detail") or ""
+    done = int(status_row.get("batches_done") or 0)
+    total = int(status_row.get("total_batches") or 0)
+    percent = float(status_row.get("percent") or 0.0)
 
+    # --- Thread count check ---
+    threads = threading.enumerate()
+    enrich_threads = [
+        t for t in threads
+        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
+    ]
+    active_count = len(enrich_threads)
+
+    # --- Build display message ---
     if status in {"done", "complete"}:
-        msg = f"Enrichment complete for **{dataset_label}**"
+        msg = f"✅ Enrichment complete for **{dataset_label}**"
     elif status == "error":
-        msg = f"Enrichment failed during {phase.lower()} — check logs."
+        msg = f"❌ Enrichment failed during {phase.lower()} — check logs."
+        f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
+        f"• Threads: {active_count}"
     else:
-        msg = f"🔄 {phase} phase ({done}/{total} batches, {percent}% done)…"
+        msg = (
+            f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
+            f"• Threads: {active_count}"
+        )
 
-    # --- Render single line in sidebar ---
+    # --- Render ---
     with st.sidebar:
-        st.caption(f"**{msg}**")
-        # if detail:
-            # st.caption(detail)
+        st.caption(msg)
+        if detail:
+            st.caption(f"{detail}")
+        st.progress(int(percent) / 100.0 if percent else 0)
+        st.caption(f"_Please wait while we enrich your data..._")
 
 @st.cache_resource(show_spinner=False)
 def task_registry():
@@ -797,53 +824,53 @@ def log_upload_event(user_id: str, table_name: str, dataset_label: str, filename
         print(f"[upload_event] ⚠️ Failed to record upload event: {e}")
 
 # --- DATA PROCESSING ---
-def set_enrichment_status(
-    user_id: str,
-    dataset_label: str,
-    *,
-    status: str = "running",
-    phase: str = "init",
-    detail: str = None,
-    batches_done: int = 0,
-    total_batches: int | None = None,
-    percent: float | None = None,
-):
-    """
-    Upsert (insert/update) enrichment status into Cloudflare D1.
-    Keeps R2 JSON status updates as-is.
-    """
-    d1 = DAOS.get("main")
-    if d1 is None:
-        print("[warn] D1 DAO not configured; skipping enrichment status write.")
-        return
+# def set_enrichment_status(
+#     user_id: str,
+#     dataset_label: str,
+#     *,
+#     status: str = "running",
+#     phase: str = "init",
+#     detail: str = None,
+#     batches_done: int = 0,
+#     total_batches: int | None = None,
+#     percent: float | None = None,
+# ):
+#     """
+#     Upsert (insert/update) enrichment status into Cloudflare D1.
+#     Keeps R2 JSON status updates as-is.
+#     """
+#     d1 = DAOS.get("main")
+#     if d1 is None:
+#         print("[warn] D1 DAO not configured; skipping enrichment status write.")
+#         return
 
-    try:
-        d1.upsert_enrichment_status(
-            user_id=user_id,
-            dataset_label=dataset_label,
-            status=status,
-            phase=phase,
-            detail=detail,
-            batches_done=batches_done,
-            total_batches=total_batches,
-            percent=percent,
-        )
-        print(f"[status] {user_id}/{dataset_label}: {phase} → {status}")
-    except Exception as e:
-        print(f"[status] ⚠️ Failed to update enrichment_status: {e}")
+#     try:
+#         d1.upsert_enrichment_status(
+#             user_id=user_id,
+#             dataset_label=dataset_label,
+#             status=status,
+#             phase=phase,
+#             detail=detail,
+#             batches_done=batches_done,
+#             total_batches=total_batches,
+#             percent=percent,
+#         )
+#         print(f"[status] {user_id}/{dataset_label}: {phase} → {status}")
+#     except Exception as e:
+#         print(f"[status] ⚠️ Failed to update enrichment_status: {e}")
 
-def finish_enrichment_status(user_id: str, dataset_label: str, ok: bool, detail: str = None):
-    """
-    Convenience wrapper to finalize enrichment status at completion/failure.
-    """
-    set_enrichment_status(
-        user_id=user_id,
-        dataset_label=dataset_label,
-        status="completed" if ok else "failed",
-        phase="done",
-        detail=detail,
-        percent=100 if ok else None,
-    )
+# def finish_enrichment_status(user_id: str, dataset_label: str, ok: bool, detail: str = None):
+#     """
+#     Convenience wrapper to finalize enrichment status at completion/failure.
+#     """
+#     set_enrichment_status(
+#         user_id=user_id,
+#         dataset_label=dataset_label,
+#         status="completed" if ok else "failed",
+#         phase="done",
+#         detail=detail,
+#         percent=100 if ok else None,
+#     )
 
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
     """
@@ -945,6 +972,26 @@ def run_cleaning_pipeline(df, username_label):
             'master_metadata_album_artist_name': 'artist_name',
             'master_metadata_album_album_name': 'album_name'
         })
+
+        # Remove any rows mentioning Travis Scott in artist, album, or track fields (case-insensitive)
+        pattern = r"(?i)\btravis\s*scott\b"
+        cols_to_check = ["artist_name", "album_name", "track_name"]
+
+        # Ensure columns exist
+        for col in cols_to_check:
+            if col not in cleaned_df.columns:
+                cleaned_df[col] = ""
+
+        mask = (
+            cleaned_df["artist_name"].fillna("").str.contains(pattern, regex=True) |
+            cleaned_df["album_name"].fillna("").str.contains(pattern, regex=True) |
+            cleaned_df["track_name"].fillna("").str.contains(pattern, regex=True)
+        )
+
+        before = len(cleaned_df)
+        cleaned_df = cleaned_df[~mask]
+        removed = before - len(cleaned_df)
+        st.write(f"• Removed {removed} rows mentioning Travis Scott")
 
         # Parse datetime
         cleaned_df['datetime'] = pd.to_datetime(cleaned_df['datetime'])
@@ -1840,7 +1887,6 @@ elif page == "Overview":
             if "supergenre" in df_filtered.columns and not df_filtered["supergenre"].empty
             else "N/A"
         )
-        # st.dataframe(df_filtered.groupby(by=["supergenre"]).count())
 
         skips_df = df_filtered[df_filtered["skipped"] == True]
         skipped_artist = skips_df["artist_name"].value_counts().idxmax() if not skips_df.empty else "N/A"
@@ -3255,76 +3301,110 @@ elif page == "The Farm":
         )
         st.plotly_chart(fig_timeline, use_container_width=True)
 
-    def display_popularity_comparison_monthly(user_name: str, user_monthly: pd.DataFrame, global_monthly: pd.DataFrame, smoothing_window: int):
+    def display_popularity_comparison_monthly(
+        user_name: str,
+        user_monthly: pd.DataFrame,
+        global_monthly: pd.DataFrame,
+        smoothing_window: int,
+    ):
         """
-        Monthly popularity comparison (user vs others) with smoothing window
-        that depends on scope (All vs Year). Y-axis is fixed to 0..100.
+        Flexible monthly popularity comparison plot.
+        Automatically adapts to any combination of 'type' values
+        in the info_popularity long-format file.
         """
+        import plotly.graph_objects as go
+
         if user_monthly.empty:
             st.warning("⚠️ Not enough data to plot popularity trend for this user.")
             return
 
-        # Smooth & sort
+        # Sort and prepare data
         um = user_monthly.copy().sort_values("month")
         gm = global_monthly.copy().sort_values("month") if not global_monthly.empty else pd.DataFrame(columns=um.columns)
 
-        for col in ["avg_track_popularity", "avg_artist_popularity"]:
-            if col in um.columns:
-                um[col + "_smooth"] = um[col].rolling(window=smoothing_window, min_periods=1, center=True).mean()
-            if not gm.empty and col in gm.columns:
-                gm[col + "_smooth"] = gm[col].rolling(window=smoothing_window, min_periods=1, center=True).mean()
+        # Smooth avg_popularity per type
+        smoothed_um = []
+        smoothed_gm = []
 
+        for df_src, smoothed_list in [(um, smoothed_um), (gm, smoothed_gm)]:
+            if df_src.empty:
+                continue
+
+            for t in df_src["type"].unique():
+                subset = df_src[df_src["type"] == t].copy()
+                subset = subset.sort_values("month")
+                subset["avg_popularity_smooth"] = (
+                    subset["avg_popularity"]
+                    .rolling(window=smoothing_window, min_periods=1, center=True)
+                    .mean()
+                )
+                subset["type"] = t
+                smoothed_list.append(subset)
+
+        um_smooth = pd.concat(smoothed_um, ignore_index=True) if smoothed_um else pd.DataFrame()
+        gm_smooth = pd.concat(smoothed_gm, ignore_index=True) if smoothed_gm else pd.DataFrame()
+
+        # --- Plot ---
         fig = go.Figure()
 
-        # User
-        fig.add_trace(go.Scatter(
-            x=um["month"], y=um["avg_track_popularity_smooth"],
-            mode="lines", name=f"{user_name} – Track Popularity", line=dict(color="#1ed760")
-        ))
-        fig.add_trace(go.Scatter(
-            x=um["month"], y=um["avg_artist_popularity_smooth"],
-            mode="lines", name=f"{user_name} – Artist Popularity", line=dict(color="#457e59")
-        ))
-
-        # Global
-        if not gm.empty:
+        # User lines
+        for t in um_smooth["type"].unique():
+            sub = um_smooth[um_smooth["type"] == t]
             fig.add_trace(go.Scatter(
-                x=gm["month"], y=gm["avg_track_popularity_smooth"],
-                mode="lines", name="Global Avg – Track Popularity", line=dict(color="#fd6bff", dash="dot")
-            ))
-            fig.add_trace(go.Scatter(
-                x=gm["month"], y=gm["avg_artist_popularity_smooth"],
-                mode="lines", name="Global Avg – Artist Popularity", line=dict(color="#b800bb", dash="dot")
+                x=sub["month"],
+                y=sub["avg_popularity_smooth"],
+                mode="lines",
+                name=f"{user_name} – {t.replace('_', ' ').title()}",
+                line=dict(width=2),
             ))
 
-        # ✅ lock y-axis to 0..100 regardless of filter
+        # Global lines (dashed)
+        if not gm_smooth.empty:
+            for t in gm_smooth["type"].unique():
+                sub = gm_smooth[gm_smooth["type"] == t]
+                fig.add_trace(go.Scatter(
+                    x=sub["month"],
+                    y=sub["avg_popularity_smooth"],
+                    mode="lines",
+                    name=f"Global Avg – {t.replace('_', ' ').title()}",
+                    line=dict(dash="dot", width=2),
+                ))
+
+        # Axis and layout tweaks
         fig.update_yaxes(range=[0, 100])
-
         fig.update_layout(
-            title=f"{user_name} vs Global Average — Monthly Popularity (smoothed)",
+            title=f"{user_name} vs Global Average — Monthly Popularity (Smoothed)",
             xaxis_title="Month",
             yaxis_title="Average Popularity (0–100)",
             hovermode="x unified",
             legend_title="Metric",
         )
+
         st.plotly_chart(fig, use_container_width=True)
 
-    def get_monthly_popularity(info_popularity: pd.DataFrame,
-                               include_users: list[str] | None = None,
-                               exclude_users: list[str] | None = None,
-                               start_date: pd.Timestamp | None = None,
-                               end_date: pd.Timestamp | None = None) -> pd.DataFrame:
+    def get_monthly_popularity(
+        info_popularity: pd.DataFrame,
+        include_users: list[str] | None = None,
+        exclude_users: list[str] | None = None,
+        start_date: pd.Timestamp | None = None,
+        end_date: pd.Timestamp | None = None,
+    ) -> pd.DataFrame:
         """
-        Reuse your info_popularity CSV to compute monthly averages.
-        Returns columns: [month, avg_track_popularity, avg_artist_popularity]
+        Compute monthly average popularity per type (spotify_* / weighted_* etc.)
+        from the unified info_popularity long-format file.
+
+        Returns a wide-format DataFrame with columns:
+        [month, spotify_track, weighted_track, spotify_artist, weighted_artist, ...]
+        and maintains compatibility with old naming (avg_track_popularity / avg_artist_popularity).
         """
         required_cols = {"user_id", "month", "type", "avg_popularity"}
         if info_popularity.empty or not required_cols.issubset(info_popularity.columns):
-            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+            return pd.DataFrame(columns=["month"])
 
         df = info_popularity.copy()
         df["month"] = pd.to_datetime(df["month"], errors="coerce")
 
+        # --- Filtering (per-user / global / date range) ---
         if include_users is not None:
             df = df[df["user_id"].isin(include_users)]
         if exclude_users is not None:
@@ -3335,17 +3415,34 @@ elif page == "The Farm":
             df = df[df["month"] <= pd.to_datetime(end_date)]
 
         if df.empty:
-            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+            return pd.DataFrame(columns=["month"])
 
+        # --- Group by month + type to compute mean popularity ---
         monthly_type_avg = (
             df.groupby(["month", "type"])["avg_popularity"]
-            .mean(numeric_only=True).reset_index()
+            .mean(numeric_only=True)
+            .reset_index()
         )
+
+        # --- Pivot dynamically (all available types become columns) ---
         monthly = (
-            monthly_type_avg.pivot(index="month", columns="type", values="avg_popularity")
-            .reset_index().rename_axis(None, axis=1)
-            .rename(columns={"track": "avg_track_popularity", "artist": "avg_artist_popularity"})
-        ).fillna(0)
+            monthly_type_avg
+            .pivot(index="month", columns="type", values="avg_popularity")
+            .reset_index()
+            .rename_axis(None, axis=1)
+            .fillna(0)
+        )
+
+        # --- Compatibility layer for legacy chart code ---
+        # Provide "avg_track_popularity" and "avg_artist_popularity" columns if possible
+        for candidate_type, alias in [
+            ("weighted_track", "avg_track_popularity"),
+            ("spotify_track", "avg_track_popularity"),
+            ("weighted_artist", "avg_artist_popularity"),
+            ("spotify_artist", "avg_artist_popularity"),
+        ]:
+            if alias not in monthly.columns and candidate_type in monthly.columns:
+                monthly[alias] = monthly[candidate_type]
 
         return monthly
 
@@ -3428,25 +3525,68 @@ elif page == "The Farm":
     # -------------------- Popularity (uses INFO_POPULARITY) -------------------- #
     info_pop = INFO_POPULARITY.copy() if "INFO_POPULARITY" in globals() else pd.DataFrame()
 
-    # Compute user's monthly series
+    # Compute user's monthly series (from info_popularity long-format)
     user_monthly = get_monthly_popularity(info_pop, include_users=[user_id])
+
     # Align global to user's timespan for fair comparison
     if not user_monthly.empty:
         start_date = pd.to_datetime(user_monthly["month"]).min()
         end_date = pd.to_datetime(user_monthly["month"]).max()
     else:
         start_date = end_date = None
-    global_monthly = get_monthly_popularity(info_pop, exclude_users=[user_id], start_date=start_date, end_date=end_date)
 
-    # Now compute the *aggregated* popularity numbers for the top scorecards
-    # (we use the *filtered_df* above so "All" vs a year works)
-    track_pop_filtered = round((filtered_df.groupby("track_name")["track_popularity"].mean()).mean(), 2) if "track_popularity" in filtered_df.columns else 0.0
-    art_pop_filtered = round((filtered_df.groupby("artist_name")["artist_popularity"].mean()).mean(), 2) if "artist_popularity" in filtered_df.columns else 0.0
+    global_monthly = get_monthly_popularity(
+        info_pop,
+        exclude_users=[user_id],
+        start_date=start_date,
+        end_date=end_date,
+    )
 
-    # Compute deltas vs global (from monthly tables)
-    if not user_monthly.empty and not global_monthly.empty:
-        track_pop_global = round(global_monthly["avg_track_popularity"].mean(), 2)
-        art_pop_global = round(global_monthly["avg_artist_popularity"].mean(), 2)
+    # -------------------- Compute aggregated popularity metrics for scorecards -------------------- #
+    # Prefer weighted popularity values (listening-weighted), fallback to raw Spotify averages
+
+    track_pop_filtered = 0.0
+    art_pop_filtered = 0.0
+    track_pop_global = 0.0
+    art_pop_global = 0.0
+
+    # Compute user-level aggregates
+    if not user_monthly.empty:
+        # Prefer weighted metrics if available
+        if "weighted_track" in user_monthly.columns:
+            track_pop_filtered = round(user_monthly["weighted_track"].mean(), 2)
+        elif "avg_track_popularity" in user_monthly.columns:
+            track_pop_filtered = round(user_monthly["avg_track_popularity"].mean(), 2)
+
+        if "weighted_artist" in user_monthly.columns:
+            art_pop_filtered = round(user_monthly["weighted_artist"].mean(), 2)
+        elif "avg_artist_popularity" in user_monthly.columns:
+            art_pop_filtered = round(user_monthly["avg_artist_popularity"].mean(), 2)
+    else:
+        # Fallback to direct dataset stats if enrichment data missing
+        if "track_popularity" in filtered_df.columns:
+            track_pop_filtered = round(
+                (filtered_df.groupby("track_name")["track_popularity"].mean()).mean(), 2
+            )
+        if "artist_popularity" in filtered_df.columns:
+            art_pop_filtered = round(
+                (filtered_df.groupby("artist_name")["artist_popularity"].mean()).mean(), 2
+            )
+
+    # Compute global-level aggregates (for deltas)
+    if not global_monthly.empty:
+        if "weighted_track" in global_monthly.columns:
+            track_pop_global = round(global_monthly["weighted_track"].mean(), 2)
+        elif "avg_track_popularity" in global_monthly.columns:
+            track_pop_global = round(global_monthly["avg_track_popularity"].mean(), 2)
+
+        if "weighted_artist" in global_monthly.columns:
+            art_pop_global = round(global_monthly["weighted_artist"].mean(), 2)
+        elif "avg_artist_popularity" in global_monthly.columns:
+            art_pop_global = round(global_monthly["avg_artist_popularity"].mean(), 2)
+
+    # Compute deltas (difference from global)
+    if track_pop_global or art_pop_global:
         track_delta_str = f"{(track_pop_filtered - track_pop_global):+0.1f}"
         art_delta_str = f"{(art_pop_filtered - art_pop_global):+0.1f}"
     else:

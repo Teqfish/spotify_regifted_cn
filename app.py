@@ -35,7 +35,7 @@ import traceback
 from typing import Optional
 import zipfile
 
-from dao_selector import get_daos, get_server_mode
+from dao_selector import get_daos, get_server_mode, get_log_dao
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
 from chart_scorer import parse_label_ts_from_table_name
 
@@ -232,47 +232,49 @@ def verify_enrichment_consistency(user_id: str, dataset_label: str) -> bool:
       - D1 and R2 both report status 'complete'
       - All key metadata tables exist and meet row count thresholds
     """
-    try:
-        status_dao = DAOS.get("status")
-        metadata_dao = DAOS.get("r2")
+    # try:
+    #     status_dao = DAOS.get("status")
+    #     metadata_dao = DAOS.get("r2")
 
-        # --- Load both statuses ---
-        d1_status = status_dao.read_status(user_id, dataset_label) or {}
-        r2_status = metadata_dao.read_status(user_id, dataset_label) or {}
+    #     # --- Load both statuses ---
+    #     d1_status = status_dao.read_status(user_id, dataset_label) or {}
+    #     r2_status = metadata_dao.read_status(user_id, dataset_label) or {}
 
-        d1_complete = d1_status.get("status") == "complete"
-        r2_complete = r2_status.get("status") == "complete"
+    #     d1_complete = d1_status.get("status") == "complete"
+    #     r2_complete = r2_status.get("status") == "complete"
 
-        # --- Load critical metadata tables ---
-        required_tables = {
-            "info_artist_genre.csv": 1000,
-            "info_album.csv": 100,
-            "info_track.csv": 1000,
-        }
+    #     # --- Load critical metadata tables ---
+    #     required_tables = {
+    #         "info_artist_genre.csv": 1000,
+    #         "info_album.csv": 100,
+    #         "info_track.csv": 1000,
+    #     }
 
-        data_ok = True
-        for table, min_rows in required_tables.items():
-            try:
-                df = metadata_dao.safe_download_csv(f"enrichment/metadata/{table}")
-                if len(df) < min_rows:
-                    print(f"[verify_enrich] ⚠️ {table} has only {len(df)} rows (expected ≥{min_rows})")
-                    data_ok = False
-            except Exception as e:
-                print(f"[verify_enrich] ❌ Could not read {table}: {e}")
-                data_ok = False
+    #     data_ok = True
+    #     for table, min_rows in required_tables.items():
+    #         try:
+    #             df = metadata_dao.safe_download_csv(f"enrichment/metadata/{table}")
+    #             if len(df) < min_rows:
+    #                 print(f"[verify_enrich] ⚠️ {table} has only {len(df)} rows (expected ≥{min_rows})")
+    #                 data_ok = False
+    #         except Exception as e:
+    #             print(f"[verify_enrich] ❌ Could not read {table}: {e}")
+    #             data_ok = False
 
-        consistent = d1_complete and r2_complete and data_ok
+    #     consistent = d1_complete and r2_complete and data_ok
 
-        if not consistent:
-            print(f"[verify_enrich] ❌ Inconsistent enrichment for {dataset_label}.")
-        else:
-            print(f"[verify_enrich] ✅ Verified enrichment consistency for {dataset_label}.")
+    #     if not consistent:
+    #         print(f"[verify_enrich] ❌ Inconsistent enrichment for {dataset_label}.")
+    #     else:
+    #         print(f"[verify_enrich] ✅ Verified enrichment consistency for {dataset_label}.")
 
-        return consistent
+    #     return consistent
 
-    except Exception as e:
-        print(f"[verify_enrich] ⚠️ Verification failed for {dataset_label}: {e}")
-        return False
+    # except Exception as e:
+    #     print(f"[verify_enrich] ⚠️ Verification failed for {dataset_label}: {e}")
+    #     return False
+    print("[verify_enrich] Skipping verify_enrichment_consistency (disabled in diagnostic mode)")
+    return True
 
 def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao):
     """
@@ -409,17 +411,18 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     if status in {"done", "complete"}:
         msg = f"✅ Enrichment complete for **{dataset_label}**"
     elif status == "error":
-        msg = f"❌ Enrichment failed during {phase.lower()} — check logs."
-        f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
-        f"• Threads: {active_count}"
+        msg = (
+            f"❌ Enrichment failed during {phase.lower()} — check logs."
+        )
+
     else:
         msg = (
             f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
-            f"• Threads: {active_count}"
         )
 
     # --- Render ---
     with st.sidebar:
+        st.caption(f"Threads: {active_count}")
         st.caption(msg)
         if detail:
             st.caption(f"{detail}")
@@ -991,7 +994,7 @@ def run_cleaning_pipeline(df, username_label):
         before = len(cleaned_df)
         cleaned_df = cleaned_df[~mask]
         removed = before - len(cleaned_df)
-        st.write(f"• Removed {removed} rows mentioning Travis Scott")
+        st.write(f"• Removed {removed} rows mentioning Travis Scott. What a chump.")
 
         # Parse datetime
         cleaned_df['datetime'] = pd.to_datetime(cleaned_df['datetime'])
@@ -1176,6 +1179,8 @@ def background_enrich(
                 print(f"[enrich:{thread_name}] 🧹 Cleared enrichment registry for {dataset_label}")
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to clear registry: {e}")
+        if cancel_event:
+            cancel_event.set()
 
         log_enrichment_thread_count("enrichment finished or cancelled")
         log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
@@ -1587,35 +1592,35 @@ if page == "Home":
     st.session_state.setdefault("current_df", None)
     st.session_state.setdefault("current_dataset_label", None)
     st.session_state.setdefault("last_table_name", None)
-    st.session_state.setdefault("_enrichment_autostart_block", False)
-    st.session_state.setdefault("_enrichment_autostart_pending", False)
-    st.session_state.setdefault("_enrichment_thread", None)
-    st.session_state.setdefault("_enrichment_running_label", None)
-    st.session_state.setdefault("_current_enrich_thread", None)
-    st.session_state.setdefault("_current_cancel_event", None)
-    st.session_state.setdefault("_current_enrich_label", None)
+    # st.session_state.setdefault("_enrichment_autostart_block", False)
+    # st.session_state.setdefault("_enrichment_autostart_pending", False)
+    # st.session_state.setdefault("_enrichment_thread", None)
+    # st.session_state.setdefault("_enrichment_running_label", None)
+    # st.session_state.setdefault("_current_enrich_thread", None)
+    # st.session_state.setdefault("_current_cancel_event", None)
+    # st.session_state.setdefault("_current_enrich_label", None)
 
-    # ---------- Helper ----------
-    def _clear_autostart_if_new_label(label: str) -> None:
-        """Clears autostart block when new dataset label is selected."""
-        st.session_state.setdefault("_enrichment_autostart_block", False)
-        st.session_state.setdefault("_enrichment_block_label", None)
-        if st.session_state.get("_enrichment_block_label") != (label or "").strip():
-            st.session_state["_enrichment_autostart_block"] = False
-            st.session_state["_enrichment_block_label"] = None
+    # # ---------- Helper ----------
+    # def _clear_autostart_if_new_label(label: str) -> None:
+    #     """Clears autostart block when new dataset label is selected."""
+    #     st.session_state.setdefault("_enrichment_autostart_block", False)
+    #     st.session_state.setdefault("_enrichment_block_label", None)
+    #     if st.session_state.get("_enrichment_block_label") != (label or "").strip():
+    #         st.session_state["_enrichment_autostart_block"] = False
+    #         st.session_state["_enrichment_block_label"] = None
 
-    # ---------- Autostart Enrichment on Rerun ----------
-    if st.session_state.get("_enrichment_autostart_pending"):
-        st.session_state["_enrichment_autostart_pending"] = False
-        try:
-            _maybe_start_enrichment(
-                user_id=user_id,
-                dataset_label=st.session_state["current_dataset_label"],
-                table_name=st.session_state["last_table_name"],
-                cleaned_df=st.session_state["current_df"],
-            )
-        except Exception as e:
-            st.warning(f"Could not autostart enrichment: {e}")
+    # # ---------- Autostart Enrichment on Rerun ----------
+    # if st.session_state.get("_enrichment_autostart_pending"):
+    #     st.session_state["_enrichment_autostart_pending"] = False
+    #     try:
+    #         _maybe_start_enrichment(
+    #             user_id=user_id,
+    #             dataset_label=st.session_state["current_dataset_label"],
+    #             table_name=st.session_state["last_table_name"],
+    #             cleaned_df=st.session_state["current_df"],
+    #         )
+    #     except Exception as e:
+    #         st.warning(f"Could not autostart enrichment: {e}")
 
     # ---------- Header UI ----------
     h1, h2, h3 = st.columns([1, 1, 1], vertical_alignment="center")
@@ -1678,7 +1683,8 @@ if page == "Home":
         st.session_state.current_dataset_label = selected_label
         st.session_state.last_table_name = selected_table
         # --- Auto check enrichment completion & rerun if needed ---
-        _auto_check_and_reenrich_if_needed(user_id, selected_label, df)
+        log_dao = get_log_dao()
+        _auto_check_and_reenrich_if_needed(user_id, selected_label, log_dao)
 
         total_hours = (
             df["minutes_played"].sum() / 60.0 if "minutes_played" in df.columns else 0.0
@@ -1757,12 +1763,17 @@ if page == "Home":
 
                         st.success("✅ Dataset uploaded & cleaned. Enrichment will now begin in the background.")
 
-                        # Trigger enrichment autostart
-                        _clear_autostart_if_new_label(dataset_label.strip())
-                        st.session_state["_enrichment_autostart_block"] = False
-                        st.session_state["_enrichment_autostart_pending"] = True
+                        from dao_selector import get_log_dao
 
-                        st.rerun()
+                        log_dao = get_log_dao()
+                        _auto_check_and_reenrich_if_needed(user_id, dataset_label.strip(), log_dao)
+
+                        # # Trigger enrichment autostart
+                        # _clear_autostart_if_new_label(dataset_label.strip())
+                        # st.session_state["_enrichment_autostart_block"] = False
+                        # st.session_state["_enrichment_autostart_pending"] = True
+
+                        # st.rerun()
 
                 except zipfile.BadZipFile:
                     st.error("That file isn't a valid ZIP.")

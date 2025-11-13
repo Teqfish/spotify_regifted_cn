@@ -165,14 +165,13 @@ class LogDAO:
         self.last_flush = time.time()
         self.flush_interval = flush_interval
 
-    def log(self, user_id, dataset_label, phase, where, message, level="info"):
-
+    def log(self, user_id, dataset_label, phase, message, level="info"):
         stack = inspect.stack()
         caller = stack[1].function
         thread = threading.current_thread().name
         print(f"[TRACE log_dao] {thread} called log() from {caller} → {phase}: {message}")
 
-        prefix = f"[{where}] {message}"
+        prefix = f"[{phase}] {message}"
         print(f"[log_dao] {prefix}")
         entry = f"{datetime.now(timezone.utc).isoformat()} [{level.upper()}] {prefix}\n"
         self.buffer.append((user_id, dataset_label, entry))

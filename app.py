@@ -8,6 +8,7 @@ Please contact us to give feedback and feature requests.
 Built by Charlie Nash, Ben Gee, Jana Hueppe, & Tom Witt (06.2025)
 '''
 # ------------------------------- IMPORTS ------------------------------------ #
+from stringprep import c22_specials
 import bcrypt
 import country_converter as coco
 from datetime import date, datetime, timedelta, timezone
@@ -35,7 +36,7 @@ import traceback
 from typing import Optional
 import zipfile
 
-from dao_selector import get_daos, get_server_mode, get_log_dao
+from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
 from chart_scorer import parse_label_ts_from_table_name
 
@@ -225,87 +226,64 @@ def log_enrichment_thread_count(context: str = ""):
     return count
 
 # ---------- Helper: Auto-check and re-enrich if incomplete ----------
-def verify_enrichment_consistency(user_id: str, dataset_label: str) -> bool:
-    """
-    Confirms enrichment data is genuinely complete across both D1 and R2.
-    Returns True only if:
-      - D1 and R2 both report status 'complete'
-      - All key metadata tables exist and meet row count thresholds
-    """
-    # try:
-    #     status_dao = DAOS.get("status")
-    #     metadata_dao = DAOS.get("r2")
-
-    #     # --- Load both statuses ---
-    #     d1_status = status_dao.read_status(user_id, dataset_label) or {}
-    #     r2_status = metadata_dao.read_status(user_id, dataset_label) or {}
-
-    #     d1_complete = d1_status.get("status") == "complete"
-    #     r2_complete = r2_status.get("status") == "complete"
-
-    #     # --- Load critical metadata tables ---
-    #     required_tables = {
-    #         "info_artist_genre.csv": 1000,
-    #         "info_album.csv": 100,
-    #         "info_track.csv": 1000,
-    #     }
-
-    #     data_ok = True
-    #     for table, min_rows in required_tables.items():
-    #         try:
-    #             df = metadata_dao.safe_download_csv(f"enrichment/metadata/{table}")
-    #             if len(df) < min_rows:
-    #                 print(f"[verify_enrich] ⚠️ {table} has only {len(df)} rows (expected ≥{min_rows})")
-    #                 data_ok = False
-    #         except Exception as e:
-    #             print(f"[verify_enrich] ❌ Could not read {table}: {e}")
-    #             data_ok = False
-
-    #     consistent = d1_complete and r2_complete and data_ok
-
-    #     if not consistent:
-    #         print(f"[verify_enrich] ❌ Inconsistent enrichment for {dataset_label}.")
-    #     else:
-    #         print(f"[verify_enrich] ✅ Verified enrichment consistency for {dataset_label}.")
-
-    #     return consistent
-
-    # except Exception as e:
-    #     print(f"[verify_enrich] ⚠️ Verification failed for {dataset_label}: {e}")
-    #     return False
-    print("[verify_enrich] Skipping verify_enrichment_consistency (disabled in diagnostic mode)")
-    return True
-
 def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao):
     """
     Automatically checks D1 and R2 enrichment consistency.
     If either status or metadata completeness is invalid, triggers a full re-enrichment.
+    Ensures only one enrichment thread runs per user at a time.
     """
+    import threading
+    import time
+    from enrichment_service import get_user_lock
+    from dao_selector import DAOS
+
     print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
 
     try:
         status_dao = DAOS.get("status")
         metadata_dao = DAOS.get("r2")
-        print(f"[auto_reenrich] DAO debug — keys={list(DAOS.keys())}, status={type(DAOS.get('status'))}, r2={type(DAOS.get('r2'))}, metadata={type(DAOS.get('metadata'))}")
+
+        print(f"[auto_reenrich] DAO debug — keys={list(DAOS.keys())}, "
+              f"status={type(status_dao)}, r2={type(metadata_dao)}")
+
         d1_status = status_dao.read_status(user_id, dataset_label)
         r2_status = metadata_dao.read_status(user_id, dataset_label)
 
-        def status_label(s): return (s or {}).get("status", "").lower()
+        def status_label(s):
+            return (s or {}).get("status", "").lower()
+
         d1_state, r2_state = status_label(d1_status), status_label(r2_status)
 
-        # --- Verify data consistency across both layers ---
-        consistent = verify_enrichment_consistency(user_id, dataset_label)
+        # --- Thread guard: prevent duplicates ---
+        reg = st.session_state.get("_enrichment_registry", {})
+        active_thread = reg.get("thread")
+        active_label = reg.get("dataset_label")
 
-        if d1_state != "complete" or r2_state != "complete" or not consistent:
-            print(f"[auto_reenrich] ⚠️ Triggering re-enrichment for {dataset_label} (status mismatch or incomplete data).")
+        if active_thread and active_thread.is_alive():
+            print(f"[auto_reenrich] ⏸️ Enrichment already running for {user_id} ({active_label}) — skipping.")
+            return "running"
 
-            # Retrieve cleaned dataset for reprocessing
+        # --- Trigger re-enrichment only if necessary ---
+        if d1_state != "complete" or r2_state != "complete":
+            print(f"[auto_reenrich] ⚠️ Triggering re-enrichment for {dataset_label} "
+                  f"(status mismatch or incomplete data).")
+
             user_data_dao = DAOS.get("user_data")
-            cleaned_df = user_data_dao.safe_download_csv(
-                f"cleaned/{dataset_label}.csv"
-            )
+            cleaned_df = user_data_dao.safe_download_csv(f"cleaned/{dataset_label}.csv")
 
             cancel_event = threading.Event()
+
+            # --- Per-user lock enforcement ---
+            user_lock = get_user_lock(user_id)
+            if not user_lock.acquire(blocking=False):
+                print(f"[auto_reenrich] 🔒 Another enrichment already using the lock for {user_id}. "
+                      f"Will wait briefly and retry.")
+                time.sleep(1)
+                if not user_lock.acquire(blocking=False):
+                    print(f"[auto_reenrich] 🚫 Still locked — skipping re-enrichment for now.")
+                    return "locked"
+
+            # --- Start enrichment thread ---
             enrichment_thread = threading.Thread(
                 target=background_enrich,
                 kwargs=dict(
@@ -317,10 +295,19 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 ),
                 daemon=True,
             )
-
             enrichment_thread.start()
+
+            # --- Register thread in session_state ---
+            st.session_state["_enrichment_registry"] = {
+                "thread": enrichment_thread,
+                "cancel_event": cancel_event,
+                "dataset_label": dataset_label,
+                "user_id": user_id,
+            }
+
             print(f"[auto_reenrich] 🚀 Started enrichment thread for {dataset_label}")
             return "restarted"
+
         else:
             print(f"[auto_reenrich] ✅ Enrichment verified as complete for {dataset_label}")
             return "ok"
@@ -1044,35 +1031,39 @@ def background_enrich(
 ):
     """
     Background enrichment runner using DAOs.
-    Writes progress via status_dao, logs via log_dao, and stores metadata in R2.
-    Thread-safe and cancellation-aware.
+    Ensures only one enrichment runs per user_id at a time.
+    Cancels older threads and prioritizes the latest dataset selection or upload.
     """
 
     import traceback
+    import time
+    from enrichment_service import get_user_lock
     from dao_selector import DAOS, get_log_dao
 
     thread_name = threading.current_thread().name
     print(f"[enrich:{thread_name}] Starting enrichment thread for {dataset_label}")
 
-    # ✅ Ensure DAOs initialized inside thread context
-    ensure_daos_initialized_for_thread()
+    # --- Per-user lock: ensure single active enrichment per user ---
+    lock = get_user_lock(user_id)
+    if not lock.acquire(blocking=False):
+        print(f"[enrich:{thread_name}] ⚠️ Enrichment already running for {user_id} — cancelling previous thread.")
+        # attempt to cancel old thread gracefully
+        if cancel_event:
+            cancel_event.set()
+        time.sleep(1)
+        lock.acquire(blocking=True)
 
-    # --- Ensure log_dao is a valid logging DAO ---
     try:
+        # ✅ Ensure DAOs initialized inside thread context
+        ensure_daos_initialized_for_thread()
+
+        # --- Ensure log_dao is valid ---
         if log_dao is None or not hasattr(log_dao, "log"):
-            print(f"[enrich:{thread_name}] ⚠️ log_dao missing or invalid — attempting to reload via dao_selector.get_log_dao()")
+            print(f"[enrich:{thread_name}] ⚠️ log_dao missing or invalid — attempting reload via dao_selector.get_log_dao()")
             log_dao = get_log_dao()
         if not hasattr(log_dao, "log"):
             raise TypeError("log_dao does not implement .log(user_id, label, where, message, level)")
-    except Exception as e:
-        print(f"[enrich:{thread_name}] ❌ Failed to initialize log_dao: {e}")
-        # fallback dummy that prints instead of writing remotely
-        class DummyLogDAO:
-            def log(self, user_id, dataset_label, where, message, level="info"):
-                print(f"[log_dao:{level}] ({where}) {message}")
-        log_dao = DummyLogDAO()
 
-    try:
         from dao_selector import DAOS
         status_dao = DAOS.get("status")
         metadata_dao = DAOS.get("r2")
@@ -1135,6 +1126,7 @@ def background_enrich(
         )
 
         print(f"[debug] df columns at start of enrichment: {list(cleaned_df.columns)}")
+
         # --- Begin Enrichment Run ---
         log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
         status_dao.set_status(user_id, dataset_label, phase="running", detail="Executing enrichment run")
@@ -1167,7 +1159,14 @@ def background_enrich(
         log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
 
     finally:
-        # Clean up enrichment registry
+        # --- Always release per-user lock ---
+        try:
+            lock.release()
+            print(f"[enrich:{thread_name}] 🔓 Released lock for {user_id}")
+        except Exception as e:
+            print(f"[enrich:{thread_name}] ⚠️ Failed to release lock: {e}")
+
+        # --- Clean up enrichment registry ---
         try:
             reg = st.session_state.get("_enrichment_registry", {})
             if reg.get("dataset_label") == dataset_label:
@@ -1179,6 +1178,7 @@ def background_enrich(
                 print(f"[enrich:{thread_name}] 🧹 Cleared enrichment registry for {dataset_label}")
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to clear registry: {e}")
+
         if cancel_event:
             cancel_event.set()
 
@@ -1208,7 +1208,7 @@ def spawn_enrichment_thread(user_id, label, cleaned_df, log_dao=None, cancel_eve
 
     return t
 
-def _maybe_start_enrichment(*, user_id, dataset_label, table_name, cleaned_df):
+# def _maybe_start_enrichment(*, user_id, dataset_label, table_name, cleaned_df):
     import threading, time
 
     # --- Defensive wait if dataframe isn't ready yet ---
@@ -1316,156 +1316,6 @@ def ensure_daos_initialized_for_thread():
 
     except Exception as e:
         print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
-
-def verify_dataset_consistency(user_id: str, dataset_label: str, cleaned_df: pd.DataFrame, user_data_dao, log_dao=None):
-    """
-    Compare cached cleaned_df (post-ETL) vs. reloaded dataset from R2
-    and log/report any inconsistencies.
-    Also saves a detailed diff report as CSV in R2 with a summary verdict.
-    """
-    import datetime  # ✅ safer module-level import; avoids ambiguity in mixed environments
-
-    log_prefix = "[consistency]"
-    ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-
-    def _log(where, msg, level="info"):
-        print(f"{log_prefix} {msg}")
-        if log_dao:
-            log_dao.log(user_id, dataset_label, where=where, msg=msg, level=level)
-
-    _log("start", f"🔍 Starting dataset consistency check for {dataset_label}")
-
-    # --- Try to locate uploaded dataset on R2 ---
-    try:
-        all_keys = user_data_dao.list_objects(prefix=f"userdata/{user_id}_{dataset_label}_")
-        csv_keys = [k for k in all_keys if k.endswith("_history.csv")]
-        if not csv_keys:
-            _log("lookup", f"❌ No uploaded file found for {dataset_label}", "error")
-            return
-        latest_key = sorted(csv_keys)[-1]
-        _log("lookup", f"🧭 Using latest uploaded file: {latest_key}")
-    except Exception as e:
-        _log("lookup", f"❌ Failed to list or find uploaded dataset: {e}", "error")
-        return
-
-    # --- Reload dataset from R2 ---
-    try:
-        reloaded_df = user_data_dao.download_csv(path=latest_key)
-        _log("reload", f"📥 Reloaded dataset from R2: {len(reloaded_df)} rows, {len(reloaded_df.columns)} columns")
-    except Exception as e:
-        _log("reload", f"❌ Failed to reload dataset: {e}", "error")
-        return
-
-    # --- Compare shape ---
-    shape_match = (cleaned_df.shape == reloaded_df.shape)
-    if not shape_match:
-        _log("shape", f"⚠️ Shape mismatch: cleaned={cleaned_df.shape}, reloaded={reloaded_df.shape}", "warning")
-    else:
-        _log("shape", f"✅ Shape matches: {cleaned_df.shape}")
-
-    # --- Compare columns ---
-    cleaned_cols = set(cleaned_df.columns)
-    reloaded_cols = set(reloaded_df.columns)
-    missing_in_reload = cleaned_cols - reloaded_cols
-    missing_in_cleaned = reloaded_cols - cleaned_cols
-    if missing_in_reload or missing_in_cleaned:
-        _log("columns", f"⚠️ Column mismatch → missing_in_reload={missing_in_reload}, missing_in_cleaned={missing_in_cleaned}", "warning")
-    else:
-        _log("columns", "✅ Columns match exactly")
-
-    # --- Compare dtypes ---
-    dtype_diffs = {
-        c: (str(cleaned_df[c].dtype), str(reloaded_df[c].dtype))
-        for c in cleaned_cols & reloaded_cols
-        if str(cleaned_df[c].dtype) != str(reloaded_df[c].dtype)
-    }
-    if dtype_diffs:
-        _log("dtypes", f"⚠️ Dtype differences detected in {len(dtype_diffs)} columns", "warning")
-        for col, (t1, t2) in dtype_diffs.items():
-            _log("dtypes", f"   • {col}: {t1} vs {t2}")
-    else:
-        _log("dtypes", "✅ All dtypes match")
-
-    # --- Generate CSV diff report ---
-    try:
-        identical, report_path = _save_diff_report(user_id, dataset_label, cleaned_df, reloaded_df, user_data_dao)
-        verdict_msg = "✅ CLEANED DATASET IS IDENTICAL TO R2 COPY" if identical else "⚠️ DIFFERENCES FOUND"
-        _log("report", f"{verdict_msg} → {report_path}")
-    except Exception as e:
-        _log("report", f"⚠️ Failed to save diff report: {e}", "error")
-
-    _log("complete", f"✅ Consistency check completed for {dataset_label}")
-
-def _save_diff_report(user_id: str, dataset_label: str, cleaned_df: pd.DataFrame,
-                      reloaded_df: pd.DataFrame, user_data_dao, threshold: int = 10_000):
-    """
-    Compare cached vs. reloaded user dataset and save a CSV diff report to R2.
-    The file will be saved to:
-        userdata/{user_id}_{dataset_label}_consistency_report.csv
-    Returns: (identical: bool, report_path: str)
-    """
-    report_rows = []
-
-    # --- Basic metadata ---
-    meta = {
-        "rows_cleaned": len(cleaned_df),
-        "cols_cleaned": len(cleaned_df.columns),
-        "rows_reloaded": len(reloaded_df),
-        "cols_reloaded": len(reloaded_df.columns),
-        "column_mismatch": sorted(list(set(cleaned_df.columns) ^ set(reloaded_df.columns))),
-    }
-
-    # --- Meta summary ---
-    for k, v in meta.items():
-        report_rows.append({"section": "meta", "metric": k, "value": v})
-
-    # --- Dtype differences ---
-    shared_cols = sorted(set(cleaned_df.columns) & set(reloaded_df.columns))
-    dtype_diffs = []
-    for c in shared_cols:
-        t1, t2 = str(cleaned_df[c].dtype), str(reloaded_df[c].dtype)
-        if t1 != t2:
-            dtype_diffs.append(c)
-            report_rows.append({
-                "section": "dtype_mismatch",
-                "metric": c,
-                "value": f"{t1} != {t2}",
-            })
-
-    # --- Content mismatch sample ---
-    mismatches = []
-    compare_len = min(len(cleaned_df), len(reloaded_df), threshold)
-    for c in shared_cols:
-        try:
-            diff_mask = (cleaned_df[c].astype(str).iloc[:compare_len] != reloaded_df[c].astype(str).iloc[:compare_len])
-            if diff_mask.any():
-                mismatches.append((c, int(diff_mask.sum())))
-        except Exception:
-            mismatches.append((c, "comparison_failed"))
-
-    for col, count in mismatches:
-        report_rows.append({"section": "value_mismatch", "metric": col, "value": count})
-
-    # --- Verdict summary ---
-    identical = (
-        meta["rows_cleaned"] == meta["rows_reloaded"]
-        and meta["cols_cleaned"] == meta["cols_reloaded"]
-        and not meta["column_mismatch"]
-        and not dtype_diffs
-        and not mismatches
-    )
-
-    summary_msg = "✅ identical" if identical else "⚠️ differences_detected"
-    report_rows.append({"section": "summary", "metric": "identical", "value": summary_msg})
-
-    report_df = pd.DataFrame(report_rows)
-
-    # --- Upload to R2 ---
-    report_path = f"userdata/{user_id}_{dataset_label}_consistency_report.csv"
-    user_data_dao.upload_csv(report_df, path=report_path)
-    print(f"[consistency:report] 📊 Saved diff report → {report_path} ({len(report_df)} rows)")
-
-    return identical, report_path
 
 # --- LOGIN UI ---
 if not st.session_state.user:
@@ -1682,6 +1532,7 @@ if page == "Home":
         st.session_state.current_df = df
         st.session_state.current_dataset_label = selected_label
         st.session_state.last_table_name = selected_table
+
         # --- Auto check enrichment completion & rerun if needed ---
         log_dao = get_log_dao()
         _auto_check_and_reenrich_if_needed(user_id, selected_label, log_dao)
@@ -1731,18 +1582,6 @@ if page == "Home":
                     if cleaned_df is None or cleaned_df.empty:
                         st.error("ETL produced no rows. Please check your ZIP export.")
                     else:
-                        # ✅ Run consistency verification (no extra upload)
-                        try:
-                            verify_dataset_consistency(
-                                user_id,
-                                dataset_label.strip(),
-                                cleaned_df,
-                                user_dao,
-                                log_dao=status_dao
-                            )
-                        except Exception as e:
-                            st.warning(f"⚠️ Consistency check failed: {e}")
-
                         # Persist session state
                         st.session_state["current_dataset_label"] = dataset_label.strip()
                         st.session_state["current_df"] = cleaned_df
@@ -1893,11 +1732,18 @@ elif page == "Overview":
         fav_artist = df_filtered["artist_name"].value_counts().idxmax() if not df_filtered.empty else "N/A"
         fav_track = get_top_combined(df_filtered, "artist_name", "track_name")
 
-        fav_supergenre = (
-            df_filtered["supergenre"].value_counts().idxmax()
-            if "supergenre" in df_filtered.columns and not df_filtered["supergenre"].empty
-            else "N/A"
-        )
+        try:
+            if (
+                "supergenre" in df_filtered.columns
+                and not df_filtered["supergenre"].dropna().empty
+            ):
+                fav_supergenre = df_filtered["supergenre"].value_counts().idxmax()
+            else:
+                fav_supergenre = "N/A"
+        except Exception as e:
+            # Catch *anything* weird during async enrichment
+            print(f"[supergenre metric] Skipping due to transient data issue: {e}")
+            fav_supergenre = "N/A"
 
         skips_df = df_filtered[df_filtered["skipped"] == True]
         skipped_artist = skips_df["artist_name"].value_counts().idxmax() if not skips_df.empty else "N/A"
@@ -1950,10 +1796,12 @@ elif page == "Overview":
             scorecard("You listened for",f"{total_days} days",total_days_delta)
             scorecard("🎵 Favourite Track", fav_track)
             scorecard("⏩ Most Skipped Track", skipped_track)
+            # scorecard("🪩 Song of the Summer", fav_summer)
         with c2:
             scorecard("🎶 Unique Tracks", f"{unique_tracks}", delta=unique_tracks_delta)
             scorecard("🎤 Favourite Artist", fav_artist)
             scorecard("⏭️ Most Skipped Artist", skipped_artist)
+            # scorecard("🎄 Xmas Anthem", fav_xmas)
         with c3:
             scorecard("👩‍🎤 Unique Artists", f"{unique_artists}", delta=unique_artists_delta)
             scorecard("🎧 Favourite Genre", fav_supergenre)
@@ -3002,17 +2850,31 @@ elif page == "Per Album":
     col1, col2 = st.columns([4, 1.5], vertical_alignment="center")
 
     with col1:
-        st.markdown(f"<h2 style='text-align: center;'>{album_selected}'s weighting</h2>", unsafe_allow_html=True)
-        year_range = df_music[df_music.album_name == album_selected].datetime.dt.year.sort_values().unique().tolist()
+        st.markdown(
+            f"<h2 style='text-align: center;'>{album_selected}'s weighting</h2>",
+            unsafe_allow_html=True
+        )
+
+        year_range = (
+            df_music[df_music.album_name == album_selected]
+            .datetime.dt.year.dropna()
+            .sort_values()
+            .unique()
+            .tolist()
+        )
+
         if year_range:
+            # ✅ Default to the most recent year *in this album's data*
+            default_year = year_range[-1]
+
             year_selected = st.segmented_control(
                 "Year",
                 year_range,
                 selection_mode="single",
-                default=df_music.datetime.dt.year.max()
+                default=default_year,
             )
         else:
-            st.warning("No year data available in this dataset.")
+            st.warning("No year data available for this album.")
             st.stop()
 
         # --- Polar bar chart ---

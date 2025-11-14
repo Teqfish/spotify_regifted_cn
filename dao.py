@@ -512,6 +512,9 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
 
         for obj in contents:
             key = obj["Key"]
+            if not key.endswith("_history.csv"):
+                # skip reports, consistency files, snapshots, etc.
+                continue
             table_name = key.split("/")[-1].replace(".csv", "")
 
             # Extract dataset label between first "_" and second-to-last "_"

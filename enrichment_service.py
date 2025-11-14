@@ -568,6 +568,17 @@ def safe_process(func, retries: int = 3, backoff: int = 2, cancel_event: Optiona
             print(f"[Retry] {func.__name__} failed (attempt {attempt}/{retries}): {e} — retrying in {sleep_for:.1f}s")
             time.sleep(sleep_for)
 
+# --- Global per-user lock registry ---
+ENRICH_LOCKS = {}
+ENRICH_LOCKS_LOCK = threading.Lock()
+
+def get_user_lock(user_id: str):
+    """Get or create a per-user lock to ensure only one enrichment thread runs per user."""
+    with ENRICH_LOCKS_LOCK:
+        if user_id not in ENRICH_LOCKS:
+            ENRICH_LOCKS[user_id] = threading.Lock()
+        return ENRICH_LOCKS[user_id]
+
 # ================== Service ==================
 class MetadataEnricher:
     """
@@ -1258,6 +1269,10 @@ class MetadataEnricher:
 
     # ---------- Fire batch calls on-the-fly ----------
     def fetch_and_save_artists(self, names: List[str], cancel_event: Optional[threading.Event] = None):
+
+        import threading
+        self.log(f"[fetch_and_save_artists:debug] Thread={threading.current_thread().name} batch={len(names)} sample={names[:3]}")
+
         ce = cancel_event or getattr(self, "cancel_event", None)
         names = [n for n in unique_keep_order(names) if isinstance(n, str) and n.strip()]
         if not names:
@@ -2264,8 +2279,6 @@ class MetadataEnricher:
         self._load_master("albums")
         self._load_master("tracks")
 
-        all_art, all_show, all_book
-
         # --- Defensive cleanup of seen sets ---
         self.seen_artists = {
             a.strip().lower() for a in self.seen_artists
@@ -2915,7 +2928,7 @@ class MetadataEnricher:
                 return pd.DataFrame(columns=required_cols)
 
         try:
-            self.master_artists     = ensure_master_exists("info_artist_genre.csv")
+            self.master_artists = ensure_master_exists("info_artist_genre.csv")
             # Clean master: keep only fully enriched artists
             if not self.master_artists.empty:
                 before = len(self.master_artists)

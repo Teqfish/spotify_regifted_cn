@@ -214,208 +214,6 @@ def scorecard(title: str, score: str, delta: float | str = None):
 
     st.markdown(content_html, unsafe_allow_html=True)
 
-def log_enrichment_thread_count(context: str = ""):
-    threads = threading.enumerate()
-    enrich_threads = [
-        t for t in threads
-        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
-    ]
-    count = len(enrich_threads)
-    print(f"[thread_monitor] {count} enrichment thread(s) active "
-          f"{'after ' + context if context else ''}.")
-    return count
-
-# ---------- Helper: Auto-check and re-enrich if incomplete ----------
-def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao):
-    """
-    Automatically checks D1 and R2 enrichment consistency.
-    If either status or metadata completeness is invalid, triggers a full re-enrichment.
-    Ensures only one enrichment thread runs per user at a time.
-    """
-    import threading
-    import time
-    from enrichment_service import get_user_lock
-    from dao_selector import DAOS
-
-    print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
-
-    try:
-        status_dao = DAOS.get("status")
-        metadata_dao = DAOS.get("r2")
-
-        print(f"[auto_reenrich] DAO debug — keys={list(DAOS.keys())}, "
-              f"status={type(status_dao)}, r2={type(metadata_dao)}")
-
-        d1_status = status_dao.read_status(user_id, dataset_label)
-        r2_status = metadata_dao.read_status(user_id, dataset_label)
-
-        def status_label(s):
-            return (s or {}).get("status", "").lower()
-
-        d1_state, r2_state = status_label(d1_status), status_label(r2_status)
-
-        # --- Thread guard: prevent duplicates ---
-        reg = st.session_state.get("_enrichment_registry", {})
-        active_thread = reg.get("thread")
-        active_label = reg.get("dataset_label")
-
-        if active_thread and active_thread.is_alive():
-            print(f"[auto_reenrich] ⏸️ Enrichment already running for {user_id} ({active_label}) — skipping.")
-            return "running"
-
-        # --- Trigger re-enrichment only if necessary ---
-        if d1_state != "complete" or r2_state != "complete":
-            print(f"[auto_reenrich] ⚠️ Triggering re-enrichment for {dataset_label} "
-                  f"(status mismatch or incomplete data).")
-
-            user_data_dao = DAOS.get("user_data")
-            cleaned_df = user_data_dao.safe_download_csv(f"cleaned/{dataset_label}.csv")
-
-            cancel_event = threading.Event()
-
-            # --- Per-user lock enforcement ---
-            user_lock = get_user_lock(user_id)
-            if not user_lock.acquire(blocking=False):
-                print(f"[auto_reenrich] 🔒 Another enrichment already using the lock for {user_id}. "
-                      f"Will wait briefly and retry.")
-                time.sleep(1)
-                if not user_lock.acquire(blocking=False):
-                    print(f"[auto_reenrich] 🚫 Still locked — skipping re-enrichment for now.")
-                    return "locked"
-
-            # --- Start enrichment thread ---
-            enrichment_thread = threading.Thread(
-                target=background_enrich,
-                kwargs=dict(
-                    user_id=user_id,
-                    dataset_label=dataset_label,
-                    cleaned_df=cleaned_df,
-                    log_dao=log_dao,
-                    cancel_event=cancel_event,
-                ),
-                daemon=True,
-            )
-            enrichment_thread.start()
-
-            # --- Register thread in session_state ---
-            st.session_state["_enrichment_registry"] = {
-                "thread": enrichment_thread,
-                "cancel_event": cancel_event,
-                "dataset_label": dataset_label,
-                "user_id": user_id,
-            }
-
-            print(f"[auto_reenrich] 🚀 Started enrichment thread for {dataset_label}")
-            return "restarted"
-
-        else:
-            print(f"[auto_reenrich] ✅ Enrichment verified as complete for {dataset_label}")
-            return "ok"
-
-    except Exception as e:
-        print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
-        return "error"
-
-def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
-    """
-    Display live enrichment progress in the sidebar.
-    Pulls from D1 (preferred) or R2 JSON fallback.
-    Shows:
-      - current phase
-      - batches done / total
-      - % complete
-      - number of enrichment threads
-    """
-    import json, threading
-    import streamlit as st
-    from datetime import datetime
-    from dao_selector import DAOS, load_global_daos
-
-    # --- Ensure DAOs ready ---
-    if not DAOS or "main" not in DAOS:
-        load_global_daos()
-
-    d1 = DAOS.get("main")
-    r2 = DAOS.get("r2")
-    status_row = None
-
-    # --- Try D1 first ---
-    try:
-        if d1:
-            rows = d1._query(
-                """
-                SELECT status, phase, detail, batches_done, total_batches, percent
-                FROM enrichment_status
-                WHERE user_id=? AND dataset_label=?
-                ORDER BY updated_at DESC LIMIT 1
-                """,
-                [user_id, dataset_label],
-            )
-            if rows:
-                status_row = rows[0]
-    except Exception as e:
-        print(f"[sidebar_status] ⚠️ Failed to query D1: {e}")
-
-    # --- Fallback to R2 JSON ---
-    if not status_row and r2:
-        try:
-            key = f"enrichment/status/{user_id}_{dataset_label}_status.json"
-            data = json.loads(r2._get_object(key))
-            status_row = {
-                "status": data.get("status"),
-                "phase": data.get("phase"),
-                "detail": data.get("detail"),
-                "batches_done": data.get("batches_done"),
-                "total_batches": data.get("total_batches"),
-                "percent": data.get("percent"),
-            }
-        except Exception as e:
-            print(f"[sidebar_status] ⚠️ Failed to read R2 JSON: {e}")
-
-    # --- Bail out if nothing found ---
-    if not status_row:
-        with st.sidebar:
-            st.caption("ℹ️ No enrichment status found for this dataset yet.")
-        return
-
-    # --- Parse + normalize ---
-    status = (status_row.get("status") or "").lower()
-    phase = (status_row.get("phase") or "init").capitalize()
-    detail = status_row.get("detail") or ""
-    done = int(status_row.get("batches_done") or 0)
-    total = int(status_row.get("total_batches") or 0)
-    percent = float(status_row.get("percent") or 0.0)
-
-    # --- Thread count check ---
-    threads = threading.enumerate()
-    enrich_threads = [
-        t for t in threads
-        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
-    ]
-    active_count = len(enrich_threads)
-
-    # --- Build display message ---
-    if status in {"done", "complete"}:
-        msg = f"✅ Enrichment complete for **{dataset_label}**"
-    elif status == "error":
-        msg = (
-            f"❌ Enrichment failed during {phase.lower()} — check logs."
-        )
-
-    else:
-        msg = (
-            f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
-        )
-
-    # --- Render ---
-    with st.sidebar:
-        st.caption(f"Threads: {active_count}")
-        st.caption(msg)
-        if detail:
-            st.caption(f"{detail}")
-        st.progress(int(percent) / 100.0 if percent else 0)
-        st.caption(f"_Please wait while we enrich your data..._")
-
 @st.cache_resource(show_spinner=False)
 def task_registry():
     """Persistent global registry of active enrichment threads."""
@@ -714,57 +512,6 @@ if st.session_state.get("user"):
     refresh_cookie_if_needed()
 
 # ---- ETL helpers (wrappers) ----
-def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
-    """
-    Wrapper around process_uploaded_zip that:
-      - Runs the ETL process
-      - Persists ETL success/failure status via DAO (Cloudflare or local)
-      - Updates Streamlit session state for UI continuity
-    """
-    import streamlit as st
-    from dao_selector import get_daos
-
-    daos = get_daos()
-    status_dao = daos.get("status")
-
-    try:
-        # --- Run ETL ---
-        table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
-
-        # --- On success ---
-        if cleaned_df is not None and not cleaned_df.empty:
-            if status_dao:
-                try:
-                    status_dao.set_status(
-                        user_id,
-                        dataset_label,
-                        phase="etl",
-                        detail="✅ ETL completed successfully",
-                        total=len(cleaned_df),
-                    )
-                    log_upload_event(user_id, table_name, dataset_label, uploaded_file.name, status="completed")
-                except Exception:
-                    pass  # Logging must never interrupt flow
-            st.session_state.etl_done = True
-
-        return table_name, cleaned_df
-
-    except Exception as e:
-        # --- On failure ---
-        if status_dao:
-            try:
-                status_dao.set_status(
-                    user_id,
-                    dataset_label,
-                    phase="etl",
-                    detail=f"❌ ETL failed: {e}",
-                    total=None,
-                )
-                log_upload_event(user_id, None, dataset_label, uploaded_file.name, status="failed")
-            except Exception:
-                pass
-        raise
-
 def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
     from pathlib import Path  # Can also move to top-level import safely
 
@@ -814,53 +561,263 @@ def log_upload_event(user_id: str, table_name: str, dataset_label: str, filename
         print(f"[upload_event] ⚠️ Failed to record upload event: {e}")
 
 # --- DATA PROCESSING ---
-# def set_enrichment_status(
-#     user_id: str,
-#     dataset_label: str,
-#     *,
-#     status: str = "running",
-#     phase: str = "init",
-#     detail: str = None,
-#     batches_done: int = 0,
-#     total_batches: int | None = None,
-#     percent: float | None = None,
-# ):
-#     """
-#     Upsert (insert/update) enrichment status into Cloudflare D1.
-#     Keeps R2 JSON status updates as-is.
-#     """
-#     d1 = DAOS.get("main")
-#     if d1 is None:
-#         print("[warn] D1 DAO not configured; skipping enrichment status write.")
-#         return
+def ensure_daos_initialized_for_thread():
+    """
+    Ensure that Cloudflare DAOs (D1 + R2) are initialized in this thread.
+    Runs safely inside background threads without re-printing schema logs.
+    """
+    try:
+        import dao_selector
+        from dao_selector import DAOS
 
-#     try:
-#         d1.upsert_enrichment_status(
-#             user_id=user_id,
-#             dataset_label=dataset_label,
-#             status=status,
-#             phase=phase,
-#             detail=detail,
-#             batches_done=batches_done,
-#             total_batches=total_batches,
-#             percent=percent,
-#         )
-#         print(f"[status] {user_id}/{dataset_label}: {phase} → {status}")
-#     except Exception as e:
-#         print(f"[status] ⚠️ Failed to update enrichment_status: {e}")
+        # Already loaded → no work needed
+        if DAOS and "main" in DAOS:
+            return
 
-# def finish_enrichment_status(user_id: str, dataset_label: str, ok: bool, detail: str = None):
-#     """
-#     Convenience wrapper to finalize enrichment status at completion/failure.
-#     """
-#     set_enrichment_status(
-#         user_id=user_id,
-#         dataset_label=dataset_label,
-#         status="completed" if ok else "failed",
-#         phase="done",
-#         detail=detail,
-#         percent=100 if ok else None,
-#     )
+        # Load DAOs quietly (guarded inside dao_selector)
+        dao_selector.load_global_daos()
+
+    except Exception as e:
+        print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
+
+def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao):
+    """
+    Checks D1/R2 consistency and heartbeats to detect stale enrichments.
+    Cancels and restarts enrichment threads that appear hung (>5min no heartbeat).
+    Ensures only one enrichment thread per user is ever active.
+    """
+    import threading, time, datetime
+    import streamlit as st
+    from enrichment_service import get_user_lock, get_last_heartbeat, is_stale_status
+    from dao_selector import DAOS
+
+    print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
+
+    try:
+        status_dao = DAOS.get("status")
+        metadata_dao = DAOS.get("r2")
+
+        d1_status = status_dao.read_status(user_id, dataset_label) or {}
+        r2_status = metadata_dao.read_status(user_id, dataset_label) or {}
+
+        def status_label(s): return (s or {}).get("status", "").lower()
+        d1_state, r2_state = status_label(d1_status), status_label(r2_status)
+
+        reg = st.session_state.get("_enrichment_registry", {})
+        active_thread = reg.get("thread")
+        active_label = reg.get("dataset_label")
+        cancel_event = reg.get("cancel_event")
+
+        # --- Check heartbeat and status freshness ---
+        stale_d1 = is_stale_status(d1_status, threshold_minutes=5)
+        last_hb = get_last_heartbeat(user_id, dataset_label)
+        now = time.time()
+        stale_hb = (last_hb is None) or ((now - last_hb) > 300)
+
+        # --- Handle stale or hanging threads ---
+        if active_thread and active_thread.is_alive():
+            if stale_d1 or stale_hb:
+                print(f"[auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.")
+                if cancel_event:
+                    cancel_event.set()
+
+                # Attempt graceful shutdown and lock release
+                try:
+                    user_lock = get_user_lock(user_id)
+                    for _ in range(15):  # wait up to ~15s for lock release
+                        if not user_lock.locked():
+                            break
+                        time.sleep(1)
+                    else:
+                        print(f"[auto_reenrich] 🚫 Lock still held after timeout — forcing release.")
+                        user_lock.release()
+                except Exception as e:
+                    print(f"[auto_reenrich] ⚠️ Error while releasing lock: {e}")
+
+                st.session_state["_enrichment_registry"] = {}
+            else:
+                age = int(now - last_hb) if last_hb else "?"
+                print(f"[auto_reenrich] ❤️ Heartbeat OK (last={age}s ago). Skipping restart.")
+                return "running"
+
+        # --- Refetch registry after possible cleanup ---
+        reg = st.session_state.get("_enrichment_registry", {})
+        active_thread = reg.get("thread")
+        if active_thread and active_thread.is_alive():
+            print(f"[auto_reenrich] ⏸️ Active thread still alive post-cleanup — skipping restart.")
+            return "running"
+
+        # --- Determine if enrichment should restart ---
+        should_restart = (
+            d1_state not in ("complete", "running") or
+            r2_state not in ("complete", "running") or
+            stale_d1 or stale_hb
+        )
+
+        if should_restart:
+            print(f"[auto_reenrich] ⚠️ Triggering re-enrichment for {dataset_label} "
+                  f"(D1={d1_state}, R2={r2_state}, stale_d1={stale_d1}, stale_hb={stale_hb})")
+
+            user_data_dao = DAOS.get("user_data")
+            cleaned_df = user_data_dao.safe_download_csv(f"cleaned/{dataset_label}.csv")
+
+            cancel_event = threading.Event()
+            user_lock = get_user_lock(user_id)
+
+            # --- Try acquiring lock with retries ---
+            if not user_lock.acquire(blocking=False):
+                print(f"[auto_reenrich] 🔒 Lock active for {user_id} — retrying...")
+                for _ in range(10):
+                    time.sleep(1)
+                    if user_lock.acquire(blocking=False):
+                        break
+                else:
+                    print(f"[auto_reenrich] 🚫 Still locked after retries — skipping new enrichment.")
+                    return "locked"
+
+            # --- Start enrichment thread ---
+            enrichment_thread = threading.Thread(
+                target=background_enrich,
+                kwargs=dict(
+                    user_id=user_id,
+                    dataset_label=dataset_label,
+                    cleaned_df=cleaned_df,
+                    log_dao=log_dao,
+                    cancel_event=cancel_event,
+                ),
+                daemon=True,
+            )
+            enrichment_thread.start()
+
+            # --- Register in session_state ---
+            st.session_state["_enrichment_registry"] = {
+                "thread": enrichment_thread,
+                "cancel_event": cancel_event,
+                "dataset_label": dataset_label,
+                "user_id": user_id,
+            }
+
+            print(f"[auto_reenrich] 🚀 Started enrichment thread for {dataset_label}")
+            return "restarted"
+
+        else:
+            print(f"[auto_reenrich] ✅ Enrichment verified as complete for {dataset_label}")
+            return "ok"
+
+    except Exception as e:
+        print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
+        return "error"
+
+def log_enrichment_thread_count(context: str = ""):
+    threads = threading.enumerate()
+    enrich_threads = [
+        t for t in threads
+        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
+    ]
+    count = len(enrich_threads)
+    print(f"[thread_monitor] {count} enrichment thread(s) active "
+          f"{'after ' + context if context else ''}.")
+    return count
+
+def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
+    """
+    Display live enrichment progress in the sidebar.
+    Pulls from D1 (preferred) or R2 JSON fallback.
+    Shows:
+      - current phase
+      - batches done / total
+      - % complete
+      - number of enrichment threads
+    """
+    import json, threading
+    import streamlit as st
+    from datetime import datetime
+    from dao_selector import DAOS, load_global_daos
+
+    # --- Ensure DAOs ready ---
+    if not DAOS or "main" not in DAOS:
+        load_global_daos()
+
+    d1 = DAOS.get("main")
+    r2 = DAOS.get("r2")
+    status_row = None
+
+    # --- Try D1 first ---
+    try:
+        if d1:
+            rows = d1._query(
+                """
+                SELECT status, phase, detail, batches_done, total_batches, percent
+                FROM enrichment_status
+                WHERE user_id=? AND dataset_label=?
+                ORDER BY updated_at DESC LIMIT 1
+                """,
+                [user_id, dataset_label],
+            )
+            if rows:
+                status_row = rows[0]
+    except Exception as e:
+        print(f"[sidebar_status] ⚠️ Failed to query D1: {e}")
+
+    # --- Fallback to R2 JSON ---
+    if not status_row and r2:
+        try:
+            key = f"enrichment/status/{user_id}_{dataset_label}_status.json"
+            data = json.loads(r2._get_object(key))
+            status_row = {
+                "status": data.get("status"),
+                "phase": data.get("phase"),
+                "detail": data.get("detail"),
+                "batches_done": data.get("batches_done"),
+                "total_batches": data.get("total_batches"),
+                "percent": data.get("percent"),
+            }
+        except Exception as e:
+            print(f"[sidebar_status] ⚠️ Failed to read R2 JSON: {e}")
+
+    # --- Bail out if nothing found ---
+    if not status_row:
+        with st.sidebar:
+            st.caption("ℹ️ No enrichment status found for this dataset yet.")
+        return
+
+    # --- Parse + normalize ---
+    status = (status_row.get("status") or "").lower()
+    phase = (status_row.get("phase") or "init").capitalize()
+    detail = status_row.get("detail") or ""
+    done = int(status_row.get("batches_done") or 0)
+    total = int(status_row.get("total_batches") or 0)
+    percent = float(status_row.get("percent") or 0.0)
+
+    # --- Thread count check ---
+    threads = threading.enumerate()
+    enrich_threads = [
+        t for t in threads
+        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
+    ]
+    active_count = len(enrich_threads)
+
+    # --- Build display message ---
+    if status in {"done", "complete"}:
+        msg = f"✅ Enrichment complete for **{dataset_label}**"
+    elif status == "error":
+        msg = (
+            f"❌ Enrichment failed during {phase.lower()} — check logs."
+        )
+
+    else:
+        msg = (
+            f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
+        )
+
+    # --- Render ---
+    with st.sidebar:
+        st.caption(f"Threads: {active_count}")
+        st.caption(msg)
+        if detail:
+            st.caption(f"{detail}")
+        st.progress(int(percent) / 100.0 if percent else 0)
+        st.caption(f"_Please wait while we enrich your data..._")
 
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
     """
@@ -929,6 +886,57 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
         except Exception as e:
             st.error(f"❌ Failed to save cleaned data: {e}")
             return None, None
+
+def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
+    """
+    Wrapper around process_uploaded_zip that:
+      - Runs the ETL process
+      - Persists ETL success/failure status via DAO (Cloudflare or local)
+      - Updates Streamlit session state for UI continuity
+    """
+    import streamlit as st
+    from dao_selector import get_daos
+
+    daos = get_daos()
+    status_dao = daos.get("status")
+
+    try:
+        # --- Run ETL ---
+        table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
+
+        # --- On success ---
+        if cleaned_df is not None and not cleaned_df.empty:
+            if status_dao:
+                try:
+                    status_dao.set_status(
+                        user_id,
+                        dataset_label,
+                        phase="etl",
+                        detail="✅ ETL completed successfully",
+                        total=len(cleaned_df),
+                    )
+                    log_upload_event(user_id, table_name, dataset_label, uploaded_file.name, status="completed")
+                except Exception:
+                    pass  # Logging must never interrupt flow
+            st.session_state.etl_done = True
+
+        return table_name, cleaned_df
+
+    except Exception as e:
+        # --- On failure ---
+        if status_dao:
+            try:
+                status_dao.set_status(
+                    user_id,
+                    dataset_label,
+                    phase="etl",
+                    detail=f"❌ ETL failed: {e}",
+                    total=None,
+                )
+                log_upload_event(user_id, None, dataset_label, uploaded_file.name, status="failed")
+            except Exception:
+                pass
+        raise
 
 def run_cleaning_pipeline(df, username_label):
     """Cleans a Spotify listening dataframe and adds session/user metadata."""
@@ -1033,42 +1041,45 @@ def background_enrich(
     Background enrichment runner using DAOs.
     Ensures only one enrichment runs per user_id at a time.
     Cancels older threads and prioritizes the latest dataset selection or upload.
+    Includes heartbeat updates for watchdog monitoring.
     """
 
-    import traceback
-    import time
-    from enrichment_service import get_user_lock
+    import traceback, time, threading, streamlit as st
+    from enrichment_service import get_user_lock, update_heartbeat
     from dao_selector import DAOS, get_log_dao
 
     thread_name = threading.current_thread().name
-    print(f"[enrich:{thread_name}] Starting enrichment thread for {dataset_label}")
+    print(f"[enrich:{thread_name}] 🏁 Starting enrichment thread for {dataset_label}")
 
-    # --- Per-user lock: ensure single active enrichment per user ---
-    lock = get_user_lock(user_id)
-    if not lock.acquire(blocking=False):
-        print(f"[enrich:{thread_name}] ⚠️ Enrichment already running for {user_id} — cancelling previous thread.")
-        # attempt to cancel old thread gracefully
-        if cancel_event:
-            cancel_event.set()
+    # --- Acquire per-user lock with retries ---
+    user_lock = get_user_lock(user_id)
+    for attempt in range(10):
+        if user_lock.acquire(blocking=False):
+            break
+        print(f"[enrich:{thread_name}] ⏳ Waiting for lock (attempt {attempt+1}/10)...")
         time.sleep(1)
-        lock.acquire(blocking=True)
+    else:
+        print(f"[enrich:{thread_name}] 🚫 Could not acquire lock for {user_id}, aborting start.")
+        return
+
+    print(f"[enrich:{thread_name}] 🔒 Acquired user lock for {user_id}")
 
     try:
-        # ✅ Ensure DAOs initialized inside thread context
+        # ✅ Ensure DAOs initialized inside this thread
         ensure_daos_initialized_for_thread()
 
-        # --- Ensure log_dao is valid ---
+        # --- log_dao validation ---
         if log_dao is None or not hasattr(log_dao, "log"):
-            print(f"[enrich:{thread_name}] ⚠️ log_dao missing or invalid — attempting reload via dao_selector.get_log_dao()")
+            print(f"[enrich:{thread_name}] ⚠️ log_dao missing — attempting reload via dao_selector.get_log_dao()")
             log_dao = get_log_dao()
         if not hasattr(log_dao, "log"):
             raise TypeError("log_dao does not implement .log(user_id, label, where, message, level)")
 
-        from dao_selector import DAOS
+        # --- DAOs ---
         status_dao = DAOS.get("status")
         metadata_dao = DAOS.get("r2")
 
-        # --- Helper: cancellation check ---
+        # --- helper for cancellation ---
         def _check_cancel(point=""):
             if cancel_event and cancel_event.is_set():
                 msg = f"Enrichment cancelled{' during ' + point if point else ''}."
@@ -1078,7 +1089,10 @@ def background_enrich(
 
         _check_cancel("initialization")
 
-        # --- Sanity checks ---
+        # --- initialize heartbeat ---
+        update_heartbeat(user_id, dataset_label)
+
+        # --- sanity checks (Spotify + Discogs) ---
         log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
         ok, msg = spotify_sanity_check(token)
         _check_cancel("spotify_sanity_check")
@@ -1095,10 +1109,11 @@ def background_enrich(
 
         _check_cancel("MetadataEnricher init")
 
-        # --- Safety reload in case cleaned_df is unexpectedly empty ---
+        # --- reload fallback ---
         if cleaned_df is None or cleaned_df.empty:
             print(f"[enrich:{thread_name}] ⚠️ cleaned_df empty — reloading from R2 before enrichment")
             try:
+                from dao_selector import get_daos
                 daos = get_daos()
                 user_dao = daos.get("user_data")
                 latest = user_dao.list_datasets(user_id)
@@ -1108,11 +1123,10 @@ def background_enrich(
                     print(f"[enrich:{thread_name}] ✅ Reloaded dataset from R2 ({len(cleaned_df)} rows)")
             except Exception as e:
                 print(f"[enrich:{thread_name}] ❌ Failed to reload dataset: {e}")
-
             if cleaned_df is None or cleaned_df.empty:
                 raise RuntimeError(f"cleaned_df still empty — cannot start enrichment for {dataset_label}")
 
-        # --- Proceed with enrichment ---
+        # --- construct enricher ---
         enricher = MetadataEnricher(
             user_id=user_id,
             label=dataset_label,
@@ -1125,60 +1139,67 @@ def background_enrich(
             log_dao=log_dao,
         )
 
-        print(f"[debug] df columns at start of enrichment: {list(cleaned_df.columns)}")
+        print(f"[enrich:{thread_name}] 🧩 df columns: {list(cleaned_df.columns)}")
 
-        # --- Begin Enrichment Run ---
+        # --- begin enrichment ---
         log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
         status_dao.set_status(user_id, dataset_label, phase="running", detail="Executing enrichment run")
 
         _check_cancel("before run_all")
+
+        # heartbeat updater thread
+        def _heartbeat_loop():
+            while not (cancel_event and cancel_event.is_set()):
+                update_heartbeat(user_id, dataset_label)
+                time.sleep(60)
+
+        hb_thread = threading.Thread(target=_heartbeat_loop, daemon=True)
+        hb_thread.start()
+
         enricher.run_all(cancel_event=cancel_event)
         _check_cancel("after run_all")
 
-        # --- Verify output consistency before marking complete ---
-        consistent = verify_enrichment_consistency(user_id, dataset_label)
-        if not consistent:
-            msg = f"Incomplete or inconsistent enrichment detected for {dataset_label}. Forcing re-run."
-            log_dao.log(user_id, dataset_label, "enrichment", msg, level="warning")
-            status_dao.finish_status(user_id, dataset_label, ok=False, detail=msg)
-            raise RuntimeError(msg)
-
-        # --- Success ---
+        # --- success ---
         status_dao.finish_status(user_id, dataset_label, ok=True, detail="Enrichment completed successfully.")
         log_dao.log(user_id, dataset_label, "enrichment", "✅ Enrichment completed successfully.")
+        print(f"[enrich:{thread_name}] ✅ Enrichment completed for {dataset_label}")
 
     except CancelledError:
         print(f"[enrich:{thread_name}] 🧱 Cancelled by user or dataset switch.")
-        status_dao.finish_status(user_id, dataset_label, ok=False, detail="Cancelled by user or dataset switch.")
+        try:
+            status_dao.finish_status(user_id, dataset_label, ok=False, detail="Cancelled by user or dataset switch.")
+        except Exception:
+            pass
         log_dao.log(user_id, dataset_label, "enrichment", "Cancelled mid-run by user.", level="warning")
 
     except Exception as e:
         tb = traceback.format_exc()
         print(f"[enrich:{thread_name}] ❌ Exception: {e}\n{tb}")
-        status_dao.finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
+        try:
+            status_dao.finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
+        except Exception:
+            pass
         log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
 
     finally:
-        # --- Always release per-user lock ---
+        # --- release per-user lock ---
         try:
-            lock.release()
-            print(f"[enrich:{thread_name}] 🔓 Released lock for {user_id}")
+            if user_lock.locked():
+                user_lock.release()
+                print(f"[enrich:{thread_name}] 🔓 Released lock for {user_id}")
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to release lock: {e}")
 
-        # --- Clean up enrichment registry ---
+        # --- cleanup registry ---
         try:
             reg = st.session_state.get("_enrichment_registry", {})
             if reg.get("dataset_label") == dataset_label:
-                st.session_state["_enrichment_registry"] = {
-                    "thread": None,
-                    "cancel_event": None,
-                    "dataset_label": None,
-                }
+                st.session_state["_enrichment_registry"] = {}
                 print(f"[enrich:{thread_name}] 🧹 Cleared enrichment registry for {dataset_label}")
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to clear registry: {e}")
 
+        # --- signal cancel to subthreads ---
         if cancel_event:
             cancel_event.set()
 
@@ -1298,24 +1319,6 @@ def info_tables_update(user_id, table_name):
     except Exception as e:
         print(f"[Background task error] {e}")
 
-def ensure_daos_initialized_for_thread():
-    """
-    Ensure that Cloudflare DAOs (D1 + R2) are initialized in this thread.
-    Runs safely inside background threads without re-printing schema logs.
-    """
-    try:
-        import dao_selector
-        from dao_selector import DAOS
-
-        # Already loaded → no work needed
-        if DAOS and "main" in DAOS:
-            return
-
-        # Load DAOs quietly (guarded inside dao_selector)
-        dao_selector.load_global_daos()
-
-    except Exception as e:
-        print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
 
 # --- LOGIN UI ---
 if not st.session_state.user:

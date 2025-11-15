@@ -152100,3 +152100,1000 @@ A value is trying to be set on a copy of a slice from a DataFrame.
 Try using .loc[row_indexer,col_indexer] = value instead
 
 See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-14 23:24:10,799 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-14 23:24:10,855 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-14 23:24:10,870 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-14 23:24:10,871 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-14 23:24:11,037 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:19:59,798 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:20:00,007 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:20:00,103 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:20:00,103 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:20:00,366 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:20:00,366 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:20:01,353 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:20:01,406 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:20:01,421 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:20:01,421 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:20:01,547 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:20:38,914 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:20:39,306 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:20:39,321 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:20:40,527 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:20:40,847 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:20:40,847 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:20:41,736 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:20:41,784 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:20:41,799 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:20:41,799 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:20:41,938 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:20:43,364 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:20:43,659 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:20:43,659 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:20:44,566 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:20:44,617 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:20:44,631 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:20:44,631 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:20:44,766 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:20:50,256 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:20:50,500 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:20:50,501 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:20:52,106 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:20:52,413 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:20:52,414 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:20:53,411 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:20:53,463 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:20:53,478 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:20:53,478 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:20:53,635 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:21:01,401 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:21:01,721 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:21:01,721 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:21:02,651 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:21:02,703 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:21:02,717 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:21:02,718 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:21:02,852 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:21:06,742 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:21:07,033 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:21:07,045 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:21:08,295 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:21:08,638 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:21:08,638 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:21:09,627 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:21:09,683 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:21:09,698 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:21:09,698 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:21:09,839 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:26:44,264 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:26:44,587 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:26:44,587 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:26:45,544 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:26:45,593 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:26:45,607 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:26:45,607 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:26:45,748 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:28:12,722 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:28:13,019 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:28:13,019 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:28:13,936 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:28:13,984 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:28:14,000 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:28:14,000 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:28:14,142 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:28:19,140 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:28:19,403 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:28:19,403 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:28:20,311 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:28:20,363 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:28:20,377 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:28:20,377 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:28:20,518 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:28:32,737 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:28:33,060 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:28:33,060 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:28:33,931 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:28:33,979 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:28:33,993 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:28:33,993 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:28:34,135 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:28:39,887 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:28:40,175 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:28:40,175 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:28:41,096 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:28:41,142 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:28:41,156 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:28:41,156 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:28:41,289 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:28:45,969 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:28:46,282 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:28:46,283 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:28:47,162 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:28:47,211 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:28:47,226 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:28:47,226 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:28:47,350 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:29:26,792 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:29:27,175 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:29:27,175 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:29:28,247 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:29:28,533 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:29:28,533 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:29:29,517 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:29:29,572 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:29:29,586 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:29:29,586 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:29:29,741 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:29:56,273 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:29:56,599 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:29:56,599 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:29:57,484 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:29:57,530 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:29:57,545 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:29:57,545 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:29:57,678 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:31:33,136 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:33,397 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:33,403 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:33,667 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:33,950 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:33,950 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:34,769 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:35,058 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:35,058 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:35,984 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:31:36,040 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:31:36,057 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:31:36,057 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:31:36,182 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:31:41,626 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:41,944 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:41,945 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:42,843 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:31:42,889 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:31:42,904 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:31:42,904 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:31:43,031 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:31:45,001 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:45,312 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:45,324 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:46,601 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:46,833 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:46,834 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:47,925 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:31:47,976 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:31:49,004 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:49,407 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:49,407 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:51,055 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:51,410 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:51,410 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:52,308 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:31:52,355 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:31:52,370 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:31:52,370 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:31:52,503 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:31:55,124 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:55,439 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:55,439 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:56,555 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:31:56,604 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:31:57,622 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:31:57,888 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:31:57,888 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:31:58,816 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:31:58,942 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:00,304 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:00,624 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:00,624 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:01,572 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:32:01,625 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:01,639 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:32:01,639 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:32:01,765 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:32:06,150 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:06,461 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:06,461 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:07,356 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:32:07,409 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:07,423 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:32:07,423 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:32:07,565 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:32:09,912 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:10,298 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:10,298 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:11,158 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:11,456 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:11,456 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:12,545 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:32:12,592 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:13,647 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:13,954 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:13,955 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:14,823 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:32:14,870 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:14,885 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:32:14,885 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:32:15,018 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:32:17,288 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:17,573 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:17,573 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:18,495 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:32:18,547 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:18,561 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:32:18,561 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:32:18,702 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:32:31,149 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:31,421 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:31,421 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:32,396 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:32:32,447 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:33,487 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:33,753 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:33,753 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:34,705 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:32:34,756 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:34,771 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:32:34,771 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:32:34,907 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:32:57,396 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:32:57,697 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:32:57,697 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:32:58,616 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:32:58,668 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:32:58,684 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:32:58,684 [INFO] [auto_reenrich] DAO debug — keys=['main', 'r2', 'status', 'metadata', 'logs', 'user_data'], status=<class 'dao.CloudflareDAOs'>, r2=<class 'dao.CloudflareDAOs'>
+2025-11-15 00:32:58,823 [INFO] [auto_reenrich] ⏸️ Enrichment already running for 58d0bd65d3f40b92 (short-8-duplicates) — skipping.
+2025-11-15 00:33:23,751 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:33:24,075 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:33:24,075 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:33:24,994 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:33:25,048 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:33:25,063 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:33:25,201 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:33:25,201 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:33:25,256 [INFO] [enrich:Thread-15 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:33:25,257 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:33:25,257 [INFO] [enrich:Thread-15 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:33:28,307 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:33:28,585 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:33:28,585 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:33:29,502 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:33:29,555 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:33:29,571 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:33:29,698 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:33:29,699 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:33:29,758 [INFO] [enrich:Thread-16 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:33:29,758 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:33:29,758 [INFO] [enrich:Thread-16 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:35:02,761 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:35:02,803 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:35:03,016 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:35:03,017 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:35:03,109 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:35:03,109 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:35:04,154 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:35:04,207 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:35:04,221 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:35:04,351 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:35:04,352 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:35:04,400 [INFO] [enrich:Thread-17 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:35:04,400 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:35:04,400 [INFO] [enrich:Thread-17 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:35:11,655 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:35:11,924 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:35:11,924 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:35:12,815 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:35:12,864 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:35:12,881 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:35:13,022 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:35:13,022 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:35:13,081 [INFO] [enrich:Thread-18 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:35:13,081 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:35:13,081 [INFO] [enrich:Thread-18 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:35:14,900 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:35:15,192 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:35:15,192 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:35:16,160 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:35:16,215 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:35:16,229 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:35:16,353 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:35:16,354 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:35:16,406 [INFO] [enrich:Thread-19 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:35:16,407 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:35:16,407 [INFO] [enrich:Thread-19 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:35:23,069 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:35:23,382 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:35:23,383 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:35:24,258 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:35:24,303 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:35:24,317 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:35:24,443 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:35:24,443 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:35:24,483 [INFO] [enrich:Thread-20 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:35:24,483 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:35:24,483 [INFO] [enrich:Thread-20 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:35:32,167 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:35:32,423 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:35:32,423 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:35:33,342 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:35:33,396 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:35:33,409 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:35:33,573 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:35:33,573 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:35:33,635 [INFO] [enrich:Thread-21 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:35:33,636 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:35:33,636 [INFO] [enrich:Thread-21 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:35:43,454 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:35:43,727 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:35:43,727 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:35:44,717 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:35:44,770 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:35:44,784 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:35:44,908 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:35:44,908 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:35:44,952 [INFO] [enrich:Thread-22 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:35:44,952 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:35:44,952 [INFO] [enrich:Thread-22 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:36:01,230 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:36:01,496 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:36:01,496 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:36:01,968 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:36:02,246 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:36:02,246 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:36:03,777 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:36:04,089 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:36:04,089 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:36:04,993 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:36:05,039 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:36:05,054 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:36:05,237 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:36:05,237 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:36:05,302 [INFO] [enrich:Thread-23 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:36:05,302 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:36:05,302 [INFO] [enrich:Thread-23 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:36:06,904 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:36:07,176 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:36:07,176 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:36:08,061 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:36:08,113 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:36:08,127 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:36:08,254 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:36:08,255 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:36:08,303 [INFO] [enrich:Thread-24 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:36:08,303 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:36:08,303 [INFO] [enrich:Thread-24 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:36:57,005 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:36:57,276 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:36:57,277 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:36:58,225 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:36:58,277 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:36:58,291 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:36:58,414 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:36:58,414 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:36:58,460 [INFO] [enrich:Thread-25 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:36:58,460 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:36:58,460 [INFO] [enrich:Thread-25 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:37:06,588 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:06,875 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:06,875 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:07,787 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:37:07,832 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:37:07,847 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:37:08,000 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:37:08,001 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:37:08,056 [INFO] [enrich:Thread-26 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:37:08,056 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:37:08,057 [INFO] [enrich:Thread-26 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:37:10,433 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:10,748 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:10,748 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:11,699 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:37:11,750 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:37:11,764 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:37:11,912 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:37:11,912 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:37:11,963 [INFO] [enrich:Thread-27 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:37:11,963 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:37:11,963 [INFO] [enrich:Thread-27 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:37:13,905 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:14,200 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:14,201 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:15,165 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:37:15,210 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:37:15,224 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:37:15,349 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:37:15,349 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:37:15,402 [INFO] [enrich:Thread-28 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:37:15,403 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:37:15,403 [INFO] [enrich:Thread-28 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:37:18,532 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:18,827 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:18,839 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:20,123 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:20,395 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:20,395 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:21,302 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:37:21,352 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:37:21,366 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:37:21,496 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:37:21,496 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:37:21,547 [INFO] [enrich:Thread-29 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:37:21,547 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:37:21,547 [INFO] [enrich:Thread-29 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:37:24,950 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:25,243 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:25,243 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:26,154 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:37:26,204 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:37:26,218 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:37:26,363 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:37:26,363 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:37:26,414 [INFO] [enrich:Thread-30 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:37:26,414 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:37:26,414 [INFO] [enrich:Thread-30 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:37:49,944 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:50,222 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:50,222 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:51,140 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:37:51,252 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:37:52,556 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:52,834 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:52,834 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:53,783 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:37:53,833 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:37:54,952 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:37:55,266 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:37:55,266 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:37:56,162 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:37:56,208 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:37:56,222 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:37:56,372 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:37:56,372 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:37:56,423 [INFO] [enrich:Thread-31 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:37:56,423 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:37:56,423 [INFO] [enrich:Thread-31 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:38:37,441 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:38:37,749 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:38:37,749 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:38:38,657 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:38:38,704 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:38:38,718 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:38:38,865 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:38:38,865 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:38:38,913 [INFO] [enrich:Thread-32 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:38:38,913 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:38:38,913 [INFO] [enrich:Thread-32 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:38:44,679 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:38:44,968 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:38:44,968 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:38:45,879 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:38:45,931 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:38:45,945 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:38:46,074 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:38:46,074 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:38:46,121 [INFO] [enrich:Thread-33 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:38:46,121 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:38:46,121 [INFO] [enrich:Thread-33 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:38:52,791 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:38:53,097 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:38:53,097 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:38:54,009 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:38:54,056 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:38:54,070 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:38:54,190 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:38:54,191 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:38:54,238 [INFO] [enrich:Thread-34 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:38:54,238 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:38:54,238 [INFO] [enrich:Thread-34 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:39:11,261 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:39:11,576 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:39:11,576 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:39:12,448 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:39:12,495 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:39:12,509 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:39:12,628 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:39:12,628 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:39:12,676 [INFO] [enrich:Thread-35 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:39:12,676 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:39:12,676 [INFO] [enrich:Thread-35 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:39:19,039 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:39:19,314 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:39:19,314 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:39:20,239 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:39:20,290 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:39:20,304 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:39:20,442 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:39:20,442 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:39:20,491 [INFO] [enrich:Thread-36 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:39:20,491 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:39:20,491 [INFO] [enrich:Thread-36 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:39:27,797 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:39:28,084 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:39:28,084 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:39:29,091 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:39:29,137 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:39:29,151 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:39:29,284 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:39:29,284 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:39:29,332 [INFO] [enrich:Thread-37 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:39:29,332 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:39:29,332 [INFO] [enrich:Thread-37 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:40:01,539 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:40:01,593 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:40:01,608 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:40:01,732 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:40:01,733 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=running, stale_d1=True, stale_hb=True)
+2025-11-15 00:40:01,733 [INFO] [TRACE log_dao] Thread-37 (background_enrich) called log() from _check_cancel → enrichment: Enrichment cancelled during initialization.
+2025-11-15 00:40:01,733 [INFO] [log_dao] [enrichment] Enrichment cancelled during initialization.
+2025-11-15 00:40:01,733 [INFO] [enrich:Thread-37 (background_enrich)] 🛑 Enrichment cancelled during initialization.
+2025-11-15 00:40:01,733 [INFO] [enrich:Thread-37 (background_enrich)] 🧱 Cancelled by user or dataset switch.
+2025-11-15 00:40:01,821 [INFO] [auto_reenrich] 🔒 Lock active for 58d0bd65d3f40b92 — skipping new enrichment.
+2025-11-15 00:40:01,933 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-8-duplicates_status.json
+2025-11-15 00:40:02,073 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-8-duplicates → breadth_first
+2025-11-15 00:40:02,073 [INFO] [TRACE log_dao] Thread-37 (background_enrich) called log() from background_enrich → enrichment: Cancelled mid-run by user.
+2025-11-15 00:40:02,073 [INFO] [log_dao] [enrichment] Cancelled mid-run by user.
+2025-11-15 00:40:02,073 [INFO] [enrich:Thread-37 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-15 00:40:02,074 [INFO] [thread_monitor] 30 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-15 00:40:02,074 [INFO] [TRACE log_dao] Thread-37 (background_enrich) called log() from background_enrich → thread: Thread finished for short-8-duplicates
+2025-11-15 00:40:02,074 [INFO] [log_dao] [thread] Thread finished for short-8-duplicates
+2025-11-15 00:40:02,074 [INFO] [enrich:Thread-37 (background_enrich)] 💤 Thread finished for short-8-duplicates
+2025-11-15 00:40:04,361 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2974: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-15 00:40:04,362 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2975: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-15 00:40:07,668 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:40:07,720 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:40:07,738 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:40:07,928 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:40:07,977 [INFO] [enrich:Thread-38 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:40:07,977 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:40:07,977 [INFO] [enrich:Thread-38 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:40:15,764 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:40:15,817 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:40:15,832 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:40:15,928 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:40:15,928 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:40:15,930 [INFO] [TRACE log_dao] Thread-38 (background_enrich) called log() from _check_cancel → enrichment: Enrichment cancelled during initialization.
+2025-11-15 00:40:15,930 [INFO] [log_dao] [enrichment] Enrichment cancelled during initialization.
+2025-11-15 00:40:15,930 [INFO] [enrich:Thread-38 (background_enrich)] 🛑 Enrichment cancelled during initialization.
+2025-11-15 00:40:15,930 [INFO] [enrich:Thread-38 (background_enrich)] 🧱 Cancelled by user or dataset switch.
+2025-11-15 00:40:15,973 [INFO] [auto_reenrich] 🔒 Lock active for 58d0bd65d3f40b92 — skipping new enrichment.
+2025-11-15 00:40:16,207 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-8-duplicates_status.json
+2025-11-15 00:40:16,367 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-8-duplicates → breadth_first
+2025-11-15 00:40:16,368 [INFO] [TRACE log_dao] Thread-38 (background_enrich) called log() from background_enrich → enrichment: Cancelled mid-run by user.
+2025-11-15 00:40:16,369 [INFO] [log_dao] [enrichment] Cancelled mid-run by user.
+2025-11-15 00:40:16,369 [INFO] [enrich:Thread-38 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-15 00:40:16,370 [INFO] [thread_monitor] 30 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-15 00:40:16,372 [INFO] [TRACE log_dao] Thread-38 (background_enrich) called log() from background_enrich → thread: Thread finished for short-8-duplicates
+2025-11-15 00:40:16,372 [INFO] [log_dao] [thread] Thread finished for short-8-duplicates
+2025-11-15 00:40:16,372 [INFO] [enrich:Thread-38 (background_enrich)] 💤 Thread finished for short-8-duplicates
+2025-11-15 00:40:21,217 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:40:21,270 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:40:21,285 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:40:21,419 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:40:21,470 [INFO] [enrich:Thread-39 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:40:21,470 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:40:21,471 [INFO] [enrich:Thread-39 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:40:40,485 [INFO] b'Stopping...'
+2025-11-15 00:40:52,311 [INFO] [logging] ✅ StreamToLogger attached
+2025-11-15 00:40:53,117 [INFO] [logging] ✅ StreamToLogger attached
+2025-11-15 00:40:53,528 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:40:53,581 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:40:54,847 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:40:54,903 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:40:55,731 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:40:56,065 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:40:56,065 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:40:56,065 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:40:56,214 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:40:56,277 [INFO] [enrich:Thread-1 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:40:56,278 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:40:56,278 [INFO] [enrich:Thread-1 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:45:43,195 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:45:43,249 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:45:43,264 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:45:43,372 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:45:43,372 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:45:43,416 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from _check_cancel → enrichment: Enrichment cancelled during initialization.
+2025-11-15 00:45:43,416 [INFO] [log_dao] [enrichment] Enrichment cancelled during initialization.
+2025-11-15 00:45:43,416 [INFO] [enrich:Thread-1 (background_enrich)] 🛑 Enrichment cancelled during initialization.
+2025-11-15 00:45:43,416 [INFO] [enrich:Thread-1 (background_enrich)] 🧱 Cancelled by user or dataset switch.
+2025-11-15 00:45:43,419 [INFO] [auto_reenrich] 🔒 Lock active for 58d0bd65d3f40b92 — skipping new enrichment.
+2025-11-15 00:45:43,665 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-8-duplicates_status.json
+2025-11-15 00:45:43,828 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-8-duplicates → breadth_first
+2025-11-15 00:45:43,829 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → enrichment: Cancelled mid-run by user.
+2025-11-15 00:45:43,829 [INFO] [log_dao] [enrichment] Cancelled mid-run by user.
+2025-11-15 00:45:43,829 [INFO] [enrich:Thread-1 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-15 00:45:43,830 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-15 00:45:43,830 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → thread: Thread finished for short-8-duplicates
+2025-11-15 00:45:43,830 [INFO] [log_dao] [thread] Thread finished for short-8-duplicates
+2025-11-15 00:45:43,831 [INFO] [enrich:Thread-1 (background_enrich)] 💤 Thread finished for short-8-duplicates
+2025-11-15 00:46:15,668 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:46:15,720 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:46:15,735 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:46:15,920 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:46:15,969 [INFO] [enrich:Thread-2 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:46:15,970 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:46:15,970 [INFO] [enrich:Thread-2 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:52:16,394 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:52:16,419 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:52:16,669 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:52:16,670 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:52:16,686 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:52:16,686 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:52:23,411 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:52:23,682 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:52:23,682 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:52:31,585 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:52:31,870 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:52:31,870 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:52:34,456 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:52:34,750 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:52:34,750 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:53:08,933 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:53:09,214 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:53:09,214 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:53:29,601 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:53:29,656 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:53:29,671 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:53:29,805 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:53:29,805 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:53:29,850 [INFO] [enrich:Thread-3 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:53:29,851 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:53:29,851 [INFO] [enrich:Thread-3 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:55:00,027 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:55:00,295 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:55:00,295 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:55:22,907 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:55:22,961 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:55:22,976 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:55:23,106 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:55:23,106 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:55:23,154 [INFO] [enrich:Thread-4 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:55:23,154 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:55:23,154 [INFO] [enrich:Thread-4 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 00:57:04,559 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 00:57:04,890 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 00:57:04,890 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 00:57:09,374 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 00:57:09,428 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 00:57:09,443 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 00:57:09,569 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 00:57:09,569 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 00:57:09,622 [INFO] [enrich:Thread-5 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 00:57:09,622 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 00:57:09,622 [INFO] [enrich:Thread-5 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:01:59,177 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:01:59,506 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:01:59,506 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:03:00,587 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:03:01,029 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:03:01,029 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:03:01,279 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:03:01,534 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:03:01,534 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:03:10,237 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:03:10,294 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:03:10,310 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:03:10,439 [INFO] [auto_reenrich] ⚠️ Thread alive but no heartbeat >5min (possible hang). Restarting.
+2025-11-15 01:03:10,440 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:03:10,492 [INFO] [enrich:Thread-6 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:03:10,493 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:03:10,493 [INFO] [enrich:Thread-6 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:04:05,657 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:04:05,925 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:04:05,925 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:04:06,867 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:04:06,912 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:04:06,926 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:04:07,069 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:04:07,069 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:04:07,119 [INFO] [enrich:Thread-7 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:04:07,120 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:04:07,120 [INFO] [enrich:Thread-7 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:04:26,393 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:04:26,639 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:04:26,640 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:04:27,565 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:04:27,618 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:04:27,632 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:04:27,762 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:04:27,762 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:04:27,812 [INFO] [enrich:Thread-8 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:04:27,812 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:04:27,812 [INFO] [enrich:Thread-8 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:04:44,204 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:04:44,473 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:04:44,473 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:04:45,388 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:04:45,495 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:04:46,748 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:04:47,075 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:04:47,087 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:04:48,289 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:04:48,627 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:04:48,627 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:04:49,550 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:04:49,599 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:04:49,613 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:04:49,752 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:04:49,753 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:04:49,800 [INFO] [enrich:Thread-9 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:04:49,800 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:04:49,800 [INFO] [enrich:Thread-9 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:04:52,721 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:04:52,977 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:04:52,977 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:04:53,895 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:04:53,942 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:04:54,966 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:04:55,275 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:04:55,275 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:04:56,188 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:04:56,236 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:04:56,250 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:04:56,381 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:04:56,381 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:04:56,429 [INFO] [enrich:Thread-10 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:04:56,429 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:04:56,429 [INFO] [enrich:Thread-10 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:04:59,360 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:04:59,635 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:04:59,635 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:05:00,575 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:05:00,628 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:05:00,642 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:05:00,790 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:05:00,790 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:05:00,847 [INFO] [enrich:Thread-11 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:05:00,847 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:05:00,847 [INFO] [enrich:Thread-11 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:05:10,436 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:05:10,719 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:05:10,719 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:05:11,578 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:05:11,624 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:05:11,638 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:05:11,763 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:05:11,763 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:05:11,812 [INFO] [enrich:Thread-12 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:05:11,813 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:05:11,813 [INFO] [enrich:Thread-12 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:05:13,433 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:05:13,750 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:05:13,751 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:05:14,699 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:05:14,746 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:05:14,761 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:05:14,891 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:05:14,891 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:05:14,944 [INFO] [enrich:Thread-13 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:05:14,945 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:05:14,945 [INFO] [enrich:Thread-13 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:05:18,211 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:05:18,484 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:05:18,484 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:05:19,468 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:05:19,524 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:05:19,538 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:05:19,675 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:05:19,675 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:05:19,725 [INFO] [enrich:Thread-14 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:05:19,725 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:05:19,726 [INFO] [enrich:Thread-14 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:05:33,505 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:05:33,772 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:05:33,773 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:05:34,716 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:05:34,768 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:05:34,781 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:05:34,925 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:05:34,925 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:05:35,000 [INFO] [enrich:Thread-15 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:05:35,001 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:05:35,001 [INFO] [enrich:Thread-15 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:05:40,742 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:05:40,987 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:05:40,988 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:05:41,925 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:05:41,978 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:05:41,992 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:05:42,110 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:05:42,110 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:05:42,154 [INFO] [enrich:Thread-16 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:05:42,154 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:05:42,154 [INFO] [enrich:Thread-16 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:05:47,224 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:05:47,473 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:05:47,474 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:05:48,385 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:05:48,437 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:05:48,451 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:05:48,589 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:05:48,590 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:05:48,636 [INFO] [enrich:Thread-17 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:05:48,636 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:05:48,636 [INFO] [enrich:Thread-17 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:05:59,843 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:06:00,218 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:06:00,218 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:06:01,115 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:06:01,165 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:06:01,178 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:06:01,317 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:06:01,317 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:06:01,364 [INFO] [enrich:Thread-18 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:06:01,364 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:06:01,364 [INFO] [enrich:Thread-18 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:06:09,682 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:06:09,956 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:06:09,956 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:06:10,822 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:06:10,875 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:06:10,889 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:06:11,022 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:06:11,023 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:06:11,071 [INFO] [enrich:Thread-19 (background_enrich)] Starting enrichment thread for short-8-duplicates
+2025-11-15 01:06:11,071 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:06:11,071 [INFO] [enrich:Thread-19 (background_enrich)] ⚠️ Enrichment already running for 58d0bd65d3f40b92 — cancelling previous thread.
+2025-11-15 01:06:23,975 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:06:24,030 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:06:24,045 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:06:24,157 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-15 01:06:39,221 [INFO] [auto_reenrich] 🚫 Lock still held after timeout — forcing release.
+2025-11-15 01:06:39,937 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:06:39,952 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:06:40,206 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:06:40,206 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:06:40,219 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:06:40,219 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:06:40,219 [INFO] [TRACE log_dao] Thread-19 (background_enrich) called log() from _check_cancel → enrichment: Enrichment cancelled during initialization.
+2025-11-15 01:06:40,220 [INFO] [log_dao] [enrichment] Enrichment cancelled during initialization.
+2025-11-15 01:06:40,220 [INFO] [enrich:Thread-19 (background_enrich)] 🛑 Enrichment cancelled during initialization.
+2025-11-15 01:06:40,220 [INFO] [enrich:Thread-19 (background_enrich)] 🧱 Cancelled by user or dataset switch.
+2025-11-15 01:06:40,487 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-8-duplicates_status.json
+2025-11-15 01:06:40,656 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-8-duplicates → breadth_first
+2025-11-15 01:06:40,657 [INFO] [TRACE log_dao] Thread-19 (background_enrich) called log() from background_enrich → enrichment: Cancelled mid-run by user.
+2025-11-15 01:06:40,657 [INFO] [log_dao] [enrichment] Cancelled mid-run by user.
+2025-11-15 01:06:40,657 [INFO] [enrich:Thread-19 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-15 01:06:40,657 [INFO] [thread_monitor] 18 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-15 01:06:40,657 [INFO] [TRACE log_dao] Thread-19 (background_enrich) called log() from background_enrich → thread: Thread finished for short-8-duplicates
+2025-11-15 01:06:40,657 [INFO] [log_dao] [thread] Thread finished for short-8-duplicates
+2025-11-15 01:06:40,657 [INFO] [enrich:Thread-19 (background_enrich)] 💤 Thread finished for short-8-duplicates
+2025-11-15 01:06:41,108 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:06:41,162 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:06:41,177 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:06:41,386 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:06:41,449 [ERROR] Exception in thread
+2025-11-15 01:06:41,449 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:06:41,449 [ERROR] Thread-20 (background_enrich)
+2025-11-15 01:06:41,449 [ERROR] :
+2025-11-15 01:06:41,449 [ERROR] Traceback (most recent call last):
+2025-11-15 01:06:41,449 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-11-15 01:06:41,454 [ERROR] self.run()
+2025-11-15 01:06:41,454 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-11-15 01:06:41,526 [ERROR] self._target(*self._args, **self._kwargs)
+2025-11-15 01:06:41,526 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1030, in background_enrich
+2025-11-15 01:06:41,537 [ERROR] from dao_selector import DAOS, get_log_dao, ensure_daos_initialized_for_thread
+2025-11-15 01:06:41,537 [ERROR] ImportError
+2025-11-15 01:06:41,537 [ERROR] :
+2025-11-15 01:06:41,537 [ERROR] cannot import name 'ensure_daos_initialized_for_thread' from 'dao_selector' (/Users/admin/Documents/GitHub/spotify_regifted_cn/dao_selector.py)
+2025-11-15 01:07:30,610 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:07:30,890 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:07:30,890 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:07:31,841 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:07:31,892 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:07:31,907 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:07:32,030 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:07:32,081 [ERROR] Exception in thread
+2025-11-15 01:07:32,081 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:07:32,081 [ERROR] Thread-21 (background_enrich)
+2025-11-15 01:07:32,081 [ERROR] :
+2025-11-15 01:07:32,081 [ERROR] Traceback (most recent call last):
+2025-11-15 01:07:32,081 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-11-15 01:07:32,084 [ERROR] self.run()
+2025-11-15 01:07:32,084 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-11-15 01:07:32,160 [ERROR] self._target(*self._args, **self._kwargs)
+2025-11-15 01:07:32,161 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1030, in background_enrich
+2025-11-15 01:07:32,168 [ERROR] from dao_selector import DAOS, get_log_dao, ensure_daos_initialized_for_thread
+2025-11-15 01:07:32,168 [ERROR] ImportError
+2025-11-15 01:07:32,168 [ERROR] :
+2025-11-15 01:07:32,168 [ERROR] cannot import name 'ensure_daos_initialized_for_thread' from 'dao_selector' (/Users/admin/Documents/GitHub/spotify_regifted_cn/dao_selector.py)
+2025-11-15 01:07:39,964 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:07:40,280 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:07:40,280 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:07:41,224 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:07:41,277 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:07:41,292 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:07:41,447 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:07:41,492 [ERROR] Exception in thread
+2025-11-15 01:07:41,492 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:07:41,492 [ERROR] Thread-22 (background_enrich)
+2025-11-15 01:07:41,495 [ERROR] :
+2025-11-15 01:07:41,495 [ERROR] Traceback (most recent call last):
+2025-11-15 01:07:41,496 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-11-15 01:07:41,571 [ERROR] self.run()
+2025-11-15 01:07:41,572 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-11-15 01:07:41,572 [ERROR] self._target(*self._args, **self._kwargs)
+2025-11-15 01:07:41,576 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1049, in background_enrich
+2025-11-15 01:07:41,577 [ERROR] from dao_selector import DAOS, get_log_dao, ensure_daos_initialized_for_thread
+2025-11-15 01:07:41,577 [ERROR] ImportError
+2025-11-15 01:07:41,577 [ERROR] :
+2025-11-15 01:07:41,577 [ERROR] cannot import name 'ensure_daos_initialized_for_thread' from 'dao_selector' (/Users/admin/Documents/GitHub/spotify_regifted_cn/dao_selector.py)
+2025-11-15 01:08:03,831 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:08:04,134 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:08:04,134 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:08:04,994 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:08:05,044 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:08:05,057 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:08:05,177 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:08:05,226 [INFO] [enrich:Thread-23 (background_enrich)] 🏁 Starting enrichment thread for short-8-duplicates
+2025-11-15 01:08:05,226 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:08:05,226 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 1/10)...
+2025-11-15 01:08:06,232 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 2/10)...
+2025-11-15 01:08:07,237 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 3/10)...
+2025-11-15 01:08:08,240 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 4/10)...
+2025-11-15 01:08:09,242 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 5/10)...
+2025-11-15 01:08:10,248 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 6/10)...
+2025-11-15 01:08:11,250 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 7/10)...
+2025-11-15 01:08:12,253 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 8/10)...
+2025-11-15 01:08:13,255 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 9/10)...
+2025-11-15 01:08:14,260 [INFO] [enrich:Thread-23 (background_enrich)] ⏳ Waiting for lock (attempt 10/10)...
+2025-11-15 01:08:15,265 [INFO] [enrich:Thread-23 (background_enrich)] 🚫 Could not acquire lock for 58d0bd65d3f40b92, aborting start.
+2025-11-15 01:10:43,258 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:10:43,309 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:10:43,323 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:10:43,431 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:10:43,476 [INFO] [auto_reenrich] 🔒 Lock active for 58d0bd65d3f40b92 — retrying...
+2025-11-15 01:10:53,515 [INFO] [auto_reenrich] 🚫 Still locked after retries — skipping new enrichment.
+2025-11-15 01:10:58,641 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2974: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-15 01:10:58,642 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2975: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-15 01:11:05,024 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:11:05,078 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:11:05,094 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:11:05,191 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:11:05,234 [INFO] [auto_reenrich] 🔒 Lock active for 58d0bd65d3f40b92 — retrying...
+2025-11-15 01:11:15,271 [INFO] [auto_reenrich] 🚫 Still locked after retries — skipping new enrichment.
+2025-11-15 01:12:48,632 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-15 01:12:48,923 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-15 01:12:48,924 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-15 01:12:49,829 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-8-duplicates_20251114-155719_history (25 columns)
+2025-11-15 01:12:49,875 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-15 01:12:49,889 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-8-duplicates
+2025-11-15 01:12:50,034 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-8-duplicates (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-15 01:12:50,090 [INFO] [enrich:Thread-24 (background_enrich)] 🏁 Starting enrichment thread for short-8-duplicates
+2025-11-15 01:12:50,090 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-8-duplicates
+2025-11-15 01:12:50,091 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 1/10)...
+2025-11-15 01:12:51,096 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 2/10)...
+2025-11-15 01:12:52,101 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 3/10)...
+2025-11-15 01:12:53,103 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 4/10)...
+2025-11-15 01:12:54,108 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 5/10)...
+2025-11-15 01:12:55,113 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 6/10)...
+2025-11-15 01:12:56,118 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 7/10)...
+2025-11-15 01:12:57,123 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 8/10)...
+2025-11-15 01:12:58,125 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 9/10)...
+2025-11-15 01:12:59,130 [INFO] [enrich:Thread-24 (background_enrich)] ⏳ Waiting for lock (attempt 10/10)...
+2025-11-15 01:13:00,136 [INFO] [enrich:Thread-24 (background_enrich)] 🚫 Could not acquire lock for 58d0bd65d3f40b92, aborting start.

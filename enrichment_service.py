@@ -568,7 +568,7 @@ def safe_process(func, retries: int = 3, backoff: int = 2, cancel_event: Optiona
             print(f"[Retry] {func.__name__} failed (attempt {attempt}/{retries}): {e} — retrying in {sleep_for:.1f}s")
             time.sleep(sleep_for)
 
-# --- Global per-user lock registry ---
+# ============ Threading Helpers ============
 ENRICH_LOCKS = {}
 ENRICH_LOCKS_LOCK = threading.Lock()
 
@@ -578,6 +578,32 @@ def get_user_lock(user_id: str):
         if user_id not in ENRICH_LOCKS:
             ENRICH_LOCKS[user_id] = threading.Lock()
         return ENRICH_LOCKS[user_id]
+
+def is_stale_status(status_obj, threshold_minutes=1):
+    """Return True if the dataset status hasn't been updated recently."""
+    try:
+        ts_str = status_obj.get("updated_at")
+        if not ts_str:
+            return True
+        ts = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        delta = datetime.datetime.now(datetime.timezone.utc) - ts
+        return delta.total_seconds() > threshold_minutes * 60
+    except Exception:
+        return True
+
+# global heartbeat tracking
+ENRICH_HEARTBEATS = {}
+ENRICH_HEARTBEATS_LOCK = threading.Lock()
+
+def update_heartbeat(user_id: str, dataset_label: str):
+    """Record a timestamp for the active enrichment thread."""
+    with ENRICH_HEARTBEATS_LOCK:
+        ENRICH_HEARTBEATS[(user_id, dataset_label)] = time.time()
+
+def get_last_heartbeat(user_id: str, dataset_label: str):
+    """Retrieve the last heartbeat timestamp."""
+    with ENRICH_HEARTBEATS_LOCK:
+        return ENRICH_HEARTBEATS.get((user_id, dataset_label))
 
 # ================== Service ==================
 class MetadataEnricher:
@@ -1391,6 +1417,7 @@ class MetadataEnricher:
         )
         self.buf_artists.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
         self.seen_artists.update(names)
+        update_heartbeat(self.user_id, self.label)
 
     def fetch_and_save_albums_by_pairs(
         self,
@@ -1482,6 +1509,7 @@ class MetadataEnricher:
                 self.buf_albums.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
 
         self.seen_albums.update(pairs)
+        update_heartbeat(self.user_id, self.label)
 
     def fetch_and_save_tracks(
         self,
@@ -1542,6 +1570,7 @@ class MetadataEnricher:
 
                 self.buf_tracks.extend(df_out.to_dict(orient="records"))
 
+            update_heartbeat(self.user_id, self.label)
             spin_sleep(0.1)  # polite pause
 
     def fetch_and_save_shows(
@@ -1588,6 +1617,7 @@ class MetadataEnricher:
         self.log(f"[fetch_and_save_shows] Saving {len(out)} shows to buffer")
         self.buf_shows.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
         self.seen_shows.update(show_names)
+        update_heartbeat(self.user_id, self.label)
 
     def fetch_and_save_audiobooks(
         self,
@@ -1635,6 +1665,7 @@ class MetadataEnricher:
         self.log(f"[fetch_and_save_audiobooks] Saving {len(out)} audiobooks to buffer")
         self.buf_audiobooks.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
         self.seen_audiobooks.update(titles)
+        update_heartbeat(self.user_id, self.label)
 
     # --- phases called by run_all() ---
     def run_phase_overall_first50(self, top_art: pd.DataFrame, top_shows: pd.DataFrame, top_books: pd.DataFrame):
@@ -1659,6 +1690,7 @@ class MetadataEnricher:
                 )
                 self._done_batches += 1
                 self._maybe_autosave(self._done_batches, self._total_batches)
+                update_heartbeat(self.user_id, self.label)
 
         # ---------- Shows ----------
         if len(top_shows):
@@ -1675,6 +1707,7 @@ class MetadataEnricher:
                 )
                 self._done_batches += 1
                 self._maybe_autosave(self._done_batches, self._total_batches)
+                update_heartbeat(self.user_id, self.label)
 
         # ---------- Audiobooks ----------
         if len(top_books):
@@ -1691,6 +1724,7 @@ class MetadataEnricher:
                 )
                 self._done_batches += 1
                 self._maybe_autosave(self._done_batches, self._total_batches)
+                update_heartbeat(self.user_id, self.label)
 
     def run_phase_per_year(self, per_art: pd.DataFrame, per_show: pd.DataFrame, per_book: pd.DataFrame):
         """
@@ -1721,6 +1755,7 @@ class MetadataEnricher:
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
                     self._maybe_flush_discogs(self._done_batches)
+                    update_heartbeat(self.user_id, self.label)
                 batch = []
         if batch:
             before = len(batch)
@@ -1734,6 +1769,7 @@ class MetadataEnricher:
                 self._done_batches += 1
                 self._maybe_autosave(self._done_batches, self._total_batches)
                 self._maybe_flush_discogs(self._done_batches)
+                update_heartbeat(self.user_id, self.label)
 
         # ---------- Shows ----------
         batch, fired = [], 0
@@ -1754,6 +1790,7 @@ class MetadataEnricher:
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
                     self._maybe_flush_discogs(self._done_batches)
+                    update_heartbeat(self.user_id, self.label)
                 batch = []
         if batch:
             before = len(batch)
@@ -1767,6 +1804,7 @@ class MetadataEnricher:
                 self._done_batches += 1
                 self._maybe_autosave(self._done_batches, self._total_batches)
                 self._maybe_flush_discogs(self._done_batches)
+                update_heartbeat(self.user_id, self.label)
 
         # ---------- Audiobooks ----------
         batch, fired = [], 0
@@ -1793,7 +1831,7 @@ class MetadataEnricher:
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
                     self._maybe_flush_discogs(self._done_batches)
-
+                    update_heartbeat(self.user_id, self.label)
                 batch = []
         if batch:
             before = len(batch)
@@ -1807,6 +1845,7 @@ class MetadataEnricher:
                 self._done_batches += 1
                 self._maybe_autosave(self._done_batches, self._total_batches)
                 self._maybe_flush_discogs(self._done_batches)
+                update_heartbeat(self.user_id, self.label)
 
     def run_phase_per_artist_albums_of_year(self):
         """
@@ -1897,6 +1936,7 @@ class MetadataEnricher:
             )
             self._done_batches += 1
             self._maybe_autosave(self._done_batches, self._total_batches)
+            update_heartbeat(self.user_id, self.label)
 
     def run_phase_per_album_all_albums_for_top_artists(self):
         """
@@ -1945,6 +1985,7 @@ class MetadataEnricher:
             )
             self._done_batches += 1
             self._maybe_autosave(self._done_batches, self._total_batches)
+            update_heartbeat(self.user_id, self.label)
 
     def run_phase_top_tracks_per_year(self):
         """
@@ -1999,6 +2040,7 @@ class MetadataEnricher:
                                 detail=f"Top tracks per year • {y} • +{len(todo)}")
             self._done_batches += 1
             self._maybe_autosave(self._done_batches, self._total_batches)
+            update_heartbeat(self.user_id, self.label)
 
         self.log("[top_tracks_per_year] Done")
 
@@ -2082,6 +2124,7 @@ class MetadataEnricher:
             )
             self._done_batches += 1
             self._maybe_autosave(self._done_batches, self._total_batches)
+            update_heartbeat(self.user_id, self.label)
 
         self.log("[top_tracks_per_month] Done.")
 
@@ -2188,6 +2231,7 @@ class MetadataEnricher:
 
         self._done_batches += 1
         self._maybe_autosave(self._done_batches, self._total_batches)
+        update_heartbeat(self.user_id, self.label)
 
     def run_phase_chart_scorer(self):
         """
@@ -2266,6 +2310,7 @@ class MetadataEnricher:
 
         self._done_batches += 1
         self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
+        update_heartbeat(self.user_id, self.label)
 
     def run_phase_breadth_first_years_remaining(self, all_art: pd.DataFrame, all_show: pd.DataFrame, all_book: pd.DataFrame):
         """
@@ -2351,6 +2396,7 @@ class MetadataEnricher:
                     self._maybe_autosave(self._done_batches, self._total_batches)
                     # Sanitize before updating seen set
                     self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"}
+                update_heartbeat(self.user_id, self.label)
 
             # --- Shows ---
             for y in years_show:
@@ -2374,6 +2420,7 @@ class MetadataEnricher:
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
                     self.seen_shows |= {s.strip().lower() for s in batch if s.strip()}
+                update_heartbeat(self.user_id, self.label)
 
             # --- Audiobooks ---
             for y in years_book:
@@ -2397,8 +2444,12 @@ class MetadataEnricher:
                     self._done_batches += 1
                     self._maybe_autosave(self._done_batches, self._total_batches)
                     self.seen_audiobooks |= {t.strip().lower() for t in batch if t.strip()}
+                update_heartbeat(self.user_id, self.label)
+
+            update_heartbeat(self.user_id, self.label)
 
         self.log(f"[breadth_first] Completed diagnostic phase.")
+        update_heartbeat(self.user_id, self.label)
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """Full enrichment pipeline with detailed debug logging, flushing after each phase."""
@@ -2462,7 +2513,6 @@ class MetadataEnricher:
             self.log("[run_all] Starting phase: overall")
             before = self._done_batches
             self.run_phase_overall_first50(top_art, top_shows, top_books)
-
             # --- Phase-end Discogs synchronization ---
             self.log("[overall] Checking for pending Discogs results before phase end…")
             self._flush_discogs_results(timeout=15)
@@ -2470,8 +2520,8 @@ class MetadataEnricher:
                 self.log(f"[overall] ⚠️ {len(self._pending_discogs_artists)} Discogs jobs still pending at phase end.")
             else:
                 self.log("[overall] ✅ No pending Discogs jobs.")
-
             _end_phase("overall", before)
+            update_heartbeat(self.user_id, self.label)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "per_year"
@@ -2479,6 +2529,7 @@ class MetadataEnricher:
             # before = self._done_batches
             # self.run_phase_per_year(per_art, per_show, per_book)
             # _end_phase("per_year", before)
+            update_heartbeat(self.user_id, self.label)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "albums_of_year"
@@ -2486,6 +2537,7 @@ class MetadataEnricher:
             # before = self._done_batches
             # self.run_phase_per_artist_albums_of_year()
             # _end_phase("albums_of_year", before)
+            update_heartbeat(self.user_id, self.label)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "per_album"
@@ -2493,6 +2545,7 @@ class MetadataEnricher:
             # before = self._done_batches
             # self.run_phase_per_album_all_albums_for_top_artists()
             # _end_phase("per_album", before)
+            update_heartbeat(self.user_id, self.label)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "top_tracks_per_month"
@@ -2500,6 +2553,7 @@ class MetadataEnricher:
             # before = self._done_batches
             # self.run_phase_top_tracks_per_month()
             # _end_phase("top_tracks_per_month", before)
+            update_heartbeat(self.user_id, self.label)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "popularity_timeseries"
@@ -2507,6 +2561,7 @@ class MetadataEnricher:
             # before = self._done_batches
             # self.run_phase_popularity_timeseries()
             # _end_phase("popularity_timeseries", before)
+            update_heartbeat(self.user_id, self.label)
 
             # self._check_cancel(self.cancel_event)
             # self.current_phase = "chart_scorer"
@@ -2514,22 +2569,22 @@ class MetadataEnricher:
             # before = self._done_batches
             # self.run_phase_chart_scorer()
             # _end_phase("chart_scorer", before)
+            update_heartbeat(self.user_id, self.label)
 
             self._check_cancel(self.cancel_event)
             self.current_phase = "breadth_first"
             self.log("[run_all] Starting phase: breadth_first")
             before = self._done_batches
             self.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
-
-                        # --- Phase-end Discogs synchronization ---
+            # --- Phase-end Discogs synchronization ---
             self.log("[overall] Checking for pending Discogs results before phase end…")
             self._flush_discogs_results(timeout=15)
             if getattr(self, "_pending_discogs_artists", None):
                 self.log(f"[overall] ⚠️ {len(self._pending_discogs_artists)} Discogs jobs still pending at phase end.")
             else:
                 self.log("[overall] ✅ No pending Discogs jobs.")
-
             _end_phase("breadth_first", before)
+            update_heartbeat(self.user_id, self.label)
 
             # Final flush
             self._check_cancel(self.cancel_event)
@@ -2545,6 +2600,7 @@ class MetadataEnricher:
                 detail=f"✅ Enrichment completed • {added_total} new batches"
             )
             self.log(f"[run_all] Enrichment finished OK — {added_total} new batches enriched")
+            update_heartbeat(self.user_id, self.label)
 
         except CancelledError:
             self.log("[run_all] CancelledError caught, flushing partial results")
@@ -3338,7 +3394,6 @@ class MetadataEnricher:
             detail=f"✅ Enrichment resumed successfully from '{phase_name}' and completed",
         )
         self.log(f"[resume_from_phase] Completed resumed enrichment from '{phase_name}'")
-
 
 # -------------------- Discogs Pool Party --------------------
 DISCOGS_KEY = st.secrets["discogs"]["key"]

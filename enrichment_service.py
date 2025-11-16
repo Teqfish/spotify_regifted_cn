@@ -573,12 +573,20 @@ ENRICH_LOCKS = {}
 ENRICH_LOCKS_LOCK = threading.Lock()
 
 def get_user_lock(user_id: str):
-    """Get or create a per-user lock to ensure only one enrichment thread runs per user."""
+    """Get or create a per-user lock with timestamp metadata."""
     with ENRICH_LOCKS_LOCK:
-        if user_id not in ENRICH_LOCKS:
-            ENRICH_LOCKS[user_id] = threading.Lock()
-        return ENRICH_LOCKS[user_id]
+        entry = ENRICH_LOCKS.get(user_id)
+        if entry is None:
+            entry = {"lock": threading.Lock(), "last_acquired": None}
+            ENRICH_LOCKS[user_id] = entry
+        return entry["lock"]
 
+def mark_lock_acquired(user_id: str):
+    """Record timestamp of when the user lock was acquired."""
+    with ENRICH_LOCKS_LOCK:
+        if user_id in ENRICH_LOCKS:
+            ENRICH_LOCKS[user_id]["last_acquired"] = time.time()
+            
 def is_stale_status(status_obj, threshold_minutes=1):
     """Return True if the dataset status hasn't been updated recently."""
     try:
@@ -590,6 +598,21 @@ def is_stale_status(status_obj, threshold_minutes=1):
         return delta.total_seconds() > threshold_minutes * 60
     except Exception:
         return True
+
+def clear_stale_locks(max_age_minutes: int = 10):
+    """Force release locks older than max_age_minutes."""
+    now = time.time()
+    with ENRICH_LOCKS_LOCK:
+        for uid, entry in list(ENRICH_LOCKS.items()):
+            lock = entry.get("lock")
+            ts = entry.get("last_acquired")
+            if ts and (now - ts) > max_age_minutes * 60:
+                if lock.locked():
+                    try:
+                        lock.release()
+                        print(f"[startup] 🧹 Released stale lock for {uid}")
+                    except Exception as e:
+                        print(f"[startup] ⚠️ Could not release lock for {uid}: {e}")
 
 # global heartbeat tracking
 ENRICH_HEARTBEATS = {}

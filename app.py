@@ -37,11 +37,13 @@ from typing import Optional
 import zipfile
 
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
-from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
+from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks
 from chart_scorer import parse_label_ts_from_table_name
 
 # -------------------------- CONFIG / CLIENTS -------------------------------- #
 st.set_page_config(page_title="Regifted", page_icon="./media/assets/icon_spotgreen.svg", layout="wide", initial_sidebar_state="expanded")
+
+clear_stale_locks(max_age_minutes=10)
 
 SPOTIFY_ID = st.secrets["spotify"]["client_id"]
 SPOTIFY_SECRET = st.secrets["spotify"]["client_secret"]
@@ -585,6 +587,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
     Checks D1/R2 consistency and heartbeats to detect stale enrichments.
     Cancels and restarts enrichment threads that appear hung (>5min no heartbeat).
     Ensures only one enrichment thread per user is ever active.
+    Auto-releases stale locks left behind by crashed threads.
     """
     import threading, time, datetime
     import streamlit as st
@@ -600,7 +603,9 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         d1_status = status_dao.read_status(user_id, dataset_label) or {}
         r2_status = metadata_dao.read_status(user_id, dataset_label) or {}
 
-        def status_label(s): return (s or {}).get("status", "").lower()
+        def status_label(s):
+            return (s or {}).get("status", "").lower()
+
         d1_state, r2_state = status_label(d1_status), status_label(r2_status)
 
         reg = st.session_state.get("_enrichment_registry", {})
@@ -608,46 +613,56 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         active_label = reg.get("dataset_label")
         cancel_event = reg.get("cancel_event")
 
-        # --- Check heartbeat and status freshness ---
+        # --- Heartbeat + staleness checks ---
         stale_d1 = is_stale_status(d1_status, threshold_minutes=5)
         last_hb = get_last_heartbeat(user_id, dataset_label)
         now = time.time()
         stale_hb = (last_hb is None) or ((now - last_hb) > 300)
+        hb_age = int(now - last_hb) if last_hb else "?"
 
-        # --- Handle stale or hanging threads ---
+        user_lock = get_user_lock(user_id)
+
+        # --- If lock is held but no live thread, assume stale ---
+        if (not active_thread or not active_thread.is_alive()) and user_lock.locked():
+            print(f"[auto_reenrich] 🧹 Found stale lock for {user_id} — no active thread. Forcing release.")
+            try:
+                user_lock.release()
+            except Exception as e:
+                print(f"[auto_reenrich] ⚠️ Failed to release stale lock: {e}")
+
+        # --- Handle active but stale threads ---
         if active_thread and active_thread.is_alive():
             if stale_d1 or stale_hb:
                 print(f"[auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.")
                 if cancel_event:
                     cancel_event.set()
 
-                # Attempt graceful shutdown and lock release
-                try:
-                    user_lock = get_user_lock(user_id)
-                    for _ in range(15):  # wait up to ~15s for lock release
-                        if not user_lock.locked():
-                            break
-                        time.sleep(1)
-                    else:
-                        print(f"[auto_reenrich] 🚫 Lock still held after timeout — forcing release.")
+                # Wait briefly for lock to release
+                for i in range(15):
+                    if not user_lock.locked():
+                        break
+                    print(f"[auto_reenrich] ⏳ Waiting for lock release ({i+1}/15)...")
+                    time.sleep(1)
+                else:
+                    print(f"[auto_reenrich] 🚫 Lock still held after timeout — forcing release.")
+                    try:
                         user_lock.release()
-                except Exception as e:
-                    print(f"[auto_reenrich] ⚠️ Error while releasing lock: {e}")
+                    except Exception as e:
+                        print(f"[auto_reenrich] ⚠️ Error while releasing lock: {e}")
 
                 st.session_state["_enrichment_registry"] = {}
             else:
-                age = int(now - last_hb) if last_hb else "?"
-                print(f"[auto_reenrich] ❤️ Heartbeat OK (last={age}s ago). Skipping restart.")
+                print(f"[auto_reenrich] ❤️ Heartbeat OK (last={hb_age}s ago). Skipping restart.")
                 return "running"
 
-        # --- Refetch registry after possible cleanup ---
+        # --- Refresh registry post-cleanup ---
         reg = st.session_state.get("_enrichment_registry", {})
         active_thread = reg.get("thread")
         if active_thread and active_thread.is_alive():
-            print(f"[auto_reenrich] ⏸️ Active thread still alive post-cleanup — skipping restart.")
+            print(f"[auto_reenrich] ⏸️ Active thread still alive after cleanup — skipping restart.")
             return "running"
 
-        # --- Determine if enrichment should restart ---
+        # --- Decide if restart is needed ---
         should_restart = (
             d1_state not in ("complete", "running") or
             r2_state not in ("complete", "running") or
@@ -659,23 +674,25 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                   f"(D1={d1_state}, R2={r2_state}, stale_d1={stale_d1}, stale_hb={stale_hb})")
 
             user_data_dao = DAOS.get("user_data")
-            cleaned_df = user_data_dao.safe_download_csv(f"cleaned/{dataset_label}.csv")
+            cleaned_df = user_data_dao.safe_download_csv(f"userdata/{dataset_label}.csv")
 
             cancel_event = threading.Event()
+
             user_lock = get_user_lock(user_id)
 
-            # --- Try acquiring lock with retries ---
-            if not user_lock.acquire(blocking=False):
-                print(f"[auto_reenrich] 🔒 Lock active for {user_id} — retrying...")
-                for _ in range(10):
-                    time.sleep(1)
-                    if user_lock.acquire(blocking=False):
-                        break
-                else:
-                    print(f"[auto_reenrich] 🚫 Still locked after retries — skipping new enrichment.")
-                    return "locked"
+            # Try to acquire lock with retries and timestamp
+            for attempt in range(10):
+                if user_lock.acquire(blocking=False):
+                    from enrichment_service import mark_lock_acquired
+                    mark_lock_acquired(user_id)
+                    break
+                print(f"[auto_reenrich] 🔒 Lock active for {user_id} — waiting ({attempt+1}/10)...")
+                time.sleep(1)
+            else:
+                print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping new enrichment.")
+                return "locked"
 
-            # --- Start enrichment thread ---
+            # --- Launch new enrichment thread ---
             enrichment_thread = threading.Thread(
                 target=background_enrich,
                 kwargs=dict(
@@ -689,7 +706,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             )
             enrichment_thread.start()
 
-            # --- Register in session_state ---
+            # --- Register thread ---
             st.session_state["_enrichment_registry"] = {
                 "thread": enrichment_thread,
                 "cancel_event": cancel_event,
@@ -700,9 +717,8 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             print(f"[auto_reenrich] 🚀 Started enrichment thread for {dataset_label}")
             return "restarted"
 
-        else:
-            print(f"[auto_reenrich] ✅ Enrichment verified as complete for {dataset_label}")
-            return "ok"
+        print(f"[auto_reenrich] ✅ Enrichment verified as complete for {dataset_label}")
+        return "ok"
 
     except Exception as e:
         print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
@@ -1045,7 +1061,7 @@ def background_enrich(
     """
 
     import traceback, time, threading, streamlit as st
-    from enrichment_service import get_user_lock, update_heartbeat
+    from enrichment_service import get_user_lock, mark_lock_acquired, update_heartbeat
     from dao_selector import DAOS, get_log_dao
 
     thread_name = threading.current_thread().name
@@ -1053,16 +1069,8 @@ def background_enrich(
 
     # --- Acquire per-user lock with retries ---
     user_lock = get_user_lock(user_id)
-    for attempt in range(10):
-        if user_lock.acquire(blocking=False):
-            break
-        print(f"[enrich:{thread_name}] ⏳ Waiting for lock (attempt {attempt+1}/10)...")
-        time.sleep(1)
-    else:
-        print(f"[enrich:{thread_name}] 🚫 Could not acquire lock for {user_id}, aborting start.")
-        return
-
-    print(f"[enrich:{thread_name}] 🔒 Acquired user lock for {user_id}")
+    mark_lock_acquired(user_id)
+    print(f"[enrich:{thread_name}] 🔒 Proceeding with enrichment under lock for {user_id}")
 
     try:
         # ✅ Ensure DAOs initialized inside this thread

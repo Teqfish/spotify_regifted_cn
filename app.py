@@ -582,7 +582,7 @@ def ensure_daos_initialized_for_thread():
     except Exception as e:
         print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
 
-def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao):
+def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao, table_name: Optional[str] = None):
     """
     Checks D1/R2 consistency and heartbeats to detect stale enrichments.
     Handles staged enrichment:
@@ -668,13 +668,13 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         # --- Branch: resume breadth-first only ---
         if d1_state == "standard_done" or r2_state == "standard_done":
             print(f"[auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for {dataset_label}")
-            start_breadth_first_only(user_id, dataset_label, log_dao)
+            start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
             return "resumed_breadth_first"
 
         # --- Branch: breadth_error — restart breadth-first phase only ---
         if d1_state == "breadth_error" or r2_state == "breadth_error":
             print(f"[auto_reenrich] 🌀 Breadth-first error detected — restarting breadth-only for {dataset_label}")
-            start_breadth_first_only(user_id, dataset_label, log_dao)
+            start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
             return "restarted_breadth_error"
 
         # --- Branch: breadth_running — just monitor (don’t restart) ---
@@ -1272,11 +1272,19 @@ def background_enrich(
             status_info = status_dao.read_status(user_id, dataset_label) or {}
             if status_info.get("status") == "standard_done":
                 print(f"[enrich:{thread_name}] 🌐 Standard enrichment done — triggering breadth-first auto-check.")
-                # Import lazily to avoid circular reference
+                # Lazy import to avoid circular reference
+                import threading
                 from app import _auto_check_and_reenrich_if_needed
+                from dao_selector import get_log_dao
+
+                log_dao = get_log_dao()
+                table_name = getattr(enricher, "table_name", None) or getattr(enricher, "input_table_name", None)
+
+                # Spawn auto-check thread to handle breadth restart
                 threading.Thread(
                     target=_auto_check_and_reenrich_if_needed,
                     args=(user_id, dataset_label, log_dao),
+                    kwargs=dict(table_name=table_name),
                     daemon=True,
                 ).start()
         except Exception as e:
@@ -1290,30 +1298,63 @@ def background_enrich(
             print(f"[enrich:{thread_name}] ⚠️ log_dao thread log failed: {e}")
         print(f"[enrich:{thread_name}] 💤 Thread finished for {dataset_label}")
 
-def start_breadth_first_only(user_id: str, dataset_label: str, log_dao):
+def start_breadth_first_only(user_id: str, dataset_label: str, log_dao, table_name: Optional[str] = None):
     """
     Launches a lightweight enrichment thread that runs only the breadth-first phase.
     Reconstructs minimal environment (masters, seen sets, and DAOs) and
     resumes enrichment from the breadth-first stage.
+    Supports explicit table_name (userdata/{user_id}_{dataset_label}_{ts}_history.csv)
+    and pattern-based discovery fallback.
     """
-    import threading
+    import threading, fnmatch
     from dao_selector import DAOS
     from enrichment_service import MetadataEnricher, update_heartbeat, get_user_lock, mark_lock_acquired
 
     print(f"[breadth_restart] 🚀 Starting breadth-first-only enrichment for {dataset_label}")
 
     # --- Load DAOs ---
-    daos = DAOS
-    user_data_dao = daos.get("user_data")
-    metadata_dao = daos.get("r2")
-    status_dao = daos.get("status")
+    user_data_dao = DAOS.get("user_data")
+    metadata_dao = DAOS.get("r2")
+    status_dao = DAOS.get("status")
 
-    # --- Load the latest cleaned dataset ---
-    cleaned_df = user_data_dao.safe_download_csv(f"userdata/{dataset_label}.csv")
+    # --- Locate cleaned dataset ---
+    cleaned_df = None
+    candidate_key = None
+
+    if table_name:
+        # Use explicit table name if provided
+        candidate_key = f"userdata/{table_name}.csv" if not table_name.startswith("userdata/") else table_name
+        try:
+            cleaned_df = user_data_dao.safe_download_csv(candidate_key)
+            if cleaned_df is not None and not cleaned_df.empty:
+                print(f"[breadth_restart] ✅ Loaded cleaned dataset using explicit table_name: {candidate_key}")
+        except Exception as e:
+            print(f"[breadth_restart] ⚠️ Failed to load dataset from explicit path {candidate_key}: {e}")
+
+    # --- Fallback: pattern-based lookup ---
     if cleaned_df is None or cleaned_df.empty:
-        print(f"[breadth_restart] ❌ Could not load cleaned dataset for {dataset_label}")
+        try:
+            prefix = "userdata/"
+            pattern = f"{user_id}_{dataset_label}_*_history.csv"
+            all_files = user_data_dao.list_files(prefix=prefix)
+            matches = sorted(
+                [f for f in all_files if fnmatch.fnmatch(f.split(prefix)[-1], pattern)],
+                reverse=True
+            )
+            if matches:
+                candidate_key = f"{prefix}{matches[0]}"
+                cleaned_df = user_data_dao.safe_download_csv(candidate_key)
+                print(f"[breadth_restart] ✅ Auto-located most recent dataset: {candidate_key} ({len(cleaned_df)} rows)")
+            else:
+                print(f"[breadth_restart] ❌ No matching dataset found for pattern {pattern}")
+        except Exception as e:
+            print(f"[breadth_restart] ⚠️ Error searching for dataset pattern: {e}")
+
+    if cleaned_df is None or cleaned_df.empty:
+        print(f"[breadth_restart] ❌ Could not locate a valid cleaned dataset for {dataset_label}")
         return
 
+    # --- Thread + lock setup ---
     cancel_event = threading.Event()
     user_lock = get_user_lock(user_id)
     mark_lock_acquired(user_id)
@@ -1333,21 +1374,23 @@ def start_breadth_first_only(user_id: str, dataset_label: str, log_dao):
                 log_dao=log_dao,
             )
 
-            # --- Load master tables ---
+            # ✅ attach cancel_event for internal consistency
+            enricher.cancel_event = cancel_event
+
+            # --- Prepare environment ---
             enricher._load_master("artists")
             enricher._load_master("albums")
             enricher._load_master("tracks")
 
-            # --- Update status and heartbeat ---
             status_dao.set_breadth_running(user_id, dataset_label)
             update_heartbeat(user_id, dataset_label)
 
-            # --- Build listening summaries for breadth-first ---
+            # --- Build per-year summaries ---
             try:
                 print(f"[breadth_restart] 🧮 Building per-year listening summaries using all_listens()")
                 all_art, all_show, all_book = enricher.all_listens()
             except Exception as e:
-                print(f"[breadth_restart] ⚠️ all_listens() failed ({e}) — falling back to raw category filtering.")
+                print(f"[breadth_restart] ⚠️ all_listens() failed ({e}) — falling back to category filter.")
                 all_art = enricher.df[enricher.df["category"] == "music"].copy()
                 all_show = enricher.df[enricher.df["category"] == "show"].copy()
                 all_book = enricher.df[enricher.df["category"] == "audiobook"].copy()
@@ -1355,19 +1398,14 @@ def start_breadth_first_only(user_id: str, dataset_label: str, log_dao):
             # --- Run breadth-first enrichment ---
             enricher.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
 
-            # --- Final flush and completion ---
-            try:
-                enricher.flush_all()
-                print(f"[breadth_restart] 💾 Flushed final breadth-first results.")
-            except Exception as e:
-                print(f"[breadth_restart] ⚠️ flush_all() failed after breadth-first: {e}")
-
+            # --- Finalize ---
+            enricher.flush_all()
             status_dao.finish_full_status(
                 user_id,
                 dataset_label,
-                detail="✅ Full enrichment completed (breadth-first done)"
+                detail=f"✅ Full enrichment completed (breadth-first done, source={candidate_key})"
             )
-            print(f"[breadth_restart] ✅ Breadth-first enrichment completed for {dataset_label}")
+            print(f"[breadth_restart] ✅ Breadth-first enrichment completed successfully for {dataset_label}")
 
         except Exception as e:
             print(f"[breadth_restart] ❌ Error during breadth-first: {e}")
@@ -1376,7 +1414,6 @@ def start_breadth_first_only(user_id: str, dataset_label: str, log_dao):
                 dataset_label,
                 detail=f"❌ Breadth-first enrichment failed: {e}"
             )
-
         finally:
             try:
                 if user_lock.locked():
@@ -1384,11 +1421,8 @@ def start_breadth_first_only(user_id: str, dataset_label: str, log_dao):
                     print(f"[breadth_restart] 🔓 Released user lock for {user_id}")
             except Exception as e:
                 print(f"[breadth_restart] ⚠️ Failed to release user lock: {e}")
-
             cancel_event.set()
-            print(f"[breadth_restart] 💤 Breadth-first thread finished for {dataset_label}")
 
-    # --- Start background thread ---
     threading.Thread(target=_run_breadth, daemon=True).start()
 
 def spawn_enrichment_thread(user_id, label, cleaned_df, log_dao=None, cancel_event=None):
@@ -1721,8 +1755,14 @@ if page == "Home":
         st.session_state.last_table_name = selected_table
 
         # --- Auto check enrichment completion & rerun if needed ---
+        from dao_selector import get_log_dao
         log_dao = get_log_dao()
-        _auto_check_and_reenrich_if_needed(user_id, selected_label.strip(), log_dao)
+        _auto_check_and_reenrich_if_needed(
+            user_id,
+            selected_label.strip(),
+            log_dao,
+            table_name=selected_table,
+        )
 
         total_hours = (
             df["minutes_played"].sum() / 60.0 if "minutes_played" in df.columns else 0.0
@@ -1792,7 +1832,12 @@ if page == "Home":
                         from dao_selector import get_log_dao
 
                         log_dao = get_log_dao()
-                        _auto_check_and_reenrich_if_needed(user_id, dataset_label.strip(), log_dao)
+                        _auto_check_and_reenrich_if_needed(
+                            user_id,
+                            dataset_label.strip(),
+                            log_dao,
+                            table_name=table_name,
+                        )
 
                         # # Trigger enrichment autostart
                         # _clear_autostart_if_new_label(dataset_label.strip())

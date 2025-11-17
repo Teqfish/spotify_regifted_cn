@@ -170155,3 +170155,417 @@ requests.exceptions.HTTPError: 503 Server Error: Service Unavailable for url: ht
 2025-11-17 21:09:20,945 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
 2025-11-17 21:09:20,946 [INFO] [breadth_restart] 🚀 Starting breadth-first-only enrichment for short-status-1
 2025-11-17 21:09:21,010 [INFO] [breadth_restart] ❌ Could not load cleaned dataset for short-status-1
+2025-11-17 21:29:28,676 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:29:29,005 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:29:29,005 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:29:29,337 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:29:29,697 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:29:29,698 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:29:31,176 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:29:31,231 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:29:31,248 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:29:31,471 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:29:31,471 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:29:31,471 [INFO] [breadth_restart] 🚀 Starting breadth-first-only enrichment for short-status-1
+2025-11-17 21:29:31,546 [INFO] [breadth_restart] ❌ Could not load cleaned dataset for short-status-1
+2025-11-17 21:29:44,882 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:29:45,327 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:29:45,340 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:29:47,377 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:29:47,870 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:29:47,870 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:29:49,591 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:29:49,643 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:30:01,259 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:30:01,590 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:30:01,590 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:30:03,346 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:30:03,399 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:30:39,296 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:30:39,593 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:30:39,593 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:30:41,504 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:30:41,552 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:30:41,566 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:30:41,771 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:30:41,771 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:30:41,772 [INFO] [breadth_restart] 🚀 Starting breadth-first-only enrichment for short-status-1
+2025-11-17 21:30:41,848 [INFO] [breadth_restart] ❌ Could not load cleaned dataset for short-status-1
+2025-11-17 21:31:04,157 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:31:04,607 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:31:04,607 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:31:06,503 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:31:06,558 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:31:08,009 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:31:08,355 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:31:08,355 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:31:10,217 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:31:10,262 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:31:10,276 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:31:10,435 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:31:10,436 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:31:10,436 [INFO] [auto_reenrich] ⚠️ Exception during enrichment check: start_breadth_first_only() got an unexpected keyword argument 'table_name'
+2025-11-17 21:31:25,320 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:31:25,679 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:31:25,679 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:31:27,208 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:31:27,262 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:31:27,277 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:31:27,432 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:31:27,432 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:31:27,432 [INFO] [breadth_restart] 🚀 Starting breadth-first-only enrichment for short-status-1
+2025-11-17 21:31:27,489 [INFO] [breadth_restart] ❌ Could not load cleaned dataset for short-status-1
+2025-11-17 21:32:58,325 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:32:58,665 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:32:58,666 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:32:58,805 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:32:59,113 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:32:59,113 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:33:01,256 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:33:01,309 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:33:01,324 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:33:01,481 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:33:01,481 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:33:01,481 [INFO] [auto_reenrich] ⚠️ Exception during enrichment check: cannot import name 'DISCOGS_KEY' from 'dao_selector' (/Users/admin/Documents/GitHub/spotify_regifted_cn/dao_selector.py)
+2025-11-17 21:33:13,240 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:33:13,902 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:33:13,902 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:33:16,672 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:33:16,731 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:33:16,746 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:33:16,900 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:33:16,901 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:33:16,901 [INFO] [breadth_restart] 🚀 Starting breadth-first-only enrichment for short-status-1
+2025-11-17 21:33:18,974 [INFO] [breadth_restart] ✅ Loaded cleaned dataset using explicit table_name: userdata/58d0bd65d3f40b92_short-status-1_20251117-204045_history.csv
+2025-11-17 21:33:18,974 [INFO] [breadth_restart] 🔧 Initializing MetadataEnricher for breadth-first phase
+2025-11-17 21:33:20,179 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 21:33:20,195 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:33:20,195 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:33:20,195 [INFO] [master] Reloaded master tables (triggered by args=('artists',))
+2025-11-17 21:33:21,218 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 21:33:21,232 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:33:21,232 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:33:21,232 [INFO] [master] Reloaded master tables (triggered by args=('albums',))
+2025-11-17 21:33:22,175 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 21:33:22,192 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:33:22,192 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:33:22,192 [INFO] [master] Reloaded master tables (triggered by args=('tracks',))
+2025-11-17 21:33:22,359 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:33:22,577 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:33:22,577 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:33:22,577 [INFO] [CloudflareDAO] 🧭 Recorded breadth-first start for short-status-1
+2025-11-17 21:33:22,577 [INFO] [breadth_restart] 🧮 Building per-year listening summaries using all_listens()
+2025-11-17 21:33:22,621 [INFO] [all_listens] Built full per-year summaries: artists=6459 rows, shows=8 rows, books=0 rows
+2025-11-17 21:33:22,624 [INFO] [breadth_restart] ❌ Error during breadth-first: 'MetadataEnricher' object has no attribute 'cancel_event'
+2025-11-17 21:33:22,772 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:33:22,983 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_error] (phase=breadth_first, stage=breadth)
+2025-11-17 21:33:22,983 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:33:22,983 [INFO] [CloudflareDAO] ⚠️ Recorded breadth-first enrichment error for short-status-1
+2025-11-17 21:35:13,104 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:35:13,421 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:35:13,421 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:35:14,823 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:35:14,876 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:35:14,891 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:35:15,078 [INFO] [auto_reenrich] 🧭 D1=breadth_error, R2=breadth_error
+2025-11-17 21:35:15,079 [INFO] [auto_reenrich] 🌀 Breadth-first error detected — restarting breadth-only for short-status-1
+2025-11-17 21:35:15,079 [INFO] [breadth_restart] 🚀 Starting breadth-first-only enrichment for short-status-1
+2025-11-17 21:35:16,207 [INFO] [breadth_restart] ✅ Loaded cleaned dataset using explicit table_name: userdata/58d0bd65d3f40b92_short-status-1_20251117-204045_history.csv
+2025-11-17 21:35:16,207 [INFO] [breadth_restart] 🔧 Initializing MetadataEnricher for breadth-first phase
+2025-11-17 21:35:17,100 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 21:35:17,113 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:17,113 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:17,113 [INFO] [master] Reloaded master tables (triggered by args=('artists',))
+2025-11-17 21:35:17,987 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 21:35:18,002 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:18,002 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:18,002 [INFO] [master] Reloaded master tables (triggered by args=('albums',))
+2025-11-17 21:35:18,969 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 21:35:18,984 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:18,984 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:18,985 [INFO] [master] Reloaded master tables (triggered by args=('tracks',))
+2025-11-17 21:35:19,146 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:19,348 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:19,349 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:19,349 [INFO] [CloudflareDAO] 🧭 Recorded breadth-first start for short-status-1
+2025-11-17 21:35:19,349 [INFO] [breadth_restart] 🧮 Building per-year listening summaries using all_listens()
+2025-11-17 21:35:19,383 [INFO] [all_listens] Built full per-year summaries: artists=6459 rows, shows=8 rows, books=0 rows
+2025-11-17 21:35:19,386 [INFO] [breadth_first] Starting diagnostic phase…
+2025-11-17 21:35:20,251 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 21:35:20,268 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:20,269 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:20,269 [INFO] [master] Reloaded master tables (triggered by args=('albums',))
+2025-11-17 21:35:21,069 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 21:35:21,087 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:21,087 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 21:35:21,087 [INFO] [master] Reloaded master tables (triggered by args=('tracks',))
+2025-11-17 21:35:21,092 [INFO] [breadth_first:init] Reset seen_artists from 6372 → 6372 (complete master only)
+2025-11-17 21:35:21,092 [INFO] [breadth_first] Max cycles = 4 (music=4, shows=3, books=0)
+2025-11-17 21:35:21,222 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:21,428 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:21,429 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:21,429 [INFO] [CloudflareDAO] 🧭 Recorded breadth-first start for short-status-1
+2025-11-17 21:35:21,429 [INFO] [breadth_first] Cycle 1/4
+2025-11-17 21:35:21,433 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-17 21:35:21,433 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-17 21:35:21,433 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, after_filter=0
+2025-11-17 21:35:21,438 [INFO] [filter:debug] incoming prefilter len=135
+2025-11-17 21:35:21,444 [INFO] [filter] Artists filtered out: 0/135 (remaining=135)
+2025-11-17 21:35:21,447 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=135, after_filter=135
+2025-11-17 21:35:21,447 [INFO] [fetch_and_save_artists:debug] Thread=Thread-13 (_run_breadth) batch=50 sample=['The Wailers', 'The Andrews Sisters with Orchestra', "L'éclair"]
+2025-11-17 21:35:21,447 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-17 21:35:21,447 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-17 21:35:21,450 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-17 21:35:21,452 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-17 21:35:21,930 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-17 21:35:22,037 [INFO] [resolve_artist_ids] Fallback search for 4 names
+2025-11-17 21:35:22,261 [INFO] [resolve_artist_ids] Found ID for The Wailers
+2025-11-17 21:35:22,651 [INFO] [resolve_artist_ids] Found ID for The Andrews Sisters with Orchestra
+2025-11-17 21:35:23,063 [INFO] [resolve_artist_ids] Found ID for L'éclair
+2025-11-17 21:35:23,478 [INFO] [resolve_artist_ids] Found ID for Pekka Juhani Hannikainen
+2025-11-17 21:35:23,583 [INFO] [resolve_artist_ids] Done — resolved 54 IDs so far
+2025-11-17 21:35:23,588 [INFO] [fetch_and_save_artists] Resolved IDs for 54 / 50
+2025-11-17 21:35:23,588 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-17 21:35:23,778 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-17 21:35:23,778 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-17 21:35:23,880 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-17 21:35:23,885 [INFO] [fetch_and_save_artists] 23 artists missing genres → submitting async Discogs jobs
+2025-11-17 21:35:23,885 [INFO] [fetch_and_save_artists] Submitted 23 Discogs jobs (non-blocking)
+2025-11-17 21:35:23,983 [INFO] [init] Loaded 6421 supergenre mappings from storage.
+2025-11-17 21:35:23,987 [INFO] [fetch_and_save_artists] 24 artists marked as Unlisted
+2025-11-17 21:35:23,987 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer
+2025-11-17 21:35:24,220 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:24,389 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:24,389 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:24,391 [INFO] [filter:debug] incoming prefilter len=355
+2025-11-17 21:35:24,395 [INFO] [filter] Artists filtered out: 0/355 (remaining=355)
+2025-11-17 21:35:24,396 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=355, after_filter=355
+2025-11-17 21:35:24,396 [INFO] [fetch_and_save_artists:debug] Thread=Thread-13 (_run_breadth) batch=50 sample=['Groove Chronicles (Noodles)', 'Mimi And Richard Farina', 'The Fontaine Sisters']
+2025-11-17 21:35:24,396 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-17 21:35:24,396 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-17 21:35:24,399 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-17 21:35:24,401 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-17 21:35:24,877 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-17 21:35:24,984 [INFO] [resolve_artist_ids] Fallback search for 5 names
+2025-11-17 21:35:25,320 [INFO] [resolve_artist_ids] Found ID for Groove Chronicles (Noodles)
+2025-11-17 21:35:25,790 [INFO] [resolve_artist_ids] Found ID for Mimi And Richard Farina
+2025-11-17 21:35:26,223 [INFO] [resolve_artist_ids] Found ID for The Fontaine Sisters
+2025-11-17 21:35:26,644 [INFO] [resolve_artist_ids] Found ID for Tom Goux and Jacek Sulanowski
+2025-11-17 21:35:26,990 [INFO] [resolve_artist_ids] Found ID for Male and female singers
+2025-11-17 21:35:27,093 [INFO] [resolve_artist_ids] Done — resolved 109 IDs so far
+2025-11-17 21:35:27,094 [INFO] [fetch_and_save_artists] Resolved IDs for 109 / 50
+2025-11-17 21:35:27,094 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-17 21:35:27,277 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-17 21:35:27,277 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-17 21:35:27,380 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-17 21:35:27,386 [INFO] [fetch_and_save_artists] 20 artists missing genres → submitting async Discogs jobs
+2025-11-17 21:35:27,386 [INFO] [fetch_and_save_artists] Submitted 20 Discogs jobs (non-blocking)
+2025-11-17 21:35:27,397 [INFO] [fetch_and_save_artists] 20 artists marked as Unlisted
+2025-11-17 21:35:27,397 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer
+2025-11-17 21:35:27,753 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:27,945 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:27,945 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:27,950 [INFO] [filter:debug] incoming prefilter len=35
+2025-11-17 21:35:27,959 [INFO] [filter] Artists filtered out: 0/35 (remaining=35)
+2025-11-17 21:35:27,959 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=35, after_filter=35
+2025-11-17 21:35:27,959 [INFO] [fetch_and_save_artists:debug] Thread=Thread-13 (_run_breadth) batch=35 sample=['Elizabeth Cotten and Brenda Evans', 'Cub', 'Belief Defect']
+2025-11-17 21:35:27,959 [INFO] [fetch_and_save_artists] Starting batch with 35 names
+2025-11-17 21:35:27,959 [INFO] [resolve_artist_ids] Resolving 35 names
+2025-11-17 21:35:27,962 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-17 21:35:27,965 [INFO] [resolve_artist_ids] Fetching 35 tracks via get_tracks
+2025-11-17 21:35:28,205 [INFO] [spotify:tracks] Fetched 35 tracks
+2025-11-17 21:35:28,308 [INFO] [resolve_artist_ids] Fallback search for 2 names
+2025-11-17 21:35:28,574 [INFO] [resolve_artist_ids] Found ID for Elizabeth Cotten and Brenda Evans
+2025-11-17 21:35:28,963 [INFO] [resolve_artist_ids] Found ID for Riccardo Bartoli
+2025-11-17 21:35:29,066 [INFO] [resolve_artist_ids] Done — resolved 146 IDs so far
+2025-11-17 21:35:29,068 [INFO] [fetch_and_save_artists] Resolved IDs for 146 / 35
+2025-11-17 21:35:29,068 [INFO] [fetch_and_save_artists] Calling get_artists for 35 IDs
+2025-11-17 21:35:29,297 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: Fetched 35 artists
+2025-11-17 21:35:29,298 [INFO] [log_dao] [spotify:artists] Fetched 35 artists
+2025-11-17 21:35:29,403 [INFO] [fetch_and_save_artists] Got 35 artist records back
+2025-11-17 21:35:29,404 [INFO] [fetch_and_save_artists] 17 artists missing genres → submitting async Discogs jobs
+2025-11-17 21:35:29,404 [INFO] [fetch_and_save_artists] Submitted 17 Discogs jobs (non-blocking)
+2025-11-17 21:35:29,407 [INFO] [fetch_and_save_artists] 18 artists marked as Unlisted
+2025-11-17 21:35:29,407 [INFO] [fetch_and_save_artists:debug] Saving 35 artists to buffer
+2025-11-17 21:35:29,630 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:30,072 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:30,072 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:30,077 [INFO] [filter] Shows filtered out: 0/1 (remaining=1)
+2025-11-17 21:35:30,077 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-17 21:35:30,077 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-17 21:35:30,077 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-17 21:35:30,082 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-17 21:35:30,171 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-17 21:35:30,275 [INFO] [resolve_show_ids] Fallback search for 1 shows
+2025-11-17 21:35:30,558 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-17 21:35:30,663 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-17 21:35:30,665 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-17 21:35:30,808 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:shows: Fetched 1 shows
+2025-11-17 21:35:30,809 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-17 21:35:30,912 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-17 21:35:30,915 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-17 21:35:31,190 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:31,382 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:31,383 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:31,383 [INFO] [breadth_first] Cycle 2/4
+2025-11-17 21:35:31,386 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-17 21:35:31,386 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-17 21:35:31,386 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, after_filter=0
+2025-11-17 21:35:31,391 [INFO] [filter:debug] incoming prefilter len=84
+2025-11-17 21:35:31,397 [INFO] [filter] Artists filtered out: 0/84 (remaining=84)
+2025-11-17 21:35:31,397 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=84, after_filter=84
+2025-11-17 21:35:31,397 [INFO] [fetch_and_save_artists:debug] Thread=Thread-13 (_run_breadth) batch=50 sample=['Anson Seabra', 'whenyoung', 'Helen Reddy']
+2025-11-17 21:35:31,397 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-17 21:35:31,398 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-17 21:35:31,401 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-17 21:35:31,404 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-17 21:35:31,757 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-17 21:35:31,863 [INFO] [resolve_artist_ids] Fallback search for 1 names
+2025-11-17 21:35:32,095 [INFO] [resolve_artist_ids] Found ID for (G)I-DLE
+2025-11-17 21:35:32,201 [INFO] [resolve_artist_ids] Done — resolved 197 IDs so far
+2025-11-17 21:35:32,202 [INFO] [fetch_and_save_artists] Resolved IDs for 197 / 50
+2025-11-17 21:35:32,202 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-17 21:35:32,386 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: 📈 Spotify calls so far: total=10 • rate≈0.33/s • per-endpoint=(artists:4, episodes:1, shows:1, tracks:4)
+2025-11-17 21:35:32,386 [INFO] [log_dao] [spotify:artists] 📈 Spotify calls so far: total=10 • rate≈0.33/s • per-endpoint=(artists:4, episodes:1, shows:1, tracks:4)
+2025-11-17 21:35:32,388 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-17 21:35:32,388 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-17 21:35:32,492 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-17 21:35:32,500 [INFO] [fetch_and_save_artists] 19 artists missing genres → submitting async Discogs jobs
+2025-11-17 21:35:32,501 [INFO] [fetch_and_save_artists] Submitted 19 Discogs jobs (non-blocking)
+2025-11-17 21:35:32,509 [INFO] [fetch_and_save_artists] 20 artists marked as Unlisted
+2025-11-17 21:35:32,510 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer
+2025-11-17 21:35:32,743 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:32,921 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:32,922 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:32,927 [INFO] [filter:debug] incoming prefilter len=304
+2025-11-17 21:35:32,937 [INFO] [filter] Artists filtered out: 0/304 (remaining=304)
+2025-11-17 21:35:32,937 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=304, after_filter=304
+2025-11-17 21:35:32,937 [INFO] [fetch_and_save_artists:debug] Thread=Thread-13 (_run_breadth) batch=50 sample=['Datsik', 'Percy X', 'GUAN']
+2025-11-17 21:35:32,937 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-17 21:35:32,937 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-17 21:35:32,940 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-17 21:35:32,943 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-17 21:35:33,264 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-17 21:35:33,369 [INFO] [resolve_artist_ids] Done — resolved 247 IDs so far
+2025-11-17 21:35:33,371 [INFO] [fetch_and_save_artists] Resolved IDs for 247 / 50
+2025-11-17 21:35:33,372 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-17 21:35:33,564 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-17 21:35:33,564 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-17 21:35:33,669 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-17 21:35:33,674 [INFO] [fetch_and_save_artists] 11 artists missing genres → submitting async Discogs jobs
+2025-11-17 21:35:33,675 [INFO] [fetch_and_save_artists] Submitted 11 Discogs jobs (non-blocking)
+2025-11-17 21:35:33,685 [INFO] [fetch_and_save_artists] 13 artists marked as Unlisted
+2025-11-17 21:35:33,685 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer
+2025-11-17 21:35:34,053 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:34,245 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:34,245 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:34,251 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-17 21:35:34,251 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-17 21:35:34,252 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=0, after_filter=0
+2025-11-17 21:35:34,254 [INFO] [breadth_first] Cycle 3/4
+2025-11-17 21:35:34,256 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-17 21:35:34,256 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-17 21:35:34,256 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, after_filter=0
+2025-11-17 21:35:34,258 [INFO] [filter:debug] incoming prefilter len=34
+2025-11-17 21:35:34,263 [INFO] [filter] Artists filtered out: 0/34 (remaining=34)
+2025-11-17 21:35:34,264 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=34, after_filter=34
+2025-11-17 21:35:34,264 [INFO] [fetch_and_save_artists:debug] Thread=Thread-13 (_run_breadth) batch=34 sample=['L*o*J', 'Sven Väth', 'FIRE']
+2025-11-17 21:35:34,264 [INFO] [fetch_and_save_artists] Starting batch with 34 names
+2025-11-17 21:35:34,264 [INFO] [resolve_artist_ids] Resolving 34 names
+2025-11-17 21:35:34,267 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-17 21:35:34,269 [INFO] [resolve_artist_ids] Fetching 34 tracks via get_tracks
+2025-11-17 21:35:34,528 [INFO] [spotify:tracks] Fetched 34 tracks
+2025-11-17 21:35:34,633 [INFO] [resolve_artist_ids] Fallback search for 1 names
+2025-11-17 21:35:34,849 [INFO] [resolve_artist_ids] Found ID for FIRE
+2025-11-17 21:35:34,950 [INFO] [resolve_artist_ids] Done — resolved 282 IDs so far
+2025-11-17 21:35:34,951 [INFO] [fetch_and_save_artists] Resolved IDs for 282 / 34
+2025-11-17 21:35:34,951 [INFO] [fetch_and_save_artists] Calling get_artists for 34 IDs
+2025-11-17 21:35:35,078 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: Fetched 34 artists
+2025-11-17 21:35:35,078 [INFO] [log_dao] [spotify:artists] Fetched 34 artists
+2025-11-17 21:35:35,183 [INFO] [fetch_and_save_artists] Got 34 artist records back
+2025-11-17 21:35:35,188 [INFO] [fetch_and_save_artists] 10 artists missing genres → submitting async Discogs jobs
+2025-11-17 21:35:35,189 [INFO] [fetch_and_save_artists] Submitted 10 Discogs jobs (non-blocking)
+2025-11-17 21:35:35,198 [INFO] [fetch_and_save_artists] 11 artists marked as Unlisted
+2025-11-17 21:35:35,198 [INFO] [fetch_and_save_artists:debug] Saving 34 artists to buffer
+2025-11-17 21:35:35,471 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:35,633 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:35,633 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:35,640 [INFO] [filter:debug] incoming prefilter len=251
+2025-11-17 21:35:35,648 [INFO] [filter] Artists filtered out: 0/251 (remaining=251)
+2025-11-17 21:35:35,648 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=251, after_filter=251
+2025-11-17 21:35:35,649 [INFO] [fetch_and_save_artists:debug] Thread=Thread-13 (_run_breadth) batch=50 sample=['Subeena', 'The Fourmost', 'Tiawa']
+2025-11-17 21:35:35,649 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-17 21:35:35,649 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-17 21:35:35,652 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-17 21:35:35,654 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-17 21:35:35,951 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-17 21:35:36,056 [INFO] [resolve_artist_ids] Done — resolved 332 IDs so far
+2025-11-17 21:35:36,059 [INFO] [fetch_and_save_artists] Resolved IDs for 332 / 50
+2025-11-17 21:35:36,060 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-17 21:35:36,197 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-17 21:35:36,198 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-17 21:35:36,300 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-17 21:35:36,310 [INFO] [fetch_and_save_artists] 16 artists missing genres → submitting async Discogs jobs
+2025-11-17 21:35:36,310 [INFO] [fetch_and_save_artists] Submitted 16 Discogs jobs (non-blocking)
+2025-11-17 21:35:36,316 [INFO] [fetch_and_save_artists] 20 artists marked as Unlisted
+2025-11-17 21:35:36,316 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer
+2025-11-17 21:35:36,754 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:36,962 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:36,962 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:36,969 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-17 21:35:36,969 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-17 21:35:36,969 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=0, after_filter=0
+2025-11-17 21:35:36,973 [INFO] [breadth_first] Cycle 4/4
+2025-11-17 21:35:36,974 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-17 21:35:36,974 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-17 21:35:36,974 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, after_filter=0
+2025-11-17 21:35:36,975 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-17 21:35:36,976 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-17 21:35:36,976 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=0, after_filter=0
+2025-11-17 21:35:36,977 [INFO] [filter:debug] incoming prefilter len=201
+2025-11-17 21:35:36,982 [INFO] [filter] Artists filtered out: 0/201 (remaining=201)
+2025-11-17 21:35:36,982 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=201, after_filter=201
+2025-11-17 21:35:36,982 [INFO] [fetch_and_save_artists:debug] Thread=Thread-13 (_run_breadth) batch=50 sample=['The Crickets', 'Paul Oakenfold', 'Vizionn']
+2025-11-17 21:35:36,982 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-17 21:35:36,982 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-17 21:35:36,985 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-17 21:35:36,987 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-17 21:35:37,382 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-17 21:35:37,488 [INFO] [resolve_artist_ids] Fallback search for 1 names
+2025-11-17 21:35:37,775 [INFO] [resolve_artist_ids] Found ID for Starkey (feat. Anneka)
+2025-11-17 21:35:37,881 [INFO] [resolve_artist_ids] Done — resolved 382 IDs so far
+2025-11-17 21:35:37,884 [INFO] [fetch_and_save_artists] Resolved IDs for 382 / 50
+2025-11-17 21:35:37,884 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-17 21:35:38,089 [INFO] [TRACE log_dao] Thread-13 (_run_breadth) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-17 21:35:38,090 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-17 21:35:38,192 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-17 21:35:38,194 [INFO] [fetch_and_save_artists] 10 artists missing genres → submitting async Discogs jobs
+2025-11-17 21:35:38,194 [INFO] [fetch_and_save_artists] Submitted 10 Discogs jobs (non-blocking)
+2025-11-17 21:35:38,197 [INFO] [fetch_and_save_artists] 14 artists marked as Unlisted
+2025-11-17 21:35:38,197 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer
+2025-11-17 21:35:38,492 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:38,648 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [breadth_running] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:38,649 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:38,653 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-17 21:35:38,654 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-17 21:35:38,654 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=0, after_filter=0
+2025-11-17 21:35:38,807 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 21:35:39,013 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [full_done] (phase=breadth_first, stage=breadth)
+2025-11-17 21:35:39,013 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → breadth_first
+2025-11-17 21:35:39,013 [INFO] [CloudflareDAO] 🧭 Recorded full enrichment completion for short-status-1
+2025-11-17 21:35:39,013 [INFO] [breadth_first] ✅ Completed breadth-first enrichment successfully.
+2025-11-17 21:35:39,014 [INFO] [flush_all] Starting global master merges at 20251117-213539
+2025-11-17 21:35:39,480 [INFO] [merge_into_master] Merged 369 new → total 6734 (before=6372)
+2025-11-17 21:35:40,160 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-17 21:35:40,160 [INFO] [merge_into_master] ✅ Saved 6734 rows to info_artist_genre.csv
+2025-11-17 21:35:40,161 [INFO] [flush_all] ✅ info_artist_genre.csv merged (369 new rows)
+2025-11-17 21:35:40,283 [INFO] [merge_into_master] Merged 140 new → total 1782 (before=1643)
+2025-11-17 21:35:40,926 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre_unlisted.csv
+2025-11-17 21:35:40,927 [INFO] [merge_into_master] ✅ Saved 1782 rows to info_artist_genre_unlisted.csv
+2025-11-17 21:35:40,928 [INFO] [flush_all] ✅ info_artist_genre_unlisted.csv merged (140 new rows)
+2025-11-17 21:35:40,996 [INFO] [merge_into_master] Merged 1 new → total 34 (before=34)
+2025-11-17 21:35:41,601 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-17 21:35:41,601 [INFO] [merge_into_master] ✅ Saved 34 rows to info_show.csv
+2025-11-17 21:35:41,601 [INFO] [flush_all] ✅ info_show.csv merged (1 new rows)
+2025-11-17 21:35:41,602 [INFO] [flush_all] ✅ Completed flush_all with 510 rows total.
+2025-11-17 21:35:41,602 [INFO] [flush_all] Cleaning up Discogs worker pool…

@@ -2247,14 +2247,14 @@ class MetadataEnricher:
         Reads charts from: reference/info_charts.csv
         """
         from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
+        from enrichment_service import update_heartbeat
 
         self._check_cancel(self.cancel_event)
 
-        # Use clean bucket paths (no local 'datasets/' prefix)
         charts_path = "reference/info_charts.csv"
         output_dir = "enrichment/chart_scorer"
 
-        # Derive label & timestamp for naming, preferably from dataset filename
+        # Derive label & timestamp for naming
         label, ts_str = None, None
         table_name = getattr(self, "table_name", None) or getattr(self, "input_table_name", None)
         if table_name:
@@ -2277,45 +2277,59 @@ class MetadataEnricher:
             total=self._total_batches
         )
 
-        # --- Load reference chart data ---
         try:
-            # CloudflareDAO supports CSV read directly from R2
+            # --- Load reference chart data ---
             charts_df = self.storage.download_csv(path=charts_path)
             print(f"[ChartScorer] ✅ Loaded charts from R2: {charts_path}")
+
+            # --- Compute results entirely in-memory ---
+            points_df, global_df = compute_chart_scorer_if_missing(
+                user_id=self.user_id,
+                label=label,
+                ts_str=ts_str,
+                listening=listening_view,
+                charts=charts_df,
+                output_dir=None,
+                anchor_weekday=4,
+                max_weeks=5,
+                weekly_decay=10,
+                use_weighting_if_present=True,
+                overwrite=False,
+                cancel_event=self.cancel_event,
+                return_dataframes=True,
+            )
+
+            # --- Upload results ---
+            user_parquet_key = f"enrichment/chart_scorer/{self.user_id}_{label}_chart-scores.parquet"
+            global_parquet_key = "enrichment/chart_scorer/global_chart-summaries.parquet"
+
+            if hasattr(self.storage, "upload_parquet"):
+                self.storage.upload_parquet(points_df, path=user_parquet_key, overwrite=True)
+                self.storage.upload_parquet(global_df, path=global_parquet_key, overwrite=True)
+            else:
+                self.storage.upload_csv(points_df, path=user_parquet_key.replace(".parquet", ".csv"))
+                self.storage.upload_csv(global_df, path=global_parquet_key.replace(".parquet", ".csv"))
+
+            self._done_batches += 1
+            self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
+            update_heartbeat(self.user_id, self.label)
+
+            # ✅ Mark standard enrichment complete
+            self.status.finish_standard_status(
+                self.user_id,
+                self.label,
+                detail=f"✅ Chart scoring complete ({label}) — standard enrichment fully done"
+            )
+            print(f"[ChartScorer] 🧭 Marked standard enrichment as complete for {self.label}")
+
         except Exception as e:
-            raise RuntimeError(f"Failed to load reference charts from R2: {charts_path} ({e})")
-
-        # --- Compute results entirely in-memory ---
-        points_df, global_df = compute_chart_scorer_if_missing(
-            user_id=self.user_id,
-            label=label,
-            ts_str=ts_str,
-            listening=listening_view,
-            charts=charts_df,
-            output_dir=None,  # prevents local writes
-            anchor_weekday=4,
-            max_weeks=5,
-            weekly_decay=10,
-            use_weighting_if_present=True,
-            overwrite=False,
-            cancel_event=self.cancel_event,
-            return_dataframes=True,
-        )
-
-        # --- Upload results to Cloudflare ---
-        user_parquet_key = f"enrichment/chart_scorer/{self.user_id}_{label}_chart-scores.parquet"
-        global_parquet_key = "enrichment/chart_scorer/global_chart-summaries.parquet"
-
-        if hasattr(self.storage, "upload_parquet"):
-            self.storage.upload_parquet(points_df, path=user_parquet_key, overwrite=True)
-            self.storage.upload_parquet(global_df, path=global_parquet_key, overwrite=True)
-        else:
-            self.storage.upload_csv(points_df, path=user_parquet_key.replace(".parquet", ".csv"))
-            self.storage.upload_csv(global_df, path=global_parquet_key.replace(".parquet", ".csv"))
-
-        self._done_batches += 1
-        self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
-        update_heartbeat(self.user_id, self.label)
+            print(f"[ChartScorer] ❌ Error in chart scorer: {e}")
+            self.status.finish_standard_error(
+                self.user_id,
+                self.label,
+                detail=f"❌ Chart scorer failed: {e}"
+            )
+            raise
 
     def run_phase_breadth_first_years_remaining(self, all_art: pd.DataFrame, all_show: pd.DataFrame, all_book: pd.DataFrame):
         """
@@ -2323,138 +2337,125 @@ class MetadataEnricher:
         For each year (descending), process up to 50 *new* artists, shows, and audiobooks.
         Diagnostic version: adds deep logging and sanitization of seen_artists.
         """
+        from enrichment_service import update_heartbeat
+
         self.current_phase = "breadth_first"
         self._check_cancel(self.cancel_event)
         self.log("[breadth_first] Starting diagnostic phase…")
-        self._load_master("albums")
-        self._load_master("tracks")
 
-        # --- Defensive cleanup of seen sets ---
-        self.seen_artists = {
-            a.strip().lower() for a in self.seen_artists
-            if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"
-        }
+        try:
+            self._load_master("albums")
+            self._load_master("tracks")
 
-        # --- Reset seen_artists to only include fully enriched master artists ---
-        if hasattr(self, "master_artists") and not self.master_artists.empty:
-            before = len(self.seen_artists)
-            valid_master = self.master_artists[
-                self.master_artists["artist_id"].notna()
-                & self.master_artists["primary_genre"].notna()
-            ]
-            self.seen_artists = set(valid_master["artist_name"].dropna().astype(str).str.lower())
-            after = len(self.seen_artists)
-            self.log(f"[breadth_first:init] Reset seen_artists from {before} → {after} (complete master only)")
+            # --- Defensive cleanup of seen sets ---
+            self.seen_artists = {
+                a.strip().lower() for a in self.seen_artists
+                if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"
+            }
 
-        years_music = sorted(all_art["year"].dropna().unique().tolist(), reverse=True) if not all_art.empty else []
-        years_show  = sorted(all_show["year"].dropna().unique().tolist(), reverse=True) if not all_show.empty else []
-        years_book  = sorted(all_book["year"].dropna().unique().tolist(), reverse=True) if not all_book.empty else []
+            # --- Reset seen_artists to only include fully enriched master artists ---
+            if hasattr(self, "master_artists") and not self.master_artists.empty:
+                before = len(self.seen_artists)
+                valid_master = self.master_artists[
+                    self.master_artists["artist_id"].notna()
+                    & self.master_artists["primary_genre"].notna()
+                ]
+                self.seen_artists = set(valid_master["artist_name"].dropna().astype(str).str.lower())
+                after = len(self.seen_artists)
+                self.log(f"[breadth_first:init] Reset seen_artists from {before} → {after} (complete master only)")
 
-        max_cycles = max(1, len(set(years_music + years_show + years_book)))
-        self.log(f"[breadth_first] Max cycles = {max_cycles} (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)})")
-        self.log(f"[breadth_first:debug] seen_artists init size={len(self.seen_artists)} sample={list(self.seen_artists)[:10]}")
+            years_music = sorted(all_art["year"].dropna().unique().tolist(), reverse=True) if not all_art.empty else []
+            years_show  = sorted(all_show["year"].dropna().unique().tolist(), reverse=True) if not all_show.empty else []
+            years_book  = sorted(all_book["year"].dropna().unique().tolist(), reverse=True) if not all_book.empty else []
 
-        for cycle in range(1, max_cycles + 1):
-            self._check_cancel(self.cancel_event)
-            self.log(f"[breadth_first] Cycle {cycle}/{max_cycles}")
+            max_cycles = max(1, len(set(years_music + years_show + years_book)))
+            self.log(f"[breadth_first] Max cycles = {max_cycles} (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)})")
 
-            # --- Artists ---
-            for y in years_music:
-                self._check_cancel(self.cancel_event)
-                sub = all_art[all_art["year"] == y].sort_values("minutes_played", ascending=False)
-
-                self.log(f"[breadth_first][debug] Year {y} sub shape={sub.shape}")
-                if not sub.empty:
-                    self.log(f"[breadth_first][debug] Year {y} artist sample={sub['artist_name'].dropna().head(5).tolist()}")
-                else:
-                    self.log(f"[breadth_first][debug] Year {y} has no rows in all_art")
-                self.log(f"[breadth_first] seen_artists size={len(self.seen_artists)} sample={list(self.seen_artists)[:5]}")
-
-                # Step 1: initial candidate list (before filters)
-                names = [n for n in sub["artist_name"].dropna().astype(str).tolist() if n.strip()]
-                before_total = len(names)
-
-                # Step 2: remove already seen
-                names = [n for n in names if n.strip().lower() not in self.seen_artists]
-                after_seen = len(names)
-
-                self.log(f"[breadth_first] Year {y}: candidates={before_total}, after_seen={after_seen}, seen_artists={len(self.seen_artists)}")
-
-                # Step 3: secondary filter (masters)
-                names_prefilter = list(names)
-                names = self._filter_known_artists(names)
-                after_filter = len(names)
-                self.log(f"[breadth_first] Year {y} Artists before={len(names_prefilter)}, after={after_filter}")
-
-                if before_total > 0 and after_filter == 0:
-                    self.log(f"[breadth_first][warning] ⚠️ All {before_total} artists excluded at year {y}! seen_artists or master table may be overmatching.")
-
-                batch = names[:50]
-                if batch:
-                    self.fetch_and_save_artists(batch, cancel_event=self.cancel_event)
-                    self.status.inc_status(
-                        self.user_id, self.label,
-                        add_batches=1,
-                        detail=f"breadth_first(artists) • year={y} • +{len(batch)}"
-                    )
-                    self._done_batches += 1
-                    self._maybe_autosave(self._done_batches, self._total_batches)
-                    # Sanitize before updating seen set
-                    self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"}
-                update_heartbeat(self.user_id, self.label)
-
-            # --- Shows ---
-            for y in years_show:
-                self._check_cancel(self.cancel_event)
-                sub = all_show[all_show["year"] == y].sort_values("minutes_played", ascending=False)
-                names = [n for n in sub["show_name"].dropna().astype(str).tolist() if n.strip()]
-                before = len(names)
-                names = [n for n in names if n.strip().lower() not in self.seen_shows]
-                before_seen = len(names)
-                names = self._filter_known_shows(names)
-                after = len(names)
-                self.log(f"[breadth_first] Year {y} Shows before={before}, after={after} (after_seen={before_seen})")
-                batch = names[:50]
-                if batch:
-                    self.fetch_and_save_shows(batch, cancel_event=self.cancel_event)
-                    self.status.inc_status(
-                        self.user_id, self.label,
-                        add_batches=1,
-                        detail=f"breadth_first(shows) • year={y} • +{len(batch)}"
-                    )
-                    self._done_batches += 1
-                    self._maybe_autosave(self._done_batches, self._total_batches)
-                    self.seen_shows |= {s.strip().lower() for s in batch if s.strip()}
-                update_heartbeat(self.user_id, self.label)
-
-            # --- Audiobooks ---
-            for y in years_book:
-                self._check_cancel(self.cancel_event)
-                sub = all_book[all_book["year"] == y].sort_values("minutes_played", ascending=False)
-                titles = [t for t in sub["audiobook_title"].dropna().astype(str).tolist() if t.strip()]
-                before = len(titles)
-                titles = [t for t in titles if t.strip().lower() not in self.seen_audiobooks]
-                before_seen = len(titles)
-                titles = self._filter_known_audiobooks(titles)
-                after = len(titles)
-                self.log(f"[breadth_first] Year {y} Audiobooks before={before}, after={after} (after_seen={before_seen})")
-                batch = titles[:50]
-                if batch:
-                    self.fetch_and_save_audiobooks(batch, cancel_event=self.cancel_event)
-                    self.status.inc_status(
-                        self.user_id, self.label,
-                        add_batches=1,
-                        detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}"
-                    )
-                    self._done_batches += 1
-                    self._maybe_autosave(self._done_batches, self._total_batches)
-                    self.seen_audiobooks |= {t.strip().lower() for t in batch if t.strip()}
-                update_heartbeat(self.user_id, self.label)
-
+            self.status.set_breadth_running(self.user_id, self.label)
             update_heartbeat(self.user_id, self.label)
 
-        self.log(f"[breadth_first] Completed diagnostic phase.")
-        update_heartbeat(self.user_id, self.label)
+            # --- Main cycles ---
+            for cycle in range(1, max_cycles + 1):
+                self._check_cancel(self.cancel_event)
+                self.log(f"[breadth_first] Cycle {cycle}/{max_cycles}")
+
+                # --- Artists ---
+                for y in years_music:
+                    self._check_cancel(self.cancel_event)
+                    sub = all_art[all_art["year"] == y].sort_values("minutes_played", ascending=False)
+                    names = [n for n in sub["artist_name"].dropna().astype(str).tolist() if n.strip()]
+                    before_total = len(names)
+                    names = [n for n in names if n.strip().lower() not in self.seen_artists]
+                    after_seen = len(names)
+                    names_prefilter = list(names)
+                    names = self._filter_known_artists(names)
+                    after_filter = len(names)
+                    self.log(f"[breadth_first] Year {y}: candidates={before_total}, after_seen={after_seen}, after_filter={after_filter}")
+                    batch = names[:50]
+                    if batch:
+                        self.fetch_and_save_artists(batch, cancel_event=self.cancel_event)
+                        self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                            detail=f"breadth_first(artists) • year={y} • +{len(batch)}")
+                        self._done_batches += 1
+                        self._maybe_autosave(self._done_batches, self._total_batches)
+                        self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip()}
+                    update_heartbeat(self.user_id, self.label)
+
+                # --- Shows ---
+                for y in years_show:
+                    self._check_cancel(self.cancel_event)
+                    sub = all_show[all_show["year"] == y].sort_values("minutes_played", ascending=False)
+                    names = [n for n in sub["show_name"].dropna().astype(str).tolist() if n.strip()]
+                    before = len(names)
+                    names = [n for n in names if n.strip().lower() not in self.seen_shows]
+                    names = self._filter_known_shows(names)
+                    batch = names[:50]
+                    if batch:
+                        self.fetch_and_save_shows(batch, cancel_event=self.cancel_event)
+                        self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                            detail=f"breadth_first(shows) • year={y} • +{len(batch)}")
+                        self._done_batches += 1
+                        self._maybe_autosave(self._done_batches, self._total_batches)
+                        self.seen_shows |= {s.strip().lower() for s in batch if s.strip()}
+                    update_heartbeat(self.user_id, self.label)
+
+                # --- Audiobooks ---
+                for y in years_book:
+                    self._check_cancel(self.cancel_event)
+                    sub = all_book[all_book["year"] == y].sort_values("minutes_played", ascending=False)
+                    titles = [t for t in sub["audiobook_title"].dropna().astype(str).tolist() if t.strip()]
+                    before = len(titles)
+                    titles = [t for t in titles if t.strip().lower() not in self.seen_audiobooks]
+                    titles = self._filter_known_audiobooks(titles)
+                    batch = titles[:50]
+                    if batch:
+                        self.fetch_and_save_audiobooks(batch, cancel_event=self.cancel_event)
+                        self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                            detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}")
+                        self._done_batches += 1
+                        self._maybe_autosave(self._done_batches, self._total_batches)
+                        self.seen_audiobooks |= {t.strip().lower() for t in batch if t.strip()}
+                    update_heartbeat(self.user_id, self.label)
+
+                update_heartbeat(self.user_id, self.label)
+
+            # ✅ Success: mark full enrichment complete
+            self.status.finish_full_status(
+                self.user_id,
+                self.label,
+                detail=f"✅ Breadth-first enrichment completed successfully ({self._done_batches} new batches)"
+            )
+            self.log(f"[breadth_first] ✅ Completed breadth-first enrichment successfully.")
+            update_heartbeat(self.user_id, self.label)
+
+        except Exception as e:
+            self.log(f"[breadth_first] ❌ Breadth-first error: {e}")
+            self.status.finish_breadth_error(
+                self.user_id,
+                self.label,
+                detail=f"❌ Breadth-first phase failed: {e}"
+            )
+            raise
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """Full enrichment pipeline with detailed debug logging, flushing after each phase."""
@@ -2477,15 +2478,30 @@ class MetadataEnricher:
                 total=total
             )
 
+            # 🟡 No new data to enrich — mark as already complete
             if total == 0:
                 self.log("[run_all] Nothing new to enrich (all entities already in masters)")
-                self.status.finish_status(
-                    self.user_id, self.label,
-                    ok=True,
-                    detail="✅ All enrichment already up to date"
+
+                # ✅ Use the new standard completion marker
+                self.status.finish_standard_status(
+                    self.user_id,
+                    self.label,
+                    detail="✅ All enrichment already up to date (no new entities)"
                 )
+
+                # Safety flush to ensure masters are synced
+                try:
+                    self.flush_all()
+                    self.log("[run_all] Performed final flush for empty enrichment case.")
+                except Exception as e:
+                    self.log(f"[run_all] ⚠️ flush_all failed during empty enrichment: {e}")
+
+                # Mark enrichment thread as gracefully finished
+                self.log("[run_all] Exiting early — no enrichment required.")
+                update_heartbeat(self.user_id, self.label)
                 return
 
+            # --- Phase tracking helper ---
             def _end_phase(name: str, before: int):
                 added = self._done_batches - before
                 self.log(f"[run_all] Completed phase: {name} (batches +{added})")
@@ -2528,37 +2544,37 @@ class MetadataEnricher:
             _end_phase("overall", before)
             update_heartbeat(self.user_id, self.label)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "per_year"
-            self.log("[run_all] Starting phase: per_year")
-            before = self._done_batches
-            self.run_phase_per_year(per_art, per_show, per_book)
-            _end_phase("per_year", before)
-            update_heartbeat(self.user_id, self.label)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "per_year"
+            # self.log("[run_all] Starting phase: per_year")
+            # before = self._done_batches
+            # self.run_phase_per_year(per_art, per_show, per_book)
+            # _end_phase("per_year", before)
+            # update_heartbeat(self.user_id, self.label)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "albums_of_year"
-            self.log("[run_all] Starting phase: albums_of_year")
-            before = self._done_batches
-            self.run_phase_per_artist_albums_of_year()
-            _end_phase("albums_of_year", before)
-            update_heartbeat(self.user_id, self.label)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "albums_of_year"
+            # self.log("[run_all] Starting phase: albums_of_year")
+            # before = self._done_batches
+            # self.run_phase_per_artist_albums_of_year()
+            # _end_phase("albums_of_year", before)
+            # update_heartbeat(self.user_id, self.label)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "per_album"
-            self.log("[run_all] Starting phase: per_album")
-            before = self._done_batches
-            self.run_phase_per_album_all_albums_for_top_artists()
-            _end_phase("per_album", before)
-            update_heartbeat(self.user_id, self.label)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "per_album"
+            # self.log("[run_all] Starting phase: per_album")
+            # before = self._done_batches
+            # self.run_phase_per_album_all_albums_for_top_artists()
+            # _end_phase("per_album", before)
+            # update_heartbeat(self.user_id, self.label)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "top_tracks_per_month"
-            self.log("[run_all] Starting phase: top_tracks_per_month")
-            before = self._done_batches
-            self.run_phase_top_tracks_per_month()
-            _end_phase("top_tracks_per_month", before)
-            update_heartbeat(self.user_id, self.label)
+            # self._check_cancel(self.cancel_event)
+            # self.current_phase = "top_tracks_per_month"
+            # self.log("[run_all] Starting phase: top_tracks_per_month")
+            # before = self._done_batches
+            # self.run_phase_top_tracks_per_month()
+            # _end_phase("top_tracks_per_month", before)
+            # update_heartbeat(self.user_id, self.label)
 
             self._check_cancel(self.cancel_event)
             self.current_phase = "popularity_timeseries"
@@ -2568,6 +2584,7 @@ class MetadataEnricher:
             _end_phase("popularity_timeseries", before)
             update_heartbeat(self.user_id, self.label)
 
+            # --- Phase 7: Chart Scorer ---
             self._check_cancel(self.cancel_event)
             self.current_phase = "chart_scorer"
             self.log("[run_all] Starting phase: chart_scorer")
@@ -2576,75 +2593,79 @@ class MetadataEnricher:
             _end_phase("chart_scorer", before)
             update_heartbeat(self.user_id, self.label)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "breadth_first"
-            self.log("[run_all] Starting phase: breadth_first")
-            before = self._done_batches
-            self.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
-            # --- Phase-end Discogs synchronization ---
-            self.log("[overall] Checking for pending Discogs results before phase end…")
-            self._flush_discogs_results(timeout=15)
-            if getattr(self, "_pending_discogs_artists", None):
-                self.log(f"[overall] ⚠️ {len(self._pending_discogs_artists)} Discogs jobs still pending at phase end.")
-            else:
-                self.log("[overall] ✅ No pending Discogs jobs.")
-            _end_phase("breadth_first", before)
-            update_heartbeat(self.user_id, self.label)
-
-            # Final flush
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "flush"
-            self.log("[run_all] Starting final flush")
-            self.flush_all()
-            self.log("[run_all] Flush complete")
-
-            added_total = self._done_batches
-            self.status.finish_status(
-                self.user_id, self.label,
-                ok=True,
-                detail=f"✅ Enrichment completed • {added_total} new batches"
-            )
-            self.log(f"[run_all] Enrichment finished OK — {added_total} new batches enriched")
-            update_heartbeat(self.user_id, self.label)
-
-        except CancelledError:
-            self.log("[run_all] CancelledError caught, flushing partial results")
+            # ✅ Finalize standard enrichment (phases 1–7)
+            self.log("[run_all] All standard enrichment phases completed — starting final flush.")
+            self.current_phase = "flush_standard"
             try:
-                self.flush_partial()
+                self.flush_all()
+                self.log("[run_all] ✅ Final flush after standard enrichment completed successfully.")
             except Exception as e:
-                self.log(f"[run_all] flush_partial failed during cancel: {e}")
-            self.status.finish_status(
-                self.user_id, self.label,
-                ok=False,
-                detail="🛑 Cancelled by user (partial results saved)"
-            )
-            raise
+                self.log(f"[run_all] ⚠️ Final flush after standard enrichment failed: {e}")
 
-        except Exception as e:
-            self.log(f"[run_all] Exception: {e}")
+            # ✅ Mark standard enrichment completion
+            self.status.finish_standard_status(
+                self.user_id,
+                self.label,
+                detail="✅ Standard enrichment completed successfully (phases 1–7)"
+            )
+            self.log("[run_all] 🧭 Recorded standard enrichment completion in status.")
+            update_heartbeat(self.user_id, self.label)
+
+            # --- Graceful stop after standard enrichment ---
+            self._done_batches = self._total_batches
+            self.log("[run_all] Returning cleanly after standard enrichment (breadth-first deferred).")
+            return  # 🚪 Exit run_all() here — do NOT continue to breadth_first
+
+        # --- Handle cancellation mid-phase ---
+        except CancelledError:
+            self.log("[run_all] 🛑 CancelledError caught — flushing partial results.")
             try:
                 self.flush_partial()
-            except Exception as e2:
-                self.log(f"[run_all] flush_partial failed during exception: {e2}")
-            self.status.finish_status(
-                self.user_id, self.label,
-                ok=False,
-                detail=f"❌ Failed: {e}"
+                self.log("[run_all] ✅ Partial results flushed after cancellation.")
+            except Exception as e:
+                self.log(f"[run_all] ⚠️ flush_partial failed during cancel: {e}")
+
+            self.status.finish_standard_error(
+                self.user_id,
+                self.label,
+                detail="🛑 Enrichment cancelled by user (partial results saved)."
             )
             raise
 
+        # --- Handle unexpected errors in standard enrichment ---
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            self.log(f"[run_all] ❌ Exception during standard enrichment: {e}\n{tb}")
+
+            try:
+                self.flush_partial()
+                self.log("[run_all] ✅ Partial results flushed after exception.")
+            except Exception as e2:
+                self.log(f"[run_all] ⚠️ flush_partial failed during exception handling: {e2}")
+
+            self.status.finish_standard_error(
+                self.user_id,
+                self.label,
+                detail=f"❌ Error during standard enrichment (phases 1–7): {e}"
+            )
+            raise
+
+        # --- Always clean up system resources ---
         finally:
             if hasattr(self, "discogs_pool"):
                 try:
                     self.log("[run_all] Waiting for remaining Discogs jobs to finish…")
-                    self.discogs_pool.job_queue.join()  # wait for all queued jobs
-                    self._flush_discogs_results(timeout=30)  # merge any stragglers
+                    self.discogs_pool.job_queue.join()  # Wait for all queued jobs
+                    self._flush_discogs_results(timeout=30)  # Merge any stragglers
 
                     self.log("[run_all] Cleaning up Discogs worker pool…")
                     self.discogs_pool.shutdown()
-                    self.log("[run_all] Discogs worker pool shut down successfully")
+                    self.log("[run_all] ✅ Discogs worker pool shut down successfully.")
                 except Exception as e:
-                    self.log(f"[run_all] Discogs pool shutdown failed: {e}")
+                    self.log(f"[run_all] ⚠️ Discogs pool shutdown failed: {e}")
+
+            self.log("[run_all] 💤 Standard enrichment pipeline fully terminated.")
 
     # --- Autosaver ---
     def _save_checkpoint(self, batches_done: int, total_batches: int):
@@ -3225,7 +3246,7 @@ class MetadataEnricher:
         return out
 
     # --- Restarter ---
-    def infer_last_phase_from_logs(self, log_text: str) -> Optional[str]:
+    # def infer_last_phase_from_logs(self, log_text: str) -> Optional[str]:
         """
         Inspect logs to find the last successfully completed phase.
         Returns the phase name string (e.g. 'per_album') or None.
@@ -3239,7 +3260,7 @@ class MetadataEnricher:
                 last_phase = line.split("Completed phase:")[1].strip()
         return last_phase
 
-    def resume_from_logs(self, log_text: str):
+    # def resume_from_logs(self, log_text: str):
         """
         Resume enrichment from the next phase after the last completed one.
         """
@@ -3286,7 +3307,7 @@ class MetadataEnricher:
                 self.log(f"[resume_from_logs] Phase {phase} failed: {e}")
                 raise
 
-    def resume_from_phase(self, phase_name: str, cancel_event=None, auto: bool = True, last_error: str = None):
+    # def resume_from_phase(self, phase_name: str, cancel_event=None, auto: bool = True, last_error: str = None):
         """
         Resume enrichment starting from a given phase, using logs and status tracking.
         Logs the restart event, updates status, and continues from the selected phase onward.

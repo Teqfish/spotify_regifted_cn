@@ -615,6 +615,103 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             "detail": "No status found in R2 or D1",
         }
 
+    def finish_standard_status(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks phases 1–7 (standard enrichment) as completed successfully.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "standard_done",
+            "phase": "chart_scorer",
+            "detail": detail or "✅ Standard enrichment completed (phases 1–7)",
+            "batches_done": 1,
+            "total_batches": 1,
+            "percent": 100,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded standard enrichment completion for {dataset_label}")
+
+    def set_breadth_running(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks the beginning of the breadth-first phase (phase 8).
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "breadth_running",
+            "phase": "breadth_first",
+            "detail": detail or "🌐 Breadth-first enrichment in progress",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded breadth-first start for {dataset_label}")
+
+    def finish_full_status(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks full enrichment (phases 1–8) as completed successfully.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "full_done",
+            "phase": "breadth_first",
+            "detail": detail or "✅ Full enrichment completed (phases 1–8)",
+            "batches_done": 1,
+            "total_batches": 1,
+            "percent": 100,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded full enrichment completion for {dataset_label}")
+
+    def finish_standard_error(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks a failure during standard enrichment (phases 1–7).
+        Signals that full re-enrichment is required.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "error",
+            "phase": "chart_scorer",
+            "detail": detail or "❌ Error during standard enrichment (phases 1–7)",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] ⚠️ Recorded standard enrichment error for {dataset_label}")
+
+    def finish_breadth_error(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks a failure during breadth-first enrichment (phase 8).
+        Keeps the dataset usable (standard already done).
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "breadth_error",
+            "phase": "breadth_first",
+            "detail": detail or "❌ Error during breadth-first enrichment (phase 8)",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] ⚠️ Recorded breadth-first enrichment error for {dataset_label}")
+
     # ------------------------------------------------------------
     # METADATA + MASTERS + CHECKPOINTS
     # ------------------------------------------------------------
@@ -1089,23 +1186,47 @@ class CloudflareD1DAO:
         batches_done, total_batches, percent
     ):
         """
-        Upsert global enrichment status and per-phase progress JSON.
+        Upsert or update global enrichment status and phase progress.
+        Supports extended enrichment lifecycle states:
+        - standard_done
+        - breadth_running
+        - breadth_error
+        - full_done
+        Mirrors incremental batch counts into phase_progress JSON.
         """
-        # Serialize per-phase progress as JSON snippet
         import json
         import sqlite3  # SQLite-compatible formatting
 
+        # --- Normalize / validate inputs ---
+        if not user_id or not dataset_label:
+            raise ValueError("Both user_id and dataset_label are required for enrichment status upsert")
+
+        # Handle None values gracefully (SQLite prefers NULLs over Python None in some cases)
+        total_batches = total_batches if total_batches is not None else 0
+        batches_done = batches_done if batches_done is not None else 0
+        percent = percent if percent is not None else 0.0
+
+        # --- Prepare phase JSON snippet ---
         phase_data = json.dumps({
             "batches_done": batches_done,
             "total_batches": total_batches,
             "percent": percent,
+            "status": status,
         })
+
+        # --- Determine current enrichment stage ---
+        if status in ("standard_done", "error"):
+            stage = "standard"
+        elif status in ("breadth_running", "breadth_error", "full_done"):
+            stage = "breadth"
+        else:
+            stage = "unknown"
 
         sql = """
         INSERT INTO enrichment_status
             (user_id, dataset_label, status, phase, detail,
-            batches_done, total_batches, percent, phase_progress)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, json_object(? , ?))
+            batches_done, total_batches, percent, phase_progress, stage)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, json_object(? , ?), ?)
         ON CONFLICT(user_id, dataset_label)
         DO UPDATE SET
             status        = excluded.status,
@@ -1114,6 +1235,7 @@ class CloudflareD1DAO:
             batches_done  = excluded.batches_done,
             total_batches = excluded.total_batches,
             percent       = excluded.percent,
+            stage         = excluded.stage,
             phase_progress = json_patch(
                 COALESCE(enrichment_status.phase_progress, '{}'),
                 json_object(excluded.phase, json(excluded.phase_progress))
@@ -1121,6 +1243,7 @@ class CloudflareD1DAO:
             updated_at = CURRENT_TIMESTAMP
         """
 
+        # --- Execute with full positional binding ---
         self._query(
             sql,
             [
@@ -1132,11 +1255,13 @@ class CloudflareD1DAO:
                 batches_done,
                 total_batches,
                 percent,
-                phase,  # key
-                phase_data,  # value
+                phase,        # key for phase_progress JSON
+                phase_data,   # value for that phase
+                stage,        # new field
             ],
         )
 
+        print(f"[CloudflareD1DAO] 🧭 Upserted enrichment_status → {dataset_label} [{status}] (phase={phase}, stage={stage})")
 class LocalUserDataDAO:
     """
     Saves cleaned listening history locally (userdata/).

@@ -169343,3 +169343,815 @@ requests.exceptions.HTTPError: 503 Server Error: Service Unavailable for url: ht
 2025-11-17 14:56:10,168 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
 2025-11-17 14:56:10,168 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
 2025-11-17 14:56:13,779 [INFO] b'Stopping...'
+2025-11-17 19:09:28,480 [INFO] [logging] ✅ StreamToLogger attached
+2025-11-17 19:09:31,931 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 19:09:32,023 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 19:09:33,529 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 19:09:33,625 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 19:09:34,354 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 19:09:34,690 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 19:09:34,690 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 19:10:39,649 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 19:10:40,079 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 19:10:40,079 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 19:10:42,050 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 19:10:42,144 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 19:10:42,170 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for full-1
+2025-11-17 19:10:42,363 [INFO] [auto_reenrich] 🧭 D1=running, R2=running
+2025-11-17 19:10:42,364 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for full-1 (D1=running, R2=running, stale_d1=True, stale_hb=True)
+2025-11-17 19:10:42,430 [INFO] [enrich:Thread-1 (background_enrich)] 🏁 Starting enrichment thread for full-1
+2025-11-17 19:10:42,431 [INFO] [auto_reenrich] 🚀 Started enrichment thread for full-1
+2025-11-17 19:10:42,431 [INFO] [enrich:Thread-1 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-17 19:10:42,540 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-17 19:10:42,540 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-17 19:10:42,765 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-17 19:10:42,765 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-17 19:10:43,112 [INFO] [enrich:Thread-1 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-17 19:10:43,808 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 19:10:44,131 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 19:10:44,132 [INFO] [dao_selector] ✅ Initialized Cloudflare D1 (first time this session)
+2025-11-17 19:10:45,795 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 19:10:45,888 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 19:10:45,888 [INFO] [enrich:Thread-1 (background_enrich)] ✅ Reloaded dataset from R2 (72212 rows)
+2025-11-17 19:10:45,908 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-17 19:10:45,908 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-17 19:10:46,106 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 19:10:46,339 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [running] (phase=running, stage=unknown)
+2025-11-17 19:10:46,340 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → running
+2025-11-17 19:10:47,028 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 19:10:47,043 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 19:10:47,043 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 19:10:57,064 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 19:10:57,178 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 19:10:57,226 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for full-1
+2025-11-17 19:10:57,368 [INFO] [auto_reenrich] 🧭 D1=running, R2=running
+2025-11-17 19:10:57,371 [INFO] [auto_reenrich] ⚠️ Thread stale (>threshold). Cancelling + waiting for cleanup.
+2025-11-17 19:10:57,371 [INFO] [auto_reenrich] ⏳ Waiting for lock release (1/15)...
+2025-11-17 19:10:58,377 [INFO] [auto_reenrich] ⏳ Waiting for lock release (2/15)...
+2025-11-17 19:10:59,385 [INFO] [auto_reenrich] ⏳ Waiting for lock release (3/15)...
+2025-11-17 19:11:00,392 [INFO] [auto_reenrich] ⏳ Waiting for lock release (4/15)...
+2025-11-17 19:11:01,399 [INFO] [auto_reenrich] ⏳ Waiting for lock release (5/15)...
+2025-11-17 19:11:02,406 [INFO] [auto_reenrich] ⏳ Waiting for lock release (6/15)...
+2025-11-17 19:11:03,413 [INFO] [auto_reenrich] ⏳ Waiting for lock release (7/15)...
+2025-11-17 19:11:04,419 [INFO] [auto_reenrich] ⏳ Waiting for lock release (8/15)...
+2025-11-17 19:11:05,426 [INFO] [auto_reenrich] ⏳ Waiting for lock release (9/15)...
+2025-11-17 19:11:06,433 [INFO] [auto_reenrich] ⏳ Waiting for lock release (10/15)...
+2025-11-17 19:11:07,438 [INFO] [auto_reenrich] ⏳ Waiting for lock release (11/15)...
+2025-11-17 19:11:08,449 [INFO] [auto_reenrich] ⏳ Waiting for lock release (12/15)...
+2025-11-17 19:11:09,456 [INFO] [auto_reenrich] ⏳ Waiting for lock release (13/15)...
+2025-11-17 19:11:10,463 [INFO] [auto_reenrich] ⏳ Waiting for lock release (14/15)...
+2025-11-17 19:11:11,001 [INFO] [run_all] Planning complete. Estimated total batches = 623
+2025-11-17 19:11:11,219 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 19:11:11,440 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [running] (phase=planning, stage=unknown)
+2025-11-17 19:11:11,441 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → planning
+2025-11-17 19:11:11,441 [INFO] [run_all] 🛑 CancelledError caught — flushing partial results.
+2025-11-17 19:11:11,442 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 19:11:11,442 [INFO] [run_all] ✅ Partial results flushed after cancellation.
+2025-11-17 19:11:11,469 [INFO] [auto_reenrich] ⏳ Waiting for lock release (15/15)...
+2025-11-17 19:11:11,596 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 19:11:11,796 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [error] (phase=chart_scorer, stage=standard)
+2025-11-17 19:11:11,796 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → chart_scorer
+2025-11-17 19:11:11,796 [INFO] [CloudflareDAO] ⚠️ Recorded standard enrichment error for full-1
+2025-11-17 19:11:11,796 [INFO] [run_all] Waiting for remaining Discogs jobs to finish…
+2025-11-17 19:11:11,796 [INFO] [run_all] ⚠️ Discogs pool shutdown failed: 'DiscogsWorkerPool' object has no attribute 'job_queue'
+2025-11-17 19:11:11,796 [INFO] [run_all] 💤 Standard enrichment pipeline fully terminated.
+2025-11-17 19:11:11,796 [INFO] [enrich:Thread-1 (background_enrich)] 🧱 Cancelled by user or dataset switch.
+2025-11-17 19:11:12,270 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 19:11:12,436 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [error] (phase=chart_scorer, stage=standard)
+2025-11-17 19:11:12,436 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → chart_scorer
+2025-11-17 19:11:12,437 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → enrichment: Cancelled mid-run by user.
+2025-11-17 19:11:12,437 [INFO] [log_dao] [enrichment] Cancelled mid-run by user.
+2025-11-17 19:11:12,437 [INFO] [enrich:Thread-1 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-17 19:11:12,437 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-17 19:11:12,438 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → thread: Thread finished for full-1
+2025-11-17 19:11:12,438 [INFO] [log_dao] [thread] Thread finished for full-1
+2025-11-17 19:11:12,438 [INFO] [enrich:Thread-1 (background_enrich)] 💤 Thread finished for full-1
+2025-11-17 19:11:12,474 [INFO] [auto_reenrich] 🚫 Lock still held after timeout — forcing release.
+2025-11-17 19:11:12,475 [INFO] [auto_reenrich] ⚠️ Error while releasing lock: release unlocked lock
+2025-11-17 19:11:12,475 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for full-1 (D1=running, R2=running, stale_d1=True, stale_hb=False)
+2025-11-17 19:11:12,527 [INFO] [enrich:Thread-3 (background_enrich)] 🏁 Starting enrichment thread for full-1
+2025-11-17 19:11:12,528 [INFO] [auto_reenrich] 🚀 Started enrichment thread for full-1
+2025-11-17 19:11:12,528 [INFO] [enrich:Thread-3 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-17 19:11:12,537 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-17 19:11:12,537 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-17 19:11:12,954 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-17 19:11:12,955 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-17 19:11:13,210 [INFO] [enrich:Thread-3 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-17 19:11:14,636 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_short-split-1_20251117-191113_history.csv
+2025-11-17 19:11:14,636 [INFO] [CloudflareDAO] ✅ Uploaded dataset → userdata/58d0bd65d3f40b92_short-split-1_20251117-191113_history.csv
+2025-11-17 19:11:14,913 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:15,111 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=etl, stage=unknown)
+2025-11-17 19:11:15,111 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → etl
+2025-11-17 19:11:15,339 [INFO] [upload_event] Recorded: user=58d0bd65d3f40b92, label=short-split-1, status=completed
+2025-11-17 19:11:15,526 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:15,771 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=etl, stage=unknown)
+2025-11-17 19:11:15,772 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → etl
+2025-11-17 19:11:15,772 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-split-1
+2025-11-17 19:11:15,924 [INFO] [auto_reenrich] 🧭 D1=running, R2=running
+2025-11-17 19:11:15,924 [INFO] [auto_reenrich] ⚠️ Thread stale (>threshold). Cancelling + waiting for cleanup.
+2025-11-17 19:11:15,924 [INFO] [auto_reenrich] ⏳ Waiting for lock release (1/15)...
+2025-11-17 19:11:15,980 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 19:11:16,079 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 19:11:16,080 [INFO] [enrich:Thread-3 (background_enrich)] ✅ Reloaded dataset from R2 (72212 rows)
+2025-11-17 19:11:16,098 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-17 19:11:16,098 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-17 19:11:16,269 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 19:11:16,500 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [running] (phase=running, stage=unknown)
+2025-11-17 19:11:16,501 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → running
+2025-11-17 19:11:16,501 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from _check_cancel → enrichment: Enrichment cancelled during before run_all.
+2025-11-17 19:11:16,501 [INFO] [log_dao] [enrichment] Enrichment cancelled during before run_all.
+2025-11-17 19:11:16,501 [INFO] [enrich:Thread-3 (background_enrich)] 🛑 Enrichment cancelled during before run_all.
+2025-11-17 19:11:16,501 [INFO] [enrich:Thread-3 (background_enrich)] 🧱 Cancelled by user or dataset switch.
+2025-11-17 19:11:16,751 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 19:11:16,929 [INFO] [auto_reenrich] ⏳ Waiting for lock release (2/15)...
+2025-11-17 19:11:16,957 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [error] (phase=running, stage=standard)
+2025-11-17 19:11:16,957 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → running
+2025-11-17 19:11:16,958 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → enrichment: Cancelled mid-run by user.
+2025-11-17 19:11:16,958 [INFO] [log_dao] [enrichment] Cancelled mid-run by user.
+2025-11-17 19:11:16,958 [INFO] [enrich:Thread-3 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-17 19:11:16,959 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-17 19:11:16,960 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → thread: Thread finished for full-1
+2025-11-17 19:11:16,960 [INFO] [log_dao] [thread] Thread finished for full-1
+2025-11-17 19:11:16,961 [INFO] [enrich:Thread-3 (background_enrich)] 💤 Thread finished for full-1
+2025-11-17 19:11:17,931 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for short-split-1 (D1=running, R2=running, stale_d1=True, stale_hb=True)
+2025-11-17 19:11:17,988 [INFO] [enrich:Thread-5 (background_enrich)] 🏁 Starting enrichment thread for short-split-1
+2025-11-17 19:11:17,989 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-split-1
+2025-11-17 19:11:17,989 [INFO] [enrich:Thread-5 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-17 19:11:18,065 [INFO] [TRACE log_dao] Thread-5 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-17 19:11:18,065 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-17 19:11:18,269 [INFO] [TRACE log_dao] Thread-5 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-17 19:11:18,270 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-17 19:11:18,492 [INFO] [enrich:Thread-5 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-17 19:11:19,684 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 19:11:19,740 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 19:11:19,740 [INFO] [enrich:Thread-5 (background_enrich)] ✅ Reloaded dataset from R2 (29937 rows)
+2025-11-17 19:11:19,751 [INFO] [TRACE log_dao] Thread-5 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-17 19:11:19,751 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-17 19:11:19,905 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:20,261 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=running, stage=unknown)
+2025-11-17 19:11:20,261 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → running
+2025-11-17 19:11:21,014 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 19:11:21,029 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 19:11:21,029 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 19:11:30,235 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-17 19:11:30,390 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:30,602 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=planning, stage=unknown)
+2025-11-17 19:11:30,602 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → planning
+2025-11-17 19:11:30,602 [INFO] [run_all] Building priority sets…
+2025-11-17 19:11:30,666 [INFO] [all_listens] Built full per-year summaries: artists=6459 rows, shows=8 rows, books=0 rows
+2025-11-17 19:11:30,668 [INFO] [run_all] Total counts: artists=6459, shows=8, books=0
+2025-11-17 19:11:30,687 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-17 19:11:30,724 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-17 19:11:30,724 [INFO] [run_all] Starting phase: overall
+2025-11-17 19:11:30,724 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-17 19:11:30,724 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-17 19:11:30,726 [INFO] [filter] Artists filtered out: 10/10 (remaining=0)
+2025-11-17 19:11:30,727 [INFO] [overall_first50] Artists before=10, after=0
+2025-11-17 19:11:30,727 [INFO] [filter] Shows filtered out: 6/7 (remaining=1)
+2025-11-17 19:11:30,727 [INFO] [overall_first50] Shows before=7, after=1
+2025-11-17 19:11:30,727 [INFO] [overall_first50] Fetching shows: 1
+2025-11-17 19:11:30,727 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-17 19:11:30,727 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-17 19:11:30,727 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-17 19:11:30,735 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-17 19:11:30,917 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-17 19:11:31,023 [INFO] [resolve_show_ids] Fallback search for 1 shows
+2025-11-17 19:11:31,318 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-17 19:11:31,423 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-17 19:11:31,424 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-17 19:11:31,533 [INFO] [TRACE log_dao] Thread-5 (background_enrich) called log() from _log → spotify:shows: Fetched 1 shows
+2025-11-17 19:11:31,533 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-17 19:11:31,637 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-17 19:11:31,641 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-17 19:11:31,903 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:32,087 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=planning, stage=unknown)
+2025-11-17 19:11:32,087 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → planning
+2025-11-17 19:11:32,087 [INFO] [overall] Checking for pending Discogs results before phase end…
+2025-11-17 19:11:32,087 [INFO] [overall] ✅ No pending Discogs jobs.
+2025-11-17 19:11:32,087 [INFO] [run_all] Completed phase: overall (batches +1)
+2025-11-17 19:11:32,256 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:32,476 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=overall, stage=unknown)
+2025-11-17 19:11:32,476 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → overall
+2025-11-17 19:11:32,477 [INFO] [flush_partial] Starting autosave snapshot at 20251117-191132
+2025-11-17 19:11:32,552 [INFO] [merge_into_master] Merged 1 new → total 34 (before=34)
+2025-11-17 19:11:33,244 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-17 19:11:33,245 [INFO] [merge_into_master] ✅ Saved 34 rows to info_show.csv
+2025-11-17 19:11:33,245 [INFO] [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-17 19:11:33,245 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-17 19:11:33,245 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-17 19:11:33,401 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 6372 rows
+2025-11-17 19:11:33,482 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 1643 rows
+2025-11-17 19:11:33,743 [INFO] [summarize_master_counts] ✅ info_album.csv: 15584 rows
+2025-11-17 19:11:33,814 [INFO] [summarize_master_counts] ✅ info_track.csv: 1770 rows
+2025-11-17 19:11:33,946 [INFO] [summarize_master_counts] ✅ info_show.csv: 34 rows
+2025-11-17 19:11:34,003 [INFO] [summarize_master_counts] ✅ info_audiobook.csv: 18 rows
+2025-11-17 19:11:34,003 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-17 19:11:34,003 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-17 19:11:34,003 [INFO] [run_all] Starting phase: popularity_timeseries
+2025-11-17 19:11:34,003 [INFO] [popularity_timeseries] Starting…
+2025-11-17 19:11:34,303 [INFO] [popularity_timeseries] Starting monthly artist + track popularity aggregation…
+2025-11-17 19:11:34,308 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/enrichment_service.py:382: UserWarning: Converting to PeriodArray/Index representation will drop timezone information.
+  df["month"] = df["datetime"].dt.to_period("M").dt.to_timestamp()
+2025-11-17 19:11:34,384 [INFO] [popularity_timeseries] Aggregated 9398 artist-month rows and 22407 track-month rows.
+2025-11-17 19:11:34,477 [INFO] [merge_into_master] Merged 148 new → total 348 (before=348)
+2025-11-17 19:11:35,227 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_popularity.csv
+2025-11-17 19:11:35,227 [INFO] [merge_into_master] ✅ Saved 348 rows to info_popularity.csv
+2025-11-17 19:11:35,228 [INFO] [popularity_timeseries] ✅ Added 148 combined popularity rows for user 58d0bd65d3f40b92.
+2025-11-17 19:11:35,499 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:35,670 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=overall, stage=unknown)
+2025-11-17 19:11:35,671 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → overall
+2025-11-17 19:11:35,682 [INFO] [run_all] Completed phase: popularity_timeseries (batches +1)
+2025-11-17 19:11:35,841 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:36,051 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=popularity_timeseries, stage=unknown)
+2025-11-17 19:11:36,051 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → popularity_timeseries
+2025-11-17 19:11:36,053 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 19:11:36,053 [INFO] [run_all] Flushed partial results after phase 'popularity_timeseries'
+2025-11-17 19:11:36,054 [INFO] [run_all] Starting phase: chart_scorer
+2025-11-17 19:11:36,263 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:36,541 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 19:11:36,541 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → chart_scorer
+2025-11-17 19:11:36,783 [INFO] [ChartScorer] ✅ Loaded charts from R2: reference/info_charts.csv
+2025-11-17 19:11:37,162 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/chart_scorer/58d0bd65d3f40b92_short-split-1_chart-scores.parquet
+2025-11-17 19:11:37,310 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/chart_scorer/global_chart-summaries.parquet
+2025-11-17 19:11:37,516 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:37,734 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 19:11:37,734 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → chart_scorer
+2025-11-17 19:11:37,915 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:38,085 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [standard_done] (phase=chart_scorer, stage=standard)
+2025-11-17 19:11:38,086 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → chart_scorer
+2025-11-17 19:11:38,086 [INFO] [CloudflareDAO] 🧭 Recorded standard enrichment completion for short-split-1
+2025-11-17 19:11:38,086 [INFO] [ChartScorer] 🧭 Marked standard enrichment as complete for short-split-1
+2025-11-17 19:11:38,089 [INFO] [run_all] Completed phase: chart_scorer (batches +1)
+2025-11-17 19:11:38,240 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:38,399 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 19:11:38,400 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → chart_scorer
+2025-11-17 19:11:38,401 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 19:11:38,402 [INFO] [run_all] Flushed partial results after phase 'chart_scorer'
+2025-11-17 19:11:38,402 [INFO] [run_all] All standard enrichment phases completed — starting final flush.
+2025-11-17 19:11:38,402 [INFO] [flush_all] Starting global master merges at 20251117-191138
+2025-11-17 19:11:38,403 [INFO] [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-17 19:11:38,403 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-17 19:11:39,173 [INFO] [flush_all] Discogs pool shut down successfully.
+2025-11-17 19:11:39,174 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-17 19:11:39,345 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 6372 rows
+2025-11-17 19:11:39,435 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 1643 rows
+2025-11-17 19:11:39,694 [INFO] [summarize_master_counts] ✅ info_album.csv: 15584 rows
+2025-11-17 19:11:39,774 [INFO] [summarize_master_counts] ✅ info_track.csv: 1770 rows
+2025-11-17 19:11:39,841 [INFO] [summarize_master_counts] ✅ info_show.csv: 34 rows
+2025-11-17 19:11:39,905 [INFO] [summarize_master_counts] ✅ info_audiobook.csv: 18 rows
+2025-11-17 19:11:39,905 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-17 19:11:39,906 [INFO] [run_all] ✅ Final flush after standard enrichment completed successfully.
+2025-11-17 19:11:40,045 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:40,220 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [standard_done] (phase=chart_scorer, stage=standard)
+2025-11-17 19:11:40,220 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → chart_scorer
+2025-11-17 19:11:40,220 [INFO] [CloudflareDAO] 🧭 Recorded standard enrichment completion for short-split-1
+2025-11-17 19:11:40,221 [INFO] [run_all] 🧭 Recorded standard enrichment completion in status.
+2025-11-17 19:11:40,221 [INFO] [run_all] Returning cleanly after standard enrichment (breadth-first deferred).
+2025-11-17 19:11:40,221 [INFO] [run_all] Waiting for remaining Discogs jobs to finish…
+2025-11-17 19:11:40,221 [INFO] [run_all] ⚠️ Discogs pool shutdown failed: 'DiscogsWorkerPool' object has no attribute 'job_queue'
+2025-11-17 19:11:40,221 [INFO] [run_all] 💤 Standard enrichment pipeline fully terminated.
+2025-11-17 19:11:40,456 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-split-1_status.json
+2025-11-17 19:11:40,704 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-split-1 [done] (phase=chart_scorer, stage=unknown)
+2025-11-17 19:11:40,704 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-split-1 → chart_scorer
+2025-11-17 19:11:40,704 [INFO] [TRACE log_dao] Thread-5 (background_enrich) called log() from background_enrich → enrichment: ✅ Enrichment completed successfully.
+2025-11-17 19:11:40,704 [INFO] [log_dao] [enrichment] ✅ Enrichment completed successfully.
+2025-11-17 19:11:40,704 [INFO] [enrich:Thread-5 (background_enrich)] ✅ Enrichment completed for short-split-1
+2025-11-17 19:11:40,704 [INFO] [enrich:Thread-5 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-17 19:11:40,704 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-17 19:11:40,705 [INFO] [TRACE log_dao] Thread-5 (background_enrich) called log() from background_enrich → thread: Thread finished for short-split-1
+2025-11-17 19:11:40,705 [INFO] [log_dao] [thread] Thread finished for short-split-1
+2025-11-17 19:11:40,705 [INFO] [enrich:Thread-5 (background_enrich)] 💤 Thread finished for short-split-1
+2025-11-17 20:26:36,232 [INFO] b'Stopping...'
+2025-11-17 20:40:05,856 [INFO] [logging] ✅ StreamToLogger attached
+2025-11-17 20:40:07,833 [INFO] [logging] ✅ StreamToLogger attached
+2025-11-17 20:40:08,036 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:40:08,125 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:40:11,810 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:40:11,904 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:40:12,768 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 20:40:13,177 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 20:40:13,178 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 20:40:13,178 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for full-1
+2025-11-17 20:40:13,431 [INFO] [auto_reenrich] 🧭 D1=error, R2=error
+2025-11-17 20:40:13,432 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for full-1 (D1=error, R2=error, stale_d1=True, stale_hb=True)
+2025-11-17 20:40:13,485 [INFO] [enrich:Thread-1 (background_enrich)] 🏁 Starting enrichment thread for full-1
+2025-11-17 20:40:13,485 [INFO] [auto_reenrich] 🚀 Started enrichment thread for full-1
+2025-11-17 20:40:13,485 [INFO] [enrich:Thread-1 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-17 20:40:13,618 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-17 20:40:13,618 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-17 20:40:13,904 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-17 20:40:13,904 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-17 20:40:14,190 [INFO] [enrich:Thread-1 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-17 20:40:14,946 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 20:40:15,337 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 20:40:15,338 [INFO] [dao_selector] ✅ Initialized Cloudflare D1 (first time this session)
+2025-11-17 20:40:17,053 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:40:17,148 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:40:17,149 [INFO] [enrich:Thread-1 (background_enrich)] ✅ Reloaded dataset from R2 (72212 rows)
+2025-11-17 20:40:17,169 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-17 20:40:17,169 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-17 20:40:17,354 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 20:40:17,562 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [running] (phase=running, stage=unknown)
+2025-11-17 20:40:17,563 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → running
+2025-11-17 20:40:18,539 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 20:40:18,554 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 20:40:18,554 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 20:40:33,506 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:40:33,614 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:40:33,661 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for full-1
+2025-11-17 20:40:33,858 [INFO] [auto_reenrich] 🧭 D1=running, R2=running
+2025-11-17 20:40:33,858 [INFO] [auto_reenrich] ⚠️ Thread stale (>threshold). Cancelling + waiting for cleanup.
+2025-11-17 20:40:33,861 [INFO] [auto_reenrich] ⏳ Waiting for lock release (1/15)...
+2025-11-17 20:40:34,865 [INFO] [auto_reenrich] ⏳ Waiting for lock release (2/15)...
+2025-11-17 20:40:35,873 [INFO] [auto_reenrich] ⏳ Waiting for lock release (3/15)...
+2025-11-17 20:40:36,878 [INFO] [auto_reenrich] ⏳ Waiting for lock release (4/15)...
+2025-11-17 20:40:37,885 [INFO] [auto_reenrich] ⏳ Waiting for lock release (5/15)...
+2025-11-17 20:40:38,892 [INFO] [auto_reenrich] ⏳ Waiting for lock release (6/15)...
+2025-11-17 20:40:39,898 [INFO] [auto_reenrich] ⏳ Waiting for lock release (7/15)...
+2025-11-17 20:40:40,905 [INFO] [auto_reenrich] ⏳ Waiting for lock release (8/15)...
+2025-11-17 20:40:41,908 [INFO] [auto_reenrich] ⏳ Waiting for lock release (9/15)...
+2025-11-17 20:40:42,913 [INFO] [auto_reenrich] ⏳ Waiting for lock release (10/15)...
+2025-11-17 20:40:42,918 [INFO] [run_all] Planning complete. Estimated total batches = 623
+2025-11-17 20:40:43,130 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 20:40:43,363 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [running] (phase=planning, stage=unknown)
+2025-11-17 20:40:43,363 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → planning
+2025-11-17 20:40:43,363 [INFO] [run_all] 🛑 CancelledError caught — flushing partial results.
+2025-11-17 20:40:43,364 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 20:40:43,364 [INFO] [run_all] ✅ Partial results flushed after cancellation.
+2025-11-17 20:40:43,509 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 20:40:43,693 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [error] (phase=chart_scorer, stage=standard)
+2025-11-17 20:40:43,693 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → chart_scorer
+2025-11-17 20:40:43,693 [INFO] [CloudflareDAO] ⚠️ Recorded standard enrichment error for full-1
+2025-11-17 20:40:43,693 [INFO] [run_all] Waiting for remaining Discogs jobs to finish…
+2025-11-17 20:40:43,694 [INFO] [run_all] ⚠️ Discogs pool shutdown failed: 'DiscogsWorkerPool' object has no attribute 'job_queue'
+2025-11-17 20:40:43,694 [INFO] [run_all] 💤 Standard enrichment pipeline fully terminated.
+2025-11-17 20:40:43,694 [INFO] [enrich:Thread-1 (background_enrich)] 🧱 Cancelled by user or dataset switch.
+2025-11-17 20:40:43,921 [INFO] [auto_reenrich] ⏳ Waiting for lock release (11/15)...
+2025-11-17 20:40:43,940 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 20:40:44,125 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [error] (phase=chart_scorer, stage=standard)
+2025-11-17 20:40:44,126 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → chart_scorer
+2025-11-17 20:40:44,127 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → enrichment: Cancelled mid-run by user.
+2025-11-17 20:40:44,127 [INFO] [log_dao] [enrichment] Cancelled mid-run by user.
+2025-11-17 20:40:44,127 [INFO] [enrich:Thread-1 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-17 20:40:44,127 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-17 20:40:44,128 [INFO] [TRACE log_dao] Thread-1 (background_enrich) called log() from background_enrich → thread: Thread finished for full-1
+2025-11-17 20:40:44,128 [INFO] [log_dao] [thread] Thread finished for full-1
+2025-11-17 20:40:44,129 [INFO] [enrich:Thread-1 (background_enrich)] 💤 Thread finished for full-1
+2025-11-17 20:40:44,926 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for full-1 (D1=running, R2=running, stale_d1=True, stale_hb=False)
+2025-11-17 20:40:44,996 [INFO] [enrich:Thread-3 (background_enrich)] 🏁 Starting enrichment thread for full-1
+2025-11-17 20:40:44,996 [INFO] [auto_reenrich] 🚀 Started enrichment thread for full-1
+2025-11-17 20:40:44,997 [INFO] [enrich:Thread-3 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-17 20:40:45,006 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-17 20:40:45,006 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-17 20:40:45,410 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-17 20:40:45,410 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-17 20:40:45,730 [INFO] [enrich:Thread-3 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-17 20:40:47,627 [INFO] [CloudflareDAO] ✅ Uploaded → userdata/58d0bd65d3f40b92_short-status-1_20251117-204045_history.csv
+2025-11-17 20:40:47,627 [INFO] [CloudflareDAO] ✅ Uploaded dataset → userdata/58d0bd65d3f40b92_short-status-1_20251117-204045_history.csv
+2025-11-17 20:40:47,862 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:40:47,964 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:40:48,057 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:40:48,057 [INFO] [enrich:Thread-3 (background_enrich)] ✅ Reloaded dataset from R2 (72212 rows)
+2025-11-17 20:40:48,076 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=etl, stage=unknown)
+2025-11-17 20:40:48,076 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → etl
+2025-11-17 20:40:48,077 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-17 20:40:48,077 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-17 20:40:48,226 [INFO] [upload_event] Recorded: user=58d0bd65d3f40b92, label=short-status-1, status=completed
+2025-11-17 20:40:48,240 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 20:40:48,386 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:40:48,475 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [running] (phase=running, stage=unknown)
+2025-11-17 20:40:48,476 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → running
+2025-11-17 20:40:48,557 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=etl, stage=unknown)
+2025-11-17 20:40:48,558 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → etl
+2025-11-17 20:40:48,559 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 20:40:48,760 [INFO] [auto_reenrich] 🧭 D1=running, R2=running
+2025-11-17 20:40:48,761 [INFO] [auto_reenrich] ⚠️ Thread stale (>threshold). Cancelling + waiting for cleanup.
+2025-11-17 20:40:48,761 [INFO] [auto_reenrich] ⏳ Waiting for lock release (1/15)...
+2025-11-17 20:40:49,239 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 20:40:49,334 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 20:40:49,334 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 20:40:49,767 [INFO] [auto_reenrich] ⏳ Waiting for lock release (2/15)...
+2025-11-17 20:40:50,773 [INFO] [auto_reenrich] ⏳ Waiting for lock release (3/15)...
+2025-11-17 20:40:51,779 [INFO] [auto_reenrich] ⏳ Waiting for lock release (4/15)...
+2025-11-17 20:40:52,785 [INFO] [auto_reenrich] ⏳ Waiting for lock release (5/15)...
+2025-11-17 20:40:53,793 [INFO] [auto_reenrich] ⏳ Waiting for lock release (6/15)...
+2025-11-17 20:40:54,799 [INFO] [auto_reenrich] ⏳ Waiting for lock release (7/15)...
+2025-11-17 20:40:55,805 [INFO] [auto_reenrich] ⏳ Waiting for lock release (8/15)...
+2025-11-17 20:40:56,806 [INFO] [auto_reenrich] ⏳ Waiting for lock release (9/15)...
+2025-11-17 20:40:57,812 [INFO] [auto_reenrich] ⏳ Waiting for lock release (10/15)...
+2025-11-17 20:40:58,819 [INFO] [auto_reenrich] ⏳ Waiting for lock release (11/15)...
+2025-11-17 20:40:59,826 [INFO] [auto_reenrich] ⏳ Waiting for lock release (12/15)...
+2025-11-17 20:41:00,832 [INFO] [auto_reenrich] ⏳ Waiting for lock release (13/15)...
+2025-11-17 20:41:01,837 [INFO] [auto_reenrich] ⏳ Waiting for lock release (14/15)...
+2025-11-17 20:41:02,846 [INFO] [auto_reenrich] ⏳ Waiting for lock release (15/15)...
+2025-11-17 20:41:03,852 [INFO] [auto_reenrich] 🚫 Lock still held after timeout — forcing release.
+2025-11-17 20:41:03,852 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for short-status-1 (D1=running, R2=running, stale_d1=True, stale_hb=True)
+2025-11-17 20:41:03,926 [INFO] [enrich:Thread-6 (background_enrich)] 🏁 Starting enrichment thread for short-status-1
+2025-11-17 20:41:03,926 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-status-1
+2025-11-17 20:41:03,927 [INFO] [enrich:Thread-6 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-17 20:41:03,963 [INFO] [TRACE log_dao] Thread-6 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-17 20:41:03,963 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-17 20:41:04,157 [INFO] [TRACE log_dao] Thread-6 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-17 20:41:04,157 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-17 20:41:04,370 [INFO] [enrich:Thread-6 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-17 20:41:05,329 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:41:05,389 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:41:05,390 [INFO] [enrich:Thread-6 (background_enrich)] ✅ Reloaded dataset from R2 (29937 rows)
+2025-11-17 20:41:05,412 [INFO] [TRACE log_dao] Thread-6 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-17 20:41:05,413 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-17 20:41:05,571 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:05,763 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=running, stage=unknown)
+2025-11-17 20:41:05,765 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → running
+2025-11-17 20:41:06,536 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 20:41:06,546 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 20:41:06,546 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 20:41:23,203 [INFO] [run_all] Planning complete. Estimated total batches = 623
+2025-11-17 20:41:23,366 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 20:41:23,780 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [running] (phase=planning, stage=unknown)
+2025-11-17 20:41:23,780 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → planning
+2025-11-17 20:41:23,782 [INFO] [run_all] 🛑 CancelledError caught — flushing partial results.
+2025-11-17 20:41:23,782 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 20:41:23,782 [INFO] [run_all] ✅ Partial results flushed after cancellation.
+2025-11-17 20:41:23,958 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 20:41:24,118 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [error] (phase=chart_scorer, stage=standard)
+2025-11-17 20:41:24,118 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → chart_scorer
+2025-11-17 20:41:24,118 [INFO] [CloudflareDAO] ⚠️ Recorded standard enrichment error for full-1
+2025-11-17 20:41:24,118 [INFO] [run_all] Waiting for remaining Discogs jobs to finish…
+2025-11-17 20:41:24,118 [INFO] [run_all] ⚠️ Discogs pool shutdown failed: 'DiscogsWorkerPool' object has no attribute 'job_queue'
+2025-11-17 20:41:24,118 [INFO] [run_all] 💤 Standard enrichment pipeline fully terminated.
+2025-11-17 20:41:24,118 [INFO] [enrich:Thread-3 (background_enrich)] 🧱 Cancelled by user or dataset switch.
+2025-11-17 20:41:24,447 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_full-1_status.json
+2025-11-17 20:41:24,602 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → full-1 [error] (phase=chart_scorer, stage=standard)
+2025-11-17 20:41:24,602 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for full-1 → chart_scorer
+2025-11-17 20:41:24,605 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → enrichment: Cancelled mid-run by user.
+2025-11-17 20:41:24,605 [INFO] [log_dao] [enrichment] Cancelled mid-run by user.
+2025-11-17 20:41:24,605 [INFO] [enrich:Thread-3 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-17 20:41:24,607 [INFO] [thread_monitor] 2 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-17 20:41:24,607 [INFO] [TRACE log_dao] Thread-3 (background_enrich) called log() from background_enrich → thread: Thread finished for full-1
+2025-11-17 20:41:24,608 [INFO] [log_dao] [thread] Thread finished for full-1
+2025-11-17 20:41:24,608 [INFO] [enrich:Thread-3 (background_enrich)] 💤 Thread finished for full-1
+2025-11-17 20:41:25,584 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-17 20:41:25,738 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:25,948 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=planning, stage=unknown)
+2025-11-17 20:41:25,949 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → planning
+2025-11-17 20:41:25,949 [INFO] [run_all] Building priority sets…
+2025-11-17 20:41:26,009 [INFO] [all_listens] Built full per-year summaries: artists=6459 rows, shows=8 rows, books=0 rows
+2025-11-17 20:41:26,012 [INFO] [run_all] Total counts: artists=6459, shows=8, books=0
+2025-11-17 20:41:26,031 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-17 20:41:26,066 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-17 20:41:26,066 [INFO] [run_all] Starting phase: overall
+2025-11-17 20:41:26,066 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-17 20:41:26,066 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-17 20:41:26,068 [INFO] [filter] Artists filtered out: 10/10 (remaining=0)
+2025-11-17 20:41:26,068 [INFO] [overall_first50] Artists before=10, after=0
+2025-11-17 20:41:26,069 [INFO] [filter] Shows filtered out: 6/7 (remaining=1)
+2025-11-17 20:41:26,069 [INFO] [overall_first50] Shows before=7, after=1
+2025-11-17 20:41:26,069 [INFO] [overall_first50] Fetching shows: 1
+2025-11-17 20:41:26,069 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-17 20:41:26,069 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-17 20:41:26,069 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-17 20:41:26,071 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-17 20:41:26,128 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-17 20:41:26,233 [INFO] [resolve_show_ids] Fallback search for 1 shows
+2025-11-17 20:41:26,649 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-17 20:41:26,753 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-17 20:41:26,754 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-17 20:41:26,890 [INFO] [TRACE log_dao] Thread-6 (background_enrich) called log() from _log → spotify:shows: Fetched 1 shows
+2025-11-17 20:41:26,891 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-17 20:41:26,992 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-17 20:41:26,997 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-17 20:41:27,242 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:27,569 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=planning, stage=unknown)
+2025-11-17 20:41:27,569 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → planning
+2025-11-17 20:41:27,569 [INFO] [overall] Checking for pending Discogs results before phase end…
+2025-11-17 20:41:27,569 [INFO] [overall] ✅ No pending Discogs jobs.
+2025-11-17 20:41:27,569 [INFO] [run_all] Completed phase: overall (batches +1)
+2025-11-17 20:41:27,714 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:27,923 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=overall, stage=unknown)
+2025-11-17 20:41:27,923 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → overall
+2025-11-17 20:41:27,926 [INFO] [flush_partial] Starting autosave snapshot at 20251117-204127
+2025-11-17 20:41:28,020 [INFO] [merge_into_master] Merged 1 new → total 34 (before=34)
+2025-11-17 20:41:28,542 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-17 20:41:28,543 [INFO] [merge_into_master] ✅ Saved 34 rows to info_show.csv
+2025-11-17 20:41:28,543 [INFO] [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-17 20:41:28,543 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-17 20:41:28,544 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-17 20:41:28,714 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 6372 rows
+2025-11-17 20:41:28,793 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 1643 rows
+2025-11-17 20:41:29,057 [INFO] [summarize_master_counts] ✅ info_album.csv: 15584 rows
+2025-11-17 20:41:29,140 [INFO] [summarize_master_counts] ✅ info_track.csv: 1770 rows
+2025-11-17 20:41:29,227 [INFO] [summarize_master_counts] ✅ info_show.csv: 34 rows
+2025-11-17 20:41:29,289 [INFO] [summarize_master_counts] ✅ info_audiobook.csv: 18 rows
+2025-11-17 20:41:29,290 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-17 20:41:29,290 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-17 20:41:29,290 [INFO] [run_all] Starting phase: popularity_timeseries
+2025-11-17 20:41:29,290 [INFO] [popularity_timeseries] Starting…
+2025-11-17 20:41:29,557 [INFO] [popularity_timeseries] Starting monthly artist + track popularity aggregation…
+2025-11-17 20:41:29,561 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/enrichment_service.py:382: UserWarning: Converting to PeriodArray/Index representation will drop timezone information.
+  df["month"] = df["datetime"].dt.to_period("M").dt.to_timestamp()
+2025-11-17 20:41:29,636 [INFO] [popularity_timeseries] Aggregated 9398 artist-month rows and 22407 track-month rows.
+2025-11-17 20:41:29,730 [INFO] [merge_into_master] Merged 148 new → total 348 (before=348)
+2025-11-17 20:41:30,418 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_popularity.csv
+2025-11-17 20:41:30,418 [INFO] [merge_into_master] ✅ Saved 348 rows to info_popularity.csv
+2025-11-17 20:41:30,419 [INFO] [popularity_timeseries] ✅ Added 148 combined popularity rows for user 58d0bd65d3f40b92.
+2025-11-17 20:41:30,688 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:30,911 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=overall, stage=unknown)
+2025-11-17 20:41:30,911 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → overall
+2025-11-17 20:41:30,917 [INFO] [run_all] Completed phase: popularity_timeseries (batches +1)
+2025-11-17 20:41:31,070 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:31,292 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=popularity_timeseries, stage=unknown)
+2025-11-17 20:41:31,292 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → popularity_timeseries
+2025-11-17 20:41:31,293 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 20:41:31,293 [INFO] [run_all] Flushed partial results after phase 'popularity_timeseries'
+2025-11-17 20:41:31,293 [INFO] [run_all] Starting phase: chart_scorer
+2025-11-17 20:41:31,466 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:31,678 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 20:41:31,678 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:41:31,935 [INFO] [ChartScorer] ✅ Loaded charts from R2: reference/info_charts.csv
+2025-11-17 20:41:32,329 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/chart_scorer/58d0bd65d3f40b92_short-status-1_chart-scores.parquet
+2025-11-17 20:41:32,484 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/chart_scorer/global_chart-summaries.parquet
+2025-11-17 20:41:32,693 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:32,874 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 20:41:32,874 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:41:33,074 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:33,286 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [standard_done] (phase=chart_scorer, stage=standard)
+2025-11-17 20:41:33,287 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:41:33,288 [INFO] [CloudflareDAO] 🧭 Recorded standard enrichment completion for short-status-1
+2025-11-17 20:41:33,288 [INFO] [ChartScorer] 🧭 Marked standard enrichment as complete for short-status-1
+2025-11-17 20:41:33,292 [INFO] [run_all] Completed phase: chart_scorer (batches +1)
+2025-11-17 20:41:33,456 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:33,664 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 20:41:33,665 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:41:33,667 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 20:41:33,667 [INFO] [run_all] Flushed partial results after phase 'chart_scorer'
+2025-11-17 20:41:33,667 [INFO] [run_all] All standard enrichment phases completed — starting final flush.
+2025-11-17 20:41:33,667 [INFO] [flush_all] Starting global master merges at 20251117-204133
+2025-11-17 20:41:33,668 [INFO] [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-17 20:41:33,668 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-17 20:41:34,559 [INFO] [flush_all] Discogs pool shut down successfully.
+2025-11-17 20:41:34,559 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-17 20:41:34,722 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 6372 rows
+2025-11-17 20:41:34,799 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 1643 rows
+2025-11-17 20:41:35,063 [INFO] [summarize_master_counts] ✅ info_album.csv: 15584 rows
+2025-11-17 20:41:35,138 [INFO] [summarize_master_counts] ✅ info_track.csv: 1770 rows
+2025-11-17 20:41:35,193 [INFO] [summarize_master_counts] ✅ info_show.csv: 34 rows
+2025-11-17 20:41:35,250 [INFO] [summarize_master_counts] ✅ info_audiobook.csv: 18 rows
+2025-11-17 20:41:35,250 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-17 20:41:35,250 [INFO] [run_all] ✅ Final flush after standard enrichment completed successfully.
+2025-11-17 20:41:35,443 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:35,632 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [standard_done] (phase=chart_scorer, stage=standard)
+2025-11-17 20:41:35,632 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:41:35,632 [INFO] [CloudflareDAO] 🧭 Recorded standard enrichment completion for short-status-1
+2025-11-17 20:41:35,633 [INFO] [run_all] 🧭 Recorded standard enrichment completion in status.
+2025-11-17 20:41:35,633 [INFO] [run_all] Returning cleanly after standard enrichment (breadth-first deferred).
+2025-11-17 20:41:35,633 [INFO] [run_all] Waiting for remaining Discogs jobs to finish…
+2025-11-17 20:41:35,633 [INFO] [run_all] ⚠️ Discogs pool shutdown failed: 'DiscogsWorkerPool' object has no attribute 'job_queue'
+2025-11-17 20:41:35,633 [INFO] [run_all] 💤 Standard enrichment pipeline fully terminated.
+2025-11-17 20:41:35,931 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:41:36,481 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [done] (phase=chart_scorer, stage=unknown)
+2025-11-17 20:41:36,482 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:41:36,483 [INFO] [TRACE log_dao] Thread-6 (background_enrich) called log() from background_enrich → enrichment: ✅ Enrichment completed successfully.
+2025-11-17 20:41:36,483 [INFO] [log_dao] [enrichment] ✅ Enrichment completed successfully.
+2025-11-17 20:41:36,484 [INFO] [enrich:Thread-6 (background_enrich)] ✅ Enrichment completed for short-status-1
+2025-11-17 20:41:36,484 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-17 20:41:36,485 [INFO] [TRACE log_dao] Thread-6 (background_enrich) called log() from background_enrich → thread: Thread finished for short-status-1
+2025-11-17 20:41:36,485 [INFO] [log_dao] [thread] Thread finished for short-status-1
+2025-11-17 20:41:36,485 [INFO] [enrich:Thread-6 (background_enrich)] 💤 Thread finished for short-status-1
+2025-11-17 20:52:26,121 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 20:52:26,545 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 20:52:26,545 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 20:52:26,851 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 20:52:27,532 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 20:52:27,533 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 20:52:29,329 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:52:29,386 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:52:29,400 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 20:52:29,559 [INFO] [auto_reenrich] 🧭 D1=done, R2=done
+2025-11-17 20:52:29,559 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for short-status-1 (D1=done, R2=done, stale_d1=True, stale_hb=True)
+2025-11-17 20:52:29,625 [ERROR] Exception in thread
+2025-11-17 20:52:29,625 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-status-1
+2025-11-17 20:52:29,626 [ERROR] Thread-8 (background_enrich)
+2025-11-17 20:52:29,627 [ERROR] :
+2025-11-17 20:52:29,627 [ERROR] Traceback (most recent call last):
+2025-11-17 20:52:29,632 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-11-17 20:52:29,636 [ERROR] self.run()
+2025-11-17 20:52:29,693 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-11-17 20:52:29,694 [ERROR] self._target(*self._args, **self._kwargs)
+2025-11-17 20:52:29,694 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1075, in background_enrich
+2025-11-17 20:52:29,694 [ERROR] from enrichment_service import (
+2025-11-17 20:52:29,694 [ERROR] ImportError
+2025-11-17 20:52:29,695 [ERROR] :
+2025-11-17 20:52:29,695 [ERROR] cannot import name 'ensure_daos_initialized_for_thread' from 'enrichment_service' (/Users/admin/Documents/GitHub/spotify_regifted_cn/enrichment_service.py)
+2025-11-17 20:55:06,809 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 20:55:07,248 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 20:55:07,248 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 20:55:08,886 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:55:08,947 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:55:08,962 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 20:55:09,368 [INFO] [auto_reenrich] 🧭 D1=done, R2=done
+2025-11-17 20:55:09,369 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for short-status-1 (D1=done, R2=done, stale_d1=True, stale_hb=True)
+2025-11-17 20:55:09,438 [ERROR] Exception in thread
+2025-11-17 20:55:09,439 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-status-1
+2025-11-17 20:55:09,439 [ERROR] Thread-9 (background_enrich)
+2025-11-17 20:55:09,441 [ERROR] :
+2025-11-17 20:55:09,446 [ERROR] Traceback (most recent call last):
+2025-11-17 20:55:09,448 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+2025-11-17 20:55:09,510 [ERROR] self.run()
+2025-11-17 20:55:09,510 [ERROR] File "/Users/admin/.pyenv/versions/3.12.9/lib/python3.12/threading.py", line 1012, in run
+2025-11-17 20:55:09,510 [ERROR] self._target(*self._args, **self._kwargs)
+2025-11-17 20:55:09,510 [ERROR] File "/Users/admin/Documents/GitHub/spotify_regifted_cn/app.py", line 1082, in background_enrich
+2025-11-17 20:55:09,511 [ERROR] from dao_selector import DAOS, get_log_dao, DISCOGS_KEY, DISCOGS_SECRET, token
+2025-11-17 20:55:09,511 [ERROR] ImportError
+2025-11-17 20:55:09,511 [ERROR] :
+2025-11-17 20:55:09,511 [ERROR] cannot import name 'DISCOGS_KEY' from 'dao_selector' (/Users/admin/Documents/GitHub/spotify_regifted_cn/dao_selector.py)
+2025-11-17 20:56:25,678 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 20:56:26,325 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 20:56:26,326 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 20:56:27,971 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:56:28,027 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:56:28,042 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 20:56:28,190 [INFO] [auto_reenrich] 🧭 D1=done, R2=done
+2025-11-17 20:56:28,190 [INFO] [auto_reenrich] ⚠️ Triggering full re-enrichment for short-status-1 (D1=done, R2=done, stale_d1=True, stale_hb=True)
+2025-11-17 20:56:28,252 [INFO] [enrich:Thread-10 (background_enrich)] 🏁 Starting enrichment thread for short-status-1
+2025-11-17 20:56:28,252 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-status-1
+2025-11-17 20:56:28,252 [INFO] [enrich:Thread-10 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-17 20:56:28,259 [INFO] [TRACE log_dao] Thread-10 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-17 20:56:28,261 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-17 20:56:28,738 [INFO] [TRACE log_dao] Thread-10 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-17 20:56:28,738 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-17 20:56:28,972 [INFO] [enrich:Thread-10 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-17 20:56:30,155 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 20:56:30,212 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 20:56:30,213 [INFO] [enrich:Thread-10 (background_enrich)] ✅ Reloaded dataset from R2 (29937 rows)
+2025-11-17 20:56:30,224 [INFO] [TRACE log_dao] Thread-10 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-17 20:56:30,224 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-17 20:56:30,380 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:30,574 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=running, stage=unknown)
+2025-11-17 20:56:30,574 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → running
+2025-11-17 20:56:31,523 [INFO] [debug:init] master_artists shape=(6372, 7)
+2025-11-17 20:56:31,539 [INFO] [master] Loaded: artists=6372, albums=15584, tracks=1770, shows=34, audiobooks=18
+2025-11-17 20:56:31,539 [INFO] [master] Seen sets initialized: artists=6372, albums=15520, tracks=1770, shows=34, audiobooks=18
+2025-11-17 20:56:40,699 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-17 20:56:40,875 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:41,072 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=planning, stage=unknown)
+2025-11-17 20:56:41,072 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → planning
+2025-11-17 20:56:41,072 [INFO] [run_all] Building priority sets…
+2025-11-17 20:56:41,129 [INFO] [all_listens] Built full per-year summaries: artists=6459 rows, shows=8 rows, books=0 rows
+2025-11-17 20:56:41,134 [INFO] [run_all] Total counts: artists=6459, shows=8, books=0
+2025-11-17 20:56:41,154 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-17 20:56:41,196 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-17 20:56:41,196 [INFO] [run_all] Starting phase: overall
+2025-11-17 20:56:41,196 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-17 20:56:41,196 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-17 20:56:41,199 [INFO] [filter] Artists filtered out: 10/10 (remaining=0)
+2025-11-17 20:56:41,199 [INFO] [overall_first50] Artists before=10, after=0
+2025-11-17 20:56:41,200 [INFO] [filter] Shows filtered out: 6/7 (remaining=1)
+2025-11-17 20:56:41,200 [INFO] [overall_first50] Shows before=7, after=1
+2025-11-17 20:56:41,200 [INFO] [overall_first50] Fetching shows: 1
+2025-11-17 20:56:41,200 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-17 20:56:41,200 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-17 20:56:41,200 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-17 20:56:41,202 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-17 20:56:41,311 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-17 20:56:41,414 [INFO] [resolve_show_ids] Fallback search for 1 shows
+2025-11-17 20:56:41,628 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-17 20:56:41,733 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-17 20:56:41,733 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-17 20:56:41,855 [INFO] [TRACE log_dao] Thread-10 (background_enrich) called log() from _log → spotify:shows: Fetched 1 shows
+2025-11-17 20:56:41,855 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-17 20:56:41,961 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-17 20:56:41,964 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-17 20:56:42,281 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:42,497 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=planning, stage=unknown)
+2025-11-17 20:56:42,498 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → planning
+2025-11-17 20:56:42,498 [INFO] [overall] Checking for pending Discogs results before phase end…
+2025-11-17 20:56:42,498 [INFO] [overall] ✅ No pending Discogs jobs.
+2025-11-17 20:56:42,498 [INFO] [run_all] Completed phase: overall (batches +1)
+2025-11-17 20:56:42,818 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:43,016 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=overall, stage=unknown)
+2025-11-17 20:56:43,016 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → overall
+2025-11-17 20:56:43,018 [INFO] [flush_partial] Starting autosave snapshot at 20251117-205643
+2025-11-17 20:56:43,081 [INFO] [merge_into_master] Merged 1 new → total 34 (before=34)
+2025-11-17 20:56:43,584 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-17 20:56:43,584 [INFO] [merge_into_master] ✅ Saved 34 rows to info_show.csv
+2025-11-17 20:56:43,584 [INFO] [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-17 20:56:43,584 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-17 20:56:43,584 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-17 20:56:43,869 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 6372 rows
+2025-11-17 20:56:43,991 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 1643 rows
+2025-11-17 20:56:44,563 [INFO] [summarize_master_counts] ✅ info_album.csv: 15584 rows
+2025-11-17 20:56:44,659 [INFO] [summarize_master_counts] ✅ info_track.csv: 1770 rows
+2025-11-17 20:56:44,848 [INFO] [summarize_master_counts] ✅ info_show.csv: 34 rows
+2025-11-17 20:56:44,907 [INFO] [summarize_master_counts] ✅ info_audiobook.csv: 18 rows
+2025-11-17 20:56:44,907 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-17 20:56:44,908 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-17 20:56:44,908 [INFO] [run_all] Starting phase: popularity_timeseries
+2025-11-17 20:56:44,908 [INFO] [popularity_timeseries] Starting…
+2025-11-17 20:56:45,292 [INFO] [popularity_timeseries] Starting monthly artist + track popularity aggregation…
+2025-11-17 20:56:45,296 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/enrichment_service.py:382: UserWarning: Converting to PeriodArray/Index representation will drop timezone information.
+  df["month"] = df["datetime"].dt.to_period("M").dt.to_timestamp()
+2025-11-17 20:56:45,370 [INFO] [popularity_timeseries] Aggregated 9398 artist-month rows and 22407 track-month rows.
+2025-11-17 20:56:45,553 [INFO] [merge_into_master] Merged 148 new → total 348 (before=348)
+2025-11-17 20:56:46,186 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_popularity.csv
+2025-11-17 20:56:46,187 [INFO] [merge_into_master] ✅ Saved 348 rows to info_popularity.csv
+2025-11-17 20:56:46,187 [INFO] [popularity_timeseries] ✅ Added 148 combined popularity rows for user 58d0bd65d3f40b92.
+2025-11-17 20:56:46,450 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:47,734 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=overall, stage=unknown)
+2025-11-17 20:56:47,734 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → overall
+2025-11-17 20:56:47,739 [INFO] [run_all] Completed phase: popularity_timeseries (batches +1)
+2025-11-17 20:56:47,895 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:48,074 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=popularity_timeseries, stage=unknown)
+2025-11-17 20:56:48,075 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → popularity_timeseries
+2025-11-17 20:56:48,076 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 20:56:48,076 [INFO] [run_all] Flushed partial results after phase 'popularity_timeseries'
+2025-11-17 20:56:48,076 [INFO] [run_all] Starting phase: chart_scorer
+2025-11-17 20:56:48,235 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:48,479 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 20:56:48,480 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:56:48,924 [INFO] [ChartScorer] ✅ Loaded charts from R2: reference/info_charts.csv
+2025-11-17 20:56:49,074 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/chart_scorer/58d0bd65d3f40b92_short-status-1_chart-scores.parquet
+2025-11-17 20:56:49,253 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/chart_scorer/global_chart-summaries.parquet
+2025-11-17 20:56:49,542 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:49,708 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 20:56:49,709 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:56:49,891 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:50,099 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [standard_done] (phase=chart_scorer, stage=standard)
+2025-11-17 20:56:50,099 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:56:50,099 [INFO] [CloudflareDAO] 🧭 Recorded standard enrichment completion for short-status-1
+2025-11-17 20:56:50,099 [INFO] [ChartScorer] 🧭 Marked standard enrichment as complete for short-status-1
+2025-11-17 20:56:50,103 [INFO] [run_all] Completed phase: chart_scorer (batches +1)
+2025-11-17 20:56:50,257 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:50,443 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [running] (phase=chart_scorer, stage=unknown)
+2025-11-17 20:56:50,443 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:56:50,444 [INFO] [flush_partial] Nothing to flush (all buffers empty).
+2025-11-17 20:56:50,444 [INFO] [run_all] Flushed partial results after phase 'chart_scorer'
+2025-11-17 20:56:50,444 [INFO] [run_all] All standard enrichment phases completed — starting final flush.
+2025-11-17 20:56:50,444 [INFO] [flush_all] Starting global master merges at 20251117-205650
+2025-11-17 20:56:50,445 [INFO] [flush_all] ⚠️ No data written — all buffers empty or merges skipped.
+2025-11-17 20:56:50,445 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-17 20:56:51,339 [INFO] [flush_all] Discogs pool shut down successfully.
+2025-11-17 20:56:51,339 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-17 20:56:51,619 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 6372 rows
+2025-11-17 20:56:51,716 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 1643 rows
+2025-11-17 20:56:52,194 [INFO] [summarize_master_counts] ✅ info_album.csv: 15584 rows
+2025-11-17 20:56:52,293 [INFO] [summarize_master_counts] ✅ info_track.csv: 1770 rows
+2025-11-17 20:56:52,352 [INFO] [summarize_master_counts] ✅ info_show.csv: 34 rows
+2025-11-17 20:56:52,414 [INFO] [summarize_master_counts] ✅ info_audiobook.csv: 18 rows
+2025-11-17 20:56:52,414 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-17 20:56:52,414 [INFO] [run_all] ✅ Final flush after standard enrichment completed successfully.
+2025-11-17 20:56:52,619 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:52,828 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [standard_done] (phase=chart_scorer, stage=standard)
+2025-11-17 20:56:52,829 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:56:52,829 [INFO] [CloudflareDAO] 🧭 Recorded standard enrichment completion for short-status-1
+2025-11-17 20:56:52,829 [INFO] [run_all] 🧭 Recorded standard enrichment completion in status.
+2025-11-17 20:56:52,829 [INFO] [run_all] Returning cleanly after standard enrichment (breadth-first deferred).
+2025-11-17 20:56:52,829 [INFO] [run_all] Waiting for remaining Discogs jobs to finish…
+2025-11-17 20:56:52,830 [INFO] [run_all] ⚠️ Discogs pool shutdown failed: 'DiscogsWorkerPool' object has no attribute 'job_queue'
+2025-11-17 20:56:52,830 [INFO] [run_all] 💤 Standard enrichment pipeline fully terminated.
+2025-11-17 20:56:53,066 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-status-1_status.json
+2025-11-17 20:56:53,251 [INFO] [CloudflareD1DAO] 🧭 Upserted enrichment_status → short-status-1 [standard_done] (phase=chart_scorer, stage=standard)
+2025-11-17 20:56:53,252 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-status-1 → chart_scorer
+2025-11-17 20:56:53,252 [INFO] [CloudflareDAO] 🧭 Recorded standard enrichment completion for short-status-1
+2025-11-17 20:56:53,253 [INFO] [TRACE log_dao] Thread-10 (background_enrich) called log() from background_enrich → enrichment: ✅ Enrichment completed successfully.
+2025-11-17 20:56:53,253 [INFO] [log_dao] [enrichment] ✅ Enrichment completed successfully.
+2025-11-17 20:56:53,253 [INFO] [enrich:Thread-10 (background_enrich)] ✅ Enrichment completed for short-status-1
+2025-11-17 20:56:53,253 [INFO] [enrich:Thread-10 (background_enrich)] 🔓 Released lock for 58d0bd65d3f40b92
+2025-11-17 20:56:53,254 [INFO] [thread_monitor] 1 enrichment thread(s) active after enrichment finished or cancelled.
+2025-11-17 20:56:53,254 [INFO] [TRACE log_dao] Thread-10 (background_enrich) called log() from background_enrich → thread: Thread finished for short-status-1
+2025-11-17 20:56:53,255 [INFO] [log_dao] [thread] Thread finished for short-status-1
+2025-11-17 20:56:53,255 [INFO] [enrich:Thread-10 (background_enrich)] 💤 Thread finished for short-status-1
+2025-11-17 21:04:34,534 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:04:34,890 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:04:34,890 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:04:35,415 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:04:35,824 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:04:35,825 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:04:36,914 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:04:36,968 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:04:36,983 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:04:37,121 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:04:37,121 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:04:37,121 [INFO] [auto_reenrich] ⚠️ Exception during enrichment check: cannot import name 'DISCOGS_KEY' from 'dao_selector' (/Users/admin/Documents/GitHub/spotify_regifted_cn/dao_selector.py)
+2025-11-17 21:05:59,052 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:05:59,464 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:05:59,464 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:06:00,448 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:06:00,496 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:06:00,510 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:06:00,706 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:06:00,706 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:06:00,706 [INFO] [breadth_restart] 🚀 Starting breadth-first-only enrichment for short-status-1
+2025-11-17 21:06:00,771 [INFO] [breadth_restart] ❌ Could not load cleaned dataset for short-status-1
+2025-11-17 21:09:18,442 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:09:18,833 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:09:18,833 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:09:19,258 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 21:09:19,655 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 21:09:19,655 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 21:09:20,665 [INFO] [CloudflareDAO] 🧭 Loaded global schema (25 columns)
+2025-11-17 21:09:20,718 [INFO] [CloudflareDAO] ✅ Global schema applied successfully for 25 columns
+2025-11-17 21:09:20,732 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-status-1
+2025-11-17 21:09:20,945 [INFO] [auto_reenrich] 🧭 D1=standard_done, R2=standard_done
+2025-11-17 21:09:20,945 [INFO] [auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for short-status-1
+2025-11-17 21:09:20,946 [INFO] [breadth_restart] 🚀 Starting breadth-first-only enrichment for short-status-1
+2025-11-17 21:09:21,010 [INFO] [breadth_restart] ❌ Could not load cleaned dataset for short-status-1

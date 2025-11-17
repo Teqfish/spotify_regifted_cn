@@ -401,71 +401,49 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
 
     def save_user_data(self, user_id: str, dataset_label: str, df: pd.DataFrame, filename: str):
         """
-        Save cleaned dataset + schema to Cloudflare R2 under userdata/.
-        Creates two files:
+        Save cleaned dataset to Cloudflare R2 under userdata/.
+        Creates one file:
         - userdata/{table_name}.csv
-        - userdata/{table_name}_schema.json
+        Schema generation is no longer performed (global schema is shared at userdata/schema.json).
         """
-        import io, json, time
+        import io, time
 
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
-
         csv_key = f"userdata/{table_name}.csv"
-        schema_key = f"userdata/{table_name}_schema.json"
 
         # --- Upload CSV ---
         buf = io.BytesIO()
         df.to_csv(buf, index=False)
         self._put_bytes(csv_key, buf.getvalue(), "text/csv")
 
-        # --- Build schema dictionary ---
-        schema = {}
-        for col, dtype in df.dtypes.items():
-            dtype_str = str(dtype)
-            # Normalize common types for better round-tripping
-            if "datetime" in dtype_str:
-                dtype_str = "datetime64[ns, UTC]" if getattr(df[col].dt, "tz", None) else "datetime64[ns]"
-            elif "int" in dtype_str:
-                dtype_str = "Int64"
-            elif "float" in dtype_str:
-                dtype_str = "Float64"
-            elif "bool" in dtype_str:
-                dtype_str = "boolean"
-            elif dtype_str == "object":
-                dtype_str = "string"
-            schema[col] = dtype_str
-
-        # --- Upload schema JSON ---
-        body = json.dumps(schema, indent=2).encode("utf-8")
-        self._put_bytes(schema_key, body, "application/json")
-
-        print(f"[CloudflareDAO] ✅ Uploaded dataset + schema → {csv_key}")
+        print(f"[CloudflareDAO] ✅ Uploaded dataset → {csv_key}")
         return table_name, csv_key
+
 
     def load_user_data(self, table_name: str) -> pd.DataFrame:
         """
-        Load cleaned dataset CSV from R2 and restore original dtypes using schema.
-        If schema is missing, falls back to best-effort parsing.
+        Load cleaned dataset CSV from R2 and restore dtypes using the global schema.
+        Falls back to inference if schema cannot be loaded.
         """
         import io, json
         import pandas as pd
 
         csv_key = f"userdata/{table_name}.csv"
-        schema_key = f"userdata/{table_name}_schema.json"
+        schema_key = "userdata/schema.json"  # ✅ global schema path
 
         # --- Step 1: Load CSV ---
         csv_bytes = self._get_object(csv_key)
         df = pd.read_csv(io.BytesIO(csv_bytes), low_memory=False)
 
-        # --- Step 2: Load schema if available ---
+        # --- Step 2: Load global schema ---
         schema = None
         try:
             schema_bytes = self._get_object(schema_key)
             schema = json.loads(schema_bytes.decode("utf-8"))
-            print(f"[CloudflareDAO] 🧭 Loaded schema for {table_name} ({len(schema)} columns)")
-        except Exception:
-            print(f"[CloudflareDAO] ⚠️ No schema found for {table_name} — falling back to inference")
+            print(f"[CloudflareDAO] 🧭 Loaded global schema ({len(schema)} columns)")
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ Could not load global schema ({e}) — falling back to inference")
 
         # --- Step 3: Apply schema if present ---
         if schema:
@@ -487,7 +465,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
                     # Skip casting failures gracefully (e.g., all NaN)
                     pass
 
-            print(f"[CloudflareDAO] ✅ Schema reapplied successfully for {len(schema)} columns")
+            print(f"[CloudflareDAO] ✅ Global schema applied successfully for {len(schema)} columns")
 
         # --- Step 4: Ensure UTC consistency ---
         if "datetime" in df.columns:

@@ -157208,3 +157208,4 @@ Index: []
 2025-11-17 00:11:04,754 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
 2025-11-17 00:11:05,089 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
 2025-11-17 00:11:05,090 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 10:02:58,541 [INFO] b'Stopping...'

@@ -155723,3 +155723,1488 @@ See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stab
 2025-11-16 21:49:32,295 [INFO] [flush_all] ✅ info_show.csv merged (2 new rows)
 2025-11-16 21:49:32,295 [INFO] [flush_all] ✅ Completed flush_all with 741 rows total.
 2025-11-16 21:49:32,295 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-16 21:52:46,850 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:52:47,164 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:52:47,164 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:52:50,013 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:52:50,343 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:52:50,343 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:53:14,781 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:53:15,126 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:53:15,126 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:53:20,219 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:53:20,558 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:53:20,558 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:53:20,878 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:53:21,153 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:53:21,154 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:53:23,552 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:53:23,856 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:53:23,856 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:54:10,354 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-enrich_lock_20251116-214613_history (25 columns)
+2025-11-16 21:54:10,410 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-16 21:54:10,425 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-enrich_lock
+2025-11-16 21:54:10,623 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-16 21:54:10,625 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-enrich_lock (D1=running, R2=running, stale_d1=True, stale_hb=True)
+2025-11-16 21:54:10,695 [INFO] [enrich:Thread-12 (background_enrich)] 🏁 Starting enrichment thread for short-enrich_lock
+2025-11-16 21:54:10,695 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-enrich_lock
+2025-11-16 21:54:10,695 [INFO] [enrich:Thread-12 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-16 21:54:10,704 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-16 21:54:10,704 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-16 21:54:11,006 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-16 21:54:11,007 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-16 21:54:11,214 [INFO] [enrich:Thread-12 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-16 21:54:12,155 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-enrich_lock_20251116-214613_history (25 columns)
+2025-11-16 21:54:12,213 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-16 21:54:12,214 [INFO] [enrich:Thread-12 (background_enrich)] ✅ Reloaded dataset from R2 (29937 rows)
+2025-11-16 21:54:12,225 [INFO] [enrich:Thread-12 (background_enrich)] 🧩 df columns: ['datetime', 'ms_played', 'country', 'track_name', 'artist_name', 'album_name', 'spotify_track_uri', 'episode_name', 'episode_show_name', 'spotify_episode_uri', 'audiobook_title', 'audiobook_uri', 'audiobook_chapter_uri', 'audiobook_chapter_title', 'reason_start', 'reason_end', 'shuffle', 'skipped', 'seconds_played', 'minutes_played', 'year', 'month', 'day', 'username', 'category']
+2025-11-16 21:54:12,225 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-16 21:54:12,225 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-16 21:54:12,373 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:12,524 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → running
+2025-11-16 21:54:12,690 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:12,754 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:12,870 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:12,951 [INFO] [debug:init] master_artists shape=(2050, 7)
+2025-11-16 21:54:12,952 [INFO] [debug:init] master_artists head=[{'supergenre': 'Pop', 'artist_popularity': 48, 'artist_name': 'Cornelius', 'primary_genre': 'shibuya-kei', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5ebdd24386203ce97cd25e97496', 'genres': nan, 'artist_id': '2vJObElaIZWYDLpiXiJMo9'}, {'supergenre': 'Rock', 'artist_popularity': 68, 'artist_name': 'Blur', 'primary_genre': 'britpop', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb00620d736644d2359ce99430', 'genres': nan, 'artist_id': '7MhMgCo0Bl0Kukl93PZbYS'}, {'supergenre': 'Ambient & Experimental Electronic', 'artist_popularity': 9, 'artist_name': 'Grischa Lichtenberger', 'primary_genre': 'idm', 'artist_image': 'https://i.scdn.co/image/2508955aebc5043d449a2f33927e00824f3af7a1', 'genres': nan, 'artist_id': '5ahuBhk9Urv0iYLrNSbPRK'}]
+2025-11-16 21:54:12,952 [INFO] [debug:init] seen_artists sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren', 'robin williams', 'hawkwind', 'yellowman', 'pole', 'sramaana']
+2025-11-16 21:54:12,954 [INFO] [master] Loaded: artists=2050, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 21:54:12,954 [INFO] [master] Seen sets initialized: artists=2050, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 21:54:12,982 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-16 21:54:12,983 [INFO] category
+music      29925
+podcast       12
+Name: count, dtype: Int64
+2025-11-16 21:54:12,984 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-16 21:54:16,239 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2982: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:54:16,240 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2983: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:54:23,643 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-16 21:54:23,866 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:24,066 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → planning
+2025-11-16 21:54:24,066 [INFO] [run_all] Building priority sets…
+2025-11-16 21:54:24,123 [INFO] [all_listens] Built full per-year summaries: artists=6459 rows, shows=8 rows, books=0 rows
+2025-11-16 21:54:24,127 [INFO] [run_all] Total counts: artists=6459, shows=8, books=0
+2025-11-16 21:54:24,146 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-16 21:54:24,146 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-16 21:54:24,146 [INFO] category
+music      29925
+podcast       12
+Name: count, dtype: Int64
+2025-11-16 21:54:24,148 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-16 21:54:24,182 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-16 21:54:24,182 [INFO] [run_all] Starting phase: overall
+2025-11-16 21:54:24,182 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-16 21:54:24,182 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-16 21:54:24,183 [INFO] [filter] Artists filtered out: 10/10 (remaining=0)
+2025-11-16 21:54:24,183 [INFO] [overall_first50] Artists before=10, after=0
+2025-11-16 21:54:24,183 [INFO] [filter] Shows filtered out: 6/7 (remaining=1)
+2025-11-16 21:54:24,183 [INFO] [overall_first50] Shows before=7, after=1
+2025-11-16 21:54:24,183 [INFO] [overall_first50] Fetching shows: 1
+2025-11-16 21:54:24,184 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-16 21:54:24,184 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-16 21:54:24,184 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-16 21:54:24,186 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-16 21:54:24,289 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-16 21:54:24,394 [INFO] [resolve_show_ids] Fallback search for 1 shows
+2025-11-16 21:54:24,619 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-16 21:54:24,725 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-16 21:54:24,726 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-16 21:54:24,841 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:shows: Fetched 1 shows
+2025-11-16 21:54:24,841 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-16 21:54:24,943 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-16 21:54:24,947 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-16 21:54:25,392 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:25,670 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → planning
+2025-11-16 21:54:25,671 [INFO] [overall] Checking for pending Discogs results before phase end…
+2025-11-16 21:54:25,671 [INFO] [overall] ✅ No pending Discogs jobs.
+2025-11-16 21:54:25,671 [INFO] [run_all] Completed phase: overall (batches +1)
+2025-11-16 21:54:25,832 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:26,010 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:26,012 [INFO] [flush_partial] Starting autosave snapshot at 20251116-215426
+2025-11-16 21:54:26,081 [INFO] [merge_into_master] Merged 1 new → total 7 (before=7)
+2025-11-16 21:54:26,727 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-16 21:54:26,727 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-16 21:54:26,727 [INFO] [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-16 21:54:26,727 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-16 21:54:26,728 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-16 21:54:26,816 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 2050 rows
+2025-11-16 21:54:26,887 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 412 rows
+2025-11-16 21:54:26,959 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-16 21:54:27,019 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-16 21:54:27,447 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-16 21:54:27,526 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-16 21:54:27,527 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-16 21:54:27,527 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-16 21:54:27,527 [INFO] [run_all] Starting phase: breadth_first
+2025-11-16 21:54:27,528 [INFO] [breadth_first] Starting diagnostic phase…
+2025-11-16 21:54:27,704 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:27,781 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:27,936 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:28,014 [INFO] [debug:init] master_artists shape=(2050, 7)
+2025-11-16 21:54:28,017 [INFO] [debug:init] master_artists head=[{'supergenre': 'Pop', 'artist_popularity': 48, 'artist_name': 'Cornelius', 'primary_genre': 'shibuya-kei', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5ebdd24386203ce97cd25e97496', 'genres': nan, 'artist_id': '2vJObElaIZWYDLpiXiJMo9'}, {'supergenre': 'Rock', 'artist_popularity': 68, 'artist_name': 'Blur', 'primary_genre': 'britpop', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb00620d736644d2359ce99430', 'genres': nan, 'artist_id': '7MhMgCo0Bl0Kukl93PZbYS'}, {'supergenre': 'Ambient & Experimental Electronic', 'artist_popularity': 9, 'artist_name': 'Grischa Lichtenberger', 'primary_genre': 'idm', 'artist_image': 'https://i.scdn.co/image/2508955aebc5043d449a2f33927e00824f3af7a1', 'genres': nan, 'artist_id': '5ahuBhk9Urv0iYLrNSbPRK'}]
+2025-11-16 21:54:28,017 [INFO] [debug:init] seen_artists sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren', 'robin williams', 'hawkwind', 'yellowman', 'pole', 'sramaana']
+2025-11-16 21:54:28,019 [INFO] [master] Loaded: artists=2050, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 21:54:28,019 [INFO] [master] Seen sets initialized: artists=2050, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 21:54:28,019 [INFO] [master] Reloaded master tables (triggered by args=('albums',))
+2025-11-16 21:54:28,189 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:28,252 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:28,380 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-16 21:54:28,455 [INFO] [debug:init] master_artists shape=(2050, 7)
+2025-11-16 21:54:28,456 [INFO] [debug:init] master_artists head=[{'supergenre': 'Pop', 'artist_popularity': 48, 'artist_name': 'Cornelius', 'primary_genre': 'shibuya-kei', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5ebdd24386203ce97cd25e97496', 'genres': nan, 'artist_id': '2vJObElaIZWYDLpiXiJMo9'}, {'supergenre': 'Rock', 'artist_popularity': 68, 'artist_name': 'Blur', 'primary_genre': 'britpop', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb00620d736644d2359ce99430', 'genres': nan, 'artist_id': '7MhMgCo0Bl0Kukl93PZbYS'}, {'supergenre': 'Ambient & Experimental Electronic', 'artist_popularity': 9, 'artist_name': 'Grischa Lichtenberger', 'primary_genre': 'idm', 'artist_image': 'https://i.scdn.co/image/2508955aebc5043d449a2f33927e00824f3af7a1', 'genres': nan, 'artist_id': '5ahuBhk9Urv0iYLrNSbPRK'}]
+2025-11-16 21:54:28,456 [INFO] [debug:init] seen_artists sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren', 'robin williams', 'hawkwind', 'yellowman', 'pole', 'sramaana']
+2025-11-16 21:54:28,458 [INFO] [master] Loaded: artists=2050, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 21:54:28,458 [INFO] [master] Seen sets initialized: artists=2050, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 21:54:28,458 [INFO] [master] Reloaded master tables (triggered by args=('tracks',))
+2025-11-16 21:54:28,460 [INFO] [breadth_first:init] Reset seen_artists from 2050 → 2050 (complete master only)
+2025-11-16 21:54:28,461 [INFO] [breadth_first] Max cycles = 4 (music=4, shows=3, books=0)
+2025-11-16 21:54:28,461 [INFO] [breadth_first:debug] seen_artists init size=2050 sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren', 'robin williams', 'hawkwind', 'yellowman', 'pole', 'sramaana']
+2025-11-16 21:54:28,461 [INFO] [breadth_first] Cycle 1/4
+2025-11-16 21:54:28,461 [INFO] [breadth_first][debug] Year 2024 sub shape=(111, 3)
+2025-11-16 21:54:28,462 [INFO] [breadth_first][debug] Year 2024 artist sample=['The Cinematic Orchestra', 'LFO', 'Grizzly Bear', 'Hexstatic', 'Television']
+2025-11-16 21:54:28,462 [INFO] [breadth_first] seen_artists size=2050 sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren']
+2025-11-16 21:54:28,462 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, seen_artists=2050
+2025-11-16 21:54:28,462 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-16 21:54:28,462 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-16 21:54:28,462 [INFO] [breadth_first] Year 2024 Artists before=0, after=0
+2025-11-16 21:54:28,462 [INFO] [breadth_first][warning] ⚠️ All 111 artists excluded at year 2024! seen_artists or master table may be overmatching.
+2025-11-16 21:54:28,463 [INFO] [breadth_first][debug] Year 2023 sub shape=(2019, 3)
+2025-11-16 21:54:28,463 [INFO] [breadth_first][debug] Year 2023 artist sample=['Nursery Rhymes 123', 'SHXCXCHCXSH', 'Blur', 'The Beatles', 'The Cactus Blossoms']
+2025-11-16 21:54:28,463 [INFO] [breadth_first] seen_artists size=2050 sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren']
+2025-11-16 21:54:28,464 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=1011, seen_artists=2050
+2025-11-16 21:54:28,464 [INFO] [filter:debug] incoming prefilter len=1011
+2025-11-16 21:54:28,466 [INFO] [filter] Artists filtered out: 0/1011 (remaining=1011)
+2025-11-16 21:54:28,467 [INFO] [breadth_first] Year 2023 Artists before=1011, after=1011
+2025-11-16 21:54:28,467 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['The Wailers', 'The Andrews Sisters with Orchestra', 'Deniro']
+2025-11-16 21:54:28,467 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:28,467 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:28,470 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:28,474 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:28,740 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:28,846 [INFO] [resolve_artist_ids] Fallback search for 2 names
+2025-11-16 21:54:29,262 [INFO] [resolve_artist_ids] Found ID for The Wailers
+2025-11-16 21:54:29,669 [INFO] [resolve_artist_ids] Found ID for The Andrews Sisters with Orchestra
+2025-11-16 21:54:29,774 [INFO] [resolve_artist_ids] Done — resolved 52 IDs so far
+2025-11-16 21:54:29,775 [INFO] [fetch_and_save_artists] Resolved IDs for 52 / 50
+2025-11-16 21:54:29,775 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:29,932 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:29,932 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:30,035 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:30,039 [INFO] [fetch_and_save_artists] 16 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:30,040 [INFO] [fetch_and_save_artists] Submitted 16 Discogs jobs (non-blocking)
+2025-11-16 21:54:30,146 [INFO] [init] Loaded 6421 supergenre mappings from storage.
+2025-11-16 21:54:30,149 [INFO] [fetch_and_save_artists] 17 artists marked as Unlisted
+2025-11-16 21:54:30,150 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '2QsynagSdAqZj3U9HgDzjD', 'artist_name': 'Bob Marley & The Wailers'}, {'artist_id': '2NCGI6dLTxLdI9XHdv7QfM', 'artist_name': 'The Andrews Sisters'}, {'artist_id': '5OoDtYl4zYEnvAtFSxqf2W', 'artist_name': 'Deniro'}]
+2025-11-16 21:54:30,466 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:30,668 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:30,671 [INFO] [breadth_first][debug] Year 2022 sub shape=(2332, 3)
+2025-11-16 21:54:30,673 [INFO] [breadth_first][debug] Year 2022 artist sample=['Steely Dan', 'The Beatles', 'Nursery Rhymes 123', 'Cornelius', 'Architectural']
+2025-11-16 21:54:30,673 [INFO] [breadth_first] seen_artists size=2149 sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren']
+2025-11-16 21:54:30,675 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=1302, seen_artists=2149
+2025-11-16 21:54:30,676 [INFO] [filter:debug] incoming prefilter len=1302
+2025-11-16 21:54:30,679 [INFO] [filter] Artists filtered out: 0/1302 (remaining=1302)
+2025-11-16 21:54:30,679 [INFO] [breadth_first] Year 2022 Artists before=1302, after=1302
+2025-11-16 21:54:30,680 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['John Cooper Clarke', 'Shygirl', 'Eliza Carthy']
+2025-11-16 21:54:30,680 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:30,680 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:30,684 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:30,688 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:30,968 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:31,073 [INFO] [resolve_artist_ids] Fallback search for 1 names
+2025-11-16 21:54:31,645 [INFO] [resolve_artist_ids] Found ID for Groove Chronicles (Noodles)
+2025-11-16 21:54:31,746 [INFO] [resolve_artist_ids] Done — resolved 103 IDs so far
+2025-11-16 21:54:31,749 [INFO] [fetch_and_save_artists] Resolved IDs for 103 / 50
+2025-11-16 21:54:31,750 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:31,926 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:31,926 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:32,027 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:32,031 [INFO] [fetch_and_save_artists] 14 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:32,032 [INFO] [fetch_and_save_artists] Submitted 14 Discogs jobs (non-blocking)
+2025-11-16 21:54:32,039 [INFO] [fetch_and_save_artists] 15 artists marked as Unlisted
+2025-11-16 21:54:32,040 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '0EOkMBYWbDnVqwfHA4zq32', 'artist_name': 'John Cooper Clarke'}, {'artist_id': '3M3wTTCDwicRubwMyHyEDy', 'artist_name': 'Shygirl'}, {'artist_id': '3ZSRiAJKs42ymp2KYA80Qh', 'artist_name': 'Eliza Carthy'}]
+2025-11-16 21:54:32,370 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:32,551 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:32,554 [INFO] [breadth_first][debug] Year 2021 sub shape=(1997, 3)
+2025-11-16 21:54:32,555 [INFO] [breadth_first][debug] Year 2021 artist sample=['SHXCXCHCXSH', 'Martyn', 'The Beatles', 'Squarepusher', 'Vladislav Delay']
+2025-11-16 21:54:32,556 [INFO] [breadth_first] seen_artists size=2248 sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren']
+2025-11-16 21:54:32,558 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=947, seen_artists=2248
+2025-11-16 21:54:32,559 [INFO] [filter:debug] incoming prefilter len=947
+2025-11-16 21:54:32,563 [INFO] [filter] Artists filtered out: 0/947 (remaining=947)
+2025-11-16 21:54:32,563 [INFO] [breadth_first] Year 2021 Artists before=947, after=947
+2025-11-16 21:54:32,563 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['Lindstrøm', 'The Beta Band', 'Tiña']
+2025-11-16 21:54:32,563 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:32,563 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:32,569 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:32,573 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:33,038 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:33,145 [INFO] [resolve_artist_ids] Done — resolved 153 IDs so far
+2025-11-16 21:54:33,147 [INFO] [fetch_and_save_artists] Resolved IDs for 153 / 50
+2025-11-16 21:54:33,148 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:33,342 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:33,342 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:33,448 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:33,453 [INFO] [fetch_and_save_artists] 11 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:33,454 [INFO] [fetch_and_save_artists] Submitted 11 Discogs jobs (non-blocking)
+2025-11-16 21:54:33,461 [INFO] [fetch_and_save_artists] 11 artists marked as Unlisted
+2025-11-16 21:54:33,463 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '2vTtjIqZ7hW0W15t1ApKTB', 'artist_name': 'Lindstrøm'}, {'artist_id': '2LMR8u7DOMF0FBseDpTsRa', 'artist_name': 'The Beta Band'}, {'artist_id': '2s1OJF6Etcb6npyu2poqFk', 'artist_name': 'Tiña'}]
+2025-11-16 21:54:33,688 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:33,853 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:33,855 [INFO] [breadth_first] Year 2023 Shows before=3, after=0 (after_seen=0)
+2025-11-16 21:54:33,856 [INFO] [breadth_first] Year 2022 Shows before=3, after=0 (after_seen=0)
+2025-11-16 21:54:33,857 [INFO] [filter] Shows filtered out: 0/1 (remaining=1)
+2025-11-16 21:54:33,858 [INFO] [breadth_first] Year 2021 Shows before=2, after=1 (after_seen=1)
+2025-11-16 21:54:33,858 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-16 21:54:33,858 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-16 21:54:33,858 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-16 21:54:33,865 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-16 21:54:33,925 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-16 21:54:34,028 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-16 21:54:34,029 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-16 21:54:34,143 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:shows: 📈 Spotify calls so far: total=10 • rate≈0.33/s • per-endpoint=(artists:3, episodes:2, shows:2, tracks:3)
+2025-11-16 21:54:34,143 [INFO] [log_dao] [spotify:shows] 📈 Spotify calls so far: total=10 • rate≈0.33/s • per-endpoint=(artists:3, episodes:2, shows:2, tracks:3)
+2025-11-16 21:54:34,145 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:shows: Fetched 1 shows
+2025-11-16 21:54:34,145 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-16 21:54:34,251 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-16 21:54:34,254 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-16 21:54:34,546 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:34,723 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:34,723 [INFO] [breadth_first] Cycle 2/4
+2025-11-16 21:54:34,725 [INFO] [breadth_first][debug] Year 2024 sub shape=(111, 3)
+2025-11-16 21:54:34,726 [INFO] [breadth_first][debug] Year 2024 artist sample=['The Cinematic Orchestra', 'LFO', 'Grizzly Bear', 'Hexstatic', 'Television']
+2025-11-16 21:54:34,726 [INFO] [breadth_first] seen_artists size=2348 sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren']
+2025-11-16 21:54:34,727 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, seen_artists=2348
+2025-11-16 21:54:34,727 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-16 21:54:34,727 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-16 21:54:34,727 [INFO] [breadth_first] Year 2024 Artists before=0, after=0
+2025-11-16 21:54:34,727 [INFO] [breadth_first][warning] ⚠️ All 111 artists excluded at year 2024! seen_artists or master table may be overmatching.
+2025-11-16 21:54:34,729 [INFO] [breadth_first][debug] Year 2023 sub shape=(2019, 3)
+2025-11-16 21:54:34,729 [INFO] [breadth_first][debug] Year 2023 artist sample=['Nursery Rhymes 123', 'SHXCXCHCXSH', 'Blur', 'The Beatles', 'The Cactus Blossoms']
+2025-11-16 21:54:34,730 [INFO] [breadth_first] seen_artists size=2348 sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren']
+2025-11-16 21:54:34,732 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=954, seen_artists=2348
+2025-11-16 21:54:34,732 [INFO] [filter:debug] incoming prefilter len=954
+2025-11-16 21:54:34,735 [INFO] [filter] Artists filtered out: 0/954 (remaining=954)
+2025-11-16 21:54:34,735 [INFO] [breadth_first] Year 2023 Artists before=954, after=954
+2025-11-16 21:54:34,736 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['draag me', 'UMFANG', 'Born Free']
+2025-11-16 21:54:34,736 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:34,736 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:34,739 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:34,742 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:34,953 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:35,055 [INFO] [resolve_artist_ids] Done — resolved 203 IDs so far
+2025-11-16 21:54:35,057 [INFO] [fetch_and_save_artists] Resolved IDs for 203 / 50
+2025-11-16 21:54:35,057 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:35,200 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:35,201 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:35,305 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:35,311 [INFO] [fetch_and_save_artists] 8 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:35,311 [INFO] [fetch_and_save_artists] Submitted 8 Discogs jobs (non-blocking)
+2025-11-16 21:54:35,318 [INFO] [fetch_and_save_artists] 9 artists marked as Unlisted
+2025-11-16 21:54:35,319 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '3c78RGXMpRW2lwP8NQeUQ2', 'artist_name': 'draag me'}, {'artist_id': '1Tf0PpDLg4A8m7aidHGRG3', 'artist_name': 'UMFANG'}, {'artist_id': '3EcPBdr1pRn1jc3ePUL7qO', 'artist_name': 'Born Free'}]
+2025-11-16 21:54:35,566 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:35,726 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:35,729 [INFO] [breadth_first][debug] Year 2022 sub shape=(2332, 3)
+2025-11-16 21:54:35,730 [INFO] [breadth_first][debug] Year 2022 artist sample=['Steely Dan', 'The Beatles', 'Nursery Rhymes 123', 'Cornelius', 'Architectural']
+2025-11-16 21:54:35,730 [INFO] [breadth_first] seen_artists size=2447 sample=['hint', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'todd rundgren']
+2025-11-16 21:54:35,733 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=1242, seen_artists=2447
+2025-11-16 21:54:35,734 [INFO] [filter:debug] incoming prefilter len=1242
+2025-11-16 21:54:35,739 [INFO] [filter] Artists filtered out: 0/1242 (remaining=1242)
+2025-11-16 21:54:35,739 [INFO] [breadth_first] Year 2022 Artists before=1242, after=1242
+2025-11-16 21:54:35,739 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['Ruffkutt', 'Digital Mystikz', 'Metropolis']
+2025-11-16 21:54:35,739 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:35,739 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:35,744 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:35,747 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:36,133 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:36,237 [INFO] [resolve_artist_ids] Done — resolved 253 IDs so far
+2025-11-16 21:54:36,239 [INFO] [fetch_and_save_artists] Resolved IDs for 253 / 50
+2025-11-16 21:54:36,240 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:36,412 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:36,412 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:36,517 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:36,519 [INFO] [fetch_and_save_artists] 10 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:36,519 [INFO] [fetch_and_save_artists] Submitted 10 Discogs jobs (non-blocking)
+2025-11-16 21:54:36,521 [INFO] [fetch_and_save_artists] 11 artists marked as Unlisted
+2025-11-16 21:54:36,522 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '1TyTV8l6TBijKbKZfrPDpC', 'artist_name': 'Ruffkutt'}, {'artist_id': '4ESIM5V4xT2Ce0ZWPhxIEY', 'artist_name': 'Digital Mystikz'}, {'artist_id': '4TRWlrXoRqqfC2BkJ6fLa0', 'artist_name': 'Metropolis'}]
+2025-11-16 21:54:36,760 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:36,924 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:36,927 [INFO] [breadth_first][debug] Year 2021 sub shape=(1997, 3)
+2025-11-16 21:54:36,928 [INFO] [breadth_first][debug] Year 2021 artist sample=['SHXCXCHCXSH', 'Martyn', 'The Beatles', 'Squarepusher', 'Vladislav Delay']
+2025-11-16 21:54:36,929 [INFO] [breadth_first] seen_artists size=2547 sample=['hint', 'Bennie Maupin', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger']
+2025-11-16 21:54:36,930 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=886, seen_artists=2547
+2025-11-16 21:54:36,931 [INFO] [filter:debug] incoming prefilter len=886
+2025-11-16 21:54:36,936 [INFO] [filter] Artists filtered out: 0/886 (remaining=886)
+2025-11-16 21:54:36,936 [INFO] [breadth_first] Year 2021 Artists before=886, after=886
+2025-11-16 21:54:36,936 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['The Preatures', 'Animal Collective', 'Emil Rottmayer']
+2025-11-16 21:54:36,936 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:36,936 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:36,941 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:36,945 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:37,257 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:37,363 [INFO] [resolve_artist_ids] Done — resolved 303 IDs so far
+2025-11-16 21:54:37,365 [INFO] [fetch_and_save_artists] Resolved IDs for 303 / 50
+2025-11-16 21:54:37,365 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:37,525 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:37,525 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:37,626 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:37,630 [INFO] [fetch_and_save_artists] 12 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:37,630 [INFO] [fetch_and_save_artists] Submitted 12 Discogs jobs (non-blocking)
+2025-11-16 21:54:37,635 [INFO] [fetch_and_save_artists] 13 artists marked as Unlisted
+2025-11-16 21:54:37,636 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '5gcDZA9xXCOspWgQilUYIu', 'artist_name': 'The Preatures'}, {'artist_id': '4kwxTgCKMipBKhSnEstNKj', 'artist_name': 'Animal Collective'}, {'artist_id': '2UuvaSzB0VNumArR71ReMT', 'artist_name': 'Emil Rottmayer'}]
+2025-11-16 21:54:38,127 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:38,293 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:38,296 [INFO] [breadth_first] Year 2023 Shows before=3, after=0 (after_seen=0)
+2025-11-16 21:54:38,297 [INFO] [breadth_first] Year 2022 Shows before=3, after=0 (after_seen=0)
+2025-11-16 21:54:38,298 [INFO] [breadth_first] Year 2021 Shows before=2, after=0 (after_seen=0)
+2025-11-16 21:54:38,298 [INFO] [breadth_first] Cycle 3/4
+2025-11-16 21:54:38,299 [INFO] [breadth_first][debug] Year 2024 sub shape=(111, 3)
+2025-11-16 21:54:38,300 [INFO] [breadth_first][debug] Year 2024 artist sample=['The Cinematic Orchestra', 'LFO', 'Grizzly Bear', 'Hexstatic', 'Television']
+2025-11-16 21:54:38,300 [INFO] [breadth_first] seen_artists size=2647 sample=['hint', 'Bennie Maupin', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five']
+2025-11-16 21:54:38,301 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, seen_artists=2647
+2025-11-16 21:54:38,301 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-16 21:54:38,301 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-16 21:54:38,301 [INFO] [breadth_first] Year 2024 Artists before=0, after=0
+2025-11-16 21:54:38,301 [INFO] [breadth_first][warning] ⚠️ All 111 artists excluded at year 2024! seen_artists or master table may be overmatching.
+2025-11-16 21:54:38,302 [INFO] [breadth_first][debug] Year 2023 sub shape=(2019, 3)
+2025-11-16 21:54:38,303 [INFO] [breadth_first][debug] Year 2023 artist sample=['Nursery Rhymes 123', 'SHXCXCHCXSH', 'Blur', 'The Beatles', 'The Cactus Blossoms']
+2025-11-16 21:54:38,303 [INFO] [breadth_first] seen_artists size=2647 sample=['hint', 'Bennie Maupin', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five']
+2025-11-16 21:54:38,304 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=895, seen_artists=2647
+2025-11-16 21:54:38,304 [INFO] [filter:debug] incoming prefilter len=895
+2025-11-16 21:54:38,306 [INFO] [filter] Artists filtered out: 0/895 (remaining=895)
+2025-11-16 21:54:38,306 [INFO] [breadth_first] Year 2023 Artists before=895, after=895
+2025-11-16 21:54:38,307 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['Cymande', 'Gak', 'Justice']
+2025-11-16 21:54:38,307 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:38,307 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:38,310 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:38,314 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:38,699 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:38,803 [INFO] [resolve_artist_ids] Done — resolved 353 IDs so far
+2025-11-16 21:54:38,804 [INFO] [fetch_and_save_artists] Resolved IDs for 353 / 50
+2025-11-16 21:54:38,804 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:39,006 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:39,006 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:39,111 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:39,119 [INFO] [fetch_and_save_artists] 15 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:39,119 [INFO] [fetch_and_save_artists] Submitted 15 Discogs jobs (non-blocking)
+2025-11-16 21:54:39,128 [INFO] [fetch_and_save_artists] 16 artists marked as Unlisted
+2025-11-16 21:54:39,129 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '4hfcSstwnyuBoek1dQwLkG', 'artist_name': 'Cymande'}, {'artist_id': '7nnrIQYcmvdaa1zgNrVwDY', 'artist_name': 'Gak'}, {'artist_id': '1gR0gsQYfi6joyO1dlp76N', 'artist_name': 'Justice'}]
+2025-11-16 21:54:39,368 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:39,576 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:39,579 [INFO] [breadth_first][debug] Year 2022 sub shape=(2332, 3)
+2025-11-16 21:54:39,580 [INFO] [breadth_first][debug] Year 2022 artist sample=['Steely Dan', 'The Beatles', 'Nursery Rhymes 123', 'Cornelius', 'Architectural']
+2025-11-16 21:54:39,580 [INFO] [breadth_first] seen_artists size=2747 sample=['hint', 'Bennie Maupin', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five']
+2025-11-16 21:54:39,582 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=1182, seen_artists=2747
+2025-11-16 21:54:39,583 [INFO] [filter:debug] incoming prefilter len=1182
+2025-11-16 21:54:39,588 [INFO] [filter] Artists filtered out: 0/1182 (remaining=1182)
+2025-11-16 21:54:39,588 [INFO] [breadth_first] Year 2022 Artists before=1182, after=1182
+2025-11-16 21:54:39,588 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['The Focus Group', 'Manfred Mann', 'Maurice Jarre']
+2025-11-16 21:54:39,588 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:39,589 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:39,592 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:39,595 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:39,946 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:40,052 [INFO] [resolve_artist_ids] Fallback search for 1 names
+2025-11-16 21:54:40,302 [INFO] [resolve_artist_ids] Found ID for Black Girl / White Girl
+2025-11-16 21:54:40,404 [INFO] [resolve_artist_ids] Done — resolved 404 IDs so far
+2025-11-16 21:54:40,407 [INFO] [fetch_and_save_artists] Resolved IDs for 404 / 50
+2025-11-16 21:54:40,407 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:40,607 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: 📈 Spotify calls so far: total=20 • rate≈0.67/s • per-endpoint=(artists:8, episodes:2, shows:2, tracks:8)
+2025-11-16 21:54:40,607 [INFO] [log_dao] [spotify:artists] 📈 Spotify calls so far: total=20 • rate≈0.67/s • per-endpoint=(artists:8, episodes:2, shows:2, tracks:8)
+2025-11-16 21:54:40,609 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:40,609 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:40,711 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:40,716 [INFO] [fetch_and_save_artists] 17 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:40,716 [INFO] [fetch_and_save_artists] Submitted 17 Discogs jobs (non-blocking)
+2025-11-16 21:54:40,726 [INFO] [fetch_and_save_artists] 17 artists marked as Unlisted
+2025-11-16 21:54:40,727 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '1rBMmvtO1VqLH4kSpe5oaU', 'artist_name': 'The Focus Group'}, {'artist_id': '5670CyWrIOA7702gNjsGMZ', 'artist_name': 'Manfred Mann'}, {'artist_id': '6iyQYs37mRXLW04Z9NOnNT', 'artist_name': 'Maurice Jarre'}]
+2025-11-16 21:54:41,025 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:42,498 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:42,502 [INFO] [breadth_first][debug] Year 2021 sub shape=(1997, 3)
+2025-11-16 21:54:42,503 [INFO] [breadth_first][debug] Year 2021 artist sample=['SHXCXCHCXSH', 'Martyn', 'The Beatles', 'Squarepusher', 'Vladislav Delay']
+2025-11-16 21:54:42,504 [INFO] [breadth_first] seen_artists size=2846 sample=['hint', 'Bennie Maupin', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five']
+2025-11-16 21:54:42,506 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=819, seen_artists=2846
+2025-11-16 21:54:42,506 [INFO] [filter:debug] incoming prefilter len=819
+2025-11-16 21:54:42,510 [INFO] [filter] Artists filtered out: 0/819 (remaining=819)
+2025-11-16 21:54:42,510 [INFO] [breadth_first] Year 2021 Artists before=819, after=819
+2025-11-16 21:54:42,510 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['Joe Lovano', 'True Steppers', 'Sticky Fingers']
+2025-11-16 21:54:42,510 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:42,510 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:42,515 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:42,518 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:42,824 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:42,927 [INFO] [resolve_artist_ids] Done — resolved 454 IDs so far
+2025-11-16 21:54:42,928 [INFO] [fetch_and_save_artists] Resolved IDs for 454 / 50
+2025-11-16 21:54:42,928 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:43,088 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:43,089 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:43,192 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:43,198 [INFO] [fetch_and_save_artists] 12 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:43,199 [INFO] [fetch_and_save_artists] Submitted 12 Discogs jobs (non-blocking)
+2025-11-16 21:54:43,207 [INFO] [fetch_and_save_artists] 15 artists marked as Unlisted
+2025-11-16 21:54:43,208 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '36YE6h8aN09ZKG4EhneDSf', 'artist_name': 'Joe Lovano'}, {'artist_id': '3p9WryxYXLd0We8X84VC0U', 'artist_name': 'True Steppers'}, {'artist_id': '3ZGr7nQBXDU2WhyXgRVbt0', 'artist_name': 'Sticky Fingers'}]
+2025-11-16 21:54:43,458 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:43,698 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:43,701 [INFO] [breadth_first] Year 2023 Shows before=3, after=0 (after_seen=0)
+2025-11-16 21:54:43,702 [INFO] [breadth_first] Year 2022 Shows before=3, after=0 (after_seen=0)
+2025-11-16 21:54:43,703 [INFO] [breadth_first] Year 2021 Shows before=2, after=0 (after_seen=0)
+2025-11-16 21:54:43,703 [INFO] [breadth_first] Cycle 4/4
+2025-11-16 21:54:43,703 [INFO] [breadth_first][debug] Year 2024 sub shape=(111, 3)
+2025-11-16 21:54:43,704 [INFO] [breadth_first][debug] Year 2024 artist sample=['The Cinematic Orchestra', 'LFO', 'Grizzly Bear', 'Hexstatic', 'Television']
+2025-11-16 21:54:43,704 [INFO] [breadth_first] seen_artists size=2946 sample=['hint', 'Bennie Maupin', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five']
+2025-11-16 21:54:43,706 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, seen_artists=2946
+2025-11-16 21:54:43,706 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-16 21:54:43,706 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-16 21:54:43,706 [INFO] [breadth_first] Year 2024 Artists before=0, after=0
+2025-11-16 21:54:43,706 [INFO] [breadth_first][warning] ⚠️ All 111 artists excluded at year 2024! seen_artists or master table may be overmatching.
+2025-11-16 21:54:43,708 [INFO] [breadth_first][debug] Year 2023 sub shape=(2019, 3)
+2025-11-16 21:54:43,708 [INFO] [breadth_first][debug] Year 2023 artist sample=['Nursery Rhymes 123', 'SHXCXCHCXSH', 'Blur', 'The Beatles', 'The Cactus Blossoms']
+2025-11-16 21:54:43,708 [INFO] [breadth_first] seen_artists size=2946 sample=['hint', 'Bennie Maupin', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five']
+2025-11-16 21:54:43,709 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=839, seen_artists=2946
+2025-11-16 21:54:43,709 [INFO] [filter:debug] incoming prefilter len=839
+2025-11-16 21:54:43,712 [INFO] [filter] Artists filtered out: 0/839 (remaining=839)
+2025-11-16 21:54:43,712 [INFO] [breadth_first] Year 2023 Artists before=839, after=839
+2025-11-16 21:54:43,713 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=["Nobody's Angel", 'Martin Short', 'Phil Oakey']
+2025-11-16 21:54:43,713 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:43,713 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:43,716 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:43,719 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:44,011 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:44,117 [INFO] [resolve_artist_ids] Done — resolved 504 IDs so far
+2025-11-16 21:54:44,118 [INFO] [fetch_and_save_artists] Resolved IDs for 504 / 50
+2025-11-16 21:54:44,118 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:44,301 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:44,301 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:44,407 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:44,409 [INFO] [fetch_and_save_artists] 18 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:44,409 [INFO] [fetch_and_save_artists] Submitted 18 Discogs jobs (non-blocking)
+2025-11-16 21:54:44,413 [INFO] [fetch_and_save_artists] 22 artists marked as Unlisted
+2025-11-16 21:54:44,413 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '0Mc27Ij9oeRlpihBxaBzGB', 'artist_name': "Nobody's Angel"}, {'artist_id': '0dV9xcjrW5YwkxG3gEBhRx', 'artist_name': 'Martin Short'}, {'artist_id': '6ne5YmZH7oCXcZUBsY66sn', 'artist_name': 'Phil Oakey'}]
+2025-11-16 21:54:44,697 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:44,904 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:44,907 [INFO] [breadth_first][debug] Year 2022 sub shape=(2332, 3)
+2025-11-16 21:54:44,908 [INFO] [breadth_first][debug] Year 2022 artist sample=['Steely Dan', 'The Beatles', 'Nursery Rhymes 123', 'Cornelius', 'Architectural']
+2025-11-16 21:54:44,908 [INFO] [breadth_first] seen_artists size=3045 sample=['hint', 'Bennie Maupin', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five']
+2025-11-16 21:54:44,911 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=1122, seen_artists=3045
+2025-11-16 21:54:44,911 [INFO] [filter:debug] incoming prefilter len=1122
+2025-11-16 21:54:44,915 [INFO] [filter] Artists filtered out: 0/1122 (remaining=1122)
+2025-11-16 21:54:44,915 [INFO] [breadth_first] Year 2022 Artists before=1122, after=1122
+2025-11-16 21:54:44,915 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['John Rutter', 'Unwound', 'Funeral For A Friend']
+2025-11-16 21:54:44,915 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:44,915 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:44,919 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:44,923 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:45,208 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:45,310 [INFO] [resolve_artist_ids] Fallback search for 1 names
+2025-11-16 21:54:45,666 [INFO] [resolve_artist_ids] Found ID for 2Pac
+2025-11-16 21:54:45,771 [INFO] [resolve_artist_ids] Done — resolved 555 IDs so far
+2025-11-16 21:54:45,773 [INFO] [fetch_and_save_artists] Resolved IDs for 555 / 50
+2025-11-16 21:54:45,773 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:45,924 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:45,925 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:46,030 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:46,035 [INFO] [fetch_and_save_artists] 15 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:46,035 [INFO] [fetch_and_save_artists] Submitted 15 Discogs jobs (non-blocking)
+2025-11-16 21:54:46,046 [INFO] [fetch_and_save_artists] 16 artists marked as Unlisted
+2025-11-16 21:54:46,047 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '0qlhpgr87PEG89Jd5iRpxe', 'artist_name': 'John Rutter'}, {'artist_id': '4YjpqCSDD7zwMQgPYJMqb0', 'artist_name': 'Unwound'}, {'artist_id': '4AbDWrmJPSOeIbT2Ou60ik', 'artist_name': 'Funeral For A Friend'}]
+2025-11-16 21:54:46,279 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:46,590 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:46,591 [INFO] [breadth_first][debug] Year 2021 sub shape=(1997, 3)
+2025-11-16 21:54:46,592 [INFO] [breadth_first][debug] Year 2021 artist sample=['SHXCXCHCXSH', 'Martyn', 'The Beatles', 'Squarepusher', 'Vladislav Delay']
+2025-11-16 21:54:46,592 [INFO] [breadth_first] seen_artists size=3145 sample=['hint', 'Bennie Maupin', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five']
+2025-11-16 21:54:46,593 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=758, seen_artists=3145
+2025-11-16 21:54:46,593 [INFO] [filter:debug] incoming prefilter len=758
+2025-11-16 21:54:46,595 [INFO] [filter] Artists filtered out: 0/758 (remaining=758)
+2025-11-16 21:54:46,595 [INFO] [breadth_first] Year 2021 Artists before=758, after=758
+2025-11-16 21:54:46,595 [INFO] [fetch_and_save_artists:debug] Thread=Thread-12 (background_enrich) batch=50 sample=['Beach House', 'George FitzGerald', 'Richard Thompson']
+2025-11-16 21:54:46,595 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 21:54:46,595 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 21:54:46,599 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 21:54:46,602 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 21:54:47,226 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 21:54:47,330 [INFO] [resolve_artist_ids] Done — resolved 605 IDs so far
+2025-11-16 21:54:47,333 [INFO] [fetch_and_save_artists] Resolved IDs for 605 / 50
+2025-11-16 21:54:47,333 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 21:54:47,505 [INFO] [TRACE log_dao] Thread-12 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 21:54:47,505 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 21:54:47,611 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 21:54:47,615 [INFO] [fetch_and_save_artists] 10 artists missing genres → submitting async Discogs jobs
+2025-11-16 21:54:47,615 [INFO] [fetch_and_save_artists] Submitted 10 Discogs jobs (non-blocking)
+2025-11-16 21:54:47,622 [INFO] [fetch_and_save_artists] 11 artists marked as Unlisted
+2025-11-16 21:54:47,623 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '56ZTgzPBDge0OvCGgMO3OY', 'artist_name': 'Beach House'}, {'artist_id': '3KOHpygRuo1ruQAbEneR3t', 'artist_name': 'George FitzGerald'}, {'artist_id': '5w75MoT8FfcGOMgjgrj1cz', 'artist_name': 'Richard Thompson'}]
+2025-11-16 21:54:47,846 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:48,019 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 21:54:48,021 [INFO] [breadth_first] Year 2023 Shows before=3, after=0 (after_seen=0)
+2025-11-16 21:54:48,022 [INFO] [breadth_first] Year 2022 Shows before=3, after=0 (after_seen=0)
+2025-11-16 21:54:48,023 [INFO] [breadth_first] Year 2021 Shows before=2, after=0 (after_seen=0)
+2025-11-16 21:54:48,023 [INFO] [breadth_first] Completed diagnostic phase.
+2025-11-16 21:54:48,024 [INFO] [overall] Checking for pending Discogs results before phase end…
+2025-11-16 21:54:48,099 [INFO] [_flush_discogs_results] Merged Discogs genres for 17/18 artists.
+2025-11-16 21:54:48,100 [INFO] [overall] ⚠️ 140 Discogs jobs still pending at phase end.
+2025-11-16 21:54:48,100 [INFO] [run_all] Completed phase: breadth_first (batches +13)
+2025-11-16 21:54:48,250 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 21:54:48,479 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → breadth_first
+2025-11-16 21:54:48,483 [INFO] [flush_partial] Starting autosave snapshot at 20251116-215448
+2025-11-16 21:54:48,583 [INFO] [merge_into_master] Merged 600 new → total 2648 (before=2050)
+2025-11-16 21:54:49,164 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-16 21:54:49,165 [INFO] [merge_into_master] ✅ Saved 2648 rows to info_artist_genre.csv
+2025-11-16 21:54:49,165 [INFO] [flush_partial] ✅ merged 600 rows → info_artist_genre.csv
+2025-11-16 21:54:49,236 [INFO] [merge_into_master] Merged 1 new → total 7 (before=7)
+2025-11-16 21:54:49,750 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-16 21:54:49,750 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-16 21:54:49,751 [INFO] [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-16 21:54:49,751 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-16 21:54:49,751 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-16 21:54:49,926 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 2648 rows
+2025-11-16 21:54:49,989 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 412 rows
+2025-11-16 21:54:50,056 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-16 21:54:50,124 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-16 21:54:50,235 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-16 21:54:50,290 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-16 21:54:50,291 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-16 21:54:50,291 [INFO] [run_all] Flushed partial results after phase 'breadth_first'
+2025-11-16 21:54:50,292 [INFO] [run_all] Starting final flush
+2025-11-16 21:54:50,292 [INFO] [flush_all] Starting global master merges at 20251116-215450
+2025-11-16 21:54:50,370 [INFO] [merge_into_master] Merged 173 new → total 585 (before=412)
+2025-11-16 21:54:50,892 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre_unlisted.csv
+2025-11-16 21:54:50,892 [INFO] [merge_into_master] ✅ Saved 585 rows to info_artist_genre_unlisted.csv
+2025-11-16 21:54:50,892 [INFO] [flush_all] ✅ info_artist_genre_unlisted.csv merged (173 new rows)
+2025-11-16 21:54:50,893 [INFO] [flush_all] ✅ Completed flush_all with 173 rows total.
+2025-11-16 21:54:50,893 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-16 21:55:06,030 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2982: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:55:06,031 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2983: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:55:52,231 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:55:52,517 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:55:52,517 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:55:52,612 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:55:52,899 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:55:52,899 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:55:53,404 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2982: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:55:53,405 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2983: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:55:57,798 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:55:58,092 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:55:58,092 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:55:58,550 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2982: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:55:58,551 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2983: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:56:03,279 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:56:03,594 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:56:03,594 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:56:04,144 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2982: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:56:04,144 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2983: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:56:33,253 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 21:56:33,578 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 21:56:33,578 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 21:56:34,112 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2982: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 21:56:34,112 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:2983: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 22:00:34,255 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 22:00:34,575 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 22:00:34,576 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 22:07:33,178 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 22:07:33,467 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 22:07:33,467 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 22:07:33,829 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 22:07:34,123 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 22:07:34,124 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 22:08:00,036 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 22:08:00,318 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 22:08:00,318 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 22:08:37,638 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 22:08:38,007 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 22:08:38,007 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 22:08:59,840 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 22:09:00,203 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 22:09:00,204 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:26:47,999 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:26:48,300 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:26:48,301 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:26:48,583 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:26:48,936 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:26:48,937 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:30:48,793 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3038: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:30:48,794 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3039: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:31:50,554 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:31:50,847 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:31:50,847 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:31:54,771 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:31:55,049 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:31:55,050 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:31:55,587 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3048: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:31:55,587 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3049: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:32:20,468 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3048: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:32:20,468 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3049: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:34:24,911 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:34:25,251 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:34:25,252 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:34:25,779 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3066: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:34:25,780 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3067: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:35:38,768 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:35:39,039 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:35:39,040 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:35:39,583 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3072: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:35:39,583 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3073: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:36:06,312 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:36:06,647 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:36:06,647 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:40:29,930 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:40:30,249 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:40:30,249 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:40:30,615 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:40:30,988 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:40:30,989 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:41:22,349 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:41:22,625 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:41:22,626 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:41:23,126 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3072: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:41:23,126 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3073: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:41:30,515 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:41:30,862 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:41:30,862 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:41:31,358 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3072: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:41:31,359 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3073: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:41:33,852 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:41:34,150 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:41:34,151 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:41:34,670 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3066: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:41:34,671 [ERROR] /Users/admin/Documents/GitHub/spotify_regifted_cn/app.py:3067: SettingWithCopyWarning:
+
+
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+2025-11-16 23:49:25,645 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:49:25,940 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:49:25,940 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:49:43,380 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:49:43,696 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:49:43,696 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:50:23,814 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:50:24,070 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:50:24,070 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:50:36,756 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:50:37,037 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:50:37,038 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:50:37,577 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:50:37,889 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:50:37,889 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:50:51,105 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:50:51,370 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:50:51,371 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:53:22,479 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:53:22,756 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:53:22,757 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:55:33,298 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:55:33,720 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:55:33,721 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:56:03,810 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:56:04,091 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:56:04,091 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:56:28,598 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:56:28,833 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:56:28,834 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:56:37,968 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:56:38,265 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:56:38,265 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:56:43,738 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:56:43,996 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:56:43,997 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:56:49,321 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:56:49,636 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:56:49,636 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:57:13,176 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:57:13,454 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:57:13,454 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:57:25,447 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:57:25,713 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:57:25,713 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:57:31,697 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:57:31,970 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:57:31,970 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:57:55,525 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:57:55,782 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:57:55,782 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:58:05,515 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:58:05,832 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:58:05,832 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:58:25,430 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-enrich_lock_20251116-214613_history (25 columns)
+2025-11-16 23:58:25,485 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-16 23:58:25,499 [INFO] [auto_reenrich] 🔍 Checking enrichment consistency for short-enrich_lock
+2025-11-16 23:58:25,693 [INFO] [auto_reenrich] ⚠️ Thread stale (>5min no heartbeat or D1 update). Cancelling + waiting for cleanup.
+2025-11-16 23:58:25,694 [INFO] [auto_reenrich] ⚠️ Triggering re-enrichment for short-enrich_lock (D1=running, R2=running, stale_d1=True, stale_hb=True)
+2025-11-16 23:58:25,745 [INFO] [enrich:Thread-14 (background_enrich)] 🏁 Starting enrichment thread for short-enrich_lock
+2025-11-16 23:58:25,746 [INFO] [auto_reenrich] 🚀 Started enrichment thread for short-enrich_lock
+2025-11-16 23:58:25,746 [INFO] [enrich:Thread-14 (background_enrich)] 🔒 Proceeding with enrichment under lock for 58d0bd65d3f40b92
+2025-11-16 23:58:25,754 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from background_enrich → sanity: Starting Spotify sanity check
+2025-11-16 23:58:25,755 [INFO] [log_dao] [sanity] Starting Spotify sanity check
+2025-11-16 23:58:26,030 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from background_enrich → sanity: Starting Discogs sanity check
+2025-11-16 23:58:26,030 [INFO] [log_dao] [sanity] Starting Discogs sanity check
+2025-11-16 23:58:26,473 [INFO] [enrich:Thread-14 (background_enrich)] ⚠️ cleaned_df empty — reloading from R2 before enrichment
+2025-11-16 23:58:27,339 [INFO] [CloudflareDAO] 🧭 Loaded schema for 58d0bd65d3f40b92_short-enrich_lock_20251116-214613_history (25 columns)
+2025-11-16 23:58:27,392 [INFO] [CloudflareDAO] ✅ Schema reapplied successfully for 25 columns
+2025-11-16 23:58:27,393 [INFO] [enrich:Thread-14 (background_enrich)] ✅ Reloaded dataset from R2 (29937 rows)
+2025-11-16 23:58:27,404 [INFO] [enrich:Thread-14 (background_enrich)] 🧩 df columns: ['datetime', 'ms_played', 'country', 'track_name', 'artist_name', 'album_name', 'spotify_track_uri', 'episode_name', 'episode_show_name', 'spotify_episode_uri', 'audiobook_title', 'audiobook_uri', 'audiobook_chapter_uri', 'audiobook_chapter_title', 'reason_start', 'reason_end', 'shuffle', 'skipped', 'seconds_played', 'minutes_played', 'year', 'month', 'day', 'username', 'category']
+2025-11-16 23:58:27,405 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from background_enrich → enrichment: Starting run_all()
+2025-11-16 23:58:27,405 [INFO] [log_dao] [enrichment] Starting run_all()
+2025-11-16 23:58:27,538 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:27,674 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → running
+2025-11-16 23:58:27,806 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:27,854 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:27,955 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:28,046 [INFO] [debug:init] master_artists shape=(2648, 7)
+2025-11-16 23:58:28,047 [INFO] [debug:init] master_artists head=[{'supergenre': 'Pop', 'artist_popularity': 48, 'artist_name': 'Cornelius', 'primary_genre': 'shibuya-kei', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5ebdd24386203ce97cd25e97496', 'genres': nan, 'artist_id': '2vJObElaIZWYDLpiXiJMo9'}, {'supergenre': 'Rock', 'artist_popularity': 68, 'artist_name': 'Blur', 'primary_genre': 'britpop', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb00620d736644d2359ce99430', 'genres': nan, 'artist_id': '7MhMgCo0Bl0Kukl93PZbYS'}, {'supergenre': 'Ambient & Experimental Electronic', 'artist_popularity': 9, 'artist_name': 'Grischa Lichtenberger', 'primary_genre': 'idm', 'artist_image': 'https://i.scdn.co/image/2508955aebc5043d449a2f33927e00824f3af7a1', 'genres': nan, 'artist_id': '5ahuBhk9Urv0iYLrNSbPRK'}]
+2025-11-16 23:58:28,047 [INFO] [debug:init] seen_artists sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'beach house', 'todd rundgren', 'robin williams', 'alex wand', 'jah shaka']
+2025-11-16 23:58:28,048 [INFO] [master] Loaded: artists=2648, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 23:58:28,048 [INFO] [master] Seen sets initialized: artists=2648, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 23:58:28,065 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-16 23:58:28,066 [INFO] category
+music      29925
+podcast       12
+Name: count, dtype: Int64
+2025-11-16 23:58:28,067 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-16 23:58:38,471 [INFO] [run_all] Planning complete. Estimated total batches = 311
+2025-11-16 23:58:38,601 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:38,750 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → planning
+2025-11-16 23:58:38,750 [INFO] [run_all] Building priority sets…
+2025-11-16 23:58:38,793 [INFO] [all_listens] Built full per-year summaries: artists=6459 rows, shows=8 rows, books=0 rows
+2025-11-16 23:58:38,796 [INFO] [run_all] Total counts: artists=6459, shows=8, books=0
+2025-11-16 23:58:38,814 [INFO] [run_all] Top overall counts: artists=10, shows=7, books=0
+2025-11-16 23:58:38,814 [INFO] [DEBUG] Categories summary in self.df:
+2025-11-16 23:58:38,815 [INFO] category
+music      29925
+podcast       12
+Name: count, dtype: Int64
+2025-11-16 23:58:38,816 [INFO] Empty DataFrame
+Columns: [datetime, ms_played, country, track_name, artist_name, album_name, spotify_track_uri, episode_name, episode_show_name, spotify_episode_uri, audiobook_title, audiobook_uri, audiobook_chapter_uri, audiobook_chapter_title, reason_start, reason_end, shuffle, skipped, seconds_played, minutes_played, year, month, day, username, category]
+Index: []
+2025-11-16 23:58:38,853 [INFO] [run_all] Per-year counts: artists=40, shows=8, books=0
+2025-11-16 23:58:38,853 [INFO] [run_all] Starting phase: overall
+2025-11-16 23:58:38,853 [INFO] [overall_first50] Top counts: artists=10, shows=7, books=0
+2025-11-16 23:58:38,853 [INFO] [filter:debug] incoming prefilter len=10
+2025-11-16 23:58:38,855 [INFO] [filter] Artists filtered out: 10/10 (remaining=0)
+2025-11-16 23:58:38,855 [INFO] [overall_first50] Artists before=10, after=0
+2025-11-16 23:58:38,855 [INFO] [filter] Shows filtered out: 6/7 (remaining=1)
+2025-11-16 23:58:38,855 [INFO] [overall_first50] Shows before=7, after=1
+2025-11-16 23:58:38,855 [INFO] [overall_first50] Fetching shows: 1
+2025-11-16 23:58:38,855 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-16 23:58:38,855 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-16 23:58:38,855 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-16 23:58:38,858 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-16 23:58:38,906 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-16 23:58:39,008 [INFO] [resolve_show_ids] Fallback search for 1 shows
+2025-11-16 23:58:39,376 [INFO] [resolve_show_ids] Found ID for The Caretaker - Everywhere at the End of Time
+2025-11-16 23:58:39,481 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-16 23:58:39,482 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-16 23:58:39,553 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:shows: Fetched 1 shows
+2025-11-16 23:58:39,553 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-16 23:58:39,658 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-16 23:58:39,659 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-16 23:58:39,947 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:40,107 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → planning
+2025-11-16 23:58:40,107 [INFO] [overall] Checking for pending Discogs results before phase end…
+2025-11-16 23:58:40,107 [INFO] [overall] ✅ No pending Discogs jobs.
+2025-11-16 23:58:40,107 [INFO] [run_all] Completed phase: overall (batches +1)
+2025-11-16 23:58:40,230 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:40,378 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:40,379 [INFO] [flush_partial] Starting autosave snapshot at 20251116-235840
+2025-11-16 23:58:40,433 [INFO] [merge_into_master] Merged 1 new → total 7 (before=7)
+2025-11-16 23:58:40,885 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-16 23:58:40,886 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-16 23:58:40,886 [INFO] [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-16 23:58:40,886 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-16 23:58:40,886 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-16 23:58:40,988 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 2648 rows
+2025-11-16 23:58:41,062 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 585 rows
+2025-11-16 23:58:41,111 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-16 23:58:41,157 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-16 23:58:41,222 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-16 23:58:41,263 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-16 23:58:41,264 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-16 23:58:41,264 [INFO] [run_all] Flushed partial results after phase 'overall'
+2025-11-16 23:58:41,264 [INFO] [run_all] Starting phase: breadth_first
+2025-11-16 23:58:41,264 [INFO] [breadth_first] Starting diagnostic phase…
+2025-11-16 23:58:41,440 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:41,484 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:41,582 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:41,646 [INFO] [debug:init] master_artists shape=(2648, 7)
+2025-11-16 23:58:41,646 [INFO] [debug:init] master_artists head=[{'supergenre': 'Pop', 'artist_popularity': 48, 'artist_name': 'Cornelius', 'primary_genre': 'shibuya-kei', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5ebdd24386203ce97cd25e97496', 'genres': nan, 'artist_id': '2vJObElaIZWYDLpiXiJMo9'}, {'supergenre': 'Rock', 'artist_popularity': 68, 'artist_name': 'Blur', 'primary_genre': 'britpop', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb00620d736644d2359ce99430', 'genres': nan, 'artist_id': '7MhMgCo0Bl0Kukl93PZbYS'}, {'supergenre': 'Ambient & Experimental Electronic', 'artist_popularity': 9, 'artist_name': 'Grischa Lichtenberger', 'primary_genre': 'idm', 'artist_image': 'https://i.scdn.co/image/2508955aebc5043d449a2f33927e00824f3af7a1', 'genres': nan, 'artist_id': '5ahuBhk9Urv0iYLrNSbPRK'}]
+2025-11-16 23:58:41,646 [INFO] [debug:init] seen_artists sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'beach house', 'todd rundgren', 'robin williams', 'alex wand', 'jah shaka']
+2025-11-16 23:58:41,647 [INFO] [master] Loaded: artists=2648, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 23:58:41,647 [INFO] [master] Seen sets initialized: artists=2648, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 23:58:41,647 [INFO] [master] Reloaded master tables (triggered by args=('albums',))
+2025-11-16 23:58:41,797 [INFO] [master:init] ⚠️ info_album.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:41,838 [INFO] [master:init] ⚠️ info_track.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:41,934 [INFO] [master:init] ⚠️ info_audiobook.csv empty or missing — initializing in memory only.
+2025-11-16 23:58:41,996 [INFO] [debug:init] master_artists shape=(2648, 7)
+2025-11-16 23:58:41,997 [INFO] [debug:init] master_artists head=[{'supergenre': 'Pop', 'artist_popularity': 48, 'artist_name': 'Cornelius', 'primary_genre': 'shibuya-kei', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5ebdd24386203ce97cd25e97496', 'genres': nan, 'artist_id': '2vJObElaIZWYDLpiXiJMo9'}, {'supergenre': 'Rock', 'artist_popularity': 68, 'artist_name': 'Blur', 'primary_genre': 'britpop', 'artist_image': 'https://i.scdn.co/image/ab6761610000e5eb00620d736644d2359ce99430', 'genres': nan, 'artist_id': '7MhMgCo0Bl0Kukl93PZbYS'}, {'supergenre': 'Ambient & Experimental Electronic', 'artist_popularity': 9, 'artist_name': 'Grischa Lichtenberger', 'primary_genre': 'idm', 'artist_image': 'https://i.scdn.co/image/2508955aebc5043d449a2f33927e00824f3af7a1', 'genres': nan, 'artist_id': '5ahuBhk9Urv0iYLrNSbPRK'}]
+2025-11-16 23:58:41,997 [INFO] [debug:init] seen_artists sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'beach house', 'todd rundgren', 'robin williams', 'alex wand', 'jah shaka']
+2025-11-16 23:58:41,998 [INFO] [master] Loaded: artists=2648, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 23:58:41,998 [INFO] [master] Seen sets initialized: artists=2648, albums=0, tracks=0, shows=7, audiobooks=0
+2025-11-16 23:58:41,998 [INFO] [master] Reloaded master tables (triggered by args=('tracks',))
+2025-11-16 23:58:42,000 [INFO] [breadth_first:init] Reset seen_artists from 2648 → 2648 (complete master only)
+2025-11-16 23:58:42,000 [INFO] [breadth_first] Max cycles = 4 (music=4, shows=3, books=0)
+2025-11-16 23:58:42,000 [INFO] [breadth_first:debug] seen_artists init size=2648 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger', 'beach house', 'todd rundgren', 'robin williams', 'alex wand', 'jah shaka']
+2025-11-16 23:58:42,000 [INFO] [breadth_first] Cycle 1/4
+2025-11-16 23:58:42,000 [INFO] [breadth_first][debug] Year 2024 sub shape=(111, 3)
+2025-11-16 23:58:42,001 [INFO] [breadth_first][debug] Year 2024 artist sample=['The Cinematic Orchestra', 'LFO', 'Grizzly Bear', 'Hexstatic', 'Television']
+2025-11-16 23:58:42,001 [INFO] [breadth_first] seen_artists size=2648 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger']
+2025-11-16 23:58:42,001 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, seen_artists=2648
+2025-11-16 23:58:42,001 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-16 23:58:42,001 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-16 23:58:42,001 [INFO] [breadth_first] Year 2024 Artists before=0, after=0
+2025-11-16 23:58:42,001 [INFO] [breadth_first][warning] ⚠️ All 111 artists excluded at year 2024! seen_artists or master table may be overmatching.
+2025-11-16 23:58:42,001 [INFO] [breadth_first][debug] Year 2023 sub shape=(2019, 3)
+2025-11-16 23:58:42,002 [INFO] [breadth_first][debug] Year 2023 artist sample=['Nursery Rhymes 123', 'SHXCXCHCXSH', 'Blur', 'The Beatles', 'The Cactus Blossoms']
+2025-11-16 23:58:42,002 [INFO] [breadth_first] seen_artists size=2648 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger']
+2025-11-16 23:58:42,002 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=787, seen_artists=2648
+2025-11-16 23:58:42,002 [INFO] [filter:debug] incoming prefilter len=787
+2025-11-16 23:58:42,004 [INFO] [filter] Artists filtered out: 0/787 (remaining=787)
+2025-11-16 23:58:42,004 [INFO] [breadth_first] Year 2023 Artists before=787, after=787
+2025-11-16 23:58:42,004 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['The Wailers', 'The Andrews Sisters with Orchestra', 'The Beautiful South']
+2025-11-16 23:58:42,004 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:42,004 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:42,006 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:42,008 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:42,244 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:42,350 [INFO] [resolve_artist_ids] Fallback search for 3 names
+2025-11-16 23:58:42,540 [INFO] [resolve_artist_ids] Found ID for The Wailers
+2025-11-16 23:58:42,812 [INFO] [resolve_artist_ids] Found ID for The Andrews Sisters with Orchestra
+2025-11-16 23:58:43,269 [INFO] [resolve_artist_ids] Found ID for L'éclair
+2025-11-16 23:58:43,375 [INFO] [resolve_artist_ids] Done — resolved 53 IDs so far
+2025-11-16 23:58:43,378 [INFO] [fetch_and_save_artists] Resolved IDs for 53 / 50
+2025-11-16 23:58:43,378 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:43,551 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:43,552 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:43,656 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:43,661 [INFO] [fetch_and_save_artists] 9 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:43,662 [INFO] [fetch_and_save_artists] Submitted 9 Discogs jobs (non-blocking)
+2025-11-16 23:58:43,747 [INFO] [init] Loaded 6421 supergenre mappings from storage.
+2025-11-16 23:58:43,751 [INFO] [fetch_and_save_artists] 10 artists marked as Unlisted
+2025-11-16 23:58:43,752 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '2QsynagSdAqZj3U9HgDzjD', 'artist_name': 'Bob Marley & The Wailers'}, {'artist_id': '2NCGI6dLTxLdI9XHdv7QfM', 'artist_name': 'The Andrews Sisters'}, {'artist_id': '4fomCZiFUMX73KJ0YQ0V90', 'artist_name': 'The Beautiful South'}]
+2025-11-16 23:58:44,021 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:44,159 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:44,160 [INFO] [breadth_first][debug] Year 2022 sub shape=(2332, 3)
+2025-11-16 23:58:44,161 [INFO] [breadth_first][debug] Year 2022 artist sample=['Steely Dan', 'The Beatles', 'Nursery Rhymes 123', 'Cornelius', 'Architectural']
+2025-11-16 23:58:44,161 [INFO] [breadth_first] seen_artists size=2746 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger']
+2025-11-16 23:58:44,161 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=1064, seen_artists=2746
+2025-11-16 23:58:44,161 [INFO] [filter:debug] incoming prefilter len=1064
+2025-11-16 23:58:44,164 [INFO] [filter] Artists filtered out: 0/1064 (remaining=1064)
+2025-11-16 23:58:44,164 [INFO] [breadth_first] Year 2022 Artists before=1064, after=1064
+2025-11-16 23:58:44,164 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Groove Chronicles (Noodles)', 'Kikagaku Moyo', 'The Ventures']
+2025-11-16 23:58:44,165 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:44,165 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:44,170 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:44,174 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:44,505 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:44,608 [INFO] [resolve_artist_ids] Fallback search for 2 names
+2025-11-16 23:58:44,822 [INFO] [resolve_artist_ids] Found ID for Groove Chronicles (Noodles)
+2025-11-16 23:58:45,163 [INFO] [resolve_artist_ids] Found ID for MED
+2025-11-16 23:58:45,266 [INFO] [resolve_artist_ids] Done — resolved 105 IDs so far
+2025-11-16 23:58:45,270 [INFO] [fetch_and_save_artists] Resolved IDs for 105 / 50
+2025-11-16 23:58:45,270 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:45,443 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:45,444 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:45,545 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:45,550 [INFO] [fetch_and_save_artists] 16 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:45,551 [INFO] [fetch_and_save_artists] Submitted 16 Discogs jobs (non-blocking)
+2025-11-16 23:58:45,557 [INFO] [fetch_and_save_artists] 17 artists marked as Unlisted
+2025-11-16 23:58:45,558 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '52ra5pt8grwDXQaE2AO5on', 'artist_name': 'groove chronicles'}, {'artist_id': '0hrb5WRiNlj8vh3WnCgXFq', 'artist_name': 'Kikagaku Moyo'}, {'artist_id': '2GaayiIs1kcyNqRXQuzp35', 'artist_name': 'The Ventures'}]
+2025-11-16 23:58:45,796 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:45,983 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:45,986 [INFO] [breadth_first][debug] Year 2021 sub shape=(1997, 3)
+2025-11-16 23:58:45,987 [INFO] [breadth_first][debug] Year 2021 artist sample=['SHXCXCHCXSH', 'Martyn', 'The Beatles', 'Squarepusher', 'Vladislav Delay']
+2025-11-16 23:58:45,988 [INFO] [breadth_first] seen_artists size=2846 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger']
+2025-11-16 23:58:45,989 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=703, seen_artists=2846
+2025-11-16 23:58:45,990 [INFO] [filter:debug] incoming prefilter len=703
+2025-11-16 23:58:45,995 [INFO] [filter] Artists filtered out: 0/703 (remaining=703)
+2025-11-16 23:58:45,995 [INFO] [breadth_first] Year 2021 Artists before=703, after=703
+2025-11-16 23:58:45,995 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Boris Brejcha', 'HOTEI', 'The Shangri-Las']
+2025-11-16 23:58:45,995 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:45,995 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:45,999 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:46,003 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:46,272 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:46,375 [INFO] [resolve_artist_ids] Done — resolved 155 IDs so far
+2025-11-16 23:58:46,377 [INFO] [fetch_and_save_artists] Resolved IDs for 155 / 50
+2025-11-16 23:58:46,377 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:46,561 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:46,562 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:46,667 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:46,673 [INFO] [fetch_and_save_artists] 12 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:46,674 [INFO] [fetch_and_save_artists] Submitted 12 Discogs jobs (non-blocking)
+2025-11-16 23:58:46,685 [INFO] [fetch_and_save_artists] 14 artists marked as Unlisted
+2025-11-16 23:58:46,688 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '6caPJFLv1wesmM7gwK1ACy', 'artist_name': 'Boris Brejcha'}, {'artist_id': '4cShXyYZpvnVZYeE3Oukns', 'artist_name': 'HOTEI'}, {'artist_id': '1WvziZcLLYLoMMdmQx7qcN', 'artist_name': 'The Shangri-Las'}]
+2025-11-16 23:58:46,900 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:47,048 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:47,051 [INFO] [breadth_first] Year 2023 Shows before=3, after=0 (after_seen=0)
+2025-11-16 23:58:47,052 [INFO] [breadth_first] Year 2022 Shows before=3, after=0 (after_seen=0)
+2025-11-16 23:58:47,053 [INFO] [filter] Shows filtered out: 0/1 (remaining=1)
+2025-11-16 23:58:47,054 [INFO] [breadth_first] Year 2021 Shows before=2, after=1 (after_seen=1)
+2025-11-16 23:58:47,054 [INFO] [fetch_and_save_shows] Starting batch with 1 shows
+2025-11-16 23:58:47,054 [INFO] [resolve_show_ids] Resolving 1 show names
+2025-11-16 23:58:47,054 [INFO] [resolve_show_ids] Checking spotify_episode_uri column
+2025-11-16 23:58:47,062 [INFO] [resolve_show_ids] Fetching 1 episodes via get_episodes
+2025-11-16 23:58:47,113 [INFO] [spotify:episodes] Fetched 1 episodes
+2025-11-16 23:58:47,216 [INFO] [resolve_show_ids] Done — resolved 1 show IDs so far
+2025-11-16 23:58:47,217 [INFO] [fetch_and_save_shows] Calling get_shows for 1 IDs
+2025-11-16 23:58:47,311 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:shows: 📈 Spotify calls so far: total=10 • rate≈0.33/s • per-endpoint=(artists:3, episodes:2, shows:2, tracks:3)
+2025-11-16 23:58:47,311 [INFO] [log_dao] [spotify:shows] 📈 Spotify calls so far: total=10 • rate≈0.33/s • per-endpoint=(artists:3, episodes:2, shows:2, tracks:3)
+2025-11-16 23:58:47,313 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:shows: Fetched 1 shows
+2025-11-16 23:58:47,313 [INFO] [log_dao] [spotify:shows] Fetched 1 shows
+2025-11-16 23:58:47,418 [INFO] [fetch_and_save_shows] Got 1 show records back
+2025-11-16 23:58:47,422 [INFO] [fetch_and_save_shows] Saving 1 shows to buffer
+2025-11-16 23:58:47,638 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:47,845 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:47,845 [INFO] [breadth_first] Cycle 2/4
+2025-11-16 23:58:47,848 [INFO] [breadth_first][debug] Year 2024 sub shape=(111, 3)
+2025-11-16 23:58:47,848 [INFO] [breadth_first][debug] Year 2024 artist sample=['The Cinematic Orchestra', 'LFO', 'Grizzly Bear', 'Hexstatic', 'Television']
+2025-11-16 23:58:47,849 [INFO] [breadth_first] seen_artists size=2946 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger']
+2025-11-16 23:58:47,849 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, seen_artists=2946
+2025-11-16 23:58:47,850 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-16 23:58:47,850 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-16 23:58:47,850 [INFO] [breadth_first] Year 2024 Artists before=0, after=0
+2025-11-16 23:58:47,850 [INFO] [breadth_first][warning] ⚠️ All 111 artists excluded at year 2024! seen_artists or master table may be overmatching.
+2025-11-16 23:58:47,852 [INFO] [breadth_first][debug] Year 2023 sub shape=(2019, 3)
+2025-11-16 23:58:47,853 [INFO] [breadth_first][debug] Year 2023 artist sample=['Nursery Rhymes 123', 'SHXCXCHCXSH', 'Blur', 'The Beatles', 'The Cactus Blossoms']
+2025-11-16 23:58:47,853 [INFO] [breadth_first] seen_artists size=2946 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'the flat five', 'artful dodger']
+2025-11-16 23:58:47,855 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=737, seen_artists=2946
+2025-11-16 23:58:47,855 [INFO] [filter:debug] incoming prefilter len=737
+2025-11-16 23:58:47,859 [INFO] [filter] Artists filtered out: 0/737 (remaining=737)
+2025-11-16 23:58:47,859 [INFO] [breadth_first] Year 2023 Artists before=737, after=737
+2025-11-16 23:58:47,859 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Levon Vincent', 'Tonstartssbandht', 'Ray Noble']
+2025-11-16 23:58:47,860 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:47,860 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:47,863 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:47,867 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:48,168 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:48,274 [INFO] [resolve_artist_ids] Done — resolved 205 IDs so far
+2025-11-16 23:58:48,276 [INFO] [fetch_and_save_artists] Resolved IDs for 205 / 50
+2025-11-16 23:58:48,277 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:48,451 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:48,451 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:48,552 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:48,558 [INFO] [fetch_and_save_artists] 9 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:48,558 [INFO] [fetch_and_save_artists] Submitted 9 Discogs jobs (non-blocking)
+2025-11-16 23:58:48,562 [INFO] [fetch_and_save_artists] 15 artists marked as Unlisted
+2025-11-16 23:58:48,563 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '5NvCz2qTmLDV9I5J8szc6r', 'artist_name': 'Levon Vincent'}, {'artist_id': '0ZoYAbDGICaSPSfTTvworW', 'artist_name': 'Tonstartssbandht'}, {'artist_id': '5ZCIBTruXBxbtCZ0IztQWI', 'artist_name': 'Ray Noble'}]
+2025-11-16 23:58:48,749 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:48,896 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:48,897 [INFO] [breadth_first][debug] Year 2022 sub shape=(2332, 3)
+2025-11-16 23:58:48,898 [INFO] [breadth_first][debug] Year 2022 artist sample=['Steely Dan', 'The Beatles', 'Nursery Rhymes 123', 'Cornelius', 'Architectural']
+2025-11-16 23:58:48,898 [INFO] [breadth_first] seen_artists size=3045 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'guthrie govan', 'the flat five']
+2025-11-16 23:58:48,899 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=1006, seen_artists=3045
+2025-11-16 23:58:48,899 [INFO] [filter:debug] incoming prefilter len=1006
+2025-11-16 23:58:48,902 [INFO] [filter] Artists filtered out: 0/1006 (remaining=1006)
+2025-11-16 23:58:48,902 [INFO] [breadth_first] Year 2022 Artists before=1006, after=1006
+2025-11-16 23:58:48,902 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Electronic', 'Xavier Rudd', 'Godflesh']
+2025-11-16 23:58:48,902 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:48,902 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:48,906 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:48,908 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:49,425 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:49,531 [INFO] [resolve_artist_ids] Done — resolved 255 IDs so far
+2025-11-16 23:58:49,532 [INFO] [fetch_and_save_artists] Resolved IDs for 255 / 50
+2025-11-16 23:58:49,532 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:49,660 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:49,660 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:49,763 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:49,766 [INFO] [fetch_and_save_artists] 9 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:49,766 [INFO] [fetch_and_save_artists] Submitted 9 Discogs jobs (non-blocking)
+2025-11-16 23:58:49,771 [INFO] [fetch_and_save_artists] 10 artists marked as Unlisted
+2025-11-16 23:58:49,772 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '3xYNGCooNIzKMAtJYKSOyq', 'artist_name': 'Electronic'}, {'artist_id': '5lbM4g6bhxjNX7R5QHP2nD', 'artist_name': 'Xavier Rudd'}, {'artist_id': '5A4ebXQf38xWIq0xSWLhsS', 'artist_name': 'Godflesh'}]
+2025-11-16 23:58:50,033 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:50,241 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:50,244 [INFO] [breadth_first][debug] Year 2021 sub shape=(1997, 3)
+2025-11-16 23:58:50,245 [INFO] [breadth_first][debug] Year 2021 artist sample=['SHXCXCHCXSH', 'Martyn', 'The Beatles', 'Squarepusher', 'Vladislav Delay']
+2025-11-16 23:58:50,246 [INFO] [breadth_first] seen_artists size=3145 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'guthrie govan', 'the flat five']
+2025-11-16 23:58:50,248 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=641, seen_artists=3145
+2025-11-16 23:58:50,249 [INFO] [filter:debug] incoming prefilter len=641
+2025-11-16 23:58:50,254 [INFO] [filter] Artists filtered out: 0/641 (remaining=641)
+2025-11-16 23:58:50,254 [INFO] [breadth_first] Year 2021 Artists before=641, after=641
+2025-11-16 23:58:50,254 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Anita Lane', 'Imam Baildi', 'Supertramp']
+2025-11-16 23:58:50,254 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:50,254 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:50,258 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:50,262 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:50,585 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:50,691 [INFO] [resolve_artist_ids] Done — resolved 305 IDs so far
+2025-11-16 23:58:50,692 [INFO] [fetch_and_save_artists] Resolved IDs for 305 / 50
+2025-11-16 23:58:50,692 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:50,908 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:50,908 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:51,013 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:51,015 [INFO] [fetch_and_save_artists] 18 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:51,015 [INFO] [fetch_and_save_artists] Submitted 18 Discogs jobs (non-blocking)
+2025-11-16 23:58:51,017 [INFO] [fetch_and_save_artists] 18 artists marked as Unlisted
+2025-11-16 23:58:51,018 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '5lP538RHY8e9KUlut6jVDW', 'artist_name': 'Anita Lane'}, {'artist_id': '3YSKQqV2uJpdbiiwowgOdD', 'artist_name': 'Imam Baildi'}, {'artist_id': '3JsMj0DEzyWc0VDlHuy9Bx', 'artist_name': 'Supertramp'}]
+2025-11-16 23:58:51,212 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:51,365 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:51,366 [INFO] [breadth_first] Year 2023 Shows before=3, after=0 (after_seen=0)
+2025-11-16 23:58:51,367 [INFO] [breadth_first] Year 2022 Shows before=3, after=0 (after_seen=0)
+2025-11-16 23:58:51,367 [INFO] [breadth_first] Year 2021 Shows before=2, after=0 (after_seen=0)
+2025-11-16 23:58:51,367 [INFO] [breadth_first] Cycle 3/4
+2025-11-16 23:58:51,368 [INFO] [breadth_first][debug] Year 2024 sub shape=(111, 3)
+2025-11-16 23:58:51,368 [INFO] [breadth_first][debug] Year 2024 artist sample=['The Cinematic Orchestra', 'LFO', 'Grizzly Bear', 'Hexstatic', 'Television']
+2025-11-16 23:58:51,368 [INFO] [breadth_first] seen_artists size=3245 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'guthrie govan', 'the flat five']
+2025-11-16 23:58:51,368 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, seen_artists=3245
+2025-11-16 23:58:51,369 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-16 23:58:51,369 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-16 23:58:51,369 [INFO] [breadth_first] Year 2024 Artists before=0, after=0
+2025-11-16 23:58:51,369 [INFO] [breadth_first][warning] ⚠️ All 111 artists excluded at year 2024! seen_artists or master table may be overmatching.
+2025-11-16 23:58:51,369 [INFO] [breadth_first][debug] Year 2023 sub shape=(2019, 3)
+2025-11-16 23:58:51,370 [INFO] [breadth_first][debug] Year 2023 artist sample=['Nursery Rhymes 123', 'SHXCXCHCXSH', 'Blur', 'The Beatles', 'The Cactus Blossoms']
+2025-11-16 23:58:51,370 [INFO] [breadth_first] seen_artists size=3245 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'guthrie govan', 'the flat five']
+2025-11-16 23:58:51,370 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=684, seen_artists=3245
+2025-11-16 23:58:51,371 [INFO] [filter:debug] incoming prefilter len=684
+2025-11-16 23:58:51,373 [INFO] [filter] Artists filtered out: 0/684 (remaining=684)
+2025-11-16 23:58:51,373 [INFO] [breadth_first] Year 2023 Artists before=684, after=684
+2025-11-16 23:58:51,373 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Tokischa', 'Aaron Carter', 'Orville Peck']
+2025-11-16 23:58:51,373 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:51,373 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:51,377 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:51,379 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:51,676 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:51,783 [INFO] [resolve_artist_ids] Fallback search for 1 names
+2025-11-16 23:58:52,042 [INFO] [resolve_artist_ids] Found ID for Anders Miolin
+2025-11-16 23:58:52,147 [INFO] [resolve_artist_ids] Done — resolved 356 IDs so far
+2025-11-16 23:58:52,149 [INFO] [fetch_and_save_artists] Resolved IDs for 356 / 50
+2025-11-16 23:58:52,149 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:52,321 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:52,321 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:52,427 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:52,433 [INFO] [fetch_and_save_artists] 19 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:52,433 [INFO] [fetch_and_save_artists] Submitted 19 Discogs jobs (non-blocking)
+2025-11-16 23:58:52,438 [INFO] [fetch_and_save_artists] 19 artists marked as Unlisted
+2025-11-16 23:58:52,439 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '2p4aN0Uxkk3iT3HK0cJ2cJ', 'artist_name': 'Tokischa'}, {'artist_id': '5338fdSzGNOFD4cxAxDTeq', 'artist_name': 'Aaron Carter'}, {'artist_id': '46auOkH1pk28rWrSoUNhLo', 'artist_name': 'Orville Peck'}]
+2025-11-16 23:58:52,681 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:52,827 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:52,830 [INFO] [breadth_first][debug] Year 2022 sub shape=(2332, 3)
+2025-11-16 23:58:52,831 [INFO] [breadth_first][debug] Year 2022 artist sample=['Steely Dan', 'The Beatles', 'Nursery Rhymes 123', 'Cornelius', 'Architectural']
+2025-11-16 23:58:52,831 [INFO] [breadth_first] seen_artists size=3345 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'guthrie govan', 'the flat five']
+2025-11-16 23:58:52,833 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=953, seen_artists=3345
+2025-11-16 23:58:52,833 [INFO] [filter:debug] incoming prefilter len=953
+2025-11-16 23:58:52,839 [INFO] [filter] Artists filtered out: 0/953 (remaining=953)
+2025-11-16 23:58:52,839 [INFO] [breadth_first] Year 2022 Artists before=953, after=953
+2025-11-16 23:58:52,839 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Red Tail Ring', 'Steve Forbert', 'The Rentals']
+2025-11-16 23:58:52,839 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:52,839 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:52,843 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:52,846 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:53,417 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:53,520 [INFO] [resolve_artist_ids] Done — resolved 406 IDs so far
+2025-11-16 23:58:53,522 [INFO] [fetch_and_save_artists] Resolved IDs for 406 / 50
+2025-11-16 23:58:53,523 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:53,697 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: 📈 Spotify calls so far: total=20 • rate≈0.67/s • per-endpoint=(artists:8, episodes:2, shows:2, tracks:8)
+2025-11-16 23:58:53,697 [INFO] [log_dao] [spotify:artists] 📈 Spotify calls so far: total=20 • rate≈0.67/s • per-endpoint=(artists:8, episodes:2, shows:2, tracks:8)
+2025-11-16 23:58:53,699 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:53,699 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:53,801 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:53,805 [INFO] [fetch_and_save_artists] 14 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:53,805 [INFO] [fetch_and_save_artists] Submitted 14 Discogs jobs (non-blocking)
+2025-11-16 23:58:53,811 [INFO] [fetch_and_save_artists] 15 artists marked as Unlisted
+2025-11-16 23:58:53,812 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '7eFNDfeRSsRCcUGLBVZZB3', 'artist_name': 'Red Tail Ring'}, {'artist_id': '3oAbjWINfcTSAuVUlXXMty', 'artist_name': 'Steve Forbert'}, {'artist_id': '3NmdKZUM96z7NGvL35g5PC', 'artist_name': 'The Rentals'}]
+2025-11-16 23:58:54,011 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:54,154 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:54,157 [INFO] [breadth_first][debug] Year 2021 sub shape=(1997, 3)
+2025-11-16 23:58:54,158 [INFO] [breadth_first][debug] Year 2021 artist sample=['SHXCXCHCXSH', 'Martyn', 'The Beatles', 'Squarepusher', 'Vladislav Delay']
+2025-11-16 23:58:54,158 [INFO] [breadth_first] seen_artists size=3444 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'Freddy Fresh', 'guthrie govan']
+2025-11-16 23:58:54,160 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=588, seen_artists=3444
+2025-11-16 23:58:54,160 [INFO] [filter:debug] incoming prefilter len=588
+2025-11-16 23:58:54,165 [INFO] [filter] Artists filtered out: 0/588 (remaining=588)
+2025-11-16 23:58:54,165 [INFO] [breadth_first] Year 2021 Artists before=588, after=588
+2025-11-16 23:58:54,165 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Antonio Aguilar', 'Albert Hammond', 'Martine McCutcheon']
+2025-11-16 23:58:54,165 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:54,165 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:54,169 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:54,172 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:54,401 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:54,507 [INFO] [resolve_artist_ids] Done — resolved 456 IDs so far
+2025-11-16 23:58:54,508 [INFO] [fetch_and_save_artists] Resolved IDs for 456 / 50
+2025-11-16 23:58:54,508 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:54,688 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:54,688 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:54,794 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:54,797 [INFO] [fetch_and_save_artists] 13 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:54,797 [INFO] [fetch_and_save_artists] Submitted 13 Discogs jobs (non-blocking)
+2025-11-16 23:58:54,800 [INFO] [fetch_and_save_artists] 13 artists marked as Unlisted
+2025-11-16 23:58:54,801 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '0PN0fbe41KbuzlRYnoajNm', 'artist_name': 'Antonio Aguilar'}, {'artist_id': '34E3csCxpXunPGEkOVVX2g', 'artist_name': 'Albert Hammond'}, {'artist_id': '6RxvPZHJL1V9kWWvzM0APg', 'artist_name': 'Martine McCutcheon'}]
+2025-11-16 23:58:55,001 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:55,152 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:55,154 [INFO] [breadth_first] Year 2023 Shows before=3, after=0 (after_seen=0)
+2025-11-16 23:58:55,156 [INFO] [breadth_first] Year 2022 Shows before=3, after=0 (after_seen=0)
+2025-11-16 23:58:55,157 [INFO] [breadth_first] Year 2021 Shows before=2, after=0 (after_seen=0)
+2025-11-16 23:58:55,157 [INFO] [breadth_first] Cycle 4/4
+2025-11-16 23:58:55,158 [INFO] [breadth_first][debug] Year 2024 sub shape=(111, 3)
+2025-11-16 23:58:55,160 [INFO] [breadth_first][debug] Year 2024 artist sample=['The Cinematic Orchestra', 'LFO', 'Grizzly Bear', 'Hexstatic', 'Television']
+2025-11-16 23:58:55,161 [INFO] [breadth_first] seen_artists size=3544 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'Freddy Fresh', 'guthrie govan']
+2025-11-16 23:58:55,162 [INFO] [breadth_first] Year 2024: candidates=111, after_seen=0, seen_artists=3544
+2025-11-16 23:58:55,162 [INFO] [filter:debug] incoming prefilter len=0
+2025-11-16 23:58:55,162 [INFO] [filter_known_artists] ⚠️ No input names provided.
+2025-11-16 23:58:55,162 [INFO] [breadth_first] Year 2024 Artists before=0, after=0
+2025-11-16 23:58:55,162 [INFO] [breadth_first][warning] ⚠️ All 111 artists excluded at year 2024! seen_artists or master table may be overmatching.
+2025-11-16 23:58:55,163 [INFO] [breadth_first][debug] Year 2023 sub shape=(2019, 3)
+2025-11-16 23:58:55,164 [INFO] [breadth_first][debug] Year 2023 artist sample=['Nursery Rhymes 123', 'SHXCXCHCXSH', 'Blur', 'The Beatles', 'The Cactus Blossoms']
+2025-11-16 23:58:55,164 [INFO] [breadth_first] seen_artists size=3544 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'Freddy Fresh', 'guthrie govan']
+2025-11-16 23:58:55,165 [INFO] [breadth_first] Year 2023: candidates=2019, after_seen=631, seen_artists=3544
+2025-11-16 23:58:55,165 [INFO] [filter:debug] incoming prefilter len=631
+2025-11-16 23:58:55,167 [INFO] [filter] Artists filtered out: 0/631 (remaining=631)
+2025-11-16 23:58:55,168 [INFO] [breadth_first] Year 2023 Artists before=631, after=631
+2025-11-16 23:58:55,168 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Harmonia', 'Dennis Scott', 'Bobby Hebb']
+2025-11-16 23:58:55,168 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:55,168 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:55,171 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:55,175 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:55,376 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:55,482 [INFO] [resolve_artist_ids] Done — resolved 506 IDs so far
+2025-11-16 23:58:55,483 [INFO] [fetch_and_save_artists] Resolved IDs for 506 / 50
+2025-11-16 23:58:55,483 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:55,664 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:55,664 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:55,767 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:55,770 [INFO] [fetch_and_save_artists] 14 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:55,770 [INFO] [fetch_and_save_artists] Submitted 14 Discogs jobs (non-blocking)
+2025-11-16 23:58:55,774 [INFO] [fetch_and_save_artists] 14 artists marked as Unlisted
+2025-11-16 23:58:55,775 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '0tHDVpPzMs1JqKTAuGQkQR', 'artist_name': 'Harmonia'}, {'artist_id': '4bQQkZffejJRWxQ5ddezgC', 'artist_name': 'Dennis Scott'}, {'artist_id': '2uNpV18izVIP7DNusoWbT5', 'artist_name': 'Bobby Hebb'}]
+2025-11-16 23:58:55,968 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:56,127 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:56,130 [INFO] [breadth_first][debug] Year 2022 sub shape=(2332, 3)
+2025-11-16 23:58:56,131 [INFO] [breadth_first][debug] Year 2022 artist sample=['Steely Dan', 'The Beatles', 'Nursery Rhymes 123', 'Cornelius', 'Architectural']
+2025-11-16 23:58:56,132 [INFO] [breadth_first] seen_artists size=3644 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'Freddy Fresh', 'guthrie govan']
+2025-11-16 23:58:56,134 [INFO] [breadth_first] Year 2022: candidates=2332, after_seen=898, seen_artists=3644
+2025-11-16 23:58:56,134 [INFO] [filter:debug] incoming prefilter len=898
+2025-11-16 23:58:56,138 [INFO] [filter] Artists filtered out: 0/898 (remaining=898)
+2025-11-16 23:58:56,139 [INFO] [breadth_first] Year 2022 Artists before=898, after=898
+2025-11-16 23:58:56,139 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Sam Ryder', 'Group Home', 'Frederick Knight']
+2025-11-16 23:58:56,139 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:56,139 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:56,143 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:56,147 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:56,587 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:56,692 [INFO] [resolve_artist_ids] Done — resolved 556 IDs so far
+2025-11-16 23:58:56,694 [INFO] [fetch_and_save_artists] Resolved IDs for 556 / 50
+2025-11-16 23:58:56,694 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:56,844 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:56,845 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:56,950 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:56,955 [INFO] [fetch_and_save_artists] 14 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:56,955 [INFO] [fetch_and_save_artists] Submitted 14 Discogs jobs (non-blocking)
+2025-11-16 23:58:56,965 [INFO] [fetch_and_save_artists] 15 artists marked as Unlisted
+2025-11-16 23:58:56,965 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '1rvnJJghrxl1xakJZct08m', 'artist_name': 'Sam Ryder'}, {'artist_id': '48elQHSJ3DmffHQpf89jxX', 'artist_name': 'Group Home'}, {'artist_id': '3X7yeRPAqw2O76f84A2r9U', 'artist_name': 'Frederick Knight'}]
+2025-11-16 23:58:57,158 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:57,296 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:57,300 [INFO] [breadth_first][debug] Year 2021 sub shape=(1997, 3)
+2025-11-16 23:58:57,301 [INFO] [breadth_first][debug] Year 2021 artist sample=['SHXCXCHCXSH', 'Martyn', 'The Beatles', 'Squarepusher', 'Vladislav Delay']
+2025-11-16 23:58:57,301 [INFO] [breadth_first] seen_artists size=3744 sample=['hint', 'creedence clearwater revival', 'pete rock & c.l. smooth', 'Freddy Fresh', 'guthrie govan']
+2025-11-16 23:58:57,303 [INFO] [breadth_first] Year 2021: candidates=1997, after_seen=531, seen_artists=3744
+2025-11-16 23:58:57,304 [INFO] [filter:debug] incoming prefilter len=531
+2025-11-16 23:58:57,309 [INFO] [filter] Artists filtered out: 0/531 (remaining=531)
+2025-11-16 23:58:57,309 [INFO] [breadth_first] Year 2021 Artists before=531, after=531
+2025-11-16 23:58:57,309 [INFO] [fetch_and_save_artists:debug] Thread=Thread-14 (background_enrich) batch=50 sample=['Don Harper', 'Bonobo', 'Liam Clancy']
+2025-11-16 23:58:57,309 [INFO] [fetch_and_save_artists] Starting batch with 50 names
+2025-11-16 23:58:57,310 [INFO] [resolve_artist_ids] Resolving 50 names
+2025-11-16 23:58:57,313 [INFO] [resolve_artist_ids] Checking spotify_track_uri column
+2025-11-16 23:58:57,317 [INFO] [resolve_artist_ids] Fetching 50 tracks via get_tracks
+2025-11-16 23:58:57,550 [INFO] [spotify:tracks] Fetched 50 tracks
+2025-11-16 23:58:57,656 [INFO] [resolve_artist_ids] Done — resolved 606 IDs so far
+2025-11-16 23:58:57,659 [INFO] [fetch_and_save_artists] Resolved IDs for 606 / 50
+2025-11-16 23:58:57,659 [INFO] [fetch_and_save_artists] Calling get_artists for 50 IDs
+2025-11-16 23:58:57,853 [INFO] [TRACE log_dao] Thread-14 (background_enrich) called log() from _log → spotify:artists: Fetched 50 artists
+2025-11-16 23:58:57,853 [INFO] [log_dao] [spotify:artists] Fetched 50 artists
+2025-11-16 23:58:57,958 [INFO] [fetch_and_save_artists] Got 50 artist records back
+2025-11-16 23:58:57,961 [INFO] [fetch_and_save_artists] 9 artists missing genres → submitting async Discogs jobs
+2025-11-16 23:58:57,961 [INFO] [fetch_and_save_artists] Submitted 9 Discogs jobs (non-blocking)
+2025-11-16 23:58:57,965 [INFO] [fetch_and_save_artists] 12 artists marked as Unlisted
+2025-11-16 23:58:57,965 [INFO] [fetch_and_save_artists:debug] Saving 50 artists to buffer → [{'artist_id': '2JJiKj9j7wPS8vz8UlAO9X', 'artist_name': 'Don Harper'}, {'artist_id': '0cmWgDlu9CwTgxPhf403hb', 'artist_name': 'Bonobo'}, {'artist_id': '1XjkajTCuInbWYxcxPvFtP', 'artist_name': 'Liam Clancy'}]
+2025-11-16 23:58:58,216 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:58,357 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → overall
+2025-11-16 23:58:58,359 [INFO] [breadth_first] Year 2023 Shows before=3, after=0 (after_seen=0)
+2025-11-16 23:58:58,360 [INFO] [breadth_first] Year 2022 Shows before=3, after=0 (after_seen=0)
+2025-11-16 23:58:58,361 [INFO] [breadth_first] Year 2021 Shows before=2, after=0 (after_seen=0)
+2025-11-16 23:58:58,361 [INFO] [breadth_first] Completed diagnostic phase.
+2025-11-16 23:58:58,362 [INFO] [overall] Checking for pending Discogs results before phase end…
+2025-11-16 23:58:58,430 [INFO] [_flush_discogs_results] Merged Discogs genres for 12/15 artists.
+2025-11-16 23:58:58,430 [INFO] [overall] ⚠️ 141 Discogs jobs still pending at phase end.
+2025-11-16 23:58:58,430 [INFO] [run_all] Completed phase: breadth_first (batches +13)
+2025-11-16 23:58:58,585 [INFO] [CloudflareDAO] ✅ Uploaded → enrichment/status/58d0bd65d3f40b92_short-enrich_lock_status.json
+2025-11-16 23:58:58,738 [INFO] [CloudflareDAO] 🧭 Wrote status to D1 for short-enrich_lock → breadth_first
+2025-11-16 23:58:58,742 [INFO] [flush_partial] Starting autosave snapshot at 20251116-235858
+2025-11-16 23:58:58,843 [INFO] [merge_into_master] Merged 600 new → total 3245 (before=2648)
+2025-11-16 23:58:59,346 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre.csv
+2025-11-16 23:58:59,346 [INFO] [merge_into_master] ✅ Saved 3245 rows to info_artist_genre.csv
+2025-11-16 23:58:59,347 [INFO] [flush_partial] ✅ merged 600 rows → info_artist_genre.csv
+2025-11-16 23:58:59,404 [INFO] [merge_into_master] Merged 1 new → total 7 (before=7)
+2025-11-16 23:58:59,828 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_show.csv
+2025-11-16 23:58:59,828 [INFO] [merge_into_master] ✅ Saved 7 rows to info_show.csv
+2025-11-16 23:58:59,828 [INFO] [flush_partial] ✅ merged 1 rows → info_show.csv
+2025-11-16 23:58:59,829 [INFO] [flush_partial] Buffers cleared after successful merge.
+2025-11-16 23:58:59,829 [INFO] [summarize_master_counts] 🔍 Checking current master tables in R2...
+2025-11-16 23:59:00,071 [INFO] [summarize_master_counts] ✅ info_artist_genre.csv: 3245 rows
+2025-11-16 23:59:00,131 [INFO] [summarize_master_counts] ✅ info_artist_genre_unlisted.csv: 585 rows
+2025-11-16 23:59:00,177 [INFO] [summarize_master_counts] ⚠️ info_album.csv: found but empty
+2025-11-16 23:59:00,223 [INFO] [summarize_master_counts] ⚠️ info_track.csv: found but empty
+2025-11-16 23:59:00,429 [INFO] [summarize_master_counts] ✅ info_show.csv: 7 rows
+2025-11-16 23:59:00,473 [INFO] [summarize_master_counts] ⚠️ info_audiobook.csv: found but empty
+2025-11-16 23:59:00,473 [INFO] [summarize_master_counts] ✅ Summary complete.
+2025-11-16 23:59:00,474 [INFO] [run_all] Flushed partial results after phase 'breadth_first'
+2025-11-16 23:59:00,474 [INFO] [run_all] Starting final flush
+2025-11-16 23:59:00,474 [INFO] [flush_all] Starting global master merges at 20251116-235900
+2025-11-16 23:59:00,535 [INFO] [merge_into_master] Merged 172 new → total 757 (before=585)
+2025-11-16 23:59:01,029 [INFO] [CloudflareDAO] ✅ Atomic upload → enrichment/metadata/info_artist_genre_unlisted.csv
+2025-11-16 23:59:01,029 [INFO] [merge_into_master] ✅ Saved 757 rows to info_artist_genre_unlisted.csv
+2025-11-16 23:59:01,029 [INFO] [flush_all] ✅ info_artist_genre_unlisted.csv merged (172 new rows)
+2025-11-16 23:59:01,030 [INFO] [flush_all] ✅ Completed flush_all with 172 rows total.
+2025-11-16 23:59:01,030 [INFO] [flush_all] Cleaning up Discogs worker pool…
+2025-11-16 23:59:48,759 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:59:49,163 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:59:49,163 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:59:55,024 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:59:56,786 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:59:56,787 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-16 23:59:58,758 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-16 23:59:59,301 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-16 23:59:59,301 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:00:00,478 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:00:00,765 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:00:00,765 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:00:01,767 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:00:02,018 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:00:02,018 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:00:15,359 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:00:15,658 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:00:15,658 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:00:29,737 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:00:30,059 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:00:30,059 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:00:42,917 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:00:42,970 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:00:43,187 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:00:43,187 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:00:43,270 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:00:43,270 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:01:04,120 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:01:04,387 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:01:04,387 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:01:11,067 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:01:11,384 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:01:11,384 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:01:13,309 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:01:13,628 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:01:13,628 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:01:18,455 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:01:18,756 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:01:18,756 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:01:27,687 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:01:27,946 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:01:27,947 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:01:49,955 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:01:50,255 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:01:50,255 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:01:52,847 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:01:53,149 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:01:53,149 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:02:12,950 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:02:13,319 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:02:13,319 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:02:14,010 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:02:14,298 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:02:14,298 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:02:24,920 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:02:25,179 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:02:25,180 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:02:32,915 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:02:33,195 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:02:33,196 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:02:53,735 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:02:54,037 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:02:54,038 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:03:05,299 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:03:05,626 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:03:05,626 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:03:48,169 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:03:48,470 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:03:48,470 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:04:02,018 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:04:02,306 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:04:02,307 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:04:13,986 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:04:14,240 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:04:14,240 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:06:37,375 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:06:37,709 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:06:37,710 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:06:53,811 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:06:54,108 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:06:54,109 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:08:03,233 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:08:03,493 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:08:03,493 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:11:04,449 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:11:04,727 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:11:04,727 [INFO] [dao_selector] ✅ Global DAOs loaded successfully
+2025-11-17 00:11:04,754 [INFO] [CloudflareD1DAO] ✅ Ensured all base tables exist
+2025-11-17 00:11:05,089 [INFO] [CloudflareD1DAO] ✅ Ensured index: idx_enrich_status_user
+2025-11-17 00:11:05,090 [INFO] [dao_selector] ✅ Global DAOs loaded successfully

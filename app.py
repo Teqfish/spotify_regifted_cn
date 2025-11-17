@@ -1843,11 +1843,26 @@ elif page == "Overview":
                 orientation="h",
                 text="hhmmss",
                 color_discrete_sequence=["#1ed760"],
-                labels={"minutes_played": "Time Played (HH:MM:SS)", "artist_name": "Artist"},
+                labels={
+                    "minutes_played": "Time Played (HH:MM:SS)",
+                    "artist_name": "Artist",
+                },
             )
             fig_artists.update_traces(texttemplate="%{text}", textposition="outside")
-            fig_artists.update_layout(yaxis={"categoryorder": "total ascending"}, height=500)
-            st.plotly_chart(fig_artists, use_container_width=True)
+            fig_artists.update_layout(
+                yaxis={"categoryorder": "total ascending"},
+                height=500,
+            )
+
+            # ✅ new Plotly config usage — future-proof against deprecation warnings
+            st.plotly_chart(
+                fig_artists,
+                use_container_width=True,  # replaces 'width="stretch"'
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
         with c2:
             artist_image_list = []
             for idx, artist in enumerate(top_artists["artist_name"], start=1):
@@ -1877,11 +1892,25 @@ elif page == "Overview":
                 orientation="h",
                 text="hhmmss",
                 color_discrete_sequence=["#1ed760"],
-                labels={"minutes_played": "Time Played (HH:MM:SS)", "label": ""},
+                labels={
+                    "minutes_played": "Time Played (HH:MM:SS)",
+                    "label": "",
+                },
             )
             fig_tracks.update_traces(texttemplate="%{text}", textposition="outside")
-            fig_tracks.update_layout(yaxis={"categoryorder": "total ascending"}, height=500)
-            st.plotly_chart(fig_tracks, use_container_width=True)
+            fig_tracks.update_layout(
+                yaxis={"categoryorder": "total ascending"},
+                height=500,
+            )
+
+            st.plotly_chart(
+                fig_tracks,
+                use_container_width=True,
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
         with c2:
             track_image_list = []
             for idx, row in top_tracks.iterrows():
@@ -1913,28 +1942,29 @@ elif page == "Overview":
                 .reset_index()
                 .sort_values("date")
             )
-            # Rolling average
             timeline["rolling_avg"] = timeline["hours_played"].rolling(window=30, min_periods=1).mean()
 
-            # --- Logarithmic trendline (smooth overall growth shape) ---
             import numpy as np
-            timeline["days_since_start"] = (pd.to_datetime(timeline["date"]) - pd.to_datetime(timeline["date"]).min()).dt.days
+            timeline["days_since_start"] = (
+                pd.to_datetime(timeline["date"]) - pd.to_datetime(timeline["date"]).min()
+            ).dt.days
             x = np.log(timeline["days_since_start"] + 1)
             y = timeline["hours_played"]
             coeffs = np.polyfit(x, y, 1)
             timeline["trendline"] = coeffs[0] * x + coeffs[1]
 
-            # Plot
             fig_timeline = px.line(
                 timeline,
                 x="date",
                 y="rolling_avg",
                 title="Listening Trend (All Time)",
-                labels={"rolling_avg": "Hours Played (30-Day Rolling Avg)", "date": "Date"},
+                labels={
+                    "rolling_avg": "Hours Played (30-Day Rolling Avg)",
+                    "date": "Date",
+                },
                 color_discrete_sequence=["#1ed760"],
             )
 
-            # Add trendline overlay
             fig_timeline.add_scatter(
                 x=timeline["date"],
                 y=timeline["trendline"],
@@ -1944,11 +1974,9 @@ elif page == "Overview":
             )
 
         else:
-            # --- Compare all years on a Jan–Dec timeline ---
             df["hours_played"] = df["minutes_played"] / 60
-            df["month_day"] = df["datetime"].dt.strftime("%m-%d")  # normalize across years
+            df["month_day"] = df["datetime"].dt.strftime("%m-%d")
 
-            # Aggregate daily listening by year + month/day
             timeline_all = (
                 df.groupby(["year", "month_day"])["hours_played"]
                 .sum()
@@ -1956,16 +1984,15 @@ elif page == "Overview":
                 .sort_values(["year", "month_day"])
             )
 
-            # Compute rolling averages within each year (smooth daily fluctuations)
             timeline_all["rolling_avg"] = (
                 timeline_all.groupby("year")["hours_played"]
                 .transform(lambda s: s.rolling(window=30, min_periods=1).mean())
             )
 
-            # Create proxy x-axis: fixed year (e.g., 2000) so all lines align on calendar months
-            timeline_all["date_proxy"] = pd.to_datetime("2000-" + timeline_all["month_day"], errors="coerce")
+            timeline_all["date_proxy"] = pd.to_datetime(
+                "2000-" + timeline_all["month_day"], errors="coerce"
+            )
 
-            # Plot overlapping year lines
             fig_timeline = px.line(
                 timeline_all,
                 x="date_proxy",
@@ -1980,9 +2007,9 @@ elif page == "Overview":
             )
 
             fig_timeline.update_xaxes(
-                tickformat="%b",  # show Jan, Feb, Mar, ...
+                tickformat="%b",
                 title="Month (Jan → Dec)",
-                dtick="M1"
+                dtick="M1",
             )
 
             fig_timeline.update_layout(
@@ -1992,7 +2019,15 @@ elif page == "Overview":
                 legend_title="Year",
             )
 
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        # ✅ unified config pattern
+        st.plotly_chart(
+            fig_timeline,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+        )
 
         # -------------------- Genre Diversity (100% stacked area, correctly ordered) -------------------- #
         st.markdown("### Genre Diversity Over Time (Share of Total Listening)")
@@ -2032,16 +2067,9 @@ elif page == "Overview":
 
         # --- Genre Diversity Over Time (Share of Total Listening) ---
         import plotly.graph_objects as go
-        import plotly.express as px
-
-        # --- Create ordered stacked area manually ---
-        ordered_genres = total_share.index.tolist()  # bottom → top order
-        # --- Create ordered stacked area manually using custom colorscale ---
         from plotly.colors import sample_colorscale
 
-        ordered_genres = total_share.index.tolist()  # bottom → top order
-
-        # Dynamically sample colors from your custom colorscale
+        ordered_genres = total_share.index.tolist()
         n_genres = len(ordered_genres)
         sampled_colors = sample_colorscale(
             neon_colorscale, [i / (n_genres - 1) for i in range(n_genres)]
@@ -2049,7 +2077,6 @@ elif page == "Overview":
 
         fig_genre = go.Figure()
 
-        # Add traces in descending total-share order (bottom → top)
         for i, genre in enumerate(ordered_genres):
             color = sampled_colors[i]
             fig_genre.add_trace(go.Scatter(
@@ -2057,13 +2084,12 @@ elif page == "Overview":
                 y=genre_percent[genre],
                 mode="lines",
                 name=genre,
-                stackgroup="one",  # enables stacking
+                stackgroup="one",
                 line=dict(width=0.5, color=color),
                 fillcolor=color,
-                hoverinfo="x+y+name"
+                hoverinfo="x+y+name",
             ))
 
-        # --- Layout ---
         fig_genre.update_layout(
             title="Genre Diversity Over Time (Share of Total Listening)",
             yaxis=dict(title="Listening Share (%)", range=[0, 100]),
@@ -2071,19 +2097,28 @@ elif page == "Overview":
             legend_title="Supergenre",
             height=500,
             plot_bgcolor="rgba(0,0,0,0)",
-            hovermode="x unified"
+            hovermode="x unified",
         )
 
-        st.plotly_chart(fig_genre, use_container_width=True)
+        st.plotly_chart(
+            fig_genre,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+        )
 
         # 3️⃣ Listening hour heatmap
         df_filtered["hour"] = df_filtered["datetime"].dt.hour
         df_filtered["weekday"] = df_filtered["datetime"].dt.day_name()
         heat = df_filtered.pivot_table(
-            index="weekday", columns="hour", values="minutes_played", aggfunc="sum", fill_value=0
+            index="weekday", columns="hour",
+            values="minutes_played", aggfunc="sum", fill_value=0
         )
         weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         heat = heat.reindex(weekday_order)
+
         fig_heat = px.imshow(
             heat,
             labels=dict(x="Hour of Day", y="Weekday", color="Minutes Played"),
@@ -2092,7 +2127,15 @@ elif page == "Overview":
             color_continuous_scale=spotify_colorscale,
         )
         fig_heat.update_layout(height=500)
-        st.plotly_chart(fig_heat, use_container_width=True)
+
+        st.plotly_chart(
+            fig_heat,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+        )
     # ============================================================
     # 🎙️ PODCASTS
     # ============================================================
@@ -2164,7 +2207,7 @@ elif page == "Overview":
             )
             fig_pod.update_traces(texttemplate="%{text}", textposition="outside")
             fig_pod.update_layout(yaxis={"categoryorder": "total ascending"}, height=500)
-            st.plotly_chart(fig_pod, use_container_width=True)
+            st.plotly_chart(fig_pod, width='stretch')
 
         with c2:
             podcast_image_list = []
@@ -2246,7 +2289,7 @@ elif page == "Overview":
                 legend_title="Year",
             )
 
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        st.plotly_chart(fig_timeline, width='stretch')
 
         # -------------------- Listening Hour Heatmap -------------------- #
         st.markdown("## When You Listen Most")
@@ -2265,7 +2308,7 @@ elif page == "Overview":
             title="When You Listen Most",
         )
         fig_heat.update_layout(height=500)
-        st.plotly_chart(fig_heat, use_container_width=True)
+        st.plotly_chart(fig_heat, width='stretch')
 
     # ============================================================
     # 📚 AUDIOBOOKS
@@ -2380,17 +2423,22 @@ elif page == "Overview":
                 legend_title="Year",
             )
 
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        st.plotly_chart(fig_timeline, width='stretch')
 
         # --- Heatmap ---
-        # 3️⃣ Listening hour heatmap
         df_filtered["hour"] = df_filtered["datetime"].dt.hour
         df_filtered["weekday"] = df_filtered["datetime"].dt.day_name()
+
         heat = df_filtered.pivot_table(
-            index="weekday", columns="hour", values="minutes_played", aggfunc="sum", fill_value=0
+            index="weekday",
+            columns="hour",
+            values="minutes_played",
+            aggfunc="sum",
+            fill_value=0,
         )
         weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         heat = heat.reindex(weekday_order)
+
         fig_heat = px.imshow(
             heat,
             labels=dict(x="Hour of Day", y="Weekday", color="Minutes Played"),
@@ -2399,7 +2447,15 @@ elif page == "Overview":
             color_continuous_scale=spotify_colorscale,
         )
         fig_heat.update_layout(height=500)
-        st.plotly_chart(fig_heat, use_container_width=True)
+
+        st.plotly_chart(
+            fig_heat,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+        )
 
 # ----------------------------- Per Artist Page ------------------------------ #
 elif page == "Per Artist":
@@ -2637,11 +2693,15 @@ elif page == "Per Artist":
             .reset_index()
         )
         df_polar = pd.merge(
-            pd.Series(range(1, 13), name="datetime"), df_polar, how="outer", on="datetime"
+            pd.Series(range(1, 13), name="datetime"),
+            df_polar,
+            how="outer",
+            on="datetime",
         ).fillna(0)
+
         cal = {
             1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
-            7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"
+            7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
         }
         df_polar["datetime"] = df_polar["datetime"].replace(cal)
 
@@ -2654,22 +2714,27 @@ elif page == "Per Artist":
             title=f"Listening Trends {year_selected}",
         )
 
-        # ✅ Custom background colors using rgba (no alpha hex)
-        dark_bg = "rgba(11, 17, 11, 1)"  # same as #0b110bff but valid in Plotly
+        dark_bg = "rgba(11, 17, 11, 1)"
 
         fig_polar.update_layout(
             title_font_size=20,
             polar=dict(
                 radialaxis=dict(showticklabels=False),
-                bgcolor=dark_bg  # inner circle background color
+                bgcolor=dark_bg,
             ),
-            paper_bgcolor=dark_bg,  # full figure background
-            plot_bgcolor=dark_bg,   # plotting area background
-            font=dict(color="#ffffff")  # white text for contrast
+            paper_bgcolor=dark_bg,
+            plot_bgcolor=dark_bg,
+            font=dict(color="#ffffff"),
+            height=500,
         )
 
         fig_polar.update_coloraxes(showscale=False)
-        st.plotly_chart(fig_polar, use_container_width=True)
+
+        st.plotly_chart(
+            fig_polar,
+            use_container_width=True,
+            config={"displayModeBar": False, "responsive": True},
+        )
 
         # --- Dayplot calendar heatmap ---
         try:
@@ -2700,6 +2765,7 @@ elif page == "Per Artist":
                 ax.set_title(
                     f"Daily Listening Activity for {artist_selected} in {year_selected}",
                     pad=12,
+                    color="white",
                 )
                 st.pyplot(fig, use_container_width=True)
         except Exception as e:
@@ -2825,7 +2891,7 @@ elif page == "Per Album":
             album_image_url = info_album[
                 info_album.album_name == top_albums.album_name[0]
             ]["album_artwork"].values[0]
-            st.image(album_image_url, output_format="auto", use_container_width=True)
+            st.image(album_image_url, output_format="auto", width='stretch')
         except:
             try:
                 album_image_url = info_album[
@@ -2833,18 +2899,21 @@ elif page == "Per Album":
                         f"{top_albums.album_name[0]}", case=False, na=False
                     )
                 ]["album_artwork"].values[0]
-                st.image(album_image_url, output_format="auto", use_container_width=True)
+                st.image(album_image_url, output_format="auto", width='stretch')
             except:
                 st.image("media/assets/Image-Coming-Soon_vector.svg")
 
     # --- Top songs ---
     top_songs = (
         df_music[df_music.album_name == album_selected]
-        .groupby("track_name").minutes_played.sum()
-        .sort_values(ascending=False).reset_index()
+        .groupby("track_name")["minutes_played"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
     )
-    st.title("")
+
     st.markdown(f"<h2 style='text-align: center;'>{album_selected}'s tracks</h2>", unsafe_allow_html=True)
+
     fig_top_songs = px.bar(
         top_songs.head(15),
         x="minutes_played",
@@ -2852,9 +2921,24 @@ elif page == "Per Album":
         color_discrete_sequence=["#1ed760"],
         text_auto=True,
     )
-    fig_top_songs.update_yaxes(categoryorder="total ascending")
-    fig_top_songs.update_layout(xaxis_title="Total Minutes", yaxis_title=None)
-    st.write(fig_top_songs)
+
+    fig_top_songs.update_yaxes(categoryorder="total ascending", title=None)
+    fig_top_songs.update_xaxes(title="Total Minutes")
+    fig_top_songs.update_layout(
+        height=500,
+        plot_bgcolor="rgba(0,0,0,0)",
+        title_font_size=20,
+        font=dict(color="white"),
+    )
+
+    st.plotly_chart(
+        fig_top_songs,
+        use_container_width=True,
+        config={
+            "displayModeBar": False,
+            "responsive": True,
+        },
+    )
 
     # --- Year selection & visuals ---
     st.title("")
@@ -2877,7 +2961,6 @@ elif page == "Per Album":
         if year_range:
             # ✅ Default to the most recent year *in this album's data*
             default_year = year_range[-1]
-
             year_selected = st.segmented_control(
                 "Year",
                 year_range,
@@ -2894,43 +2977,57 @@ elif page == "Per Album":
                 (df_music.album_name == album_selected)
                 & (df_music.datetime.dt.year == year_selected)
             ]
-            .groupby(df_music.datetime.dt.month)
-            .minutes_played.sum()
+            .groupby(df_music.datetime.dt.month)["minutes_played"]
+            .sum()
             .reset_index()
         )
+
+        # Add missing months for continuity
+        all_months = pd.DataFrame({"datetime": range(1, 13)})
+        df_polar = all_months.merge(df_polar, on="datetime", how="left").fillna(0)
+
+        # Month mapping
         cal = {
             1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
             7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"
         }
         df_polar["datetime"] = df_polar["datetime"].replace(cal)
+
         # --- Polar bar chart (with dark background) ---
-        fig = px.bar_polar(
+        fig_polar = px.bar_polar(
             df_polar,
             r="minutes_played",
             theta="datetime",
             color="minutes_played",
             color_continuous_scale=["#1ed760", "#006400"],
-            title=" ",
+            title=f"Monthly Listening Activity for {album_selected} ({year_selected})",
         )
 
-        # ✅ Apply dark theme background
-        dark_bg = "rgba(11, 17, 11, 1)"  # same as #0b110bff but valid in Plotly
-
-        fig.update_layout(
+        dark_bg = "rgba(11, 17, 11, 1)"
+        fig_polar.update_layout(
             title_font_size=20,
             polar=dict(
-                radialaxis=dict(showticklabels=False),
-                bgcolor=dark_bg  # inner polar background
+                radialaxis=dict(showticklabels=False, ticks=""),
+                bgcolor=dark_bg
             ),
-            paper_bgcolor=dark_bg,  # full canvas background
-            plot_bgcolor=dark_bg,   # plotting area background
-            font=dict(color="#ffffff"),  # white text for contrast
+            paper_bgcolor=dark_bg,
+            plot_bgcolor=dark_bg,
+            font=dict(color="#ffffff"),
+            height=500,
         )
+        fig_polar.update_coloraxes(showscale=False)
 
-        # Optional: hide color scale for cleaner look
-        fig.update_coloraxes(showscale=False)
+        # st.plotly_chart(
+        #     fig_polar,
+        #     use_container_width=True,
+        #     config={
+        #         "displayModeBar": False,
+        #         "responsive": True,
+        #     },
+        #     key=f"polar_{album_selected}_{year_selected}",
+        # )
 
-        # --- Dayplot calendar heatmap (replacing calplot) ---
+        # --- Dayplot calendar heatmap ---
         try:
             df_day = (
                 df_music[
@@ -2940,7 +3037,6 @@ elif page == "Per Album":
                 .groupby("date")["minutes_played"]
                 .sum()
                 .reset_index()
-                .copy()
             )
 
             df_day["date"] = pd.to_datetime(df_day["date"], errors="coerce").dt.date
@@ -2948,6 +3044,7 @@ elif page == "Per Album":
             if not df_day.empty:
                 start_date = date(int(year_selected), 1, 1)
                 end_date = date(int(year_selected), 12, 31)
+
                 fig_cal, ax = plt.subplots(figsize=(16, 4))
                 dp.calendar(
                     dates=df_day["date"],
@@ -2957,11 +3054,13 @@ elif page == "Per Album":
                     ax=ax,
                     **dp.styles["github"],
                 )
-                fig_cal.set_facecolor("#0b110bff")
-                ax.set_facecolor("#0b110bff")
+                dark_bg = "#0b110bff"
+                fig_cal.set_facecolor(dark_bg)
+                ax.set_facecolor(dark_bg)
                 ax.set_title(
                     f"Daily Listening Activity for {album_selected} in {year_selected}",
                     pad=12,
+                    color="white",
                 )
                 st.pyplot(fig_cal, use_container_width=True)
             else:
@@ -2971,23 +3070,50 @@ elif page == "Per Album":
 
     with col2:
         st.markdown("", unsafe_allow_html=True)
-        fig.update_layout(
-            title_font_size=20, polar=dict(radialaxis=dict(showticklabels=False))
+        # ✅ reusing same figure is fine as long as we give a unique key
+        st.plotly_chart(
+            fig_polar,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+            key=f"polar_duplicate_{album_selected}_{year_selected}",
         )
-        fig.update_coloraxes(showscale=False)
-        st.plotly_chart(fig, use_container_width=True)
 
     # --- Line plot (monthly trends) ---
-    df_line = df_music[(df_music.album_name == album_selected)]
+    df_line = df_music[(df_music.album_name == album_selected)].copy()
     df_line["month"] = df_line.datetime.dt.month
     df_line["year"] = df_line.datetime.dt.year
-    df_line = df_line.groupby(["year", "month"]).minutes_played.sum().reset_index()
+    df_line = df_line.groupby(["year", "month"])["minutes_played"].sum().reset_index()
 
-    fig_line = px.line(df_line, x="month", y="minutes_played", color="year")
-    fig_line.update_layout(
-        xaxis_title="Month", yaxis_title="Minutes Played", legend_title_text="Year"
+    fig_line = px.line(
+        df_line,
+        x="month",
+        y="minutes_played",
+        color="year",
+        title=f"Monthly Trends for {album_selected}",
+        labels={"minutes_played": "Minutes Played", "month": "Month"},
+        color_discrete_sequence=px.colors.qualitative.Set2,
     )
-    st.plotly_chart(fig_line, use_container_width=True)
+
+    fig_line.update_layout(
+        xaxis_title="Month",
+        yaxis_title="Minutes Played",
+        legend_title_text="Year",
+        height=450,
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+
+    st.plotly_chart(
+        fig_line,
+        use_container_width=True,
+        config={
+            "displayModeBar": False,
+            "responsive": True,
+        },
+        key=f"line_{album_selected}",
+    )
 
 # ------------------------------- Per Genre ---------------------------------- #
 elif page == "Per Genre":
@@ -3066,30 +3192,58 @@ elif page == "Per Genre":
     )
 
     # --- BUILD SUNBURST ---
-    fig = px.sunburst(
+    fig_sunburst = px.sunburst(
         top_tracks,
-        path=['year', 'supergenre', 'artist_name', 'track_name'],
-        values='ms_played',
-        color='ms_played',
-        # color_continuous_scale=spotify_colorscale,
-        color_continuous_scale=["#062719","#1ed760","#1ed760","#1ed760","#1ed760","#1ed760","#90d7ad"],
-        title=' '
+        path=["year", "supergenre", "artist_name", "track_name"],
+        values="ms_played",
+        color="ms_played",
+        color_continuous_scale=[
+            "#062719",
+            "#1ed760",
+            "#1ed760",
+            "#1ed760",
+            "#1ed760",
+            "#1ed760",
+            "#90d7ad",
+        ],
+        title=" ",
     )
 
-    fig.update_traces(
-        insidetextfont=dict(color='white'),
-        hovertemplate='<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>'
+    fig_sunburst.update_traces(
+        insidetextfont=dict(color="#c8eacd"),
+        hovertemplate="<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>",
     )
-    fig.update_layout(
+
+    fig_sunburst.update_layout(
         margin=dict(t=50, l=0, r=0, b=0),
         height=800,
-        font=dict(color='black')
+        font=dict(color="white"),
+        paper_bgcolor="rgba(0,0,0,0)",  # transparent to blend with dark background
+        plot_bgcolor="rgba(0,0,0,0)",
     )
-    fig.update_coloraxes(showscale=False)
 
-    st.markdown("<h1 style='text-align: center;'>Le Moulin Des Genres (Windmill of Genre)</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align: center;'>Choose Year 👉 Top 5 Genres 👉 Top 5 Artists 👉 Top 5 Tracks 🌞</h4>", unsafe_allow_html=True)
-    st.plotly_chart(fig, use_container_width=True)
+    fig_sunburst.update_coloraxes(showscale=False)
+
+    # --- HEADER ---
+    st.markdown(
+        "<h1 style='text-align: center;'>Le Moulin Des Genres (Windmill of Genre)</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<h4 style='text-align: center;'>Choose Year 👉 Top 5 Genres 👉 Top 5 Artists 👉 Top 5 Tracks 🌞</h4>",
+        unsafe_allow_html=True,
+    )
+
+    # --- RENDER ---
+    st.plotly_chart(
+        fig_sunburst,
+        use_container_width=True,
+        config={
+            "displayModeBar": False,
+            "responsive": True,
+        },
+        key="sunburst_moulin",
+    )
 
     # Hours of day chart logic remains the same
 
@@ -3120,24 +3274,60 @@ elif page == "The Farm":
     from chart_scorer import parse_label_ts_from_table_name
 
     def display_gauge_chart(basic_score: float, delta_str: str = ""):
-        """Draw the Sheeple-O-Meter gauge (0–1)."""
-        gauge = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=basic_score,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            gauge={'axis': {'range': [0, 1]}, 'bar': {'color': "#1ed760"}},
-        ))
+        """Draw the Sheeple-O-Meter gauge (0–1) with modern Plotly syntax."""
+        gauge = go.Figure(
+            go.Indicator(
+                mode="gauge+number",
+                value=basic_score,
+                domain={"x": [0, 1], "y": [0, 1]},
+                gauge={
+                    "axis": {"range": [0, 1], "tickwidth": 1},
+                    "bar": {"color": "#1ed760"},
+                    "bgcolor": "rgba(0,0,0,0)",
+                    "borderwidth": 2,
+                    # "bordercolor": "#1ed760",
+                },
+                number={"font": {"size": 40, "color": "white"}},
+            )
+        )
+
         gauge.update_layout(
             title=dict(
                 text="Sheeple-O-Meter",
-                font=dict(size=30),
-                x=0.5, xanchor='center',
-                y=0.9, yanchor='top'
+                font=dict(size=30, color="#FFFFFF"),
+                x=0.5,
+                xanchor="center",
+                y=1,
+                yanchor="top",
             ),
-            annotations=([dict(x=0.5, y=-0.1, text=delta_str, showarrow=False, font=dict(size=20))]
-                         if delta_str else [])
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=400,
+            margin=dict(t=80, b=40, l=40, r=40),
+            annotations=(
+                [
+                    dict(
+                        x=0.5,
+                        y=-0.1,
+                        text=delta_str,
+                        showarrow=False,
+                        font=dict(size=20, color="#FFFFFF"),
+                    )
+                ]
+                if delta_str
+                else []
+            ),
         )
-        st.plotly_chart(gauge, use_container_width=True)
+
+        st.plotly_chart(
+            gauge,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+            key="sheeple_gauge",
+        )
 
     def display_artist_points_chart(chart_hits: pd.DataFrame):
         """Top 10 artists by total points."""
@@ -3159,7 +3349,7 @@ elif page == "The Farm":
             labels={'points_awarded': 'Total Points', 'artist_name': 'Artist'},
             color_discrete_sequence=['#19ab19'] * len(artist_points),
         )
-        st.plotly_chart(fig_artists, use_container_width=True)
+        st.plotly_chart(fig_artists, width='stretch')
 
     def display_timeline_chart(chart_hits: pd.DataFrame, plot_df: pd.DataFrame, years: list[int], latest_year: int, points_method: str):
         """Recreated timeline (using first_listen_week_start Fridays as 'event dates')."""
@@ -3183,7 +3373,7 @@ elif page == "The Farm":
             hovermode="x",
             hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white"))
         )
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        st.plotly_chart(fig_timeline, width='stretch')
 
     def display_popularity_comparison_monthly(
         user_name: str,
@@ -3264,7 +3454,7 @@ elif page == "The Farm":
             legend_title="Metric",
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     def get_monthly_popularity(
         info_popularity: pd.DataFrame,
@@ -3614,7 +3804,7 @@ elif page == "The Farm":
             #     "avg_weeks_after_peak": "Avg Weeks After Peak",
             # })
 
-            # st.dataframe(artist_stats, use_container_width=True, hide_index=True)
+            # st.dataframe(artist_stats, width='stretch', hide_index=True)
 
             # Top tracks table (still limited to >0 and top 10)
             if "category" in filtered_df.columns:
@@ -3650,7 +3840,7 @@ elif page == "The Farm":
                 "listen_count": "Listen Count",
             })
 
-            st.dataframe(top_songs, use_container_width=True, hide_index=True)
+            st.dataframe(top_songs, width='stretch', hide_index=True)
 
         else:
             st.info("No chart hits scored in the selected period yet.")
@@ -3686,15 +3876,22 @@ elif page == "FUN":
     # Load and normalize headlines dataset
     headlines_df = INFO_HEADLINE.copy()
 
-    # Clean and rename columns
-    headlines_df.columns = headlines_df.columns.str.strip()
+    # Clean and standardize columns completely
+    headlines_df.columns = (
+        headlines_df.columns
+        .str.strip()
+        .str.replace("\ufeff", "", regex=True)  # remove invisible BOM
+        .str.lower()  # lowercase for consistency
+    )
+
+    # Now rename to normalized names
     rename_map = {
-        'date (dd-mm-yyyy)': 'date',
-        'webTitle': 'web_title',
-        'short_description': 'short_description',
-        'webUrl': 'web_url',
-        'imageUrl': 'image_url',
-        'section': 'section'
+        "date (dd-mm-yyyy)": "date",
+        "webtitle": "web_title",
+        "short_description": "short_description",
+        "weburl": "web_url",
+        "imageurl": "image_url",
+        "section": "section",
     }
     headlines_df.rename(columns=rename_map, inplace=True)
 

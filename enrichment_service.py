@@ -586,7 +586,7 @@ def mark_lock_acquired(user_id: str):
     with ENRICH_LOCKS_LOCK:
         if user_id in ENRICH_LOCKS:
             ENRICH_LOCKS[user_id]["last_acquired"] = time.time()
-            
+
 def is_stale_status(status_obj, threshold_minutes=1):
     """Return True if the dataset status hasn't been updated recently."""
     try:
@@ -2686,24 +2686,23 @@ class MetadataEnricher:
 
     def _maybe_autosave(self, batches_done: int, total_batches: int) -> None:
         """Flush partial CSVs + merge to master every N batches."""
-        # self._batches_since_save += 1
-        # if self._batches_since_save < self.autosave_every_batches:
-        #     return
+        self._batches_since_save += 1
+        if self._batches_since_save < self.autosave_every_batches:
+            return
 
-        # try:
-        #     self.flush_partial()
-        #     self._batches_since_save = 0
-        #     # let the widget show progress + that a snapshot happened
-        #     self.status.set_status(
-        #         self.user_id, self.label,
-        #         phase=self.current_phase,
-        #         detail=f"Autosave snapshot at {batches_done}/{total_batches}",
-        #         total=total_batches
-        #     )
-        # except Exception as e:
-        #     # Non-fatal, keep going
-        #     print(f"[autosave] flush_partial failed: {e}")
-        print(f"[autosave] Skipping autosave (disabled in diagnostic mode)")
+        try:
+            self.flush_partial()
+            self._batches_since_save = 0
+            # let the widget show progress + that a snapshot happened
+            self.status.set_status(
+                self.user_id, self.label,
+                phase=self.current_phase,
+                detail=f"Autosave snapshot at {batches_done}/{total_batches}",
+                total=total_batches
+            )
+        except Exception as e:
+            # Non-fatal, keep going
+            print(f"[autosave] flush_partial failed: {e}")
 
     # def validate_master_integrity(self):
         """
@@ -2778,75 +2777,74 @@ class MetadataEnricher:
         Writes to enrichment/metadata/*.csv via DAO.merge_into_master().
         Includes detailed logging of merge results.
         """
-        # artists_df     = pd.DataFrame(self.buf_artists)     if self.buf_artists else pd.DataFrame()
-        # albums_df      = pd.DataFrame(self.buf_albums)      if self.buf_albums else pd.DataFrame()
-        # tracks_df      = pd.DataFrame(self.buf_tracks)      if self.buf_tracks else pd.DataFrame()
-        # shows_df       = pd.DataFrame(self.buf_shows)       if self.buf_shows else pd.DataFrame()
-        # audiobooks_df  = pd.DataFrame(self.buf_audiobooks)  if self.buf_audiobooks else pd.DataFrame()
+        artists_df     = pd.DataFrame(self.buf_artists)     if self.buf_artists else pd.DataFrame()
+        albums_df      = pd.DataFrame(self.buf_albums)      if self.buf_albums else pd.DataFrame()
+        tracks_df      = pd.DataFrame(self.buf_tracks)      if self.buf_tracks else pd.DataFrame()
+        shows_df       = pd.DataFrame(self.buf_shows)       if self.buf_shows else pd.DataFrame()
+        audiobooks_df  = pd.DataFrame(self.buf_audiobooks)  if self.buf_audiobooks else pd.DataFrame()
 
-        # # Ensure track snapshots always include user_id + dedupe
-        # if not tracks_df.empty:
-        #     if "user_id" not in tracks_df.columns:
-        #         tracks_df["user_id"] = self.user_id
-        #     tracks_df = tracks_df.drop_duplicates(subset=["track_id", "user_id"])
+        # Ensure track snapshots always include user_id + dedupe
+        if not tracks_df.empty:
+            if "user_id" not in tracks_df.columns:
+                tracks_df["user_id"] = self.user_id
+            tracks_df = tracks_df.drop_duplicates(subset=["track_id", "user_id"])
 
-        # if all(df.empty for df in [artists_df, albums_df, tracks_df, shows_df, audiobooks_df]):
-        #     self.log("[flush_partial] Nothing to flush (all buffers empty).")
-        #     return
+        if all(df.empty for df in [artists_df, albums_df, tracks_df, shows_df, audiobooks_df]):
+            self.log("[flush_partial] Nothing to flush (all buffers empty).")
+            return
 
-        # ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        # self.log(f"[flush_partial] Starting autosave snapshot at {ts}")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        self.log(f"[flush_partial] Starting autosave snapshot at {ts}")
 
-        # # Optional snapshot for inspection
-        # if getattr(self, "save_snapshots", False):
-        #     try:
-        #         base = f"{self.user_id}/{self.label}/_autosave/{ts}"
-        #         for name, df in {
-        #             "info_artist_genre.csv": artists_df,
-        #             "info_album.csv": albums_df,
-        #             "info_track.csv": tracks_df,
-        #             "info_show.csv": shows_df,
-        #             "info_audiobook.csv": audiobooks_df,
-        #         }.items():
-        #             if not df.empty:
-        #                 self.storage.upload_csv(df, path=f"{base}/{name}", overwrite=True)
-        #                 self.log(f"[flush_partial] Snapshot → {name} ({len(df)} rows)")
-        #     except Exception as e:
-        #         self.log(f"[flush_partial] ⚠️ Snapshot upload failed: {e}")
+        # Optional snapshot for inspection
+        if getattr(self, "save_snapshots", False):
+            try:
+                base = f"{self.user_id}/{self.label}/_autosave/{ts}"
+                for name, df in {
+                    "info_artist_genre.csv": artists_df,
+                    "info_album.csv": albums_df,
+                    "info_track.csv": tracks_df,
+                    "info_show.csv": shows_df,
+                    "info_audiobook.csv": audiobooks_df,
+                }.items():
+                    if not df.empty:
+                        self.storage.upload_csv(df, path=f"{base}/{name}", overwrite=True)
+                        self.log(f"[flush_partial] Snapshot → {name} ({len(df)} rows)")
+            except Exception as e:
+                self.log(f"[flush_partial] ⚠️ Snapshot upload failed: {e}")
 
-        # # --- Merge into masters with detailed diagnostics ---
-        # try:
-        #     for label, df, keycols in [
-        #         ("info_artist_genre.csv", artists_df, ["artist_id"]),
-        #         ("info_album.csv", albums_df, ["album_id"]),
-        #         ("info_track.csv", tracks_df, ["track_id", "user_id"]),
-        #         ("info_show.csv", shows_df, ["show_id"]),
-        #         ("info_audiobook.csv", audiobooks_df, ["audiobook_id"]),
-        #     ]:
-        #         if df.empty:
-        #             continue
-        #         before_count = len(df)
-        #         ok = self.storage.merge_into_master(df, label, keys=keycols)
-        #         status = "✅ merged" if ok else "⚠️ failed"
-        #         self.log(f"[flush_partial] {status} {before_count} rows → {label}")
-        # except Exception as e:
-        #     self.log(f"[flush_partial] ❌ merge_into_master failed: {e}")
-        #     return
+        # --- Merge into masters with detailed diagnostics ---
+        try:
+            for label, df, keycols in [
+                ("info_artist_genre.csv", artists_df, ["artist_id"]),
+                ("info_album.csv", albums_df, ["album_id"]),
+                ("info_track.csv", tracks_df, ["track_id", "user_id"]),
+                ("info_show.csv", shows_df, ["show_id"]),
+                ("info_audiobook.csv", audiobooks_df, ["audiobook_id"]),
+            ]:
+                if df.empty:
+                    continue
+                before_count = len(df)
+                ok = self.storage.merge_into_master(df, label, keys=keycols)
+                status = "✅ merged" if ok else "⚠️ failed"
+                self.log(f"[flush_partial] {status} {before_count} rows → {label}")
+        except Exception as e:
+            self.log(f"[flush_partial] ❌ merge_into_master failed: {e}")
+            return
 
-        # # Clear buffers
-        # self.buf_artists.clear()
-        # self.buf_albums.clear()
-        # self.buf_tracks.clear()
-        # self.buf_shows.clear()
-        # self.buf_audiobooks.clear()
-        # self.log("[flush_partial] Buffers cleared after successful merge.")
+        # Clear buffers
+        self.buf_artists.clear()
+        self.buf_albums.clear()
+        self.buf_tracks.clear()
+        self.buf_shows.clear()
+        self.buf_audiobooks.clear()
+        self.log("[flush_partial] Buffers cleared after successful merge.")
 
-        # # Log R2 master counts for visibility
-        # try:
-        #     self.summarize_master_counts()
-        # except Exception as e:
-        #     self.log(f"[flush_all] ⚠️ summarize_master_counts failed: {e}")
-        print("[flush_partial] Skipping flush_partial (disabled in diagnostic mode)")
+        # Log R2 master counts for visibility
+        try:
+            self.summarize_master_counts()
+        except Exception as e:
+            self.log(f"[flush_all] ⚠️ summarize_master_counts failed: {e}")
 
     def flush_all(self, suffix: str = ""):
         """

@@ -913,9 +913,9 @@ class MetadataEnricher:
         Build top 10 per-year entities (artists, shows, audiobooks), excluding already-seen.
         Returns DataFrames with columns: year, <entity_name>, minutes_played.
         """
-        print("[DEBUG] Categories summary in self.df:")
-        print(self.df["category"].value_counts(dropna=False))
-        print(self.df[self.df["category"] == "audiobook"])
+        # print("[DEBUG] Categories summary in self.df:")
+        # print(self.df["category"].value_counts(dropna=False))
+        # print(self.df[self.df["category"] == "audiobook"])
         years = sorted(self.df["year"].dropna().unique().tolist(), reverse=True)
 
         music = self.df[self.df["category"] == "music"]
@@ -1435,8 +1435,7 @@ class MetadataEnricher:
 
         # Final debug snapshot and save
         self.log(
-            f"[fetch_and_save_artists:debug] Saving {len(out)} artists to buffer → "
-            f"{out[['artist_id','artist_name']].head(3).to_dict('records')}"
+            f"[fetch_and_save_artists:debug] Saving {len(out)} artists to buffer"
         )
         self.buf_artists.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
         self.seen_artists.update(names)
@@ -1835,7 +1834,7 @@ class MetadataEnricher:
         print("[DEBUG] per_book before sorting:")
         print("  shape:", per_book.shape)
         print("  columns:", per_book.columns.tolist())
-        print("  head:\n", per_book.head())
+        # print("  head:\n", per_book.head())
         # 👆 This will tell us whether per_book has a 'year' column or if it's empty.
         for _, r in per_book.sort_values(["year"], ascending=False).iterrows():
             title = r["audiobook_title"]
@@ -2192,24 +2191,7 @@ class MetadataEnricher:
             self.log("[popularity_timeseries] No popularity data computed for this user.")
             return
 
-        # --- Step 5: Save raw detailed outputs ---
-        if not artist_df.empty:
-            self.storage.merge_into_master(
-                df_new=artist_df,
-                filename="info_popularity_artists.csv",
-                keys=["month", "artist_name"],
-            )
-            self.log(f"[popularity_timeseries] ✅ Saved {len(artist_df)} artist popularity rows.")
-
-        if not track_df.empty:
-            self.storage.merge_into_master(
-                df_new=track_df,
-                filename="info_popularity_tracks.csv",
-                keys=["month", "track_name"],
-            )
-            self.log(f"[popularity_timeseries] ✅ Saved {len(track_df)} track popularity rows.")
-
-        # --- Step 6: Build unified long-format DataFrame for dashboard ---
+        # --- Step 5: Build unified long-format DataFrame for dashboard ---
         long_parts = []
 
         if not artist_df.empty:
@@ -2233,7 +2215,7 @@ class MetadataEnricher:
             long_df["month"] = pd.to_datetime(long_df["month"], errors="coerce").dt.strftime("%Y-%m-%d")
             long_df = long_df.drop_duplicates(subset=["user_id", "month", "type"])
 
-            # --- Step 7: Merge unified long-format file ---
+            # --- Step 6: Merge unified long-format file ---
             self.storage.merge_into_master(
                 df_new=long_df,
                 filename="info_popularity.csv",
@@ -2244,7 +2226,7 @@ class MetadataEnricher:
         else:
             self.log("[popularity_timeseries] ⚠️ No long-format popularity data generated.")
 
-        # --- Step 8: Update progress/status ---
+        # --- Step 7: Update progress/status ---
         self.status.inc_status(
             self.user_id,
             self.label,
@@ -2546,52 +2528,52 @@ class MetadataEnricher:
             _end_phase("overall", before)
             update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "per_year"
-            # self.log("[run_all] Starting phase: per_year")
-            # before = self._done_batches
-            # self.run_phase_per_year(per_art, per_show, per_book)
-            # _end_phase("per_year", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_year"
+            self.log("[run_all] Starting phase: per_year")
+            before = self._done_batches
+            self.run_phase_per_year(per_art, per_show, per_book)
+            _end_phase("per_year", before)
             update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "albums_of_year"
-            # self.log("[run_all] Starting phase: albums_of_year")
-            # before = self._done_batches
-            # self.run_phase_per_artist_albums_of_year()
-            # _end_phase("albums_of_year", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "albums_of_year"
+            self.log("[run_all] Starting phase: albums_of_year")
+            before = self._done_batches
+            self.run_phase_per_artist_albums_of_year()
+            _end_phase("albums_of_year", before)
             update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "per_album"
-            # self.log("[run_all] Starting phase: per_album")
-            # before = self._done_batches
-            # self.run_phase_per_album_all_albums_for_top_artists()
-            # _end_phase("per_album", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_album"
+            self.log("[run_all] Starting phase: per_album")
+            before = self._done_batches
+            self.run_phase_per_album_all_albums_for_top_artists()
+            _end_phase("per_album", before)
             update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "top_tracks_per_month"
-            # self.log("[run_all] Starting phase: top_tracks_per_month")
-            # before = self._done_batches
-            # self.run_phase_top_tracks_per_month()
-            # _end_phase("top_tracks_per_month", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "top_tracks_per_month"
+            self.log("[run_all] Starting phase: top_tracks_per_month")
+            before = self._done_batches
+            self.run_phase_top_tracks_per_month()
+            _end_phase("top_tracks_per_month", before)
             update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "popularity_timeseries"
-            # self.log("[run_all] Starting phase: popularity_timeseries")
-            # before = self._done_batches
-            # self.run_phase_popularity_timeseries()
-            # _end_phase("popularity_timeseries", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "popularity_timeseries"
+            self.log("[run_all] Starting phase: popularity_timeseries")
+            before = self._done_batches
+            self.run_phase_popularity_timeseries()
+            _end_phase("popularity_timeseries", before)
             update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "chart_scorer"
-            # self.log("[run_all] Starting phase: chart_scorer")
-            # before = self._done_batches
-            # self.run_phase_chart_scorer()
-            # _end_phase("chart_scorer", before)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "chart_scorer"
+            self.log("[run_all] Starting phase: chart_scorer")
+            before = self._done_batches
+            self.run_phase_chart_scorer()
+            _end_phase("chart_scorer", before)
             update_heartbeat(self.user_id, self.label)
 
             self._check_cancel(self.cancel_event)
@@ -3053,8 +3035,6 @@ class MetadataEnricher:
 
         # --- Diagnostics ---
         self.log(f"[debug:init] master_artists shape={self.master_artists.shape}")
-        self.log(f"[debug:init] master_artists head={self.master_artists.head(3).to_dict('records')}")
-        self.log(f"[debug:init] seen_artists sample={list(self.seen_artists)[:10]}")
 
         self.seen_albums = (
             set(

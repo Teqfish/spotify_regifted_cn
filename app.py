@@ -1147,8 +1147,6 @@ def background_enrich(
             log_dao=log_dao,
         )
 
-        print(f"[enrich:{thread_name}] 🧩 df columns: {list(cleaned_df.columns)}")
-
         # --- begin enrichment ---
         log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
         status_dao.set_status(user_id, dataset_label, phase="running", detail="Executing enrichment run")
@@ -3375,53 +3373,44 @@ elif page == "The Farm":
         )
         st.plotly_chart(fig_timeline, width='stretch')
 
-    def display_popularity_comparison_monthly(
-        user_name: str,
-        user_monthly: pd.DataFrame,
-        global_monthly: pd.DataFrame,
-        smoothing_window: int,
-    ):
-        """
-        Flexible monthly popularity comparison plot.
-        Automatically adapts to any combination of 'type' values
-        in the info_popularity long-format file.
-        """
+    def display_popularity_comparison_monthly(user_name, user_monthly, global_monthly, smoothing_window):
         import plotly.graph_objects as go
+        import pandas as pd
 
         if user_monthly.empty:
             st.warning("⚠️ Not enough data to plot popularity trend for this user.")
             return
 
-        # Sort and prepare data
-        um = user_monthly.copy().sort_values("month")
-        gm = global_monthly.copy().sort_values("month") if not global_monthly.empty else pd.DataFrame(columns=um.columns)
+        # --- Normalize to long format if necessary ---
+        if "type" not in user_monthly.columns:
+            # detect avg_popularity-like columns
+            value_cols = [c for c in user_monthly.columns if c not in ["month", "user_id"]]
+            user_long = user_monthly.melt(id_vars="month", value_vars=value_cols, var_name="type", value_name="avg_popularity")
+            global_long = global_monthly.melt(id_vars="month", value_vars=value_cols, var_name="type", value_name="avg_popularity") if not global_monthly.empty else pd.DataFrame(columns=user_long.columns)
+        else:
+            user_long, global_long = user_monthly.copy(), global_monthly.copy()
 
-        # Smooth avg_popularity per type
-        smoothed_um = []
-        smoothed_gm = []
+        # --- Sort and smooth ---
+        um = user_long.sort_values("month")
+        gm = global_long.sort_values("month") if not global_long.empty else pd.DataFrame(columns=um.columns)
+
+        smoothed_um, smoothed_gm = [], []
 
         for df_src, smoothed_list in [(um, smoothed_um), (gm, smoothed_gm)]:
             if df_src.empty:
                 continue
-
             for t in df_src["type"].unique():
                 subset = df_src[df_src["type"] == t].copy()
-                subset = subset.sort_values("month")
-                subset["avg_popularity_smooth"] = (
-                    subset["avg_popularity"]
-                    .rolling(window=smoothing_window, min_periods=1, center=True)
-                    .mean()
-                )
-                subset["type"] = t
+                subset["avg_popularity_smooth"] = subset["avg_popularity"].rolling(window=smoothing_window, min_periods=1, center=True).mean()
                 smoothed_list.append(subset)
 
         um_smooth = pd.concat(smoothed_um, ignore_index=True) if smoothed_um else pd.DataFrame()
         gm_smooth = pd.concat(smoothed_gm, ignore_index=True) if smoothed_gm else pd.DataFrame()
 
-        # --- Plot ---
+        # --- Plot as before ---
         fig = go.Figure()
 
-        # User lines
+        # --- User smoothed traces ---
         for t in um_smooth["type"].unique():
             sub = um_smooth[um_smooth["type"] == t]
             fig.add_trace(go.Scatter(
@@ -3432,7 +3421,7 @@ elif page == "The Farm":
                 line=dict(width=2),
             ))
 
-        # Global lines (dashed)
+        # --- Global smoothed traces ---
         if not gm_smooth.empty:
             for t in gm_smooth["type"].unique():
                 sub = gm_smooth[gm_smooth["type"] == t]
@@ -3444,17 +3433,33 @@ elif page == "The Farm":
                     line=dict(dash="dot", width=2),
                 ))
 
-        # Axis and layout tweaks
+        # --- Layout ---
         fig.update_yaxes(range=[0, 100])
         fig.update_layout(
             title=f"{user_name} vs Global Average — Monthly Popularity (Smoothed)",
             xaxis_title="Month",
             yaxis_title="Average Popularity (0–100)",
             hovermode="x unified",
-            legend_title="Metric",
+            legend=dict(
+                title="Metric",
+                bgcolor="rgba(0,0,0,0)",
+                bordercolor="rgba(0,0,0,0)"
+            ),
+            template="plotly_dark",
+            height=500,
+            margin=dict(t=60, b=40, l=60, r=40),
         )
 
-        st.plotly_chart(fig, width='stretch')
+        # --- Updated Streamlit call (no deprecated kwargs) ---
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+                "scrollZoom": False
+            },
+        )
 
     def get_monthly_popularity(
         info_popularity: pd.DataFrame,

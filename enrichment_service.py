@@ -2651,14 +2651,6 @@ class MetadataEnricher:
             update_heartbeat(self.user_id, self.label)
 
             self._check_cancel(self.cancel_event)
-            self.current_phase = "per_album"
-            self.log("[run_all] Starting phase: per_album")
-            before = self._done_batches
-            self.run_phase_per_album_all_albums_for_top_artists()
-            _end_phase("per_album", before)
-            update_heartbeat(self.user_id, self.label)
-
-            self._check_cancel(self.cancel_event)
             self.current_phase = "top_tracks_per_month"
             self.log("[run_all] Starting phase: top_tracks_per_month")
             before = self._done_batches
@@ -2674,13 +2666,20 @@ class MetadataEnricher:
             _end_phase("popularity_timeseries", before)
             update_heartbeat(self.user_id, self.label)
 
-            # --- Phase 7: Chart Scorer ---
             self._check_cancel(self.cancel_event)
             self.current_phase = "chart_scorer"
             self.log("[run_all] Starting phase: chart_scorer")
             before = self._done_batches
             self.run_phase_chart_scorer()
             _end_phase("chart_scorer", before)
+            update_heartbeat(self.user_id, self.label)
+
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_album"
+            self.log("[run_all] Starting phase: per_album")
+            before = self._done_batches
+            self.run_phase_per_album_all_albums_for_top_artists()
+            _end_phase("per_album", before)
             update_heartbeat(self.user_id, self.label)
 
             # ✅ Finalize standard enrichment (phases 1–7)

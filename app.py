@@ -796,7 +796,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
     except Exception as e:
         print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
         return "error"
-    
+
 def log_enrichment_thread_count(context: str = ""):
     threads = threading.enumerate()
     enrich_threads = [
@@ -2136,7 +2136,7 @@ elif page == "Overview":
             # ✅ new Plotly config usage — future-proof against deprecation warnings
             st.plotly_chart(
                 fig_artists,
-                use_container_width=True,  # replaces 'width="stretch"'
+                width='stretch',  # replaces 'width="stretch"'
                 config={
                     "displayModeBar": False,
                     "responsive": True,
@@ -2184,7 +2184,7 @@ elif page == "Overview":
 
             st.plotly_chart(
                 fig_tracks,
-                use_container_width=True,
+                width='stretch',
                 config={
                     "displayModeBar": False,
                     "responsive": True,
@@ -2301,7 +2301,7 @@ elif page == "Overview":
         # ✅ unified config pattern
         st.plotly_chart(
             fig_timeline,
-            use_container_width=True,
+            width='stretch',
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -2381,7 +2381,7 @@ elif page == "Overview":
 
         st.plotly_chart(
             fig_genre,
-            use_container_width=True,
+            width='stretch',
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -2409,7 +2409,7 @@ elif page == "Overview":
 
         st.plotly_chart(
             fig_heat,
-            use_container_width=True,
+            width='stretch',
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -2729,7 +2729,7 @@ elif page == "Overview":
 
         st.plotly_chart(
             fig_heat,
-            use_container_width=True,
+            width='stretch',
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -3011,7 +3011,7 @@ elif page == "Per Artist":
 
         st.plotly_chart(
             fig_polar,
-            use_container_width=True,
+            width='stretch',
             config={"displayModeBar": False, "responsive": True},
         )
 
@@ -3046,7 +3046,7 @@ elif page == "Per Artist":
                     pad=12,
                     color="white",
                 )
-                st.pyplot(fig, use_container_width=True)
+                st.pyplot(fig, width='stretch')
         except Exception as e:
             st.error(f"Could not render calendar heatmap: {e}")
 
@@ -3073,8 +3073,11 @@ elif page == "Per Album":
     df_music = df[df["category"] == "music"][
         ["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]
     ]
-    df_music["datetime"] = pd.to_datetime(df_music.datetime).dt.tz_localize(None)
-    df_music["date"] = pd.to_datetime(df_music.datetime).dt.date
+    # --- Normalize datetime column safely ---
+    df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
+    df_music = df_music.dropna(subset=["datetime"]).copy()
+    df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
+    df_music["date"] = df_music["datetime"].dt.date
 
     # --- Artist and Album Selection ---
     col1, col2 = st.columns([0.7, 1])
@@ -3140,9 +3143,24 @@ elif page == "Per Album":
 
         # --- Listening streak ---
         band_streak = df_music[df_music.album_name == album_selected].sort_values("datetime")
-        band_streak = band_streak["datetime"].dt.date.drop_duplicates().sort_values().diff().dt.days.fillna(1)
-        streak_ids = (band_streak != 1).cumsum()
-        max_streak = streak_ids.value_counts().max()
+        band_streak = df_music[df_music.album_name == album_selected].copy()
+
+        # Ensure datetime is valid and clean
+        band_streak["datetime"] = pd.to_datetime(band_streak["datetime"], errors="coerce")
+        band_streak = band_streak.dropna(subset=["datetime"])
+
+        if band_streak.empty:
+            max_streak = 0
+        else:
+            # Sort and normalize to daily granularity
+            dates = band_streak["datetime"].dt.normalize().drop_duplicates().sort_values().reset_index(drop=True)
+
+            # Compute day-to-day differences safely
+            diffs = dates.diff().dt.days.fillna(1)
+
+            # Identify streaks (consecutive days = 1)
+            streak_ids = (diffs != 1).cumsum()
+            max_streak = int(streak_ids.value_counts().max())
 
         st.markdown("<h4>Longest streak</h4>", unsafe_allow_html=True)
         i = f"{max_streak} Days"
@@ -3212,7 +3230,7 @@ elif page == "Per Album":
 
     st.plotly_chart(
         fig_top_songs,
-        use_container_width=True,
+        width='stretch',
         config={
             "displayModeBar": False,
             "responsive": True,
@@ -3298,7 +3316,7 @@ elif page == "Per Album":
 
         # st.plotly_chart(
         #     fig_polar,
-        #     use_container_width=True,
+        #     width='stretch',
         #     config={
         #         "displayModeBar": False,
         #         "responsive": True,
@@ -3341,7 +3359,7 @@ elif page == "Per Album":
                     pad=12,
                     color="white",
                 )
-                st.pyplot(fig_cal, use_container_width=True)
+                st.pyplot(fig_cal, width='stretch')
             else:
                 st.info(f"No listening data for {album_selected} in {year_selected}.")
         except Exception as e:
@@ -3352,7 +3370,7 @@ elif page == "Per Album":
         # ✅ reusing same figure is fine as long as we give a unique key
         st.plotly_chart(
             fig_polar,
-            use_container_width=True,
+            width='stretch',
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -3386,7 +3404,7 @@ elif page == "Per Album":
 
     st.plotly_chart(
         fig_line,
-        use_container_width=True,
+        width='stretch',
         config={
             "displayModeBar": False,
             "responsive": True,
@@ -3483,6 +3501,7 @@ elif page == "Per Genre":
             "#1ed760",
             "#1ed760",
             "#1ed760",
+            # "#90d7ad",
             "#90d7ad",
         ],
         title=" ",
@@ -3501,7 +3520,7 @@ elif page == "Per Genre":
         plot_bgcolor="rgba(0,0,0,0)",
     )
 
-    fig_sunburst.update_coloraxes(showscale=False)
+    fig_sunburst.update_coloraxes(showscale=True)
 
     # --- HEADER ---
     st.markdown(
@@ -3516,7 +3535,7 @@ elif page == "Per Genre":
     # --- RENDER ---
     st.plotly_chart(
         fig_sunburst,
-        use_container_width=True,
+        width='stretch',
         config={
             "displayModeBar": False,
             "responsive": True,
@@ -3600,7 +3619,7 @@ elif page == "The Farm":
 
         st.plotly_chart(
             gauge,
-            use_container_width=True,
+            width='stretch',
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -3734,7 +3753,7 @@ elif page == "The Farm":
         # --- Updated Streamlit call (no deprecated kwargs) ---
         st.plotly_chart(
             fig,
-            use_container_width=True,
+            width='stretch',
             config={
                 "displayModeBar": False,
                 "responsive": True,

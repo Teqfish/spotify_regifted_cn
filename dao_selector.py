@@ -210,10 +210,8 @@ def get_log_dao() -> LogDAO:
     Always ensures append_text compatibility.
     """
     import streamlit as st
-    import dao_selector
 
     try:
-        from dao_selector import DAOS, load_global_daos
         if not DAOS or "logs" not in DAOS:
             load_global_daos()
         backend = DAOS.get("logs")

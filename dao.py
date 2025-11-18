@@ -420,7 +420,6 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         print(f"[CloudflareDAO] ✅ Uploaded dataset → {csv_key}")
         return table_name, csv_key
 
-
     def load_user_data(self, table_name: str) -> pd.DataFrame:
         """
         Load cleaned dataset CSV from R2 and restore dtypes using the global schema.
@@ -607,6 +606,9 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
                     return d1_data
         except Exception as e:
             print(f"[CloudflareDAOs] ⚠️ Failed to read D1 fallback: {e}")
+
+        print(f"[DEBUG read_status] key={key}")
+        print(f"[DEBUG read_status] d1_data type={type(d1_data)} value={d1_data}")
 
         return {
             "user_id": user_id,
@@ -1262,6 +1264,7 @@ class CloudflareD1DAO:
         )
 
         print(f"[CloudflareD1DAO] 🧭 Upserted enrichment_status → {dataset_label} [{status}] (phase={phase}, stage={stage})")
+
 class LocalUserDataDAO:
     """
     Saves cleaned listening history locally (userdata/).

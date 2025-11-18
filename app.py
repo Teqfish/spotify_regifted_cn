@@ -592,9 +592,8 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
     """
     import threading, time, datetime
     import streamlit as st
-    from enrichment_service import get_user_lock, get_last_heartbeat, is_stale_status
+    from enrichment_service import get_user_lock, get_last_heartbeat, is_stale_status, terminate_stale_enrichment_threads
     from dao_selector import DAOS
-    # from app import start_breadth_first_only  # ✅ ensure direct access for restart
 
     print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
 
@@ -702,6 +701,8 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             else:
                 print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping new enrichment.")
                 return "locked"
+
+            terminate_stale_enrichment_threads(user_id)
 
             # --- Launch new enrichment thread ---
             enrichment_thread = threading.Thread(
@@ -1274,7 +1275,6 @@ def background_enrich(
                 print(f"[enrich:{thread_name}] 🌐 Standard enrichment done — triggering breadth-first auto-check.")
                 # Lazy import to avoid circular reference
                 import threading
-                from app import _auto_check_and_reenrich_if_needed
                 from dao_selector import get_log_dao
 
                 log_dao = get_log_dao()
@@ -1322,34 +1322,50 @@ def start_breadth_first_only(user_id: str, dataset_label: str, log_dao, table_na
     candidate_key = None
 
     if table_name:
-        # Use explicit table name if provided
-        candidate_key = f"userdata/{table_name}.csv" if not table_name.startswith("userdata/") else table_name
+        # --- Explicit table_name provided ---
+        candidate_key = (
+            f"userdata/{table_name}.csv"
+            if not table_name.startswith("userdata/")
+            else table_name
+        )
         try:
             cleaned_df = user_data_dao.safe_download_csv(candidate_key)
             if cleaned_df is not None and not cleaned_df.empty:
                 print(f"[breadth_restart] ✅ Loaded cleaned dataset using explicit table_name: {candidate_key}")
+            else:
+                print(f"[breadth_restart] ⚠️ Explicit dataset loaded but empty: {candidate_key}")
         except Exception as e:
             print(f"[breadth_restart] ⚠️ Failed to load dataset from explicit path {candidate_key}: {e}")
+            cleaned_df = None
 
     # --- Fallback: pattern-based lookup ---
     if cleaned_df is None or cleaned_df.empty:
         try:
-            prefix = "userdata/"
-            pattern = f"{user_id}_{dataset_label}_*_history.csv"
-            all_files = user_data_dao.list_files(prefix=prefix)
-            matches = sorted(
-                [f for f in all_files if fnmatch.fnmatch(f.split(prefix)[-1], pattern)],
-                reverse=True
-            )
-            if matches:
-                candidate_key = f"{prefix}{matches[0]}"
-                cleaned_df = user_data_dao.safe_download_csv(candidate_key)
-                print(f"[breadth_restart] ✅ Auto-located most recent dataset: {candidate_key} ({len(cleaned_df)} rows)")
-            else:
-                print(f"[breadth_restart] ❌ No matching dataset found for pattern {pattern}")
-        except Exception as e:
-            print(f"[breadth_restart] ⚠️ Error searching for dataset pattern: {e}")
+            datasets = user_data_dao.list_datasets(user_id)
+            print(f"[breadth_restart:debug] Looking for dataset_label={dataset_label}")
+            print(f"[breadth_restart:debug] Available datasets: {list(datasets.keys())[:5]} ... total={len(datasets)}")
 
+            candidate_key = None
+            # Match on label prefix (handles timestamp suffixes)
+            for label, key in datasets.items():
+                if str(label).startswith(dataset_label) and str(key).endswith("_history.csv"):
+                    candidate_key = key
+                    break
+
+            if candidate_key:
+                cleaned_df = user_data_dao.safe_download_csv(candidate_key)
+                if cleaned_df is not None and not cleaned_df.empty:
+                    print(f"[breadth_restart] ✅ Auto-located dataset: {candidate_key} ({len(cleaned_df)} rows)")
+                else:
+                    print(f"[breadth_restart] ⚠️ Located dataset but it appears empty: {candidate_key}")
+            else:
+                print(f"[breadth_restart] ❌ No matching dataset found for label prefix '{dataset_label}'")
+
+        except Exception as e:
+            print(f"[breadth_restart] ⚠️ Error locating dataset for {dataset_label}: {e}")
+            cleaned_df = None
+
+    # --- Final validation ---
     if cleaned_df is None or cleaned_df.empty:
         print(f"[breadth_restart] ❌ Could not locate a valid cleaned dataset for {dataset_label}")
         return

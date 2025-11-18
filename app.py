@@ -587,8 +587,9 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
     Checks D1/R2 consistency and heartbeats to detect stale enrichments.
     Handles staged enrichment:
       - standard_done → resume breadth-first
-      - breadth_running → continue monitoring until full_done
+      - breadth_running → monitor
       - breadth_error → restart breadth-first only
+      - full_done → skip entirely
     """
     import threading, time, datetime
     import streamlit as st
@@ -609,6 +610,11 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
 
         d1_state, r2_state = status_label(d1_status), status_label(r2_status)
         print(f"[auto_reenrich] 🧭 D1={d1_state}, R2={r2_state}")
+
+        # --- If both are full_done, skip entirely ---
+        if d1_state == "full_done" and r2_state == "full_done":
+            print(f"[auto_reenrich] ✅ Full enrichment already complete for {dataset_label} — skipping re-enrich.")
+            return "ok"
 
         reg = st.session_state.get("_enrichment_registry", {})
         active_thread = reg.get("thread")
@@ -634,7 +640,6 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
 
         # --- If active thread exists ---
         if active_thread and active_thread.is_alive():
-            # 🧩 Breadth-running threads may have longer cycle times — tolerate 15 min idle
             extended_threshold = 900 if d1_state == "breadth_running" or r2_state == "breadth_running" else 300
             is_really_stale = (last_hb is None) or ((now - last_hb) > extended_threshold)
 
@@ -658,30 +663,27 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 print(f"[auto_reenrich] ❤️ Heartbeat OK ({hb_age}s ago). Skipping restart.")
                 return "running"
 
-        # --- Decide if restart needed ---
-        should_restart = (
-            d1_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error") and
-            r2_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
-        ) or stale_d1 or stale_hb
+        # --- Explicit handling of intermediate states ---
+        if d1_state in ("breadth_running", "running") or r2_state in ("breadth_running", "running"):
+            print(f"[auto_reenrich] 🌀 Enrichment already in progress for {dataset_label}")
+            return "running"
 
-        # --- Branch: resume breadth-first only ---
         if d1_state == "standard_done" or r2_state == "standard_done":
             print(f"[auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for {dataset_label}")
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
             return "resumed_breadth_first"
 
-        # --- Branch: breadth_error — restart breadth-first phase only ---
         if d1_state == "breadth_error" or r2_state == "breadth_error":
             print(f"[auto_reenrich] 🌀 Breadth-first error detected — restarting breadth-only for {dataset_label}")
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
             return "restarted_breadth_error"
 
-        # --- Branch: breadth_running — just monitor (don’t restart) ---
-        if d1_state == "breadth_running" or r2_state == "breadth_running":
-            print(f"[auto_reenrich] 🌀 Breadth-first enrichment already running for {dataset_label}")
-            return "running"
+        # --- Decide if restart needed ---
+        should_restart = (
+            d1_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
+            and r2_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
+        ) or stale_d1 or stale_hb
 
-        # --- Normal restart logic ---
         if should_restart:
             print(f"[auto_reenrich] ⚠️ Triggering full re-enrichment for {dataset_label} "
                   f"(D1={d1_state}, R2={r2_state}, stale_d1={stale_d1}, stale_hb={stale_hb})")
@@ -704,7 +706,6 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
 
             terminate_stale_enrichment_threads(user_id)
 
-            # --- Launch new enrichment thread ---
             enrichment_thread = threading.Thread(
                 target=background_enrich,
                 kwargs=dict(
@@ -718,7 +719,6 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             )
             enrichment_thread.start()
 
-            # --- Register thread ---
             st.session_state["_enrichment_registry"] = {
                 "thread": enrichment_thread,
                 "cancel_event": cancel_event,
@@ -1280,6 +1280,8 @@ def background_enrich(
                 log_dao = get_log_dao()
                 table_name = getattr(enricher, "table_name", None) or getattr(enricher, "input_table_name", None)
 
+                time.sleep(1.5)  # allow R2/D1 status propagation
+
                 # Spawn auto-check thread to handle breadth restart
                 threading.Thread(
                     target=_auto_check_and_reenrich_if_needed,
@@ -1343,13 +1345,21 @@ def start_breadth_first_only(user_id: str, dataset_label: str, log_dao, table_na
         try:
             datasets = user_data_dao.list_datasets(user_id)
             print(f"[breadth_restart:debug] Looking for dataset_label={dataset_label}")
-            print(f"[breadth_restart:debug] Available datasets: {list(datasets.keys())[:5]} ... total={len(datasets)}")
+            print(f"[breadth_restart:debug] Got {len(datasets)} datasets, type={type(datasets)}")
+
+            # ✅ Normalize for either list-of-tuples or dict
+            if isinstance(datasets, dict):
+                iterable = datasets.items()
+            elif isinstance(datasets, list):
+                # Already a list of (label, table_name)
+                iterable = datasets
+            else:
+                raise TypeError(f"Unexpected datasets type: {type(datasets)}")
 
             candidate_key = None
-            # Match on label prefix (handles timestamp suffixes)
-            for label, key in datasets.items():
-                if str(label).startswith(dataset_label) and str(key).endswith("_history.csv"):
-                    candidate_key = key
+            for label, table_name in iterable:
+                if str(label).startswith(dataset_label):
+                    candidate_key = f"userdata/{table_name}.csv"
                     break
 
             if candidate_key:
@@ -1359,7 +1369,7 @@ def start_breadth_first_only(user_id: str, dataset_label: str, log_dao, table_na
                 else:
                     print(f"[breadth_restart] ⚠️ Located dataset but it appears empty: {candidate_key}")
             else:
-                print(f"[breadth_restart] ❌ No matching dataset found for label prefix '{dataset_label}'")
+                print(f"[breadth_restart] ❌ No matching dataset found for label '{dataset_label}'")
 
         except Exception as e:
             print(f"[breadth_restart] ⚠️ Error locating dataset for {dataset_label}: {e}")
@@ -1419,7 +1429,7 @@ def start_breadth_first_only(user_id: str, dataset_label: str, log_dao, table_na
             status_dao.finish_full_status(
                 user_id,
                 dataset_label,
-                detail=f"✅ Full enrichment completed (breadth-first done, source={candidate_key})"
+                detail=f"✅ Full enrichment completed for {dataset_label}"
             )
             print(f"[breadth_restart] ✅ Breadth-first enrichment completed successfully for {dataset_label}")
 
@@ -1679,35 +1689,6 @@ if page == "Home":
     st.session_state.setdefault("current_df", None)
     st.session_state.setdefault("current_dataset_label", None)
     st.session_state.setdefault("last_table_name", None)
-    # st.session_state.setdefault("_enrichment_autostart_block", False)
-    # st.session_state.setdefault("_enrichment_autostart_pending", False)
-    # st.session_state.setdefault("_enrichment_thread", None)
-    # st.session_state.setdefault("_enrichment_running_label", None)
-    # st.session_state.setdefault("_current_enrich_thread", None)
-    # st.session_state.setdefault("_current_cancel_event", None)
-    # st.session_state.setdefault("_current_enrich_label", None)
-
-    # # ---------- Helper ----------
-    # def _clear_autostart_if_new_label(label: str) -> None:
-    #     """Clears autostart block when new dataset label is selected."""
-    #     st.session_state.setdefault("_enrichment_autostart_block", False)
-    #     st.session_state.setdefault("_enrichment_block_label", None)
-    #     if st.session_state.get("_enrichment_block_label") != (label or "").strip():
-    #         st.session_state["_enrichment_autostart_block"] = False
-    #         st.session_state["_enrichment_block_label"] = None
-
-    # # ---------- Autostart Enrichment on Rerun ----------
-    # if st.session_state.get("_enrichment_autostart_pending"):
-    #     st.session_state["_enrichment_autostart_pending"] = False
-    #     try:
-    #         _maybe_start_enrichment(
-    #             user_id=user_id,
-    #             dataset_label=st.session_state["current_dataset_label"],
-    #             table_name=st.session_state["last_table_name"],
-    #             cleaned_df=st.session_state["current_df"],
-    #         )
-    #     except Exception as e:
-    #         st.warning(f"Could not autostart enrichment: {e}")
 
     # ---------- Header UI ----------
     h1, h2, h3 = st.columns([1, 1, 1], vertical_alignment="center")
@@ -1854,13 +1835,6 @@ if page == "Home":
                             log_dao,
                             table_name=table_name,
                         )
-
-                        # # Trigger enrichment autostart
-                        # _clear_autostart_if_new_label(dataset_label.strip())
-                        # st.session_state["_enrichment_autostart_block"] = False
-                        # st.session_state["_enrichment_autostart_pending"] = True
-
-                        # st.rerun()
 
                 except zipfile.BadZipFile:
                     st.error("That file isn't a valid ZIP.")

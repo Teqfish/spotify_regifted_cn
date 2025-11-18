@@ -478,11 +478,16 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         return df
 
     def list_datasets(self, user_id: str) -> List[tuple[str, str]]:
-        """List all datasets uploaded by this user.
-        Extract dataset labels correctly, even if they contain underscores or hyphens.
+        """
+        List all datasets uploaded by this user.
+        Also include a shared test dataset accessible to all users.
+
         Expected filename format:
             userdata/{user_id}_{dataset_label}_{timestamp}_history.csv
         """
+        import re
+
+        # Get user’s own datasets
         res = self.r2.list_objects_v2(Bucket=self.bucket, Prefix=f"userdata/{user_id}_")
         contents = res.get("Contents", [])
         pairs = []
@@ -490,8 +495,9 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         for obj in contents:
             key = obj["Key"]
             if not key.endswith("_history.csv"):
-                # skip reports, consistency files, snapshots, etc.
+                # Skip reports, consistency files, snapshots, etc.
                 continue
+
             table_name = key.split("/")[-1].replace(".csv", "")
 
             # Extract dataset label between first "_" and second-to-last "_"
@@ -504,6 +510,15 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
                 label = parts[1] if len(parts) >= 3 else table_name
 
             pairs.append((label, table_name))
+
+        # --- Add shared public test dataset (visible to all users) ---
+        test_user_id = "58d0bd65d3f40b92"
+        test_table_name = "58d0bd65d3f40b92_full-local-18nov_1_20251118-174227_history"
+        test_label = "Charlie's Demo Dataset"
+
+        # Avoid duplication if this is already the user’s own dataset
+        if user_id != test_user_id:
+            pairs.append((test_label, test_table_name))
 
         return pairs
 

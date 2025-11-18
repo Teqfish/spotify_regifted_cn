@@ -590,10 +590,17 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
       - breadth_running → monitor
       - breadth_error → restart breadth-first only
       - full_done → skip entirely
+      - running + stale → recovery sweep + auto-restart if safe
     """
     import threading, time, datetime
     import streamlit as st
-    from enrichment_service import get_user_lock, get_last_heartbeat, is_stale_status, terminate_stale_enrichment_threads
+    from enrichment_service import (
+        get_user_lock,
+        get_last_heartbeat,
+        is_stale_status,
+        terminate_stale_enrichment_threads,
+        recovery_sweep,
+    )
     from dao_selector import DAOS
 
     print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
@@ -618,7 +625,6 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
 
         reg = st.session_state.get("_enrichment_registry", {})
         active_thread = reg.get("thread")
-        active_label = reg.get("dataset_label")
         cancel_event = reg.get("cancel_event")
 
         # --- Heartbeat + staleness checks ---
@@ -666,8 +672,63 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         # --- Explicit handling of intermediate states ---
         if d1_state in ("breadth_running", "running") or r2_state in ("breadth_running", "running"):
             print(f"[auto_reenrich] 🌀 Enrichment already in progress for {dataset_label}")
+
+            # 👇 Run recovery check in case it's a zombie "running" state
+            recovery_sweep(user_id, dataset_label, log_dao)
+
+            # --- Re-check status after recovery sweep ---
+            refreshed = metadata_dao.read_status(user_id, dataset_label) or {}
+            new_state = (refreshed.get("status") or "").lower()
+
+            # --- Auto-restart only if recovery flipped it to "error" ---
+            if new_state == "error":
+                print(f"[auto_reenrich] 🔄 Recovery flipped {dataset_label} to error — triggering re-enrichment.")
+                time.sleep(1.5)  # allow R2/D1 propagation
+
+                user_data_dao = DAOS.get("user_data")
+                cleaned_df = user_data_dao.safe_download_csv(f"userdata/{dataset_label}.csv")
+
+                cancel_event = threading.Event()
+                user_lock = get_user_lock(user_id)
+                for attempt in range(10):
+                    if user_lock.acquire(blocking=False):
+                        from enrichment_service import mark_lock_acquired
+                        mark_lock_acquired(user_id)
+                        break
+                    print(f"[auto_reenrich] 🔒 Lock active for {user_id} — waiting ({attempt+1}/10)...")
+                    time.sleep(1)
+                else:
+                    print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping restart.")
+                    return "locked"
+
+                terminate_stale_enrichment_threads(user_id)
+
+                enrichment_thread = threading.Thread(
+                    target=background_enrich,
+                    kwargs=dict(
+                        user_id=user_id,
+                        dataset_label=dataset_label,
+                        cleaned_df=cleaned_df,
+                        log_dao=log_dao,
+                        cancel_event=cancel_event,
+                    ),
+                    daemon=True,
+                )
+                enrichment_thread.start()
+
+                st.session_state["_enrichment_registry"] = {
+                    "thread": enrichment_thread,
+                    "cancel_event": cancel_event,
+                    "dataset_label": dataset_label,
+                    "user_id": user_id,
+                }
+
+                print(f"[auto_reenrich] 🚀 Restarted enrichment automatically after zombie recovery for {dataset_label}")
+                return "restarted_after_recovery"
+
             return "running"
 
+        # --- Resume or retry breadth-first ---
         if d1_state == "standard_done" or r2_state == "standard_done":
             print(f"[auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for {dataset_label}")
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
@@ -678,7 +739,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
             return "restarted_breadth_error"
 
-        # --- Decide if restart needed ---
+        # --- Determine if full restart is required ---
         should_restart = (
             d1_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
             and r2_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
@@ -735,7 +796,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
     except Exception as e:
         print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
         return "error"
-
+    
 def log_enrichment_thread_count(context: str = ""):
     threads = threading.enumerate()
     enrich_threads = [
@@ -1814,12 +1875,19 @@ if page == "Home":
 
                         # ✅ Update Cloudflare status
                         try:
-                            status_dao.set_status(
-                                user_id,
-                                dataset_label.strip(),
-                                phase="etl",
-                                detail="✅ ETL completed, starting enrichment.",
-                                total=len(cleaned_df),
+                            status_dao._upload_json(
+                                status_dao._status_key(user_id, dataset_label.strip()),
+                                {
+                                    "user_id": user_id,
+                                    "dataset_label": dataset_label.strip(),
+                                    "status": "etl_done",
+                                    "phase": "etl",
+                                    "detail": "✅ ETL completed. Awaiting enrichment start.",
+                                    "total_batches": len(cleaned_df),
+                                    "batches_done": 0,
+                                    "percent": 0,
+                                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                                },
                             )
                         except Exception as e:
                             st.warning(f"⚠️ Could not persist ETL status: {e}")

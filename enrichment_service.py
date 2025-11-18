@@ -656,6 +656,70 @@ def terminate_stale_enrichment_threads(user_id: str, max_age_sec: int = 600):
             except Exception as e:
                 print(f"[thread_cleanup] ⚠️ Error cleaning {t.name}: {e}")
 
+def recovery_sweep(user_id: str, dataset_label: str, log_dao=None):
+    """
+    Detects and repairs 'zombie running' enrichment states:
+    when the status says running, but no active thread or recent heartbeat exists.
+    """
+
+    import time, streamlit as st
+    from dao_selector import DAOS
+    from enrichment_service import get_user_lock, get_last_heartbeat
+
+    try:
+        status_dao = DAOS.get("status")
+        d1_status = status_dao.read_status(user_id, dataset_label) or {}
+
+        current_status = (d1_status.get("status") or "").lower()
+        current_phase = (d1_status.get("phase") or "").lower()
+
+        # Skip if not "running" or "breadth_running"
+        if current_status not in ("running", "breadth_running"):
+            return
+
+        reg = st.session_state.get("_enrichment_registry", {})
+        active_thread = reg.get("thread")
+        is_alive = active_thread and active_thread.is_alive()
+
+        # Heartbeat check
+        last_hb = get_last_heartbeat(user_id, dataset_label)
+        now = time.time()
+        if last_hb is not None:
+            hb_age = now - last_hb
+        else:
+            hb_age = None
+        stale_hb = (hb_age is None) or (hb_age > 600)  # 10 min threshold
+
+        age_display = f"{int(hb_age)}s" if hb_age is not None else "no heartbeat"
+
+        if not is_alive and stale_hb:
+            print(f"[recovery_sweep] ⚠️ Zombie state detected for {dataset_label}: "
+                  f"status={current_status}, phase={current_phase}, hb_age={age_display}")
+
+            # Release lock if held
+            user_lock = get_user_lock(user_id)
+            if user_lock.locked():
+                try:
+                    user_lock.release()
+                    print(f"[recovery_sweep] 🔓 Released stale lock for {user_id}")
+                except Exception as e:
+                    print(f"[recovery_sweep] ⚠️ Failed to release stale lock: {e}")
+
+            # Mark error in status
+            detail = f"⚠️ Stuck in running state with no active thread (hb_age={age_display})"
+            status_dao.finish_standard_error(user_id, dataset_label, detail=detail)
+
+            if log_dao:
+                log_dao.log(user_id, dataset_label, "recovery", detail, level="warning")
+
+            print(f"[recovery_sweep] ✅ Status updated to error for {dataset_label}")
+        else:
+            print(f"[recovery_sweep] ✅ No zombie detected for {dataset_label} "
+                  f"(alive={is_alive}, hb_age={age_display})")
+
+    except Exception as e:
+        print(f"[recovery_sweep] ⚠️ Error during recovery sweep: {e}")
+
 # ================== Service ==================
 class MetadataEnricher:
     """
@@ -2570,37 +2634,37 @@ class MetadataEnricher:
             _end_phase("overall", before)
             update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "per_year"
-            # self.log("[run_all] Starting phase: per_year")
-            # before = self._done_batches
-            # self.run_phase_per_year(per_art, per_show, per_book)
-            # _end_phase("per_year", before)
-            # update_heartbeat(self.user_id, self.label)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_year"
+            self.log("[run_all] Starting phase: per_year")
+            before = self._done_batches
+            self.run_phase_per_year(per_art, per_show, per_book)
+            _end_phase("per_year", before)
+            update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "albums_of_year"
-            # self.log("[run_all] Starting phase: albums_of_year")
-            # before = self._done_batches
-            # self.run_phase_per_artist_albums_of_year()
-            # _end_phase("albums_of_year", before)
-            # update_heartbeat(self.user_id, self.label)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "albums_of_year"
+            self.log("[run_all] Starting phase: albums_of_year")
+            before = self._done_batches
+            self.run_phase_per_artist_albums_of_year()
+            _end_phase("albums_of_year", before)
+            update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "per_album"
-            # self.log("[run_all] Starting phase: per_album")
-            # before = self._done_batches
-            # self.run_phase_per_album_all_albums_for_top_artists()
-            # _end_phase("per_album", before)
-            # update_heartbeat(self.user_id, self.label)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "per_album"
+            self.log("[run_all] Starting phase: per_album")
+            before = self._done_batches
+            self.run_phase_per_album_all_albums_for_top_artists()
+            _end_phase("per_album", before)
+            update_heartbeat(self.user_id, self.label)
 
-            # self._check_cancel(self.cancel_event)
-            # self.current_phase = "top_tracks_per_month"
-            # self.log("[run_all] Starting phase: top_tracks_per_month")
-            # before = self._done_batches
-            # self.run_phase_top_tracks_per_month()
-            # _end_phase("top_tracks_per_month", before)
-            # update_heartbeat(self.user_id, self.label)
+            self._check_cancel(self.cancel_event)
+            self.current_phase = "top_tracks_per_month"
+            self.log("[run_all] Starting phase: top_tracks_per_month")
+            before = self._done_batches
+            self.run_phase_top_tracks_per_month()
+            _end_phase("top_tracks_per_month", before)
+            update_heartbeat(self.user_id, self.label)
 
             self._check_cancel(self.cancel_event)
             self.current_phase = "popularity_timeseries"

@@ -207,15 +207,131 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     # ------------------------------------------------------------
 
     def _put_bytes(self, key: str, body: bytes, content_type: str):
-        """Upload raw bytes to R2."""
+        """
+        Upload raw bytes to R2 with exponential backoff and automatic safe-upload fallback.
+        Falls back to _put_bytes_safe() after repeated InternalErrors.
+        """
+        import time
+        from botocore.exceptions import ClientError
+
         key = key.lstrip("/")
-        self.r2.put_object(
-            Bucket=self.bucket,
-            Key=key,
-            Body=body,
-            ContentType=content_type,
-        )
-        print(f"[CloudflareDAO] ✅ Uploaded → {key}")
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                self.r2.put_object(
+                    Bucket=self.bucket,
+                    Key=key,
+                    Body=body,
+                    ContentType=content_type,
+                )
+                print(f"[CloudflareDAO] ✅ Uploaded → {key}")
+                return True
+
+            except ClientError as e:
+                err_msg = str(e)
+                if "InternalError" in err_msg or "SlowDown" in err_msg:
+                    # R2 internal hiccup or throttling → backoff and retry
+                    if attempt < max_attempts - 1:
+                        wait = min(2 ** attempt, 30)
+                        print(f"[CloudflareDAO] ⚠️ InternalError on PutObject ({attempt+1}/{max_attempts}), retrying in {wait}s…")
+                        time.sleep(wait)
+                        continue
+                    else:
+                        print(f"[CloudflareDAO] ❌ Persistent InternalError after {max_attempts} attempts, falling back to safe upload for {key}")
+                        # Fallback: use the atomic safe upload method
+                        return self._put_bytes_safe(key, body, content_type)
+
+                # Any other known transient
+                if "RequestTimeout" in err_msg or "ServiceUnavailable" in err_msg:
+                    if attempt < max_attempts - 1:
+                        wait = min(2 ** attempt, 30)
+                        print(f"[CloudflareDAO] ⚠️ Transient {err_msg[:50]}..., retrying in {wait}s…")
+                        time.sleep(wait)
+                        continue
+                    else:
+                        print(f"[CloudflareDAO] ❌ Max retries reached for {key}")
+                        raise
+
+                # Unknown error → escalate
+                print(f"[CloudflareDAO] ❌ Unexpected error uploading {key}: {e}")
+                raise
+
+            except Exception as e:
+                # Non-ClientError exceptions (network hiccups, etc.)
+                if attempt < max_attempts - 1:
+                    wait = min(2 ** attempt, 30)
+                    print(f"[CloudflareDAO] ⚠️ Unexpected upload error ({attempt+1}/{max_attempts}) for {key}: {e}, retrying in {wait}s…")
+                    time.sleep(wait)
+                    continue
+                else:
+                    print(f"[CloudflareDAO] ❌ Persistent failure, falling back to safe upload for {key}")
+                    return self._put_bytes_safe(key, body, content_type)
+
+        print(f"[CloudflareDAO] ❌ Upload ultimately failed for {key}")
+        return False
+
+    def _put_bytes_safe(self, key: str, body: bytes, content_type: str) -> bool:
+        """
+        Safe upload to R2 with retries and exponential backoff.
+        Writes to a temp key first, verifies non-zero size, then atomically renames.
+        Returns True on success, False on failure.
+        """
+        import time
+        from botocore.exceptions import ClientError
+
+        key = key.lstrip("/")
+        tmp_key = f"{key}.tmp"
+        max_attempts = 4
+
+        for attempt in range(max_attempts):
+            try:
+                # Stage temporary upload
+                self.r2.put_object(Bucket=self.bucket, Key=tmp_key, Body=body, ContentType=content_type)
+
+                # Verify uploaded size
+                head = self.r2.head_object(Bucket=self.bucket, Key=tmp_key)
+                if head.get("ContentLength", 0) == 0:
+                    print(f"[CloudflareDAO] ⚠️ Temp upload empty: {tmp_key}")
+                    self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
+                    return False
+
+                # Replace original
+                self.r2.copy_object(
+                    Bucket=self.bucket,
+                    CopySource={"Bucket": self.bucket, "Key": tmp_key},
+                    Key=key,
+                )
+                self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
+                print(f"[CloudflareDAO] ✅ Atomic upload → {key}")
+                return True
+
+            except ClientError as e:
+                err = str(e)
+                if "InternalError" in err or "SlowDown" in err or "ServiceUnavailable" in err:
+                    if attempt < max_attempts - 1:
+                        wait = min(2 ** attempt, 20)
+                        print(f"[CloudflareDAO] ⚠️ R2 InternalError during safe upload ({attempt+1}/{max_attempts}), retrying in {wait}s…")
+                        time.sleep(wait)
+                        continue
+                    else:
+                        print(f"[CloudflareDAO] ❌ Safe upload failed after {max_attempts} attempts for {key}")
+                        return False
+                else:
+                    print(f"[CloudflareDAO] ❌ Unexpected R2 error during safe upload: {e}")
+                    return False
+
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    wait = min(2 ** attempt, 20)
+                    print(f"[CloudflareDAO] ⚠️ Safe upload transient error ({attempt+1}/{max_attempts}) for {key}: {e}, retrying in {wait}s…")
+                    time.sleep(wait)
+                    continue
+                else:
+                    print(f"[CloudflareDAO] ❌ Safe upload persistent failure for {key}: {e}")
+                    return False
+
+        print(f"[CloudflareDAO] ❌ Safe upload ultimately failed for {key}")
+        return False
 
     def _get_object(self, key: str) -> bytes:
         """Retrieve object contents as bytes, or raise FileNotFoundError."""
@@ -225,6 +341,54 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             return obj["Body"].read()
         except self.r2.exceptions.NoSuchKey:
             raise FileNotFoundError(f"No such object in R2: {key}")
+
+    def _get_object_safe(self, key: str) -> Optional[bytes]:
+        """Retrieve bytes if object exists and non-empty, else None."""
+        key = key.lstrip("/")
+        try:
+            obj = self.r2.get_object(Bucket=self.bucket, Key=key)
+            data = obj["Body"].read()
+            if not data:
+                print(f"[CloudflareDAO] ⚠️ Empty object for {key}")
+                return None
+            return data
+        except self.r2.exceptions.NoSuchKey:
+            print(f"[CloudflareDAO] ℹ️ No object in R2: {key}")
+            return None
+        except Exception as e:
+            print(f"[CloudflareDAO] ❌ Failed to get {key}: {e}")
+            return None
+
+    def list_objects(self, prefix: str = "", max_keys: int = 1000) -> list[str]:
+        """
+        List all object keys under the given prefix in the R2 bucket.
+        Supports pagination transparently.
+        Example: dao.list_objects("userdata/") → ["userdata/uid_label_ts_history.csv", ...]
+        """
+        keys = []
+        continuation_token = None
+
+        try:
+            while True:
+                params = {"Bucket": self.bucket, "Prefix": prefix, "MaxKeys": max_keys}
+                if continuation_token:
+                    params["ContinuationToken"] = continuation_token
+
+                response = self.r2.list_objects_v2(**params)
+                contents = response.get("Contents", [])
+                keys.extend(obj["Key"] for obj in contents if "Key" in obj)
+
+                if response.get("IsTruncated"):
+                    continuation_token = response.get("NextContinuationToken")
+                else:
+                    break
+
+            print(f"[CloudflareDAO] 📦 Listed {len(keys)} objects under prefix '{prefix}'")
+            return keys
+
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ Failed to list objects under {prefix}: {e}")
+            return []
 
     def _upload_json(self, key: str, payload: dict):
         """Internal helper for uploading JSON files."""
@@ -236,41 +400,104 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     # ------------------------------------------------------------
 
     def save_user_data(self, user_id: str, dataset_label: str, df: pd.DataFrame, filename: str):
-        """Save cleaned dataset to Cloudflare R2 under userdata/."""
+        """
+        Save cleaned dataset to Cloudflare R2 under userdata/.
+        Creates one file:
+        - userdata/{table_name}.csv
+        Schema generation is no longer performed (global schema is shared at userdata/schema.json).
+        """
+        import io, time
+
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         table_name = f"{user_id}_{dataset_label}_{timestamp}_history"
-        key = f"userdata/{table_name}.csv"
+        csv_key = f"userdata/{table_name}.csv"
+
+        # --- Upload CSV ---
         buf = io.BytesIO()
         df.to_csv(buf, index=False)
-        self._put_bytes(key, buf.getvalue(), "text/csv")
-        return table_name, key
+        self._put_bytes(csv_key, buf.getvalue(), "text/csv")
+
+        print(f"[CloudflareDAO] ✅ Uploaded dataset → {csv_key}")
+        return table_name, csv_key
 
     def load_user_data(self, table_name: str) -> pd.DataFrame:
-        """Load cleaned dataset CSV from R2."""
-        key = f"userdata/{table_name}.csv"
-        csv_bytes = self._get_object(key)
+        """
+        Load cleaned dataset CSV from R2 and restore dtypes using the global schema.
+        Falls back to inference if schema cannot be loaded.
+        """
+        import io, json
+        import pandas as pd
 
-        dtype_map = {
-            "spotify_episode_uri": "string",
-            "audiobook_title": "string",
-            "audiobook_uri": "string",
-            "audiobook_chapter_uri": "string",
-        }
+        csv_key = f"userdata/{table_name}.csv"
+        schema_key = "userdata/schema.json"  # ✅ global schema path
 
-        return pd.read_csv(io.BytesIO(csv_bytes), dtype=dtype_map, low_memory=False)
+        # --- Step 1: Load CSV ---
+        csv_bytes = self._get_object(csv_key)
+        df = pd.read_csv(io.BytesIO(csv_bytes), low_memory=False)
+
+        # --- Step 2: Load global schema ---
+        schema = None
+        try:
+            schema_bytes = self._get_object(schema_key)
+            schema = json.loads(schema_bytes.decode("utf-8"))
+            print(f"[CloudflareDAO] 🧭 Loaded global schema ({len(schema)} columns)")
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ Could not load global schema ({e}) — falling back to inference")
+
+        # --- Step 3: Apply schema if present ---
+        if schema:
+            for col, dtype in schema.items():
+                if col not in df.columns:
+                    continue
+                try:
+                    if "datetime" in dtype:
+                        df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
+                    elif dtype in ("string", "object"):
+                        df[col] = df[col].astype("string")
+                    elif dtype.lower().startswith("int"):
+                        df[col] = df[col].astype("Int64")
+                    elif dtype.lower().startswith("float"):
+                        df[col] = df[col].astype("Float64")
+                    elif dtype.lower().startswith("bool"):
+                        df[col] = df[col].astype("boolean")
+                except Exception:
+                    # Skip casting failures gracefully (e.g., all NaN)
+                    pass
+
+            print(f"[CloudflareDAO] ✅ Global schema applied successfully for {len(schema)} columns")
+
+        # --- Step 4: Ensure UTC consistency ---
+        if "datetime" in df.columns:
+            dt = df["datetime"]
+            if pd.api.types.is_datetime64_any_dtype(dt):
+                if dt.dt.tz is None:
+                    df["datetime"] = dt.dt.tz_localize("UTC")
+                else:
+                    df["datetime"] = dt.dt.tz_convert("UTC")
+
+        return df
 
     def list_datasets(self, user_id: str) -> List[tuple[str, str]]:
-        """List all datasets uploaded by this user.
-        Extract dataset labels correctly, even if they contain underscores or hyphens.
+        """
+        List all datasets uploaded by this user.
+        Also include a shared test dataset accessible to all users.
+
         Expected filename format:
             userdata/{user_id}_{dataset_label}_{timestamp}_history.csv
         """
+        import re
+
+        # Get user’s own datasets
         res = self.r2.list_objects_v2(Bucket=self.bucket, Prefix=f"userdata/{user_id}_")
         contents = res.get("Contents", [])
         pairs = []
 
         for obj in contents:
             key = obj["Key"]
+            if not key.endswith("_history.csv"):
+                # Skip reports, consistency files, snapshots, etc.
+                continue
+
             table_name = key.split("/")[-1].replace(".csv", "")
 
             # Extract dataset label between first "_" and second-to-last "_"
@@ -284,6 +511,15 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
 
             pairs.append((label, table_name))
 
+        # --- Add shared public test dataset (visible to all users) ---
+        test_user_id = "58d0bd65d3f40b92"
+        test_table_name = "58d0bd65d3f40b92_full-local-18nov_1_20251118-174227_history"
+        test_label = "Charlie's Demo Dataset"
+
+        # Avoid duplication if this is already the user’s own dataset
+        if user_id != test_user_id:
+            pairs.append((test_label, test_table_name))
+
         return pairs
 
     # ------------------------------------------------------------
@@ -291,7 +527,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     # ------------------------------------------------------------
 
     def _status_key(self, user_id: str, label: str) -> str:
-        return f"enrichment/status/{user_id}_{label}.json"
+        return f"enrichment/status/{user_id}_{label}_status.json"
 
     def set_status(self, user_id: str, dataset_label: str, *, phase: str, detail: str = "", total: Optional[int] = None):
         payload = {
@@ -334,21 +570,164 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         self._maybe_write_d1_status(data)
 
     def finish_status(self, user_id: str, dataset_label: str, *, ok: bool = True, detail: str = ""):
+        """
+        Marks an enrichment run as finished (success or error).
+        Prevents 'phase': 'done' leakage by preserving the previous phase or
+        defaulting to 'final' for clarity.
+        """
+        try:
+            # Try to preserve the current phase if a status record exists
+            current = self.read_status(user_id, dataset_label)
+            prev_phase = current.get("phase", "final") if isinstance(current, dict) else "final"
+        except Exception:
+            prev_phase = "final"
+
         payload = {
             "user_id": user_id,
             "dataset_label": dataset_label,
             "status": "done" if ok else "error",
-            "phase": "done",
+            "phase": prev_phase,  # ✅ preserve or fall back to "final"
             "detail": detail,
             "batches_done": 1,
             "total_batches": 1,
             "percent": 100 if ok else None,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        self._upload_json(self._status_key(user_id, dataset_label), payload)
 
-        # ✅ Mirror to D1
+        # Save to R2 and mirror to D1
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
         self._maybe_write_d1_status(payload)
+
+    def read_status(self, user_id: str, dataset_label: str) -> dict:
+        """
+        Retrieve the current enrichment status for a given user and dataset.
+        Reads the JSON file from R2 (primary) and falls back to D1 if needed.
+        """
+        key = self._status_key(user_id, dataset_label)
+        try:
+            raw = self._get_object(key)
+            if raw:
+                return json.loads(raw)
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"[CloudflareDAOs] ⚠️ Failed to read R2 status: {e}")
+
+        # --- Optional fallback: try D1 if available ---
+        try:
+            if hasattr(self, "_maybe_read_d1_status"):
+                d1_data = self._maybe_read_d1_status(user_id, dataset_label)
+                if d1_data:
+                    return d1_data
+        except Exception as e:
+            print(f"[CloudflareDAOs] ⚠️ Failed to read D1 fallback: {e}")
+
+        print(f"[DEBUG read_status] key={key}")
+        print(f"[DEBUG read_status] d1_data type={type(d1_data)} value={d1_data}")
+
+        return {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "unknown",
+            "detail": "No status found in R2 or D1",
+        }
+
+    def finish_standard_status(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks phases 1–7 (standard enrichment) as completed successfully.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "standard_done",
+            "phase": "chart_scorer",
+            "detail": detail or "✅ Standard enrichment completed (phases 1–7)",
+            "batches_done": 1,
+            "total_batches": 1,
+            "percent": 100,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded standard enrichment completion for {dataset_label}")
+
+    def set_breadth_running(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks the beginning of the breadth-first phase (phase 8).
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "breadth_running",
+            "phase": "breadth_first",
+            "detail": detail or "🌐 Breadth-first enrichment in progress",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded breadth-first start for {dataset_label}")
+
+    def finish_full_status(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks full enrichment (phases 1–8) as completed successfully.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "full_done",
+            "phase": "breadth_first",
+            "detail": detail or "✅ Full enrichment completed (phases 1–8)",
+            "batches_done": 1,
+            "total_batches": 1,
+            "percent": 100,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded full enrichment completion for {dataset_label}")
+
+    def finish_standard_error(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks a failure during standard enrichment (phases 1–7).
+        Signals that full re-enrichment is required.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "error",
+            "phase": "chart_scorer",
+            "detail": detail or "❌ Error during standard enrichment (phases 1–7)",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] ⚠️ Recorded standard enrichment error for {dataset_label}")
+
+    def finish_breadth_error(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks a failure during breadth-first enrichment (phase 8).
+        Keeps the dataset usable (standard already done).
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "breadth_error",
+            "phase": "breadth_first",
+            "detail": detail or "❌ Error during breadth-first enrichment (phase 8)",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] ⚠️ Recorded breadth-first enrichment error for {dataset_label}")
 
     # ------------------------------------------------------------
     # METADATA + MASTERS + CHECKPOINTS
@@ -453,6 +832,36 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
     def upload_text(self, text: str, *, path: str):
         self._put_bytes(path, text.encode("utf-8"), "text/plain")
 
+    def download_text(self, path: str) -> str:
+        """Download plain text from R2 safely, returns empty string if missing."""
+        key = path.lstrip("/")
+        try:
+            obj = self.r2.get_object(Bucket=self.bucket, Key=key)
+            return obj["Body"].read().decode("utf-8")
+        except self.r2.exceptions.NoSuchKey:
+            return ""
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ Failed to download text {key}: {e}")
+            return ""
+
+    def append_text(self, text: str, *, path: str):
+        """Append text to an existing R2 log object without reuploading the whole file."""
+        key = path.lstrip("/")
+        tmp_key = f"{key}.tmp"
+        try:
+            # upload the new chunk first
+            self.r2.put_object(Bucket=self.bucket, Key=tmp_key, Body=text.encode("utf-8"), ContentType="text/plain")
+            # compose/concatenate tmp onto main (R2 supports multi-part copy)
+            self.r2.upload_part_copy(
+                Bucket=self.bucket,
+                CopySource={"Bucket": self.bucket, "Key": tmp_key},
+                Key=key,
+                UploadId=self._start_or_get_upload_id(key)
+            )
+            self.r2.delete_object(Bucket=self.bucket, Key=tmp_key)
+        except Exception as e:
+            print(f"[CloudflareDAO] ⚠️ append_text failed for {key}: {e}")
+
     def save_checkpoint(self, user_id: str, label: str, state: dict):
         key = f"enrichment/checkpoints/{user_id}_{label}.json"
         self._upload_json(key, state)
@@ -475,56 +884,56 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
 
     def merge_into_master(self, df_new: pd.DataFrame, filename: str, *, keys: List[str]):
         """
-        Merge df_new into a global master file in Cloudflare R2.
-        Deduplicates based on `keys`, keeping the latest non-null values.
+        Safely merge df_new into master CSV in R2.
+        Avoids accidental overwrite if new data is empty or upload fails.
         """
         key = f"enrichment/metadata/{filename}"
+        if df_new.empty:
+            print(f"[merge_into_master] ⚠️ No new rows for {filename}, skipping merge.")
+            return False
 
-        try:
-            # --- Try loading existing master ---
+        # --- Load old data
+        data_bytes = self._get_object_safe(key)
+        if data_bytes is None:
+            df_old = pd.DataFrame(columns=df_new.columns)
+            print(f"[merge_into_master] ℹ️ Starting new master for {filename}")
+        else:
             try:
-                df_old = pd.read_csv(io.BytesIO(self._get_object(key)), low_memory=False)
-                print(f"[merge_into_master] ✅ Loaded existing {filename} ({len(df_old)} rows)")
-            except FileNotFoundError:
-                print(f"[merge_into_master] ℹ️ {filename} not found — creating new master.")
+                df_old = pd.read_csv(io.BytesIO(data_bytes), low_memory=False)
+            except Exception as e:
+                print(f"[merge_into_master] ⚠️ Corrupt CSV {filename}: {e}, resetting.")
                 df_old = pd.DataFrame(columns=df_new.columns)
 
-            # --- Align schemas (ensure both DataFrames share columns) ---
-            cols = list({*df_old.columns.tolist(), *df_new.columns.tolist()})
-            df_old = df_old.reindex(columns=cols)
-            df_new = df_new.reindex(columns=cols)
+        before = len(df_old)
 
-            # --- Combine ---
-            df_combined = pd.concat([df_old, df_new], ignore_index=True)
+        # --- Align + merge
+        cols = list({*df_old.columns, *df_new.columns})
+        df_old = df_old.reindex(columns=cols)
+        df_new = df_new.reindex(columns=cols)
+        df_combined = pd.concat([df_old, df_new], ignore_index=True)
 
-            # --- Deduplicate based on keys (keep latest non-null entries) ---
-            if keys:
-                df_combined["_is_new"] = 0
-                df_combined.loc[df_combined.index[-len(df_new):], "_is_new"] = 1
+        if keys:
+            df_combined.drop_duplicates(subset=keys, keep="last", inplace=True)
 
-                def last_valid(series: pd.Series):
-                    not_nulls = series[~series.isna()]
-                    return not_nulls.iloc[-1] if not not_nulls.empty else None
+        after = len(df_combined)
+        print(f"[merge_into_master] Merged {len(df_new)} new → total {after} (before={before})")
 
-                df_combined = (
-                    df_combined.sort_values(keys + ["_is_new"])
-                    .groupby(keys, as_index=False)
-                    .agg(last_valid)
-                )
-                df_combined.drop(columns=["_is_new"], inplace=True, errors="ignore")
-            else:
-                df_combined.drop_duplicates(keep="last", inplace=True)
+        # --- Sanity checks
+        if after < before:
+            print(f"[merge_into_master] ❌ Merge shrank dataset, aborting upload.")
+            return False
 
-            # --- Upload merged master back to Cloudflare ---
-            buf = io.BytesIO()
-            df_combined.to_csv(buf, index=False, encoding="utf-8")
-            self._put_bytes(key, buf.getvalue(), "text/csv")
+        # --- Upload atomically
+        buf = io.BytesIO()
+        df_combined.to_csv(buf, index=False, encoding="utf-8")
+        ok = self._put_bytes_safe(key, buf.getvalue(), "text/csv")
 
-            print(f"[merge_into_master] ✅ Updated {filename}: {len(df_combined)} total rows")
+        if not ok:
+            print(f"[merge_into_master] ❌ Upload failed, leaving old version intact.")
+            return False
 
-        except Exception as e:
-            print(f"[merge_into_master] ❌ Failed to merge into {filename}: {e}")
-            raise
+        print(f"[merge_into_master] ✅ Saved {after} rows to {filename}")
+        return True
 
     # ------------------------------------------------------------
     # LOGGING
@@ -580,14 +989,19 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         try:
             # Load existing log
             try:
-                existing = self._get_object(key).decode("utf-8").splitlines()
-            except FileNotFoundError:
-                existing = []
+                # Try to load existing log (non-fatal if missing)
+                existing_data = self._get_object_safe(key)
+                existing_text = existing_data.decode("utf-8") + "\n" if existing_data else ""
+            except Exception:
+                existing_text = ""
 
-            existing.append(json.dumps(entry))
-            new_body = "\n".join(existing).encode("utf-8")
+            # Append new entry
+            new_line = json.dumps(entry) + "\n"
+            body = (existing_text + new_line).encode("utf-8")
 
-            self._put_bytes(key, new_body, content_type="text/plain")
+            # Use safe uploader (temp + rename)
+            self._put_bytes_safe(key, body, "text/plain")
+
             print(f"[CloudflareDAO] 🪵 Logged ({level}) → {key} — {where}:{phase or ''} {msg[:80]}")
 
         except Exception as e:
@@ -621,6 +1035,8 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             print(f"[CloudflareDAO] 🧭 Wrote status to D1 for {payload.get('dataset_label')} → {payload.get('phase')}")
         except Exception as e:
             print(f"[CloudflareDAO] ⚠️ D1 status write failed: {e}")
+
+    get_status = read_status
 
 class CloudflareD1DAO:
     """Data Access Object for Cloudflare D1 via REST API."""
@@ -787,23 +1203,47 @@ class CloudflareD1DAO:
         batches_done, total_batches, percent
     ):
         """
-        Upsert global enrichment status and per-phase progress JSON.
+        Upsert or update global enrichment status and phase progress.
+        Supports extended enrichment lifecycle states:
+        - standard_done
+        - breadth_running
+        - breadth_error
+        - full_done
+        Mirrors incremental batch counts into phase_progress JSON.
         """
-        # Serialize per-phase progress as JSON snippet
         import json
         import sqlite3  # SQLite-compatible formatting
 
+        # --- Normalize / validate inputs ---
+        if not user_id or not dataset_label:
+            raise ValueError("Both user_id and dataset_label are required for enrichment status upsert")
+
+        # Handle None values gracefully (SQLite prefers NULLs over Python None in some cases)
+        total_batches = total_batches if total_batches is not None else 0
+        batches_done = batches_done if batches_done is not None else 0
+        percent = percent if percent is not None else 0.0
+
+        # --- Prepare phase JSON snippet ---
         phase_data = json.dumps({
             "batches_done": batches_done,
             "total_batches": total_batches,
             "percent": percent,
+            "status": status,
         })
+
+        # --- Determine current enrichment stage ---
+        if status in ("standard_done", "error"):
+            stage = "standard"
+        elif status in ("breadth_running", "breadth_error", "full_done"):
+            stage = "breadth"
+        else:
+            stage = "unknown"
 
         sql = """
         INSERT INTO enrichment_status
             (user_id, dataset_label, status, phase, detail,
-            batches_done, total_batches, percent, phase_progress)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, json_object(? , ?))
+            batches_done, total_batches, percent, phase_progress, stage)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, json_object(? , ?), ?)
         ON CONFLICT(user_id, dataset_label)
         DO UPDATE SET
             status        = excluded.status,
@@ -812,6 +1252,7 @@ class CloudflareD1DAO:
             batches_done  = excluded.batches_done,
             total_batches = excluded.total_batches,
             percent       = excluded.percent,
+            stage         = excluded.stage,
             phase_progress = json_patch(
                 COALESCE(enrichment_status.phase_progress, '{}'),
                 json_object(excluded.phase, json(excluded.phase_progress))
@@ -819,6 +1260,7 @@ class CloudflareD1DAO:
             updated_at = CURRENT_TIMESTAMP
         """
 
+        # --- Execute with full positional binding ---
         self._query(
             sql,
             [
@@ -830,10 +1272,13 @@ class CloudflareD1DAO:
                 batches_done,
                 total_batches,
                 percent,
-                phase,  # key
-                phase_data,  # value
+                phase,        # key for phase_progress JSON
+                phase_data,   # value for that phase
+                stage,        # new field
             ],
         )
+
+        print(f"[CloudflareD1DAO] 🧭 Upserted enrichment_status → {dataset_label} [{status}] (phase={phase}, stage={stage})")
 
 class LocalUserDataDAO:
     """

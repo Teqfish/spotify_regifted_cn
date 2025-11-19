@@ -8,6 +8,7 @@ Please contact us to give feedback and feature requests.
 Built by Charlie Nash, Ben Gee, Jana Hueppe, & Tom Witt (06.2025)
 '''
 # ------------------------------- IMPORTS ------------------------------------ #
+from encodings import cp037
 from stringprep import c22_specials
 import bcrypt
 import country_converter as coco
@@ -149,7 +150,7 @@ spotify_palette = ["#062719","#1ed760","#90d7ad"]
 spotify_colorscale = make_colorscale(spotify_palette)
 
 # -------------------------- GENERIC HELPERS --------------------------------- #
-def scorecard(title: str, score: str, delta: float | str = None):
+def scorecard(title: str, score: str, delta: float | str = None, title_size: int = 16, score_size: int = 36, delta_size: int = 18):
     """
     Displays a 3-line scorecard (title, score, delta) with smart styling.
     Automatically detects and color-codes positive/negative deltas even if passed as strings.
@@ -189,7 +190,7 @@ def scorecard(title: str, score: str, delta: float | str = None):
             else:
                 delta_str = f"{delta:+.1f}%"
 
-        delta_html = f"<p style='margin:0; font-size:18px; color:{delta_color}; font-weight:400;'>{delta_str}</p>"
+        delta_html = f"<p style='margin:0; font-size:{delta_size}px; color:{delta_color}; font-weight:400;'>{delta_str}</p>"
     else:
         delta_html = ""
 
@@ -208,8 +209,8 @@ def scorecard(title: str, score: str, delta: float | str = None):
         line-height:1.3;
         box-shadow: 0 0 8px rgba(0,0,0,0.3);
     '>
-        <p style='margin:0; font-size:16px; color:#b8ccc0; font-weight:400;'>{title}</p>
-        <p style='margin:4px 0; font-size:36px; color:#e1ece3; font-weight:400;'>{score}</p>
+        <p style='margin:0; font-size:{title_size}px; color:#b8ccc0; font-weight:400;'>{title}</p>
+        <p style='margin:4px 0; font-size:{score_size}px; color:#e1ece3; font-weight:400;'>{score}</p>
         {delta_html}
     </div>
     """
@@ -1806,6 +1807,7 @@ if page == "Home":
         df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
         df = df.dropna(subset=["datetime"])
         df["date"] = df["datetime"].dt.date
+        df["year"] = df["datetime"].dt.year
 
         # Update session state
         st.session_state.current_df = df
@@ -1822,15 +1824,104 @@ if page == "Home":
             table_name=selected_table,
         )
 
-        total_hours = (
-            df["minutes_played"].sum() / 60.0 if "minutes_played" in df.columns else 0.0
+        # --- Metadata references ---
+        df_artist_genre = INFO_ARTIST_GENRE.copy()
+        df_album = INFO_ALBUM.copy()
+        df_supergenre_map = INFO_SUPERGENRE.copy()
+
+        # --- Helper functions ---
+        def format_hhmmss(minutes):
+            total_seconds = int(minutes * 60)
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+            return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+        def get_top_combined(df, name_col, sub_col):
+            if df.empty:
+                return "N/A"
+            top = (
+                df.groupby([name_col, sub_col])["minutes_played"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()
+            )
+            if top.empty:
+                return "N/A"
+            return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
+
+        # --- Filter dataset ---
+        # Ensure date column is datetime
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+        # Filter by category first
+        selected_category = "music"
+        df_filtered = df[df["category"] == selected_category].copy()
+        df_filtered = df_filtered.merge(
+            df_artist_genre[["artist_name", "supergenre"]],
+            on="artist_name", how="left"
         )
+
+        # --- Use dataset's latest date as reference ---
+        latest_date = df_filtered["date"].max()
+        six_months_ago = latest_date - pd.DateOffset(months=6)
+        one_year_ago = latest_date - pd.DateOffset(years=1)
+
+        # --- Define time windows relative to dataset ---
+        last_six_months_df = df_filtered[df_filtered["date"] >= six_months_ago].copy()
+        previous_six_months_df = df_filtered[
+            (df_filtered["date"] < six_months_ago) & (df_filtered["date"] >= one_year_ago)
+        ].copy()
+
+        # --- 6 month metrics ---
+        fav_track = get_top_combined(last_six_months_df, "artist_name", "track_name")
+        fav_artist = last_six_months_df["artist_name"].value_counts().idxmax() if not last_six_months_df.empty else "N/A"
+
+        try:
+            if (
+                "supergenre" in last_six_months_df.columns
+                and not last_six_months_df["supergenre"].dropna().empty
+            ):
+                # Exclude "Unlisted" before counting
+                valid_genres = last_six_months_df[
+                    last_six_months_df["supergenre"].str.lower() != "unlisted"
+                ]["supergenre"].dropna()
+
+                fav_supergenre = valid_genres.value_counts().idxmax() if not valid_genres.empty else "N/A"
+            else:
+                fav_supergenre = "N/A"
+        except Exception as e:
+            print(f"[supergenre metric] Skipping due to transient data issue: {e}")
+            fav_supergenre = "N/A"
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            scorecard("🎵 Recent Favourite Track", fav_track, score_size=30)
+        with c2:
+            scorecard("🎤 Recent Favourite Artist", fav_artist, score_size=30)
+        with c3:
+            scorecard("🎧 Recent Favourite Genre", fav_supergenre, score_size=30)
 
         st.divider()
         st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
 
-        st.dataframe(df.sample(min(20, len(df))), height=300)
-    else:
+        demo_df = df.copy()
+        st.dataframe(
+            demo_df.query('category == "music"')
+            .copy()
+            .drop(columns=[
+                "spotify_track_uri",
+                "episode_show_name",
+                "episode_name",
+                "spotify_episode_uri",
+                "audiobook_title",
+                "audiobook_uri",
+                "audiobook_chapter_uri",
+                "audiobook_chapter_title"
+            ], errors="ignore")
+            .sample(min(20, len(df))),
+            height=300
+        )
         st.info("You haven’t uploaded any datasets yet.")
 
     # ---------- Upload New Dataset ----------
@@ -2115,28 +2206,42 @@ elif page == "Overview":
         )
         top_artists["hhmmss"] = top_artists["minutes_played"].apply(format_hhmmss)
         with c1:
+            # --- Build bar chart ---
             fig_artists = px.bar(
                 top_artists,
                 y="artist_name",
                 x="minutes_played",
                 orientation="h",
-                text="hhmmss",
                 color_discrete_sequence=["#1ed760"],
                 labels={
                     "minutes_played": "Time Played (HH:MM:SS)",
                     "artist_name": "Artist",
                 },
             )
-            fig_artists.update_traces(texttemplate="%{text}", textposition="outside")
-            fig_artists.update_layout(
-                yaxis={"categoryorder": "total ascending"},
-                height=500,
+
+            # --- Manually add artist name labels inside bars ---
+            fig_artists.update_traces(
+                text=top_artists["artist_name"],        # label inside bars
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="middle",
+                insidetextfont=dict(color="#002918", size=14, family="Arial"),
             )
 
-            # ✅ new Plotly config usage — future-proof against deprecation warnings
+            # --- Layout and formatting ---
+            fig_artists.update_layout(
+                yaxis=dict(categoryorder="total ascending"),
+                height=500,
+                margin=dict(l=0, r=0, t=30, b=0),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=12),
+            )
+
+            # ✅ Modern config usage — no warnings
             st.plotly_chart(
                 fig_artists,
-                width='stretch',  # replaces 'width="stretch"'
+                use_container_width=True,
                 config={
                     "displayModeBar": False,
                     "responsive": True,
@@ -3454,11 +3559,14 @@ elif page == "Per Genre":
     df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
     df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
 
+    # --- Add minutes played column ---
+    df_exploded['mins_played'] = df_exploded['ms_played'] / 60000.0
+
     # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
     top_genres = (
-        df_exploded.groupby(['year', 'supergenre'], as_index=False)['ms_played']
+        df_exploded.groupby(['year', 'supergenre'], as_index=False)['mins_played']
         .sum()
-        .sort_values(['year', 'ms_played'], ascending=[True, False])
+        .sort_values(['year', 'mins_played'], ascending=[True, False])
         .groupby('year')
         .head(5)
     )
@@ -3468,9 +3576,9 @@ elif page == "Per Genre":
     )
 
     top_artists = (
-        df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['ms_played']
+        df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['mins_played']
         .sum()
-        .sort_values(['year', 'supergenre', 'ms_played'], ascending=[True, True, False])
+        .sort_values(['year', 'supergenre', 'mins_played'], ascending=[True, True, False])
         .groupby(['year', 'supergenre'])
         .head(5)
     )
@@ -3481,9 +3589,9 @@ elif page == "Per Genre":
     )
 
     top_tracks = (
-        df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['ms_played']
+        df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['mins_played']
         .sum()
-        .sort_values(['year', 'supergenre', 'artist_name', 'ms_played'], ascending=[True, True, True, False])
+        .sort_values(['year', 'supergenre', 'artist_name', 'mins_played'], ascending=[True, True, True, False])
         .groupby(['year', 'supergenre', 'artist_name'])
         .head(5)
     )
@@ -3492,8 +3600,8 @@ elif page == "Per Genre":
     fig_sunburst = px.sunburst(
         top_tracks,
         path=["year", "supergenre", "artist_name", "track_name"],
-        values="ms_played",
-        color="ms_played",
+        values="mins_played",
+        color="mins_played",
         color_continuous_scale=[
             "#062719",
             "#1ed760",
@@ -3520,6 +3628,7 @@ elif page == "Per Genre":
         plot_bgcolor="rgba(0,0,0,0)",
     )
 
+    fig_sunburst.update_xaxes(autorange=True)
     fig_sunburst.update_coloraxes(showscale=True)
 
     # --- HEADER ---

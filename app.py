@@ -34,7 +34,7 @@ import tempfile
 import threading
 import time
 import traceback
-from typing import Optional
+from typing import Optional, Literal
 import unicodedata
 import zipfile
 
@@ -3175,6 +3175,7 @@ elif page == "Per Album":
 
     df, current_label = require_current_df()
 
+
     # project title
     col1, col2 = st.columns([6, 1], vertical_alignment="center")
     with col2:
@@ -3385,37 +3386,78 @@ elif page == "Per Album":
                 except:
                     st.image(IMAGE_PLACEHOLDER, output_format="auto", width='stretch')
 
-    # --- Top songs ---
-    top_songs = (
-        df_music[df_music.album_name == album_selected]
-        .groupby("track_name")["minutes_played"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
+    # --- Top songs (filtered by year and album/artist selection) ---
+    if year_selected == "All Time":
+        df_base = df_music.copy()
+    else:
+        df_base = df_music[df_music["datetime"].dt.year == int(year_selected)].copy()
 
-    st.markdown(f"<h2 style='text-align: center;'>{album_selected}'s tracks</h2>", unsafe_allow_html=True)
+    if album_selected == "All Albums":
+        # All tracks by the selected artist
+        top_songs = (
+            df_base[df_base["artist_name"] == artist_selected]
+            .groupby("track_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+        )
+        chart_title = f"Top Tracks by {artist_selected} ({year_selected})"
+    else:
+        # Tracks from the selected album
+        top_songs = (
+            df_base[
+                (df_base["artist_name"] == artist_selected)
+                & (df_base["album_name"] == album_selected)
+            ]
+            .groupby("track_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+        )
+        chart_title = f"Top Tracks from '{album_selected}' ({year_selected})"
 
+    st.markdown(f"<h2 style='text-align: center;'>{chart_title}</h2>", unsafe_allow_html=True)
+
+    # --- Plotly bar chart ---
     fig_top_songs = px.bar(
-        top_songs.head(15),
+        top_songs,
         x="minutes_played",
         y="track_name",
+        orientation="h",
         color_discrete_sequence=["#1ed760"],
-        text_auto=True,
+        text=top_songs["minutes_played"].apply(lambda x: f"{int(x):,}"),
     )
 
-    fig_top_songs.update_yaxes(categoryorder="total ascending", title=None)
+    # Wrap long track names (split into chunks of ~20 chars)
+    fig_top_songs.update_yaxes(
+        ticktext=[
+            "<br>".join([t[i:i+20] for i in range(0, len(t), 20)]) for t in top_songs["track_name"]
+        ],
+        tickvals=top_songs["track_name"],
+        categoryorder="total ascending",
+        title=None,
+    )
+
+    fig_top_songs.update_traces(
+        textposition="inside",
+        insidetextanchor="middle",
+        textfont=dict(color="#002918", size=12),
+    )
+
     fig_top_songs.update_xaxes(title="Total Minutes")
     fig_top_songs.update_layout(
         height=500,
         plot_bgcolor="rgba(0,0,0,0)",
         title_font_size=20,
         font=dict(color="white"),
+        margin=dict(l=0, r=0, t=30, b=0),
     )
 
     st.plotly_chart(
         fig_top_songs,
-        width='stretch',
+        use_container_width=True,
         config={
             "displayModeBar": False,
             "responsive": True,

@@ -29,9 +29,10 @@ import re
 import secrets
 import streamlit as st
 from streamlit_carousel import carousel
-from streamlit_navigation_bar import st_navbar
+from streamlit_extras.stylable_container import stylable_container
 from supabase import create_client
 import tempfile
+import textwrap
 import threading
 import time
 import traceback
@@ -1719,7 +1720,8 @@ with st.sidebar:
             "Genres",
             "Sheeple-O-Meter",
             "On This Day",
-            "FAQs"
+            "FAQs",
+            "Test"
         ]
     )
 
@@ -2082,12 +2084,16 @@ elif page == "Overview":
         selected_category = st.segmented_control(
             "Category", categories, selection_mode="single", default="music"
         )
+        if not selected_category:
+            selected_category = "music"
     with c2:
         years = sorted(df["year"].dropna().unique())
         year_options = ["All Time"] + [str(y) for y in years]
         year_selected = st.segmented_control(
             "Select Year", year_options, selection_mode="single", default="All Time", width="stretch"
         )
+        if not year_selected:
+            year_selected = "All Time"
 
     # --- Filter dataset ---
     df_filtered = df[df["category"] == selected_category].copy()
@@ -2907,6 +2913,8 @@ elif page == "Artists":
         year_selected = st.segmented_control(
             "Select Year", year_options, selection_mode="single", default="All Time", width='stretch'
         )
+        if not year_selected:
+            year_selected = "All Time"
 
     # --- Artist and Album Selection ---
     col1, col2 = st.columns([0.7, 1])
@@ -3613,6 +3621,8 @@ elif page == "Genres":
     df, current_label = require_current_df()
     user_df = df[df["category"] == "music"].copy()
     df_music = df[df["category"] == "music"].copy()
+    df_album = INFO_ALBUM.copy()
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
 
     # --- Normalize datetime column safely ---
     df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
@@ -3650,9 +3660,8 @@ elif page == "Genres":
             "Select Year", year_options, selection_mode="single", default="All Time", width='stretch'
         )
 
-    # --- Load enrichment datasets ---
-    df_album = INFO_ALBUM.copy()            # from info_album.csv
-    df_artist_genre = INFO_ARTIST_GENRE.copy()  # from info_artist_genre.csv
+        if not year_selected:
+            year_selected = "All Time"
 
     # --- Merge datasets ---
     # First: merge listening history with album info (tracks + albums + artist)
@@ -3672,9 +3681,301 @@ elif page == "Genres":
     )
 
     # --- Datetime handling ---
-    df['datetime'] = pd.to_datetime(df['datetime'])
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df = df.dropna(subset=["datetime"]).copy()
+    df["datetime"] = df["datetime"].dt.tz_localize(None)
+    df["date"] = df["datetime"].dt.date
     df['year'] = df['datetime'].dt.year
 
+    # --- FILTER BY YEAR ---
+    if year_selected == "All Time":
+        df_year = df.copy()
+    else:
+        df_year = df[df["year"] == int(year_selected)].copy()
+
+    # --- 1️⃣ Favourite Genre ---
+    fav_genre = (
+        df_year[df_year["supergenre"].str.lower() != "unlisted"]
+        .groupby("supergenre")["minutes_played"]
+        .sum()
+        .sort_values(ascending=False)
+        .index[0]
+        if not df_year.empty else "N/A"
+    )
+    fav_subgenre = (
+        df_year[df_year["primary_genre"].str.lower() != "none"]
+        .groupby("primary_genre")["minutes_played"]
+        .sum()
+        .sort_values(ascending=False)
+        .index[0]
+        if not df_year.empty else "N/A"
+    )
+
+    # --- 2️⃣ Favourite Artist (filtered by selected genre) ---
+    df_genre = df_year[df_year["supergenre"] == genre_selected].copy()
+    fav_artist = (
+        df_genre.groupby("artist_name")["minutes_played"]
+        .sum()
+        .sort_values(ascending=False)
+        .index[0]
+        if not df_genre.empty else "N/A"
+    )
+
+    # --- 3️⃣ Favourite Track (filtered by selected genre) ---
+    fav_track = (
+        df_year.groupby(["artist_name", "track_name"])["minutes_played"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
+    )
+
+    fav_track_display = (
+        f"{fav_track.iloc[0]['artist_name']} — {fav_track.iloc[0]['track_name']}"
+        if not fav_track.empty else "N/A"
+    )
+
+    # --- DISPLAY SCORECARDS ---
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        scorecard("🎧 Favourite Genre", fav_genre)
+    with c2:
+        scorecard("🎧 Favourite Subgenre", fav_subgenre)
+    with c3:
+        scorecard("🎤 Favourite Artist", fav_artist)
+    with c4:
+        scorecard("🎵 Favourite Track", fav_track_display)
+
+    # ------------- Trend Chart ------------- #
+    st.markdown("### Listening Trend (Genre vs Overall)")
+
+    # Aggregate by date
+    timeline_all = (
+        df_year.groupby("date")["minutes_played"].sum().reset_index()
+    )
+    timeline_genre = (
+        df_genre.groupby("date")["minutes_played"].sum().reset_index()
+    )
+
+    # Rolling averages
+    timeline_all["rolling_avg"] = timeline_all["minutes_played"].rolling(window=7, min_periods=1).mean()
+    timeline_genre["rolling_avg"] = timeline_genre["minutes_played"].rolling(window=7, min_periods=1).mean()
+
+    # --- Normalisation options ---
+    # Option 1: Raw (no scaling)
+    timeline_all["norm"] = timeline_all["rolling_avg"]
+
+    # Option 2: Averaged by total artists
+    genre_count = df_year["supergenre"].nunique()
+    timeline_all["avg_per_genre"] = timeline_all["rolling_avg"] / genre_count
+
+    # Option 3: Scaled to genre’s max
+    scale_factor = timeline_genre["rolling_avg"].max() / timeline_all["rolling_avg"].max()
+    timeline_all["scaled"] = timeline_all["rolling_avg"] * scale_factor
+
+    # --- Pick normalisation method ---
+    normalisation_method = "Average per Genre"
+        # "Raw Total", "Average per Genre", "Scaled to Genre"
+
+    if normalisation_method == "Average per Genre":
+        y_col = "avg_per_genre"
+    elif normalisation_method == "Scaled to Genre":
+        y_col = "scaled"
+    else:
+        y_col = "norm"
+
+    # --- Plot ---
+    import plotly.express as px
+
+    fig_trend = px.line(
+        timeline_genre,
+        x="date",
+        y="rolling_avg",
+        title=f"{genre_selected} vs Overall Listening Trend ({year_selected})",
+        labels={"rolling_avg": "Minutes Played (7-day avg)", "date": "Date"},
+        color_discrete_sequence=["#1ed760"],
+    )
+
+    fig_trend.add_scatter(
+        x=timeline_all["date"],
+        y=timeline_all[y_col],
+        mode="lines",
+        name="Overall",
+        line=dict(color="#90d7ad", width=3, dash="dot"),
+    )
+
+    fig_trend.update_layout(
+        height=450,
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white"),
+    )
+    st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
+
+    # ------------- Top 10 Chart ----------------------- #
+    st.markdown("### 🎧 Top Tracks in Selected Genre")
+
+    top_tracks = (
+        df_year.groupby(["artist_name", "track_name"])["minutes_played"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
+        .head(10)
+    )
+
+    top_tracks["label"] = (
+        top_tracks["artist_name"] + " — " + top_tracks["track_name"]
+    )
+
+    fig_top_tracks = px.bar(
+        top_tracks,
+        x="minutes_played",
+        y="label",
+        text="minutes_played",
+        orientation="h",
+        color_discrete_sequence=["#1ed760"],
+    )
+
+    # Auto-wrap labels
+    fig_top_tracks.update_yaxes(
+        categoryorder="total ascending",
+        tickfont=dict(size=11),
+        tickmode="array",
+        tickvals=top_tracks["label"],
+        ticktext=[
+            "<br>".join(textwrap.wrap(label, width=35))
+            for label in top_tracks["label"]
+        ],
+        title=None,
+    )
+
+    fig_top_tracks.update_xaxes(title="Minutes Played")
+
+    fig_top_tracks.update_layout(
+        height=500,
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white"),
+    )
+
+    st.plotly_chart(
+        fig_top_tracks,
+        use_container_width=True,
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+    # ------------- Genre by the Hour ------------------ #
+    st.markdown("### ⏰ Top Genre by Hour of Day")
+
+    df_hour = df_year.copy()
+    df_hour["hour"] = df_hour["datetime"].dt.hour
+
+    # Determine top genre for each hour
+    top_genre_per_hour = (
+        df_hour.groupby(["hour", "supergenre"])["minutes_played"]
+        .sum()
+        .reset_index()
+    )
+
+    top_genre_per_hour = (
+        top_genre_per_hour.loc[
+            top_genre_per_hour.groupby("hour")["minutes_played"].idxmax()
+        ]
+        .sort_values("hour")
+    )
+
+    fig_hourly = px.bar(
+        top_genre_per_hour,
+        x="hour",
+        y="minutes_played",
+        color="supergenre",
+        text="supergenre",
+        color_discrete_sequence=px.colors.qualitative.Set2,
+    )
+
+    fig_hourly.update_traces(
+        textposition="inside",
+        insidetextanchor="middle",
+    )
+
+    fig_hourly.update_layout(
+        height=450,
+        xaxis=dict(
+            tickmode="array",
+            tickvals=list(range(0, 24)),
+            ticktext=[f"{h:02d}:00" for h in range(0, 24)],
+        ),
+        yaxis_title="Minutes Played",
+        bargap=0,
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white"),
+        showlegend=False,
+    )
+
+    st.plotly_chart(
+        fig_hourly,
+        use_container_width=True,
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+    # # ------------- Polar Chart ------------------------ #
+    # st.markdown("### 🎡 Genre Activity by Hour (Fixed Polar Chart)")
+
+    # df_polar = df_year.copy()
+    # df_polar["hour"] = df_polar["datetime"].dt.hour
+
+    # # Aggregate listening time per genre per hour
+    # polar_data = (
+    #     df_polar.groupby(["supergenre", "hour"])["minutes_played"]
+    #     .sum()
+    #     .reset_index()
+    # )
+
+    # # Normalize within each genre
+    # polar_data["minutes_norm"] = polar_data.groupby("supergenre")["minutes_played"].transform(
+    #     lambda x: x / x.max() if x.max() > 0 else 0
+    # )
+
+    # # Map hours (0–23) → angles (0–360°)
+    # polar_data["angle"] = (polar_data["hour"] / 24) * 360
+
+    # import plotly.graph_objects as go
+    # import plotly.express as px
+
+    # fig_polar = go.Figure()
+
+    # for genre in polar_data["supergenre"].unique():
+    #     genre_df = polar_data[polar_data["supergenre"] == genre].sort_values("angle")
+    #     # Close the loop for full circle
+    #     genre_df = pd.concat([genre_df, genre_df.iloc[[0]]])
+    #     fig_polar.add_trace(
+    #         go.Scatterpolar(
+    #             r=genre_df["minutes_norm"],
+    #             theta=genre_df["angle"],
+    #             fill="toself",
+    #             name=genre,
+    #             line=dict(width=1),
+    #         )
+    #     )
+
+    # fig_polar.update_layout(
+    #     polar=dict(
+    #         angularaxis=dict(
+    #             tickmode="array",
+    #             tickvals=list(range(0, 360, 30)),
+    #             ticktext=[f"{(h//15):02d}:00" for h in range(0, 360, 30)],
+    #             direction="clockwise",
+    #             rotation=90,
+    #         ),
+    #         radialaxis=dict(showticklabels=False, visible=False),
+    #     ),
+    #     showlegend=True,
+    #     height=650,
+    #     title=f"Listening Intensity by Hour — {year_selected}",
+    #     template="plotly_dark",
+    #     plot_bgcolor="rgba(0,0,0,0)",
+    # )
+
+    # st.plotly_chart(fig_polar, use_container_width=True, config={"displayModeBar": False})
+
+    # ------------- SUNBURST CHART: GENRES ------------- #
     # --- Explode genres ---
     # Some artists may have multiple genres, so split them
     df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
@@ -4696,3 +4997,40 @@ elif page == "FAQs":
     #         st.info("🔄 Refresh this page periodically to see progress updates.")
     # except Exception as e:
     #     st.warning(f"Could not fetch live progress: {e}")
+
+# --------------------------------- Test ------------------------------------- #
+elif page == "Test":
+
+# -------------- EXAMPLE -------------- #
+    def create_sticky_bar():
+        with stylable_container(
+            key='sty',
+            css_styles='''
+                {
+                    position: fixed;
+                    top: 0;
+                    left: 17rem;
+                    right: 0;
+                    height: 3.5rem;
+                    background: rgba(255, 255, 255, 0.95);
+                    z-index: 1000;
+                    padding: 25px 0px;
+                    corner-radius: 0px;
+                    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+                }
+                div[data-testid="stElementContainer"] div:has(div.fixed-footer-w-buttons) div {
+                border-top: 1px solid #223398;
+                }
+            '''
+            ):
+            with st.container(height=100, border=False):
+                button_bar = st.container()
+                button_bar.write("""<div class='fixed-footer-w-buttons'><div/>""", unsafe_allow_html=True)
+                with button_bar:
+                    button_cols = st.columns([1, 1, 10])
+
+        return button_bar, button_cols
+
+    button_bar, button_cols = create_sticky_bar()
+    with button_bar:
+        st.segmented_control("",["1","2","3"], selection_mode="single", key="test_seg_control")

@@ -35,6 +35,7 @@ import threading
 import time
 import traceback
 from typing import Optional
+import unicodedata
 import zipfile
 
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
@@ -216,6 +217,12 @@ def scorecard(title: str, score: str, delta: float | str = None, title_size: int
     """
 
     st.markdown(content_html, unsafe_allow_html=True)
+
+def normalize_str(s):
+    """Normalize string for consistent comparison (case-insensitive, strip accents)."""
+    if not isinstance(s, str):
+        return ""
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("utf-8").strip().lower()
 
 @st.cache_resource(show_spinner=False)
 def task_registry():
@@ -2555,16 +2562,15 @@ elif page == "Overview":
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            with st.container(border=True, horizontal_alignment="center"):
-                st.metric("🗓️ Total Listening Time", f"{total_days} days", delta=total_days_delta)
+            scorecard("🗓️ Total Listening Time", f"{total_days} days", total_days_delta)
         with c2:
-            st.metric("📻 Unique Podcasts", unique_shows, delta=unique_shows_delta)
+            scorecard("📻 Unique Podcasts", unique_shows, unique_shows_delta)
         with c3:
-            st.metric("🎙️ Unique Episodes", unique_episodes, delta=unique_episodes_delta)
+            scorecard("🎙️ Unique Episodes", unique_episodes, unique_episodes_delta)
 
         c1, c2, c3 = st.columns([1,2,1])
         with c2:
-            st.metric("⭐ Most Listened Podcast", fav_show)
+            scorecard("⭐ Most Listened Podcast", fav_show)
 
         # -------------------- Top 10 Podcasts -------------------- #
         st.markdown("## Top 10 Podcasts")
@@ -2718,11 +2724,11 @@ elif page == "Overview":
 
         c1, c2 ,c3 = st.columns(3)
         with c1:
-            st.metric("🗓️ Total Listening Time", f"{total_days} days",delta=total_days_delta)
+            scorecard("🗓️ Total Listening Time", f"{total_days} days",total_days_delta)
         with c2:
-            st.metric("📚 Unique Audiobooks", unique_books, delta=unique_books_delta)
+            scorecard("📚 Unique Audiobooks", unique_books, unique_books_delta)
         with c3:
-            st.metric("⭐ Most Listened Audiobook", fav_book)
+            scorecard("⭐ Most Listened Audiobook", fav_book)
 
         # --- Listening Trend ---
         st.markdown("### Listening Trend")
@@ -3170,8 +3176,8 @@ elif page == "Per Album":
     df, current_label = require_current_df()
 
     # project title
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment="center")
-    with col3:
+    col1, col2 = st.columns([6, 1], vertical_alignment="center")
+    with col2:
         st.image(LOGO_SPOTGREEN, width=200)
 
     # Load user-specific data
@@ -3184,12 +3190,12 @@ elif page == "Per Album":
     df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
     df_music["date"] = df_music["datetime"].dt.date
 
-    # --- Artist and Album Selection ---
     col1, col2 = st.columns([0.7, 1])
-
     with col1:
         artist_list = (
-            df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending=False).reset_index()["artist_name"].tolist()
+            df_music.groupby("artist_name").minutes_played.sum()
+            .sort_values(ascending=False)
+            .reset_index()["artist_name"].tolist()
         )
         artist_selected = st.selectbox(
             "Artist:",
@@ -3197,63 +3203,118 @@ elif page == "Per Album":
             index=0
         )
 
+    with col2:
+        # --- Year + Category selectors ---
+        years = sorted(df["year"].dropna().unique())
+        year_options = ["All Time"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year", year_options, selection_mode="single", default="All Time", width='stretch'
+        )
+
+    # --- Artist and Album Selection ---
+    col1, col2 = st.columns([0.7, 1])
+    with col1:
+        # --- Album list (with "All" option added) ---
         album_list = (
             df_music[df_music["artist_name"] == artist_selected]
             .groupby("album_name").minutes_played.sum()
-            .sort_values(ascending=False).reset_index()["album_name"].tolist()
+            .sort_values(ascending=False)
+            .reset_index()["album_name"].tolist()
         )
+        album_list = ["All Albums"] + [str(a) for a in album_list]
         album_selected = st.selectbox(
-            "Album:", options=album_list, index=0
+            "Album:",
+            options=album_list,
+            index=0
         )
 
-        # --- Metrics boxes ---
-        df_first = df_music.sort_values(by="datetime", ascending=True).groupby("album_name").first().reset_index()
-        df_last = df_music.sort_values(by="datetime", ascending=False).groupby("album_name").first().reset_index()
+        # --- FILTER by year
+        if year_selected == "All Time":
+            df_year = df_music.copy()
+        else:
+            df_year = df_music[df_music["datetime"].dt.year == int(year_selected)].copy()
 
-        st.markdown("<h4>Minutes enjoyed</h4>", unsafe_allow_html=True)
-        wch_colour_box = (64, 64, 64)
-        wch_colour_font = (50, 205, 50)
-        fontsize = 40
-        i = f"{int(df_music[df_music.album_name == album_selected].minutes_played.sum()):,}"
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: {fontsize}px; border-radius: 7px; padding: 40px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
+        # --- FILTER by year > artist
+        df_year_artist = df_year[df_year["artist_name"] == artist_selected]
 
-        st.markdown("<h4>First listen</h4>", unsafe_allow_html=True)
-        i = df_first[df_first.album_name == album_selected].date.min().strftime("%d/%m/%Y")
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: 38px; border-radius: 7px; padding: 40px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
+        # --- FILTER by year > artist > album
+        if album_selected == "All Albums":
+            df_year_artist_album = df_year_artist
+        else:
+            df_year_artist_album = df_year_artist[df_year_artist["album_name"] == album_selected].copy()
 
-        st.markdown("<h4>Most recent listen</h4>", unsafe_allow_html=True)
-        i = df_last[df_last.album_name == album_selected].date.max().strftime("%d/%m/%Y")
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: 38px; border-radius: 7px; padding: 40px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
+        # --- FILTER by artist > album
+        df_artist = df_music[df_music["artist_name"] == artist_selected].copy()
+        if album_selected == "All Albums":
+            df_artist_album = df_artist
+        else:
+            df_artist_album = df_artist[df_artist["album_name"] == album_selected].copy()
 
-        # --- Listening streak ---
-        band_streak = df_music[df_music.album_name == album_selected].sort_values("datetime")
-        band_streak = df_music[df_music.album_name == album_selected].copy()
+        # --- Ranking ---
+        artist_rank = (
+            df_year.groupby("artist_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()["artist_name"]
+            .tolist()
+        )
 
-        # Ensure datetime is valid and clean
+        album_rank = (
+            df_year_artist.groupby("album_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()["album_name"]
+            .tolist()
+        )
+
+        # --- Normalize lists for comparison ---
+        normalized_album_rank = [normalize_str(a) for a in album_rank]
+        normalized_selected_album = normalize_str(album_selected)
+
+        # --- First listen (ignores year filter) ---
+        if album_selected == "All Albums":
+            first_listen_raw = df_artist["date"].min()
+        else:
+            first_listen_raw = df_artist_album["date"].min()
+
+        if pd.notnull(first_listen_raw):
+            first_listen = pd.to_datetime(first_listen_raw, errors="coerce").strftime("%d/%m/%Y")
+        else:
+            first_listen = "N/A"
+
+        # --- Total minutes listened ---
+        artist_mins = int(df_year_artist["minutes_played"].sum())
+        artist_mins_str = f"{artist_mins // (24*60)} Days, {(artist_mins % (24*60)) // 60} Hours, {artist_mins % 60} Mins"
+        artist_album_mins = int(df_year_artist_album["minutes_played"].sum())
+        artist_album_mins_str = f"{artist_album_mins // (24*60)} Days, {(artist_album_mins % (24*60)) // 60} Hours, {artist_album_mins % 60} Mins"
+
+        # --- Last listen (ignores year filter) ---
+        if album_selected == "All Albums":
+            last_listen_raw = df_artist["date"].max()
+        else:
+            last_listen_raw = df_artist_album["date"].max()
+
+        # Ensure it's a proper datetime before doing date arithmetic
+        if pd.notnull(last_listen_raw):
+            last_listen_dt = pd.to_datetime(last_listen_raw, errors="coerce")
+        else:
+            last_listen_dt = None
+
+        # Compute days since last listen
+        if last_listen_dt is not None and not pd.isna(last_listen_dt):
+            today = pd.Timestamp.now().normalize()  # ensures consistent timezone and date comparison
+            days_since = (today - last_listen_dt).days
+            # Prevent negative values in case of bad timestamps (future-dated tracks)
+            days_since = max(days_since, 0)
+            last_listen = last_listen_dt.strftime("%d/%m/%Y")
+        else:
+            days_since = "N/A"
+            last_listen = "N/A"
+
+        # # --- Listening streak ---
+        band_streak = df_year_artist_album.sort_values("datetime")
         band_streak["datetime"] = pd.to_datetime(band_streak["datetime"], errors="coerce")
         band_streak = band_streak.dropna(subset=["datetime"])
-
         if band_streak.empty:
             max_streak = 0
         else:
@@ -3267,43 +3328,62 @@ elif page == "Per Album":
             streak_ids = (diffs != 1).cumsum()
             max_streak = int(streak_ids.value_counts().max())
 
-        st.markdown("<h4>Longest streak</h4>", unsafe_allow_html=True)
-        i = f"{max_streak} Days"
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: 38px; border-radius: 7px; padding: 40px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
+        # --- Display Scorecards ---
+        if album_selected == "All Albums":
+            scorecard("Artist Ranking", f"#{artist_rank.index(artist_selected) + 1}")
+        else:
+            if normalized_selected_album in normalized_album_rank:
+                idx = normalized_album_rank.index(normalized_selected_album)
+                scorecard("Album Ranking", f"#{idx + 1}")
+            else:
+                scorecard("Album Ranking", "N/A")
+        scorecard("First listen",first_listen)
+        if album_selected == "All Albums":
+            scorecard("Total Listening Time", artist_mins_str)
+        else:
+            scorecard("Non-Stop Listening", artist_album_mins_str)
+        scorecard("Longest streak", f"{max_streak} Days")
+        scorecard("Days since last listen", f"{days_since} Days")
 
     with col2:
-        # --- Album image ---
-        info_album = INFO_ALBUM
-        top_albums = (
-            df_music[df_music.album_name == album_selected]
-            .groupby("album_name")
-            .minutes_played.sum()
-            .sort_values(ascending=False)
-            .reset_index()
-        )
+        if album_selected == "All Albums":
+            try:
+                sub = INFO_ARTIST_GENRE.loc[
+                    INFO_ARTIST_GENRE["artist_name"] == artist_selected
+                ]
+                img = (
+                    sub["artist_image"].iloc[0].strip()
+                    if not sub.empty and isinstance(sub["artist_image"].iloc[0], str)
+                    else None
+                )
+                st.image(img or IMAGE_PLACEHOLDER, width='stretch')
+            except Exception:
+                st.image(IMAGE_PLACEHOLDER, width='stretch')
 
-        try:
-            album_image_url = info_album[
-                info_album.album_name == top_albums.album_name[0]
-            ]["album_artwork"].values[0]
-            st.image(album_image_url, output_format="auto", width='stretch')
-        except:
+        else:
+            info_album = INFO_ALBUM
+            top_albums = (
+                df_music[df_music.album_name == album_selected]
+                .groupby("album_name")
+                .minutes_played.sum()
+                .sort_values(ascending=False)
+                .reset_index()
+            )
             try:
                 album_image_url = info_album[
-                    info_album.album_name.str.contains(
-                        f"{top_albums.album_name[0]}", case=False, na=False
-                    )
+                    info_album.album_name == top_albums.album_name[0]
                 ]["album_artwork"].values[0]
                 st.image(album_image_url, output_format="auto", width='stretch')
             except:
-                st.image("media/assets/Image-Coming-Soon_vector.svg")
+                try:
+                    album_image_url = info_album[
+                        info_album.album_name.str.contains(
+                            f"{top_albums.album_name[0]}", case=False, na=False
+                        )
+                    ]["album_artwork"].values[0]
+                    st.image(album_image_url, output_format="auto", width='stretch')
+                except:
+                    st.image(IMAGE_PLACEHOLDER, output_format="auto", width='stretch')
 
     # --- Top songs ---
     top_songs = (

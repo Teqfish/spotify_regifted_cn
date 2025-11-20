@@ -151,10 +151,19 @@ spotify_palette = ["#062719","#1ed760","#90d7ad"]
 spotify_colorscale = make_colorscale(spotify_palette)
 
 # -------------------------- GENERIC HELPERS --------------------------------- #
-def scorecard(title: str, score: str, delta: float | str = None, title_size: int = 16, score_size: int = 36, delta_size: int = 18):
+def scorecard(
+    title: str,
+    score: str,
+    delta: float | str = None,
+    title_size: int = 16,
+    score_size: int = 36,
+    delta_size: int = 18,
+    background: bool = True,  # ✅ new argument
+):
     """
     Displays a 3-line scorecard (title, score, delta) with smart styling.
     Automatically detects and color-codes positive/negative deltas even if passed as strings.
+    Set background=False to make the scorecard transparent.
     """
 
     # --- Detect and colorize delta ---
@@ -195,10 +204,13 @@ def scorecard(title: str, score: str, delta: float | str = None, title_size: int
     else:
         delta_html = ""
 
+    # --- Choose background style ---
+    bg_color = "#0d5637" if background else "transparent"
+
     # --- HTML container ---
     content_html = f"""
     <div style='
-        background-color:#0d5637;
+        background-color:{bg_color};
         border-radius:3px;
         padding:8px 15px;
         margin:5px;
@@ -208,7 +220,7 @@ def scorecard(title: str, score: str, delta: float | str = None, title_size: int
         align-items:center;
         justify-content:center;
         line-height:1.3;
-        box-shadow: 0 0 8px rgba(0,0,0,0.3);
+        box-shadow: {"0 0 8px rgba(0,0,0,0.3)" if background else "none"};
     '>
         <p style='margin:0; font-size:{title_size}px; color:#b8ccc0; font-weight:400;'>{title}</p>
         <p style='margin:4px 0; font-size:{score_size}px; color:#e1ece3; font-weight:400;'>{score}</p>
@@ -1704,9 +1716,8 @@ with st.sidebar:
         [
             "Home",
             "Overview",
-            "Per Artist",
-            "Per Album",
-            "Per Genre",
+            "Artist",
+            "Genre",
             "The Farm",
             "FUN",
             "FAQs"
@@ -2847,322 +2858,8 @@ elif page == "Overview":
             },
         )
 
-# ----------------------------- Per Artist Page ------------------------------ #
-elif page == "Per Artist":
-
-    import matplotlib.pyplot as plt
-    import dayplot as dp
-    from datetime import date
-
-    ## page set up
-    # ✅ Make sure dataset is loaded
-    if "current_df" not in st.session_state:
-        st.error("No dataset selected. Please go to the Home page and select a dataset.")
-        st.stop()
-
-    df, current_label = require_current_df()
-
-    # project title and header
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
-
-    ## start content
-    # Load user-specific music data
-    df_music = df[df["category"] == "music"][
-        ["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]
-    ].copy()
-
-    # Clean datetime columns
-    df_music["datetime"] = pd.to_datetime(df_music["datetime"]).dt.tz_localize(None)
-    df_music["date"] = df_music["datetime"].dt.date
-
-    # artist and year selection
-    col1, col2, col3 = st.columns([2, 1, 2])
-
-    with col1:
-        # Artist selector, sorted by total minutes
-        artist_list = (
-            df_music.groupby("artist_name")["minutes_played"]
-            .sum()
-            .sort_values(ascending=False)
-            .reset_index()["artist_name"]
-            .tolist()
-        )
-        artist_selected = st.selectbox("Artist:", options=artist_list, index=0)
-
-    with col2:
-        # Choose between all data or per-year summary
-        mode = st.segmented_control(
-            "Summary displayed:", ["All Data", "Per Year"], selection_mode="single", default="All Data"
-        )
-
-    with col3:
-        # Year selector depends on mode
-        if mode == "All Data":
-            year_selected = "All Time"
-        else:
-            year_list = (
-                df_music[df_music["artist_name"] == artist_selected]
-                .datetime.dt.year.sort_values()
-                .unique()
-                .tolist()
-            )
-            default_year = (
-                df_music[df_music["artist_name"] == artist_selected].datetime.dt.year.max()
-            )
-            year_selected = st.segmented_control(
-                "Year:", year_list, selection_mode="single", default=default_year
-            )
-            # Filter data for that year
-            df_music = df_music[df_music["datetime"].dt.year == year_selected]
-
-    # summary cards & images
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        # Artist rank
-        year_rank = (
-            df_music.groupby("artist_name")["minutes_played"]
-            .sum()
-            .sort_values(ascending=False)
-            .reset_index()["artist_name"]
-            .tolist()
-        )
-        st.markdown(f"<h4>Rank of {str(year_selected).lower()}</h4>", unsafe_allow_html=True)
-        wch_colour_box = (64, 64, 64)
-        wch_colour_font = (50, 205, 50)
-        fontsize = 50
-        i = f"#{year_rank.index(artist_selected)+1}"
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: {fontsize}px; border-radius: 7px; padding: 30px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
-
-        # Total minutes listened
-        st.markdown("<h4>Minutes enjoyed</h4>", unsafe_allow_html=True)
-        total_minutes = int(df_music[df_music.artist_name == artist_selected].minutes_played.sum())
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: 40px; border-radius: 7px; padding: 30px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{total_minutes:,}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
-
-    with col2:
-        # Artist image
-        IMAGE_PLACEHOLDER = "media/assets/Image-Coming-Soon_vector.svg"
-        try:
-            sub = INFO_ARTIST_GENRE.loc[INFO_ARTIST_GENRE["artist_name"] == artist_selected]
-            img = sub["artist_image"].iloc[0].strip() if not sub.empty and isinstance(sub["artist_image"].iloc[0], str) else None
-            st.image(img or IMAGE_PLACEHOLDER, output_format="auto")
-        except Exception:
-            st.image(IMAGE_PLACEHOLDER, output_format="auto")
-
-    with col3:
-        # Top album image
-        IMAGE_PLACEHOLDER = "media/assets/Image-Coming-Soon_vector.svg"
-        top_albums = (
-            df_music[df_music.artist_name == artist_selected]
-            .groupby("album_name")["minutes_played"]
-            .sum()
-            .sort_values(ascending=False)
-            .reset_index()
-        )
-        album_img = None
-        try:
-            if not top_albums.empty:
-                target = top_albums.loc[0, "album_name"]
-                sub = INFO_ALBUM.loc[INFO_ALBUM["album_name"] == target]
-                if not sub.empty:
-                    album_img = sub["album_artwork"].iloc[0].strip()
-                elif album_img is None:
-                    sub2 = INFO_ALBUM.loc[
-                        INFO_ALBUM["album_name"].str.contains(str(target), case=False, na=False)
-                    ]
-                    if not sub2.empty:
-                        album_img = sub2["album_artwork"].iloc[0].strip()
-        except Exception:
-            pass
-        st.image(album_img or IMAGE_PLACEHOLDER, output_format="auto")
-
-    # first/last listens + streak
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        df_first = (
-            df_music.sort_values(by="datetime", ascending=True)
-            .groupby("album_name")
-            .first()
-            .reset_index()
-        )
-        df_last = (
-            df_music.sort_values(by="datetime", ascending=False)
-            .groupby("album_name")
-            .first()
-            .reset_index()
-        )
-        st.markdown("<h4>First listen ➡️ Most recent listen</h4>", unsafe_allow_html=True)
-        first_date = df_first[df_first.artist_name == artist_selected].date.min()
-        last_date = df_last[df_last.artist_name == artist_selected].date.max()
-        if pd.notnull(first_date) and pd.notnull(last_date):
-            listen_range = f"{first_date.strftime('%d/%m/%Y')} - {last_date.strftime('%d/%m/%Y')}"
-        else:
-            listen_range = "No valid listening dates"
-        st.markdown(f"<p style='font-size:38px; color:#32cd32;'>{listen_range}</p>", unsafe_allow_html=True)
-
-    with col2:
-        try:
-            band_streak = (
-                df_music[df_music.artist_name == artist_selected]
-                .sort_values("datetime")["datetime"]
-                .dt.date.drop_duplicates()
-                .sort_values()
-                .diff()
-                .dt.days.fillna(1)
-            )
-            streak_ids = (band_streak != 1).cumsum()
-            max_streak = streak_ids.value_counts().max()
-            st.markdown("<h4>Longest streak</h4>", unsafe_allow_html=True)
-            st.markdown(f"<p style='font-size:38px; color:#32cd32;'>{max_streak} Days</p>", unsafe_allow_html=True)
-        except Exception:
-            pass
-
-    ## top songs graph
-    top_songs = (
-        df_music[df_music.artist_name == artist_selected]
-        .groupby("track_name")["minutes_played"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
-    fig_top_songs = px.bar(
-        top_songs.head(15),
-        x="minutes_played",
-        y="track_name",
-        title=f"Your favourite songs by {artist_selected} - {str(year_selected).lower()}",
-        color_discrete_sequence=["#1ed760"],
-        text_auto=True,
-    )
-    fig_top_songs.update_yaxes(categoryorder="total ascending", title=None)
-    fig_top_songs.update_xaxes(title="Minutes Played")
-    st.write(fig_top_songs)
-
-    ## top albums graph
-    top_albums = (
-        df_music[df_music.artist_name == artist_selected]
-        .groupby("album_name")["minutes_played"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
-    fig_top_albums = px.bar(
-        top_albums.head(5),
-        x="minutes_played",
-        y="album_name",
-        title=f"Your favourite albums by {artist_selected} - {str(year_selected).lower()}",
-        color_discrete_sequence=["#1ed760"],
-        text_auto=True,
-    )
-    fig_top_albums.update_yaxes(categoryorder="total ascending", title=None)
-    fig_top_albums.update_xaxes(title="Minutes Played")
-    st.write(fig_top_albums)
-
-    ## only render the following visualizations if "Per Year" mode
-    if mode == "Per Year" and isinstance(year_selected, (int, np.integer)):
-        # --- Polar bar chart ---
-        df_polar = (
-            df_music[df_music.artist_name == artist_selected]
-            .groupby(df_music.datetime.dt.month)["minutes_played"]
-            .sum()
-            .reset_index()
-        )
-        df_polar = pd.merge(
-            pd.Series(range(1, 13), name="datetime"),
-            df_polar,
-            how="outer",
-            on="datetime",
-        ).fillna(0)
-
-        cal = {
-            1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
-            7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
-        }
-        df_polar["datetime"] = df_polar["datetime"].replace(cal)
-
-        fig_polar = px.bar_polar(
-            df_polar,
-            r="minutes_played",
-            theta="datetime",
-            color="minutes_played",
-            color_continuous_scale=["#1ed760", "#006400"],
-            title=f"Listening Trends {year_selected}",
-        )
-
-        dark_bg = "rgba(11, 17, 11, 1)"
-
-        fig_polar.update_layout(
-            title_font_size=20,
-            polar=dict(
-                radialaxis=dict(showticklabels=False),
-                bgcolor=dark_bg,
-            ),
-            paper_bgcolor=dark_bg,
-            plot_bgcolor=dark_bg,
-            font=dict(color="#ffffff"),
-            height=500,
-        )
-
-        fig_polar.update_coloraxes(showscale=False)
-
-        st.plotly_chart(
-            fig_polar,
-            width='stretch',
-            config={"displayModeBar": False, "responsive": True},
-        )
-
-        # --- Dayplot calendar heatmap ---
-        try:
-            df_day = (
-                df_music[df_music.artist_name == artist_selected]
-                .groupby("date")["minutes_played"]
-                .sum()
-                .reset_index()
-            )
-            df_day["date"] = pd.to_datetime(df_day["date"], errors="coerce").dt.date
-
-            if df_day.empty:
-                st.info(f"No listening data for {artist_selected} in {year_selected}.")
-            else:
-                start_date = date(int(year_selected), 1, 1)
-                end_date = date(int(year_selected), 12, 31)
-                fig, ax = plt.subplots(figsize=(16, 4))
-                dp.calendar(
-                    dates=df_day["date"],
-                    values=df_day["minutes_played"],
-                    start_date=start_date,
-                    end_date=end_date,
-                    ax=ax,
-                    **dp.styles["github"],
-                )
-                fig.set_facecolor("#0b110bff")
-                ax.set_facecolor("#0b110bff")
-                ax.set_title(
-                    f"Daily Listening Activity for {artist_selected} in {year_selected}",
-                    pad=12,
-                    color="white",
-                )
-                st.pyplot(fig, width='stretch')
-        except Exception as e:
-            st.error(f"Could not render calendar heatmap: {e}")
-
-# ------------------------------ Per Album Page ------------------------------ #
-elif page == "Per Album":
+# ------------------------------ Artist Page ------------------------------ #
+elif page == "Artist":
 
     import matplotlib.pyplot as plt
     import dayplot as dp
@@ -3252,21 +2949,82 @@ elif page == "Per Album":
             df_artist_album = df_artist[df_artist["album_name"] == album_selected].copy()
 
         # --- Ranking ---
-        artist_rank = (
+        # --- Ranking ---
+        # Artist ranking for the selected year (or all time)
+        artist_rank_df = (
             df_year.groupby("artist_name")["minutes_played"]
             .sum()
             .sort_values(ascending=False)
-            .reset_index()["artist_name"]
-            .tolist()
+            .reset_index()
         )
+        artist_rank = artist_rank_df["artist_name"].tolist()
 
-        album_rank = (
+        # Album ranking within the selected artist for the selected year
+        album_rank_df = (
             df_year_artist.groupby("album_name")["minutes_played"]
             .sum()
             .sort_values(ascending=False)
-            .reset_index()["album_name"]
-            .tolist()
+            .reset_index()
         )
+        album_rank = album_rank_df["album_name"].tolist()
+
+        # ---- Ranking delta logic ----
+        rank_delta = None
+        rank_val = "Unranked"
+        metric_label = "Artist Ranking"
+
+        if year_selected != "All Time":
+            prev_year = int(year_selected) - 1
+            df_prev_year = df_music[df_music["datetime"].dt.year == prev_year].copy()
+
+            # Previous year ranks
+            artist_rank_prev = (
+                df_prev_year.groupby("artist_name")["minutes_played"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()["artist_name"]
+                .tolist()
+            )
+            album_rank_prev = (
+                df_prev_year[df_prev_year["artist_name"] == artist_selected]
+                .groupby("album_name")["minutes_played"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()["album_name"]
+                .tolist()
+            )
+        else:
+            artist_rank_prev, album_rank_prev = [], []
+
+        # --- Determine ranking and delta ---
+        if album_selected == "All Albums":
+            rank_label = "Artist Ranking"
+
+            rank_now = artist_rank.index(artist_selected) + 1 if artist_selected in artist_rank else None
+            rank_prev = artist_rank_prev.index(artist_selected) + 1 if artist_selected in artist_rank_prev else None
+
+        else:
+            rank_label = "Album Ranking"
+
+            rank_now = album_rank.index(album_selected) + 1 if album_selected in album_rank else None
+            rank_prev = album_rank_prev.index(album_selected) + 1 if album_selected in album_rank_prev else None
+
+        # --- Compute delta ---
+        if year_selected != "All Time":
+            if rank_now and rank_prev:
+                delta_val = rank_prev - rank_now
+                if delta_val > 0:
+                    rank_delta = f"+{delta_val}"
+                elif delta_val < 0:
+                    rank_delta = f"{delta_val}"
+                else:
+                    rank_delta = "No change"
+            else:
+                rank_delta = "N/A"
+        else:
+            rank_delta = None  # hide delta for "All Time"
+
+        rank_val = f"#{rank_now}" if rank_now else "Unranked"
 
         # --- Normalize lists for comparison ---
         normalized_album_rank = [normalize_str(a) for a in album_rank]
@@ -3284,10 +3042,42 @@ elif page == "Per Album":
             first_listen = "N/A"
 
         # --- Total minutes listened ---
-        artist_mins = int(df_year_artist["minutes_played"].sum())
-        artist_mins_str = f"{artist_mins // (24*60)} Days, {(artist_mins % (24*60)) // 60} Hours, {artist_mins % 60} Mins"
-        artist_album_mins = int(df_year_artist_album["minutes_played"].sum())
-        artist_album_mins_str = f"{artist_album_mins // (24*60)} Days, {(artist_album_mins % (24*60)) // 60} Hours, {artist_album_mins % 60} Mins"
+        if album_selected == "All Albums":
+            total_mins = int(df_year_artist["minutes_played"].sum())
+        else:
+            total_mins = int(df_year_artist_album["minutes_played"].sum())
+
+        # Convert minutes into days, hours, and minutes
+        days = total_mins // (24 * 60)
+        hours = (total_mins % (24 * 60)) // 60
+        mins = total_mins % 60
+        total_mins_str = f"{days} Days, {hours} Hours, {mins} Mins"
+
+        # --- Delta logic (year-over-year) ---
+        time_delta = None
+        if year_selected != "All Time":
+            prev_year = int(year_selected) - 1
+            df_prev_year = df_music[df_music["datetime"].dt.year == prev_year].copy()
+
+            if album_selected == "All Albums":
+                prev_total = int(
+                    df_prev_year[df_prev_year["artist_name"] == artist_selected]["minutes_played"].sum()
+                )
+            else:
+                prev_total = int(
+                    df_prev_year[
+                        (df_prev_year["artist_name"] == artist_selected)
+                        & (df_prev_year["album_name"] == album_selected)
+                    ]["minutes_played"].sum()
+                )
+
+            if prev_total > 0:
+                delta_val = ((total_mins - prev_total) / prev_total) * 100
+                time_delta = f"{delta_val:+.1f}%"
+            elif total_mins > 0:
+                time_delta = "+∞%"
+            else:
+                time_delta = "N/A"
 
         # --- Last listen (ignores year filter) ---
         if album_selected == "All Albums":
@@ -3312,12 +3102,14 @@ elif page == "Per Album":
             days_since = "N/A"
             last_listen = "N/A"
 
-        # # --- Listening streak ---
+        # --- Listening streak with delta ---
         band_streak = df_year_artist_album.sort_values("datetime")
         band_streak["datetime"] = pd.to_datetime(band_streak["datetime"], errors="coerce")
         band_streak = band_streak.dropna(subset=["datetime"])
+
         if band_streak.empty:
             max_streak = 0
+            streak_delta = None
         else:
             # Sort and normalize to daily granularity
             dates = band_streak["datetime"].dt.normalize().drop_duplicates().sort_values().reset_index(drop=True)
@@ -3329,21 +3121,111 @@ elif page == "Per Album":
             streak_ids = (diffs != 1).cumsum()
             max_streak = int(streak_ids.value_counts().max())
 
-        # --- Display Scorecards ---
-        if album_selected == "All Albums":
-            scorecard("Artist Ranking", f"#{artist_rank.index(artist_selected) + 1}")
-        else:
-            if normalized_selected_album in normalized_album_rank:
-                idx = normalized_album_rank.index(normalized_selected_album)
-                scorecard("Album Ranking", f"#{idx + 1}")
+            # --- Compute previous year's streak for delta ---
+            if year_selected != "All Time":
+                prev_year = int(year_selected) - 1
+                prev_streak_df = df_music[
+                    (df_music["artist_name"] == artist_selected)
+                    & (df_music["datetime"].dt.year == prev_year)
+                ].copy()
+
+                if album_selected != "All Albums":
+                    prev_streak_df = prev_streak_df[prev_streak_df["album_name"] == album_selected]
+
+                prev_streak_df["datetime"] = pd.to_datetime(prev_streak_df["datetime"], errors="coerce")
+                prev_streak_df = prev_streak_df.dropna(subset=["datetime"])
+
+                if not prev_streak_df.empty:
+                    prev_dates = (
+                        prev_streak_df["datetime"].dt.normalize().drop_duplicates().sort_values().reset_index(drop=True)
+                    )
+                    prev_diffs = prev_dates.diff().dt.days.fillna(1)
+                    prev_streak_ids = (prev_diffs != 1).cumsum()
+                    prev_streak = int(prev_streak_ids.value_counts().max())
+                else:
+                    prev_streak = 0
+
+                if prev_streak == 0 and max_streak == 0:
+                    streak_delta = "0%"
+                elif prev_streak == 0:
+                    streak_delta = "+∞%"
+                else:
+                    delta_val = ((max_streak - prev_streak) / prev_streak) * 100
+                    streak_delta = f"{delta_val:+.1f}%"
             else:
-                scorecard("Album Ranking", "N/A")
-        scorecard("First listen",first_listen)
+                streak_delta = None
+
+        # --- Returns per year metric ---
         if album_selected == "All Albums":
-            scorecard("Total Listening Time", artist_mins_str)
+            df_artist_sorted = df_artist.sort_values("datetime").copy()
         else:
-            scorecard("Non-Stop Listening", artist_album_mins_str)
-        scorecard("Longest streak", f"{max_streak} Days")
+            df_artist_sorted = df_artist_album.sort_values("datetime").copy()
+
+        # Ensure datetime column is valid
+        df_artist_sorted["datetime"] = pd.to_datetime(df_artist_sorted["datetime"], errors="coerce")
+        df_artist_sorted = df_artist_sorted.dropna(subset=["datetime"])
+
+        if not df_artist_sorted.empty:
+            # Calculate time difference between consecutive listens
+            df_artist_sorted["time_diff"] = df_artist_sorted["datetime"].diff()
+
+            # Define a "return" as a gap >= 48 hours
+            df_artist_sorted["is_return"] = df_artist_sorted["time_diff"] >= pd.Timedelta(hours=48)
+
+            # Assign year of each return event
+            df_artist_sorted["year"] = df_artist_sorted["datetime"].dt.year
+
+            # Count returns per year
+            returns_per_year = (
+                df_artist_sorted[df_artist_sorted["is_return"]]
+                .groupby("year")
+                .size()
+                .reset_index(name="returns")
+            )
+
+            # Handle filter for year_selected
+            if year_selected != "All Time":
+                year_int = int(year_selected)
+                year_returns = (
+                    returns_per_year.loc[returns_per_year["year"] == year_int, "returns"].sum()
+                    if year_int in returns_per_year["year"].values
+                    else 0
+                )
+
+                # Delta vs previous year (difference in returns)
+                prev_year = year_int - 1
+                prev_returns = (
+                    returns_per_year.loc[returns_per_year["year"] == prev_year, "returns"].sum()
+                    if prev_year in returns_per_year["year"].values
+                    else 0
+                )
+
+                delta_val = year_returns - prev_returns
+                if delta_val > 0:
+                    rpa_delta = f"+{delta_val}"
+                elif delta_val < 0:
+                    rpa_delta = f"{delta_val}"
+                else:
+                    rpa_delta = "No change"
+
+                avg_returns = year_returns
+                rpa_label = f"Returns in {year_selected}"
+            else:
+                # All time average across all years
+                avg_returns = returns_per_year["returns"].mean().round(1) if not returns_per_year.empty else 0
+                rpa_delta = None
+                rpa_label = "Average Returns per Year"
+        else:
+            avg_returns = 0
+            rpa_delta = None
+            rpa_label = "Average Returns per Year"
+
+        # --- Display Scorecards ---
+        scorecard("First listen",first_listen, background=False)
+        scorecard(rank_label, rank_val, rank_delta)
+        scorecard("Total Listening Time", total_mins_str, time_delta)
+        scorecard("Longest Streak", f"{max_streak} Days", streak_delta)
+        scorecard(rpa_label, f"{avg_returns:.1f}", rpa_delta)
         scorecard("Days since last listen", f"{days_since} Days")
 
     with col2:
@@ -3468,179 +3350,260 @@ elif page == "Per Album":
     st.title("")
     col1, col2 = st.columns([4, 1.5], vertical_alignment="center")
 
-    with col1:
-        st.markdown(
-            f"<h2 style='text-align: center;'>{album_selected}'s weighting</h2>",
-            unsafe_allow_html=True
-        )
-
-        year_range = (
-            df_music[df_music.album_name == album_selected]
-            .datetime.dt.year.dropna()
-            .sort_values()
-            .unique()
-            .tolist()
-        )
-
-        if year_range:
-            # ✅ Default to the most recent year *in this album's data*
-            default_year = year_range[-1]
-            year_selected = st.segmented_control(
-                "Year",
-                year_range,
-                selection_mode="single",
-                default=default_year,
-            )
-        else:
-            st.warning("No year data available for this album.")
-            st.stop()
-
-        # --- Polar bar chart ---
-        df_polar = (
-            df_music[
-                (df_music.album_name == album_selected)
-                & (df_music.datetime.dt.year == year_selected)
-            ]
-            .groupby(df_music.datetime.dt.month)["minutes_played"]
-            .sum()
-            .reset_index()
-        )
-
-        # Add missing months for continuity
-        all_months = pd.DataFrame({"datetime": range(1, 13)})
-        df_polar = all_months.merge(df_polar, on="datetime", how="left").fillna(0)
-
-        # Month mapping
-        cal = {
-            1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
-            7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"
-        }
-        df_polar["datetime"] = df_polar["datetime"].replace(cal)
-
-        # --- Polar bar chart (with dark background) ---
-        fig_polar = px.bar_polar(
-            df_polar,
-            r="minutes_played",
-            theta="datetime",
-            color="minutes_played",
-            color_continuous_scale=["#1ed760", "#006400"],
-            title=f"Monthly Listening Activity for {album_selected} ({year_selected})",
-        )
-
-        dark_bg = "rgba(11, 17, 11, 1)"
-        fig_polar.update_layout(
-            title_font_size=20,
-            polar=dict(
-                radialaxis=dict(showticklabels=False, ticks=""),
-                bgcolor=dark_bg
-            ),
-            paper_bgcolor=dark_bg,
-            plot_bgcolor=dark_bg,
-            font=dict(color="#ffffff"),
-            height=500,
-        )
-        fig_polar.update_coloraxes(showscale=False)
-
-        # st.plotly_chart(
-        #     fig_polar,
-        #     width='stretch',
-        #     config={
-        #         "displayModeBar": False,
-        #         "responsive": True,
-        #     },
-        #     key=f"polar_{album_selected}_{year_selected}",
-        # )
-
         # --- Dayplot calendar heatmap ---
-        try:
-            df_day = (
-                df_music[
-                    (df_music.album_name == album_selected)
-                    & (df_music.datetime.dt.year == year_selected)
-                ]
-                .groupby("date")["minutes_played"]
+    if album_selected == "All Albums":
+        df_day = df_artist.groupby("date")["minutes_played"].sum().reset_index()
+    else:
+        df_day = df_artist_album.groupby("date")["minutes_played"].sum().reset_index()
+
+    df_day["date"] = pd.to_datetime(df_day["date"], errors="coerce")
+    df_day = df_day.dropna(subset=["date"])
+
+    if not df_day.empty:
+        if year_selected == "All Time":
+            # --- Collapse all years into one 365-day “virtual” year ---
+            df_day["month"] = df_day["date"].dt.month
+            df_day["day"] = df_day["date"].dt.day
+            df_day_alltime = (
+                df_day.groupby(["month", "day"])["minutes_played"]
                 .sum()
                 .reset_index()
             )
 
-            df_day["date"] = pd.to_datetime(df_day["date"], errors="coerce").dt.date
+            # Map these back to a dummy year (e.g. 2000)
+            df_day_alltime["date"] = pd.to_datetime(
+                {
+                    "year": 2000,
+                    "month": df_day_alltime["month"],
+                    "day": df_day_alltime["day"],
+                },
+                errors="coerce",
+            ).dt.date
 
-            if not df_day.empty:
-                start_date = date(int(year_selected), 1, 1)
-                end_date = date(int(year_selected), 12, 31)
+            # Build heatmap for one year (dummy 2000)
+            start_date = date(2000, 1, 1)
+            end_date = date(2000, 12, 31)
 
-                fig_cal, ax = plt.subplots(figsize=(16, 4))
-                dp.calendar(
-                    dates=df_day["date"],
-                    values=df_day["minutes_played"],
-                    start_date=start_date,
-                    end_date=end_date,
-                    ax=ax,
-                    **dp.styles["github"],
-                )
-                dark_bg = "#0b110bff"
-                fig_cal.set_facecolor(dark_bg)
-                ax.set_facecolor(dark_bg)
-                ax.set_title(
-                    f"Daily Listening Activity for {album_selected} in {year_selected}",
-                    pad=12,
-                    color="white",
-                )
-                st.pyplot(fig_cal, width='stretch')
-            else:
-                st.info(f"No listening data for {album_selected} in {year_selected}.")
-        except Exception as e:
-            st.error(f"Could not render calendar heatmap: {e}")
+            fig_cal, ax = plt.subplots(figsize=(16, 4))
+            dp.calendar(
+                dates=df_day_alltime["date"],
+                values=df_day_alltime["minutes_played"],
+                start_date=start_date,
+                end_date=end_date,
+                ax=ax,
+                **dp.styles["github"],
+            )
+            dark_bg = "#0b110bff"
+            fig_cal.set_facecolor(dark_bg)
+            ax.set_facecolor(dark_bg)
+            ax.set_title(
+                f"Daily Listening Activity for {album_selected} (All Time)",
+                pad=12,
+                color="white",
+            )
+            st.pyplot(fig_cal, use_container_width=True)
 
-    with col2:
-        st.markdown("", unsafe_allow_html=True)
-        # ✅ reusing same figure is fine as long as we give a unique key
-        st.plotly_chart(
-            fig_polar,
-            width='stretch',
-            config={
-                "displayModeBar": False,
-                "responsive": True,
-            },
-            key=f"polar_duplicate_{album_selected}_{year_selected}",
-        )
+        else:
+            # --- Year-specific heatmap (same as before) ---
+            start_date = date(int(year_selected), 1, 1)
+            end_date = date(int(year_selected), 12, 31)
+
+            fig_cal, ax = plt.subplots(figsize=(16, 4))
+            dp.calendar(
+                dates=df_day["date"],
+                values=df_day["minutes_played"],
+                start_date=start_date,
+                end_date=end_date,
+                ax=ax,
+                **dp.styles["github"],
+            )
+            dark_bg = "#0b110bff"
+            fig_cal.set_facecolor(dark_bg)
+            ax.set_facecolor(dark_bg)
+            ax.set_title(
+                f"Daily Listening Activity for {album_selected} in {year_selected}",
+                pad=12,
+                color="white",
+            )
+            st.pyplot(fig_cal, use_container_width=True)
+    else:
+        st.info(f"No listening data for {album_selected} in {year_selected}.")
 
     # --- Line plot (monthly trends) ---
-    df_line = df_music[(df_music.album_name == album_selected)].copy()
-    df_line["month"] = df_line.datetime.dt.month
-    df_line["year"] = df_line.datetime.dt.year
-    df_line = df_line.groupby(["year", "month"])["minutes_played"].sum().reset_index()
+    st.markdown("### Listening Trend")
 
-    fig_line = px.line(
-        df_line,
-        x="month",
-        y="minutes_played",
-        color="year",
-        title=f"Monthly Trends for {album_selected}",
-        labels={"minutes_played": "Minutes Played", "month": "Month"},
-        color_discrete_sequence=px.colors.qualitative.Set2,
-    )
+    # Ensure datetime and helper columns
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df["year"] = df["datetime"].dt.year
+    df["date"] = df["datetime"].dt.date
+    df["hours_played"] = df["minutes_played"] / 60
 
-    fig_line.update_layout(
-        xaxis_title="Month",
-        yaxis_title="Minutes Played",
-        legend_title_text="Year",
-        height=450,
-        plot_bgcolor="rgba(0,0,0,0)",
-    )
+    # Base filter for artist and album
+    df_artist = df[df["artist_name"] == artist_selected].copy()
+    if album_selected != "All Albums":
+        df_artist_album = df_artist[df_artist["album_name"] == album_selected].copy()
+    else:
+        df_artist_album = None
 
+    # === NORMALIZATION SETTINGS ===
+    NORMALIZATION_MODE = "relative_to_mean"
+    # Options: "none", "scale_to_max", "relative_to_mean", "per_artist_average"
+
+    # Helper function for normalization
+    def normalize_series(series, mode="none", ref_df=None):
+        if series.empty:
+            return series
+        if mode == "none":
+            return series
+        elif mode == "scale_to_max":
+            return series / series.max() if series.max() > 0 else series
+        elif mode == "relative_to_mean":
+            return series / series.mean() if series.mean() > 0 else series
+        elif mode == "per_artist_average" and ref_df is not None:
+            num_artists = ref_df["artist_name"].nunique()
+            return series / num_artists if num_artists > 0 else series
+        return series
+
+
+    # ======== ALL TIME MODE ========
+    if year_selected == "All Time":
+        timeline_all = (
+            df.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+        timeline_all["rolling_avg"] = timeline_all["hours_played"].rolling(window=30, min_periods=1).mean()
+        timeline_all["normalized"] = normalize_series(timeline_all["rolling_avg"], NORMALIZATION_MODE, df)
+
+        timeline_artist = (
+            df_artist.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+        timeline_artist["rolling_avg"] = timeline_artist["hours_played"].rolling(window=30, min_periods=1).mean()
+        timeline_artist["normalized"] = normalize_series(timeline_artist["rolling_avg"], NORMALIZATION_MODE, df)
+
+        if df_artist_album is not None and not df_artist_album.empty:
+            timeline_album = (
+                df_artist_album.groupby("date")["hours_played"]
+                .sum()
+                .reset_index()
+                .sort_values("date")
+            )
+            timeline_album["rolling_avg"] = timeline_album["hours_played"].rolling(window=30, min_periods=1).mean()
+            timeline_album["normalized"] = normalize_series(timeline_album["rolling_avg"], NORMALIZATION_MODE, df)
+        else:
+            timeline_album = None
+
+        # --- Plot ---
+        fig_timeline = px.line(
+            timeline_all,
+            x="date",
+            y="normalized",
+            title="Listening Trend (All Time)",
+            labels={"normalized": "Normalized Hours Played", "date": "Date"},
+            color_discrete_sequence=["#1ed760"],
+        )
+
+        fig_timeline.add_scatter(
+            x=timeline_artist["date"],
+            y=timeline_artist["normalized"],
+            mode="lines",
+            name=f"{artist_selected} (Artist)",
+            line=dict(color="#00b386", width=3),
+        )
+
+        if timeline_album is not None:
+            fig_timeline.add_scatter(
+                x=timeline_album["date"],
+                y=timeline_album["normalized"],
+                mode="lines",
+                name=f"{album_selected} (Album)",
+                line=dict(color="#f4c542", width=3, dash="dot"),
+            )
+
+        fig_timeline.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis_title="Normalized Hours per Day (30-Day Rolling Avg)",
+            legend_title_text="Listening Source",
+            height=450,
+        )
+
+
+    # ======== SPECIFIC YEAR MODE ========
+    else:
+        year_int = int(year_selected)
+        df_year = df[df["datetime"].dt.year == year_int].copy()
+        df_artist_year = df_artist[df_artist["datetime"].dt.year == year_int].copy()
+        if df_artist_album is not None:
+            df_album_year = df_artist_album[df_artist_album["datetime"].dt.year == year_int].copy()
+        else:
+            df_album_year = None
+
+        # Aggregate and normalize
+        timeline_all = df_year.groupby("date")["hours_played"].sum().reset_index().sort_values("date")
+        timeline_artist = df_artist_year.groupby("date")["hours_played"].sum().reset_index().sort_values("date")
+
+        timeline_all["rolling_avg"] = timeline_all["hours_played"].rolling(window=7, min_periods=1).mean()
+        timeline_artist["rolling_avg"] = timeline_artist["hours_played"].rolling(window=7, min_periods=1).mean()
+        timeline_all["normalized"] = normalize_series(timeline_all["rolling_avg"], NORMALIZATION_MODE, df_year)
+        timeline_artist["normalized"] = normalize_series(timeline_artist["rolling_avg"], NORMALIZATION_MODE, df_year)
+
+        if df_album_year is not None and not df_album_year.empty:
+            timeline_album = (
+                df_album_year.groupby("date")["hours_played"].sum().reset_index().sort_values("date")
+            )
+            timeline_album["rolling_avg"] = timeline_album["hours_played"].rolling(window=7, min_periods=1).mean()
+            timeline_album["normalized"] = normalize_series(timeline_album["rolling_avg"], NORMALIZATION_MODE, df_year)
+        else:
+            timeline_album = None
+
+        # --- Plot ---
+        fig_timeline = px.line(
+            timeline_all,
+            x="date",
+            y="normalized",
+            title=f"Listening Trend ({year_selected})",
+            labels={"normalized": "Normalized Hours Played", "date": "Date"},
+            color_discrete_sequence=["#1ed760"],
+        )
+
+        fig_timeline.add_scatter(
+            x=timeline_artist["date"],
+            y=timeline_artist["normalized"],
+            mode="lines",
+            name=f"{artist_selected} (Artist)",
+            line=dict(color="#00b386", width=3),
+        )
+
+        if timeline_album is not None:
+            fig_timeline.add_scatter(
+                x=timeline_album["date"],
+                y=timeline_album["normalized"],
+                mode="lines",
+                name=f"{album_selected} (Album)",
+                line=dict(color="#f4c542", width=3, dash="dot"),
+            )
+
+        fig_timeline.update_layout(
+            height=450,
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis_title="Normalized Hours per Day (7-Day Rolling Avg)",
+            legend_title_text="Listening Source",
+        )
+
+
+    # ✅ Unified rendering
     st.plotly_chart(
-        fig_line,
-        width='stretch',
-        config={
-            "displayModeBar": False,
-            "responsive": True,
-        },
-        key=f"line_{album_selected}",
+        fig_timeline,
+        use_container_width=True,
+        config={"displayModeBar": False, "responsive": True},
     )
 
 # ------------------------------- Per Genre ---------------------------------- #
-elif page == "Per Genre":
+elif page == "Genre":
 
     # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:

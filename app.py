@@ -29,6 +29,7 @@ import re
 import secrets
 import streamlit as st
 from streamlit_carousel import carousel
+from streamlit_navigation_bar import st_navbar
 from supabase import create_client
 import tempfile
 import threading
@@ -44,7 +45,6 @@ from chart_scorer import parse_label_ts_from_table_name
 
 # -------------------------- CONFIG / CLIENTS -------------------------------- #
 st.set_page_config(page_title="Regifted", page_icon="./media/assets/icon_spotgreen.svg", layout="wide", initial_sidebar_state="expanded")
-
 clear_stale_locks(max_age_minutes=10)
 
 SPOTIFY_ID = st.secrets["spotify"]["client_id"]
@@ -922,11 +922,11 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     # --- Render ---
     with st.sidebar:
         st.caption(f"Threads: {active_count}")
-        st.caption(msg)
-        if detail:
-            st.caption(f"{detail}")
-        st.progress(int(percent) / 100.0 if percent else 0)
-        st.caption(f"_Please wait while we enrich your data..._")
+        # st.caption(msg)
+        # if detail:
+        #     st.caption(f"{detail}")
+        # st.progress(int(percent) / 100.0 if percent else 0)
+        # st.caption(f"_Please wait while we enrich your data..._")
 
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
     """
@@ -1697,7 +1697,6 @@ if not st.session_state.user:
 
 # --- PAGE NAVIGATION ---
 with st.sidebar:
-    st.title("Navigation")
     st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
 
     # ✅ Render the enrichment status *right here*, before the radio
@@ -1709,17 +1708,17 @@ with st.sidebar:
 
     # Divider (optional)
     st.divider()
-
+    st.title("Navigation")
     # ✅ Then your page selector
     page = st.radio(
         "Go to",
         [
             "Home",
             "Overview",
-            "Artist",
-            "Genre",
-            "The Farm",
-            "FUN",
+            "Artists",
+            "Genres",
+            "Sheeple-O-Meter",
+            "On This Day",
             "FAQs"
         ]
     )
@@ -2068,34 +2067,33 @@ elif page == "Overview":
         return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
 
     # --- Header ---
-    c1, c2, c3 = st.columns([3, 3, 1], vertical_alignment="center")
-    with c3:
-        st.image(LOGO_SPOTGREEN, width=200)
-    with c2:
-        st.title("Your Listening Insights")
-
-    # --- Year + Category selectors ---
-    years = sorted(df["year"].dropna().unique())
-    year_options = ["All Time"] + [str(y) for y in years]
-
-    c1, c2 = st.columns([3, 1], vertical_alignment="center")
+    c1, c2 = st.columns([6, 1], vertical_alignment="center")
     with c1:
-        selected_year = st.segmented_control(
-            "Select Year", year_options, selection_mode="single", default="All Time"
-        )
+        st.title("Overall Listening Insights")
     with c2:
+        st.image(LOGO_SPOTGREEN, width=200)
+
+    # --- Category & Year Selectors ---
+    c1, c2 = st.columns([0.7, 1], vertical_alignment="center")
+    with c1:
         categories = ["music", "podcast"]
         if "audiobook" in df["category"].unique():
             categories.append("audiobook")
         selected_category = st.segmented_control(
             "Category", categories, selection_mode="single", default="music"
         )
+    with c2:
+        years = sorted(df["year"].dropna().unique())
+        year_options = ["All Time"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year", year_options, selection_mode="single", default="All Time", width="stretch"
+        )
 
     # --- Filter dataset ---
     df_filtered = df[df["category"] == selected_category].copy()
-    if selected_year != "All Time":
-        df_delta = df_filtered[df_filtered["year"] == (int(selected_year)-1)]
-        df_filtered = df_filtered[df_filtered["year"] == int(selected_year)]
+    if year_selected != "All Time":
+        df_delta = df_filtered[df_filtered["year"] == (int(year_selected)-1)]
+        df_filtered = df_filtered[df_filtered["year"] == int(year_selected)]
 
     # ============================================================
     # 🎵 MUSIC
@@ -2108,21 +2106,21 @@ elif page == "Overview":
 
         # --- Core metrics ---
         total_days = round(df_filtered["minutes_played"].sum() / 60 / 24, 1)
-        if selected_year != "All Time":
+        if year_selected != "All Time":
             if total_days == 0:
                 total_days_delta = "∞%"
             else: total_days_delta = f"{round((total_days - (df_delta["minutes_played"].sum() / 60 / 24)) / total_days * 100,1)}%"
         else: total_days_delta = ""
 
         unique_tracks = df_filtered["track_name"].nunique()
-        if selected_year != "All Time":
+        if year_selected != "All Time":
             if unique_tracks == 0:
                 unique_tracks_delta = "∞%"
             else: unique_tracks_delta = f"{round((unique_tracks - (df_delta["track_name"].nunique())) / unique_tracks * 100,1)}%"
         else: unique_tracks_delta = ""
 
         unique_artists = df_filtered["artist_name"].nunique()
-        if selected_year != "All Time":
+        if year_selected != "All Time":
             if unique_artists == 0:
                 unique_artists_delta = "∞%"
             else: unique_artists_delta = f"{round((unique_artists - (df_delta["artist_name"].nunique())) / unique_artists * 100,1)}%"
@@ -2336,7 +2334,7 @@ elif page == "Overview":
         df["date"] = df["datetime"].dt.date
         df["hours_played"] = df["minutes_played"] / 60
 
-        if selected_year == "All Time":
+        if year_selected == "All Time":
             # Aggregate by date
             timeline = (
                 df.groupby("date")["hours_played"]
@@ -2545,21 +2543,21 @@ elif page == "Overview":
         st.markdown("### Podcast Highlights")
 
         total_days = round(df_filtered["minutes_played"].sum() / 60 / 24, 1)
-        if selected_year != "All Time":
+        if year_selected != "All Time":
             if total_days == 0:
                 total_days_delta = "∞%"
             else:total_days_delta = f"{round((total_days - (df_delta["minutes_played"].sum() / 60 / 24)) / total_days * 100,1)}%"
         else: total_days_delta = ""
 
         unique_shows = df_filtered["episode_show_name"].nunique()
-        if selected_year != "All Time":
+        if year_selected != "All Time":
             if unique_shows == 0:
                 unique_shows_delta = "∞%"
             else: unique_shows_delta = f"{round((unique_shows - (df_delta["episode_show_name"].nunique())) / unique_shows * 100,1)}%"
         else: unique_shows_delta = ""
 
         unique_episodes = df_filtered["episode_name"].nunique()
-        if selected_year != "All Time":
+        if year_selected != "All Time":
             if unique_episodes == 0:
                 unique_episodes_delta = "∞%"
             else: unique_episodes_delta = f"{round((unique_episodes - (df_delta["episode_name"].nunique())) / unique_episodes * 100,1)}%"
@@ -2627,7 +2625,7 @@ elif page == "Overview":
         df_filtered["date"] = df_filtered["datetime"].dt.date
         df_filtered["hours_played"] = df_filtered["minutes_played"] / 60
 
-        if selected_year == "All Time":
+        if year_selected == "All Time":
             timeline = (
                 df_filtered.groupby("date")["hours_played"]
                 .sum()
@@ -2718,14 +2716,14 @@ elif page == "Overview":
         st.markdown("### Audiobook Highlights")
 
         total_days = round(df_filtered["minutes_played"].sum() / 60 / 24, 1)
-        if selected_year != "All Time":
+        if year_selected != "All Time":
             if total_days == 0:
                 total_days_delta = "∞%"
             else: total_days_delta = f"{round((total_days - (df_delta["minutes_played"].sum() / 60 / 24)) / total_days * 100,1)}%"
         else: total_days_delta = ""
 
         unique_books = df_filtered["audiobook_title"].nunique()
-        if selected_year != "All Time":
+        if year_selected != "All Time":
             if unique_books == 0:
                 unique_books_delta = "∞%"
             else: unique_books_delta = f"{round((unique_books - (df_delta["audiobook_title"].nunique())) / unique_books * 100,1)}%"
@@ -2749,7 +2747,7 @@ elif page == "Overview":
         df_filtered["date"] = df_filtered["datetime"].dt.date
         df_filtered["hours_played"] = df_filtered["minutes_played"] / 60
 
-        if selected_year == "All Time":
+        if year_selected == "All Time":
             timeline = (
                 df_filtered.groupby("date")["hours_played"]
                 .sum()
@@ -2859,7 +2857,7 @@ elif page == "Overview":
         )
 
 # ------------------------------ Artist Page ------------------------------ #
-elif page == "Artist":
+elif page == "Artists":
 
     import matplotlib.pyplot as plt
     import dayplot as dp
@@ -2872,12 +2870,6 @@ elif page == "Artist":
 
     df, current_label = require_current_df()
 
-
-    # project title
-    col1, col2 = st.columns([6, 1], vertical_alignment="center")
-    with col2:
-        st.image(LOGO_SPOTGREEN, width=200)
-
     # Load user-specific data
     df_music = df[df["category"] == "music"][
         ["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]
@@ -2887,6 +2879,13 @@ elif page == "Artist":
     df_music = df_music.dropna(subset=["datetime"]).copy()
     df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
     df_music["date"] = df_music["datetime"].dt.date
+
+    # --- Header ---
+    c1, c2 = st.columns([6, 1], vertical_alignment="center")
+    with c1:
+        st.title("Artist Insights")
+    with c2:
+        st.image(LOGO_SPOTGREEN, width=200)
 
     col1, col2 = st.columns([0.7, 1])
     with col1:
@@ -3603,7 +3602,7 @@ elif page == "Artist":
     )
 
 # ------------------------------- Per Genre ---------------------------------- #
-elif page == "Genre":
+elif page == "Genres":
 
     # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
@@ -3612,7 +3611,44 @@ elif page == "Genre":
 
     # Get current user dataset
     df, current_label = require_current_df()
-    user_df = df.copy()
+    user_df = df[df["category"] == "music"].copy()
+    df_music = df[df["category"] == "music"].copy()
+
+    # --- Normalize datetime column safely ---
+    df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
+    df_music = df_music.dropna(subset=["datetime"]).copy()
+    df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
+    df_music["date"] = df_music["datetime"].dt.date
+
+    # --- Header ---
+    c1, c2 = st.columns([6, 1], vertical_alignment="center")
+    with c1:
+        st.title("Genre Insights")
+    with c2:
+        st.image(LOGO_SPOTGREEN, width=200)
+
+    # --- Genre & Year Selectors ---
+    col1, col2 = st.columns([0.7, 1])
+    with col1:
+        genre_list = (
+            INFO_SUPERGENRE.groupby("supergenre").count()
+            .sort_values(by="supergenre")
+            .reset_index()["supergenre"]
+            .tolist()
+        )
+        genre_selected = st.selectbox(
+            "Genre:",
+            options=genre_list,
+            index=0
+        )
+
+    with col2:
+        # --- Year + Category selectors ---
+        years = sorted(df["year"].dropna().unique())
+        year_options = ["All Time"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year", year_options, selection_mode="single", default="All Time", width='stretch'
+        )
 
     # --- Load enrichment datasets ---
     df_album = INFO_ALBUM.copy()            # from info_album.csv
@@ -3753,7 +3789,7 @@ elif page == "Genre":
     years = sorted(df['year'].unique())
 
 # ------------------------------- The Farm ----------------------------------- #
-elif page == "The Farm":
+elif page == "Sheeple-O-Meter":
 
     # -------------------- Helpers (scoped to this page) -------------------- #
     from pathlib import Path
@@ -3785,7 +3821,7 @@ elif page == "The Farm":
 
         gauge.update_layout(
             title=dict(
-                text="Sheeple-O-Meter",
+                text="",
                 font=dict(size=30, color="#FFFFFF"),
                 x=0.5,
                 xanchor="center",
@@ -4216,7 +4252,8 @@ elif page == "The Farm":
 
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The Farm</b></em></p>")
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The</b></em></p>")
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Sheeple-O-Meter</b></em></p>")
         st.html("<p style='text-align: center; font-size: 30px;'>Are you a chart-following sheep or a lone-listening wolf?</p>")
 
     # -------------------- Gauge -------------------- #
@@ -4345,7 +4382,7 @@ elif page == "The Farm":
             st.info("No chart hits scored in the selected period yet.")
 
 # ------------------------------- FUN Page ----------------------------------- #
-elif page == "FUN":
+elif page == "On This Day":
     # Show current user info
         # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
@@ -4474,8 +4511,8 @@ elif page == "FUN":
     # df['date'] = pd.to_datetime(df['datetime']).dt.date
     # df['year'] = pd.to_datetime(df['datetime']).dt.year
     # year_list = df['year'].sort_values().unique().tolist()
-    # selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=df['year'].max())
-    # df_filtered = df[df['year'] == selected_year]
+    # year_selected = st.segmented_control("Year", year_list, selection_mode="single", default=df['year'].max())
+    # df_filtered = df[df['year'] == year_selected]
     # df_music = df_filtered[df_filtered['category'] == 'music']
     # most_skipped = (df_music[df_music['skipped'] > 0].groupby(['track_name', 'artist_name'])['skipped'].sum().reset_index().sort_values(by='skipped', ascending=False).head(1))
 

@@ -29,6 +29,7 @@ import re
 import secrets
 import streamlit as st
 from streamlit_carousel import carousel
+import streamlit.components.v1 as components
 from streamlit_extras.stylable_container import stylable_container
 from supabase import create_client
 import tempfile
@@ -156,33 +157,39 @@ def scorecard(
     title: str,
     score: str,
     delta: float | str = None,
-    title_size: int = 16,
-    score_size: int = 36,
-    delta_size: int = 18,
-    background: bool = True,  # ✅ new argument
+    title_size: int = 14,
+    score_size: int = 32,
+    delta_size: int = 14,
+    title_bold=False,
+    title_italic=False,
+    title_underline=False,
+    score_bold=False,
+    score_italic=False,
+    score_underline=False,
+    delta_bold=False,
+    delta_italic=False,
+    delta_underline=False,
+    background: bool = True,
+    width: int = 200,
+    height: int = 100,
+    dynamic: str = "text",
+    stretch: bool = True,
 ):
-    """
-    Displays a 3-line scorecard (title, score, delta) with smart styling.
-    Automatically detects and color-codes positive/negative deltas even if passed as strings.
-    Set background=False to make the scorecard transparent.
-    """
+    import textwrap
 
-    # --- Detect and colorize delta ---
     delta_str = ""
+    delta_color = "#b8ccc0"
     if delta is not None:
-        delta_color = "#b8ccc0"  # default grey
-
-        # Convert numeric-like strings (e.g., "+3.5%", "-2.1", "  5 % ") → float
         if isinstance(delta, str):
             match = re.search(r"([-+]?\d*\.?\d+)", delta)
             if match:
                 try:
                     delta_val = float(match.group(1))
                     if delta_val > 0:
-                        delta_color = "#1ed760"  # Spotify green
+                        delta_color = "#1ed760"
                         delta_str = f"▲ {delta.strip()}"
                     elif delta_val < 0:
-                        delta_color = "#ed203f"  # red
+                        delta_color = "#ed203f"
                         delta_str = f"▼ {delta.strip()}"
                     else:
                         delta_str = delta.strip()
@@ -190,7 +197,6 @@ def scorecard(
                     delta_str = delta.strip()
             else:
                 delta_str = delta.strip()
-
         elif isinstance(delta, (int, float)):
             if delta > 0:
                 delta_color = "#1ed760"
@@ -201,41 +207,103 @@ def scorecard(
             else:
                 delta_str = f"{delta:+.1f}%"
 
-        delta_html = f"<p style='margin:0; font-size:{delta_size}px; color:{delta_color}; font-weight:400;'>{delta_str}</p>"
-    else:
-        delta_html = ""
-
-    # --- Choose background style ---
     bg_color = "#0d5637" if background else "transparent"
 
-    # --- HTML container ---
-    content_html = f"""
-    <div style='
-        background-color:{bg_color};
-        border-radius:3px;
-        padding:8px 15px;
-        margin:5px;
-        text-align:center;
-        display:flex;
-        flex-direction:column;
-        align-items:center;
-        justify-content:center;
-        line-height:1.3;
-        box-shadow: {"0 0 8px rgba(0,0,0,0.3)" if background else "none"};
-    '>
-        <p style='margin:0; font-size:{title_size}px; color:#b8ccc0; font-weight:400;'>{title}</p>
-        <p style='margin:4px 0; font-size:{score_size}px; color:#e1ece3; font-weight:400;'>{score}</p>
-        {delta_html}
+    # --- Wrap text if no delta ---
+    wrapped_score = score
+    if delta is None and len(str(score)) > 20:
+        wrapped_score = "<br>".join(textwrap.wrap(str(score), width=400))
+
+    text_length = len(str(score))
+    scale_factor = 1.0
+    if dynamic == "text":
+        # Slightly reduce font faster for long wrapped text
+        scale_factor = max(0.5, min(1.0, 10 / (text_length / 3 + 4)))
+        if delta is None and "<br>" in wrapped_score:
+            scale_factor *= 0.85
+    score_px = int(score_size * scale_factor)
+
+    width_style = "100%" if stretch else f"{width}px"
+
+    # --- font-style logic ---
+    def make_style(bold, italic, underline):
+        style = f"font-weight:{'700' if bold else '400'};"
+        if italic:
+            style += "font-style:italic;"
+        if underline:
+            style += "text-decoration:underline;"
+        style += 'font-family:sans-serif;'
+        return style
+
+    title_style = make_style(title_bold, title_italic, title_underline)
+    score_style = make_style(score_bold, score_italic, score_underline)
+    delta_style = make_style(delta_bold, delta_italic, delta_underline)
+
+    # --- adjust score vertical position ---
+    score_top = "55%" if delta else "60%"
+
+    html = f"""
+    <div style="
+        position: relative;
+        background-color: {bg_color};
+        border-radius: 5px;
+        width: {width_style};
+        height: {height}px;
+        margin: 2px;
+        box-shadow: {'0 0 8px rgba(0,0,0,0.3)' if background else 'none'};
+        overflow: hidden;
+    ">
+        <div style="
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            font-size: {title_size}px;
+            color: #d9e3dd;
+            {title_style}
+        ">{title}</div>
+
+        <div style="
+            position: absolute;
+            top: {score_top};
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: {score_px}px;
+            color: #e1ece3;
+            {score_style}
+            line-height: 1.1;
+            width: 90%;
+            word-wrap: break-word;
+            white-space: normal;
+        ">{wrapped_score}</div>
+
+        <div style="
+            position: absolute;
+            bottom: 8px;
+            width: 100%;
+            text-align: center;
+            font-size: {delta_size}px;
+            color: {delta_color};
+            {delta_style}
+        ">{delta_str}</div>
     </div>
     """
 
-    st.markdown(content_html, unsafe_allow_html=True)
+    components.html(html, height=height + 10)
 
 def normalize_str(s):
     """Normalize string for consistent comparison (case-insensitive, strip accents)."""
     if not isinstance(s, str):
         return ""
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("utf-8").strip().lower()
+
+def format_hhmmss(minutes):
+    total_seconds = int(minutes * 60)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 @st.cache_resource(show_spinner=False)
 def task_registry():
@@ -1698,6 +1766,7 @@ if not st.session_state.user:
 
 # --- PAGE NAVIGATION ---
 with st.sidebar:
+    st.image(LOGO_SPOTGREEN, width="stretch")
     st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
 
     # ✅ Render the enrichment status *right here*, before the radio
@@ -1709,19 +1778,20 @@ with st.sidebar:
 
     # Divider (optional)
     st.divider()
-    st.title("Navigation")
     # ✅ Then your page selector
     page = st.radio(
-        "Go to",
+        "Navigation",
+        label_visibility="hidden",
+        options=
         [
-            "Home",
-            "Overview",
-            "Artists",
-            "Genres",
-            "Sheeple-O-Meter",
-            "On This Day",
-            "FAQs",
-            "Test"
+        "Home",
+        "Overview",
+        "Artists",
+        "Genres",
+        "Sheeple-O-Meter",
+        "On This Day",
+        "FAQs",
+        "Test"
         ]
     )
 
@@ -1770,6 +1840,7 @@ if page == "Home":
     st.session_state.setdefault("current_df", None)
     st.session_state.setdefault("current_dataset_label", None)
     st.session_state.setdefault("last_table_name", None)
+    st.session_state["last_page"] = "Home"
 
     # ---------- Header UI ----------
     h1, h2, h3 = st.columns([1, 1, 1], vertical_alignment="center")
@@ -1915,11 +1986,11 @@ if page == "Home":
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            scorecard("🎵 Recent Favourite Track", fav_track, score_size=30)
+            scorecard("Recent Favourite Track", fav_track, score_size=30)
         with c2:
-            scorecard("🎤 Recent Favourite Artist", fav_artist, score_size=30)
+            scorecard("Recent Favourite Artist", fav_artist, score_size=30)
         with c3:
-            scorecard("🎧 Recent Favourite Genre", fav_supergenre, score_size=30)
+            scorecard("Recent Favourite Genre", fav_supergenre, score_size=30)
 
         st.divider()
         st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
@@ -2030,10 +2101,13 @@ if page == "Home":
 # -------------------------------- Overview ---------------------------------- #
 elif page == "Overview":
 
+    st.session_state["last_page"] = "Overview"
+
     # ✅ Ensure dataset loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
+
 
     df, current_label = require_current_df()
     df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
@@ -2046,14 +2120,6 @@ elif page == "Overview":
     df_album = INFO_ALBUM.copy()
     df_supergenre_map = INFO_SUPERGENRE.copy()
     IMAGE_PLACEHOLDER = "media/assets/Image-Coming-Soon_vector.svg"
-
-    # --- Helper functions ---
-    def format_hhmmss(minutes):
-        total_seconds = int(minutes * 60)
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        return f"{hours:02}:{minutes:02}:{seconds:02}"
 
     def get_top_combined(df, name_col, sub_col):
         if df.empty:
@@ -2140,11 +2206,18 @@ elif page == "Overview":
                 "supergenre" in df_filtered.columns
                 and not df_filtered["supergenre"].dropna().empty
             ):
-                fav_supergenre = df_filtered["supergenre"].value_counts().idxmax()
+                # ✅ Exclude "Other" and "Unlisted" before determining favorite
+                fav_supergenre = (
+                    df_filtered.loc[
+                        ~df_filtered["supergenre"].str.lower().isin(["other", "unlisted"]),
+                        "supergenre"
+                    ]
+                    .value_counts()
+                    .idxmax()
+                )
             else:
                 fav_supergenre = "N/A"
         except Exception as e:
-            # Catch *anything* weird during async enrichment
             print(f"[supergenre metric] Skipping due to transient data issue: {e}")
             fav_supergenre = "N/A"
 
@@ -2152,16 +2225,17 @@ elif page == "Overview":
         skipped_artist = skips_df["artist_name"].value_counts().idxmax() if not skips_df.empty else "N/A"
         skipped_track = get_top_combined(skips_df, "artist_name", "track_name")
 
-        # Least listened genre(s)
+        # ✅ Exclude "Other" and "Unlisted" supergenres globally
         all_supergenres = (
             df_supergenre_map["supergenre"]
             .dropna()
+            .loc[~df_supergenre_map["supergenre"].str.lower().isin(["other", "unlisted"])]
             .unique()
             .tolist()
         )
 
         listened_supergenres = (
-            df_filtered["supergenre"]
+            df_filtered.loc[~df_filtered["supergenre"].str.lower().isin(["other", "unlisted"]), "supergenre"]
             .dropna()
             .unique()
             .tolist()
@@ -2170,17 +2244,15 @@ elif page == "Overview":
         unlistened = [s for s in all_supergenres if s not in listened_supergenres]
 
         if unlistened:
-            # The user has never listened to these supergenres
             least_genre = ", ".join(sorted(unlistened))
         else:
-            # All supergenres have been heard — find the least played ones
             genre_playtime = (
-                df_filtered.groupby("supergenre")["minutes_played"]
+                df_filtered.loc[~df_filtered["supergenre"].str.lower().isin(["other", "unlisted"])]
+                .groupby("supergenre")["minutes_played"]
                 .sum()
                 .sort_values(ascending=True)
             )
             min_value = genre_playtime.min()
-            # List all genres with the same minimum listening time
             least_genres = genre_playtime[genre_playtime == min_value].index.tolist()
             least_genre = ", ".join(sorted(least_genres)) if least_genres else "N/A"
 
@@ -2197,24 +2269,24 @@ elif page == "Overview":
         with c1:
             # Calculate metrics
             scorecard("You listened for",f"{total_days} days",total_days_delta)
-            scorecard("🎵 Favourite Track", fav_track)
-            scorecard("⏩ Most Skipped Track", skipped_track)
-            # scorecard("🪩 Song of the Summer", fav_summer)
+            scorecard("Favourite Track", fav_track)
+            scorecard("Most Skipped Track", skipped_track)
+            # scorecard("Song of the Summer", fav_summer)
         with c2:
-            scorecard("🎶 Unique Tracks", f"{unique_tracks}", delta=unique_tracks_delta)
-            scorecard("🎤 Favourite Artist", fav_artist)
-            scorecard("⏭️ Most Skipped Artist", skipped_artist)
-            # scorecard("🎄 Xmas Anthem", fav_xmas)
+            scorecard("Unique Tracks", f"{unique_tracks}", delta=unique_tracks_delta)
+            scorecard("Favourite Artist", fav_artist)
+            scorecard("Most Skipped Artist", skipped_artist)
+            # scorecard("Xmas Anthem", fav_xmas)
         with c3:
-            scorecard("👩‍🎤 Unique Artists", f"{unique_artists}", delta=unique_artists_delta)
-            scorecard("🎧 Favourite Genre", fav_supergenre)
-            scorecard("💤 Least Listened Genre(s)", least_genre)
+            scorecard("Unique Artists", f"{unique_artists}", delta=unique_artists_delta)
+            scorecard("Favourite Genre", fav_supergenre)
+            scorecard("Least Listened Genre(s)", least_genre)
 
         c1, c2, c3, c4 = st.columns([1,2,2,1])
         with c2:
-            scorecard("🪩 Song of the Summer", fav_summer)
+            scorecard("Song of the Summer", fav_summer)
         with c3:
-            scorecard("🎄 Xmas Anthem", fav_xmas)
+            scorecard("Xmas Anthem", fav_xmas)
 
         # --- Top 10 Artists ---
         st.markdown("## Top 10 Artists")
@@ -2243,11 +2315,11 @@ elif page == "Overview":
 
             # --- Manually add artist name labels inside bars ---
             fig_artists.update_traces(
-                text=top_artists["artist_name"],        # label inside bars
+                text=top_artists["hhmmss"],        # label inside bars
                 texttemplate="%{text}",
                 textposition="inside",
-                insidetextanchor="middle",
-                insidetextfont=dict(color="#002918", size=14, family="Arial"),
+                insidetextanchor="end",
+                insidetextfont=dict(color="#002918", size=12, family="Arial"),
             )
 
             # --- Layout and formatting ---
@@ -2257,7 +2329,7 @@ elif page == "Overview":
                 margin=dict(l=0, r=0, t=30, b=0),
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#e1ece3", size=12),
+                font=dict(color="#e1ece3", size=14),
             )
 
             # ✅ Modern config usage — no warnings
@@ -2269,6 +2341,7 @@ elif page == "Overview":
                     "responsive": True,
                 },
             )
+
         with c2:
             artist_image_list = []
             for idx, artist in enumerate(top_artists["artist_name"], start=1):
@@ -2276,7 +2349,7 @@ elif page == "Overview":
                 img = match["artist_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
                 artist_image_list.append(dict(text=artist, title=f"#{idx}", img=img))
             if artist_image_list:
-                carousel(items=artist_image_list, container_height=500)
+                carousel(items=artist_image_list, wrap=False, container_height=500)
 
         # --- Top 10 Tracks ---
         st.markdown("## Top 10 Tracks")
@@ -2303,7 +2376,13 @@ elif page == "Overview":
                     "label": "",
                 },
             )
-            fig_tracks.update_traces(texttemplate="%{text}", textposition="outside")
+            fig_tracks.update_traces(
+                text=top_tracks["hhmmss"],        # label inside bars
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="end",
+                insidetextfont=dict(color="#002918", size=12, family="Arial"),
+            )
             fig_tracks.update_layout(
                 yaxis={"categoryorder": "total ascending"},
                 height=500,
@@ -2311,12 +2390,13 @@ elif page == "Overview":
 
             st.plotly_chart(
                 fig_tracks,
-                width='stretch',
+                use_container_width=True,
                 config={
                     "displayModeBar": False,
                     "responsive": True,
                 },
             )
+
         with c2:
             track_image_list = []
             for idx, row in top_tracks.iterrows():
@@ -2428,7 +2508,7 @@ elif page == "Overview":
         # ✅ unified config pattern
         st.plotly_chart(
             fig_timeline,
-            width='stretch',
+            use_container_width=True,
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -2504,11 +2584,12 @@ elif page == "Overview":
             height=500,
             plot_bgcolor="rgba(0,0,0,0)",
             hovermode="x unified",
+            legend=dict(traceorder="normal")
         )
 
         st.plotly_chart(
             fig_genre,
-            width='stretch',
+            use_container_width=True,
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -2536,12 +2617,13 @@ elif page == "Overview":
 
         st.plotly_chart(
             fig_heat,
-            width='stretch',
+            use_container_width=True,
             config={
                 "displayModeBar": False,
                 "responsive": True,
             },
         )
+
     # ============================================================
     # 🎙️ PODCASTS
     # ============================================================
@@ -2865,9 +2947,7 @@ elif page == "Overview":
 # ------------------------------ Artist Page ------------------------------ #
 elif page == "Artists":
 
-    import matplotlib.pyplot as plt
-    import dayplot as dp
-    from datetime import date
+    st.session_state["last_page"] = "Artist"
 
     # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
@@ -2955,7 +3035,6 @@ elif page == "Artists":
         else:
             df_artist_album = df_artist[df_artist["album_name"] == album_selected].copy()
 
-        # --- Ranking ---
         # --- Ranking ---
         # Artist ranking for the selected year (or all time)
         artist_rank_df = (
@@ -3234,6 +3313,7 @@ elif page == "Artists":
         scorecard("Longest Streak", f"{max_streak} Days", streak_delta)
         scorecard(rpa_label, f"{avg_returns:.1f}", rpa_delta)
         scorecard("Days since last listen", f"{days_since} Days")
+        st.metric("Longest Streak", f"{max_streak} Days", streak_delta)
 
     with col2:
         if album_selected == "All Albums":
@@ -3612,6 +3692,8 @@ elif page == "Artists":
 # ------------------------------- Per Genre ---------------------------------- #
 elif page == "Genres":
 
+    st.session_state["last_page"] = "Genres"
+
     # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
@@ -3745,6 +3827,116 @@ elif page == "Genres":
     with c4:
         scorecard("🎵 Favourite Track", fav_track_display)
 
+    # ------------- Top 10 Chart ----------------------- #
+    st.markdown("### 🎧 Top Tracks in Selected Genre")
+
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        # --- Filter by selected genre first ---
+        df_genre_filtered = df_year[df_year["supergenre"] == genre_selected].copy()
+
+        # --- Top tracks within selected genre ---
+        top_tracks = (
+            df_genre_filtered.groupby(["artist_name", "track_name", "album_name"])["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()
+            .head(10)
+        )
+
+        if not top_tracks.empty:
+            # Apply hh:mm:ss formatting
+            top_tracks["hhmmss"] = top_tracks["minutes_played"].apply(format_hhmmss)
+
+            # Combined label for display
+            top_tracks["label"] = (
+                top_tracks["artist_name"] + " — " + top_tracks["track_name"]
+            )
+
+            # --- Bar chart ---
+            fig_top_tracks = px.bar(
+                top_tracks,
+                x="minutes_played",
+                y="label",
+                text="hhmmss",
+                orientation="h",
+                color_discrete_sequence=["#1ed760"],
+            )
+
+            # Wrap labels across two lines
+            import textwrap
+            fig_top_tracks.update_yaxes(
+                categoryorder="total ascending",
+                tickfont=dict(size=11),
+                tickmode="array",
+                tickvals=top_tracks["label"],
+                ticktext=[
+                    "<br>".join(textwrap.wrap(label, width=35))
+                    for label in top_tracks["label"]
+                ],
+                title=None,
+            )
+
+            # --- Format x-axis as hh:mm:ss ---
+            max_minutes = top_tracks["minutes_played"].max()
+            tick_interval = max_minutes / 5  # roughly 5 evenly spaced ticks
+            tickvals = [i for i in range(0, int(max_minutes) + 1, int(tick_interval) or 1)]
+            ticktext = [format_hhmmss(x) for x in tickvals]
+
+            fig_top_tracks.update_xaxes(
+                title="Listening Time (hh:mm:ss)",
+                tickvals=tickvals,
+                ticktext=ticktext,
+                showgrid=False,
+            )
+
+            # --- Style bars ---
+            fig_top_tracks.update_traces(
+                textposition="inside",
+                insidetextanchor="end",
+                textfont=dict(color="black", size=12),
+            )
+
+            fig_top_tracks.update_layout(
+                height=500,
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+            )
+
+            st.plotly_chart(
+                fig_top_tracks,
+                use_container_width=True,
+                config={"displayModeBar": False, "responsive": True},
+            )
+        else:
+            st.info("No track data found for this genre and year selection.")
+
+    # --- Album artwork carousel ---
+    with c2:
+        album_image_list = []
+        for idx, row in top_tracks.iterrows():
+            album_match = INFO_ALBUM.loc[
+                INFO_ALBUM["album_name"] == row["album_name"]
+            ]
+            img = (
+                album_match["album_artwork"].iloc[0]
+                if not album_match.empty
+                else IMAGE_PLACEHOLDER
+            )
+            album_image_list.append(
+                dict(
+                    text=f"{row['artist_name']} — {row['album_name']}",
+                    title=f"#{idx + 1}",
+                    img=img,
+                )
+            )
+
+        # Only render carousel if there are valid images
+        if album_image_list:
+            carousel(items=album_image_list, wrap=False, container_height=500)
+
     # ------------- Trend Chart ------------- #
     st.markdown("### Listening Trend (Genre vs Overall)")
 
@@ -3810,100 +4002,88 @@ elif page == "Genres":
     )
     st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
 
-    # ------------- Top 10 Chart ----------------------- #
-    st.markdown("### 🎧 Top Tracks in Selected Genre")
-
-    top_tracks = (
-        df_year.groupby(["artist_name", "track_name"])["minutes_played"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-        .head(10)
-    )
-
-    top_tracks["label"] = (
-        top_tracks["artist_name"] + " — " + top_tracks["track_name"]
-    )
-
-    fig_top_tracks = px.bar(
-        top_tracks,
-        x="minutes_played",
-        y="label",
-        text="minutes_played",
-        orientation="h",
-        color_discrete_sequence=["#1ed760"],
-    )
-
-    # Auto-wrap labels
-    fig_top_tracks.update_yaxes(
-        categoryorder="total ascending",
-        tickfont=dict(size=11),
-        tickmode="array",
-        tickvals=top_tracks["label"],
-        ticktext=[
-            "<br>".join(textwrap.wrap(label, width=35))
-            for label in top_tracks["label"]
-        ],
-        title=None,
-    )
-
-    fig_top_tracks.update_xaxes(title="Minutes Played")
-
-    fig_top_tracks.update_layout(
-        height=500,
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white"),
-    )
-
-    st.plotly_chart(
-        fig_top_tracks,
-        use_container_width=True,
-        config={"displayModeBar": False, "responsive": True},
-    )
-
-    # ------------- Genre by the Hour ------------------ #
+# ------------- Genre by the Hour ------------------ #
     st.markdown("### ⏰ Top Genre by Hour of Day")
 
-    df_hour = df_year.copy()
-    df_hour["hour"] = df_hour["datetime"].dt.hour
+    from plotly.colors import sample_colorscale
 
-    # Determine top genre for each hour
-    top_genre_per_hour = (
-        df_hour.groupby(["hour", "supergenre"])["minutes_played"]
+    # --- Step 1: Prep data ---
+    df_hour = df_year.copy()
+    df_hour["hour"] = df_hour["datetime"].dt.hour.astype(float)
+
+    # Remove unlisted
+    df_hour = df_hour[df_hour["supergenre"].str.lower() != "unlisted"]
+
+    # Aggregate listening by hour + genre
+    hour_genre_summary = (
+        df_hour.groupby(["hour", "supergenre"], as_index=False)["minutes_played"]
         .sum()
-        .reset_index()
     )
 
+    # Determine top genre per hour
     top_genre_per_hour = (
-        top_genre_per_hour.loc[
-            top_genre_per_hour.groupby("hour")["minutes_played"].idxmax()
+        hour_genre_summary.loc[
+            hour_genre_summary.groupby("hour")["minutes_played"].idxmax()
         ]
         .sort_values("hour")
+        .reset_index(drop=True)
     )
 
+    # Fill missing hours with zeros
+    all_hours = pd.DataFrame({"hour": list(range(24))})
+    top_genre_per_hour = (
+        all_hours.merge(top_genre_per_hour, on="hour", how="left")
+        .fillna({"supergenre": "No Data", "minutes_played": 0})
+    )
+
+    # --- Step 2: Create color map consistent with your genre diversity chart ---
+    ordered_genres = sorted(top_genre_per_hour["supergenre"].unique())
+    n_genres = len(ordered_genres)
+
+    # Use the same global neon_colorscale you defined elsewhere
+    sampled_colors = sample_colorscale(
+        neon_colorscale, [i / max(1, n_genres - 1) for i in range(n_genres)]
+    )
+    color_map = dict(zip(ordered_genres, sampled_colors))
+
+    # --- Step 3: Plot ---
     fig_hourly = px.bar(
         top_genre_per_hour,
         x="hour",
         y="minutes_played",
         color="supergenre",
         text="supergenre",
-        color_discrete_sequence=px.colors.qualitative.Set2,
+        color_discrete_map=color_map,  # 🎨 consistent color mapping
     )
 
     fig_hourly.update_traces(
         textposition="inside",
         insidetextanchor="middle",
+        width=1.0,
+        offset=0,
+        base=0,
     )
+
+    # Dynamic y-axis scaling
+    y_max = top_genre_per_hour["minutes_played"].max() * 1.1
 
     fig_hourly.update_layout(
         height=450,
+        bargap=0,
         xaxis=dict(
             tickmode="array",
-            tickvals=list(range(0, 24)),
-            ticktext=[f"{h:02d}:00" for h in range(0, 24)],
+            tickvals=list(range(24)),
+            ticktext=[f"{h:02d}:00" for h in range(24)],
+            title=None,
+            type="linear",
+            range=[0, 24],
+            fixedrange=True,
         ),
-        yaxis_title="Minutes Played",
-        bargap=0,
+        yaxis=dict(
+            title="Minutes Played",
+            range=[0, y_max],
+            fixedrange=True,
+        ),
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="white"),
         showlegend=False,
@@ -4066,7 +4246,7 @@ elif page == "Genres":
     # --- RENDER ---
     st.plotly_chart(
         fig_sunburst,
-        width='stretch',
+        use_container_width=True,
         config={
             "displayModeBar": False,
             "responsive": True,
@@ -4092,15 +4272,9 @@ elif page == "Genres":
 # ------------------------------- The Farm ----------------------------------- #
 elif page == "Sheeple-O-Meter":
 
+    st.session_state["last_page"] = "Sheeple-O-Meter"
+
     # -------------------- Helpers (scoped to this page) -------------------- #
-    from pathlib import Path
-    import re
-    import os
-    import numpy as np
-    import pandas as pd
-    import plotly.express as px
-    import plotly.graph_objects as go
-    from chart_scorer import parse_label_ts_from_table_name
 
     def display_gauge_chart(basic_score: float, delta_str: str = ""):
         """Draw the Sheeple-O-Meter gauge (0–1) with modern Plotly syntax."""
@@ -4150,7 +4324,7 @@ elif page == "Sheeple-O-Meter":
 
         st.plotly_chart(
             gauge,
-            width='stretch',
+            use_container_width=True,
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -4178,7 +4352,14 @@ elif page == "Sheeple-O-Meter":
             labels={'points_awarded': 'Total Points', 'artist_name': 'Artist'},
             color_discrete_sequence=['#19ab19'] * len(artist_points),
         )
-        st.plotly_chart(fig_artists, width='stretch')
+        st.plotly_chart(
+            fig_artists,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            }
+        )
 
     def display_timeline_chart(chart_hits: pd.DataFrame, plot_df: pd.DataFrame, years: list[int], latest_year: int, points_method: str):
         """Recreated timeline (using first_listen_week_start Fridays as 'event dates')."""
@@ -4202,7 +4383,14 @@ elif page == "Sheeple-O-Meter":
             hovermode="x",
             hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white"))
         )
-        st.plotly_chart(fig_timeline, width='stretch')
+        st.plotly_chart(
+            fig_timeline,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            }
+        )
 
     def display_popularity_comparison_monthly(user_name, user_monthly, global_monthly, smoothing_window):
         import plotly.graph_objects as go
@@ -4284,7 +4472,7 @@ elif page == "Sheeple-O-Meter":
         # --- Updated Streamlit call (no deprecated kwargs) ---
         st.plotly_chart(
             fig,
-            width='stretch',
+            use_container_width=True,
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -4684,7 +4872,7 @@ elif page == "Sheeple-O-Meter":
 
 # ------------------------------- FUN Page ----------------------------------- #
 elif page == "On This Day":
-    # Show current user info
+
         # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
@@ -4704,11 +4892,10 @@ elif page == "On This Day":
 
     # project title
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    with col1:
+        st.markdown("## On This Day")
     with col3:
         st.image(LOGO_SPOTGREEN, width=200)
-
-        ## random event generator ##
-    st.markdown("## Random News & Listening Day")
 
     # Load and normalize headlines dataset
     headlines_df = INFO_HEADLINE.copy()
@@ -4738,54 +4925,134 @@ elif page == "On This Day":
     # Normalize listening dataframe to daily level
     df['date'] = pd.to_datetime(df['datetime']).dt.date
 
-    if st.button("Pick a Random Day"):
+    def scorecard_button(label: str, key=None, height: int = 100, font_size: int = 28, background: str = "#0d5637", hover_color: str = "#1ed760"):
+        """
+        A full-width clickable scorecard-style button that fits neatly in Streamlit layouts.
+        Returns True when clicked.
+        """
+        if key is None:
+            key = f"scorecard_btn_{uuid.uuid4()}"
+
+        # CSS styling (self-contained)
+        st.markdown(f"""
+            <style>
+            div[data-testid="{key}"] {{
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                background-color: {background};
+                color: #e1ece3;
+                border: none;
+                border-radius: 5px;
+                height: {height}px;
+                font-size: {font_size}px;
+                font-weight: 600;
+                box-shadow: 0 0 8px rgba(0,0,0,0.3);
+                cursor: pointer;
+                transition: all 0.2s ease-in-out;
+                text-align: center;
+            }}
+            div[data-testid="{key}"]:hover {{
+                background-color: {hover_color};
+                color: black;
+            }}
+            </style>
+        """, unsafe_allow_html=True)
+
+        # Streamlit button + custom wrapper
+        button_placeholder = st.container()
+        clicked = button_placeholder.button(label, key=key, use_container_width=True)
+
+        return clicked
+
+    trigger_random = scorecard_button(f"🎲 {st.session_state.get('random_date_display', 'Pick a Random Day')}", key="random_day")
+
+    if "last_page" not in st.session_state or st.session_state["last_page"] != "On This Day":
+        trigger_random = True
+    st.session_state["last_page"] = "On This Day"
+
+    if trigger_random:
         valid_date = None
         attempts = 0
-
         while valid_date is None and attempts < 1000:
             attempts += 1
             random_date = df['date'].sample(n=1).iloc[0]
-
             has_news = not headlines_df[headlines_df['date'] == random_date].empty
             has_listening = not df[df['date'] == random_date].empty
-
             if has_news and has_listening:
                 valid_date = random_date
 
-        if valid_date is None:
-            st.error("Couldn't find a valid day with both news and listening history.")
-            st.stop()
+        if valid_date is not None:
+            st.session_state["random_date_display"] = valid_date.strftime('%d %B %Y')
+            # Display the date and content below
+            st.subheader(st.session_state["random_date_display"])
 
-        st.subheader(f"**{valid_date.strftime('%d %B %Y')}**")
+        # --- News Section ---
+        news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
 
-        col1, col2, = st.columns([1,1])
+        # --- Listening Section ---
+        daily_df = df[df['date'] == valid_date]
+        top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
+        category = top_item['category']
+
+        track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
+        podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
+        audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
+
+        scorecard("",f"{valid_date.strftime('%d %B %Y')}",score_bold=True)
+
+        col1, col2 = st.columns([1, 1])
         with col1:
-            # --- News Section ---
-            news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
             st.subheader(f"**{news['web_title']}**")
-            if isinstance(news['image_url'], str) and news['image_url'].startswith("http"):
-                st.image(news['image_url'], width=400)
-            st.write(news['short_description'])
-            st.markdown(f"[Read more]({news['web_url']})")
 
         with col2:
-            # --- Listening Section ---
-            daily_df = df[df['date'] == valid_date]
-            top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
-            category = top_item['category']
-
-            track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
-            podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
-            audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
-
             if category == "music":
                 st.subheader(f"{top_item['artist_name']}")
                 st.write(f"**Album:** {top_item['album_name']}")
                 st.write(f"**Track:** {top_item['track_name']}")
+            elif category == "podcast":
+                st.subheader(f"**Show:** {top_item['episode_show_name']}")
+            elif category == "audiobook":
+                st.subheader(f"**Book:** {top_item['audiobook_title']}")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if isinstance(news['image_url'], str) and news['image_url'].startswith("http"):
+                st.image(news['image_url'], width='stretch')
+            st.write(news['short_description'])
+
+        with col2:
+            if category == "music":
                 album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
                 artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
                 if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width='stretch')
+
+            elif category == "podcast":
+                st.subheader(f"**Show:** {top_item['episode_show_name']}")
+                st.write(f"**Episode:** {top_item['episode_name']}")
+                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
+                artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
                     st.image(artwork_url, width=300)
+                st.markdown(f"[Listen again]({podcast_url})")
+
+            elif category == "audiobook":
+                st.subheader(f"**Book:** {top_item['audiobook_title']}")
+                st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
+                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
+                artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width=300)
+                st.markdown(f"[Listen again]({audiobook_url})")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+
+            st.markdown(f"[Read more]({news['web_url']})")
+
+        with col2:
+            if category == "music":
                 st.markdown(f"[Listen again]({track_url})")
 
             elif category == "podcast":
@@ -4806,52 +5073,12 @@ elif page == "On This Day":
                     st.image(artwork_url, width=300)
                 st.markdown(f"[Listen again]({audiobook_url})")
 
-    # ##most skipped song Scorecard##
-    # st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)
-    # ## df grouped by year
-    # df['date'] = pd.to_datetime(df['datetime']).dt.date
-    # df['year'] = pd.to_datetime(df['datetime']).dt.year
-    # year_list = df['year'].sort_values().unique().tolist()
-    # year_selected = st.segmented_control("Year", year_list, selection_mode="single", default=df['year'].max())
-    # df_filtered = df[df['year'] == year_selected]
-    # df_music = df_filtered[df_filtered['category'] == 'music']
-    # most_skipped = (df_music[df_music['skipped'] > 0].groupby(['track_name', 'artist_name'])['skipped'].sum().reset_index().sort_values(by='skipped', ascending=False).head(1))
-
-    # ## box stolen from the internet
-    # wch_colour_box = (64, 64, 64)
-    # wch_colour_font = (255, 255, 255)
-    # #wch_colour_font = (50, 205, 50)
-    # fontsize = 38
-    # valign = "left"
-    # iconname = "fas fa-star"
-    # i = (most_skipped['track_name'].values[0] + ' by ' + most_skipped['artist_name'].values[0] if not most_skipped.empty else "No skipped tracks")
-
-    # htmlstr = f"""
-    #       <p style='background-color: rgb(
-    #           {wch_colour_box[0]},
-    #           {wch_colour_box[1]},
-    #           {wch_colour_box[2]}, 0.75
-    #       );
-    #       color: rgb(
-    #           {wch_colour_font[0]},
-    #           {wch_colour_font[1]},
-    #           {wch_colour_font[2]}, 0.75
-    #       );
-    #       font-size: {fontsize}px;
-    #       border-radius: 7px;
-    #       padding-top: 40px;
-    #       padding-bottom: 40px;
-    #       line-height:25px;
-    #       display: flex;
-    #       align-items: center;
-    #       justify-content: center;'>
-    #       <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-    #   """
-    # st.markdown(htmlstr, unsafe_allow_html=True)
 
 # --------------------------------- FAQs ------------------------------------- #
 elif page == "FAQs":
-    # project title
+
+    st.session_state["last_page"] = "FAQs"
+
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
     with col3:
         st.image(LOGO_SPOTGREEN, width=200)

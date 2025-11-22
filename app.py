@@ -292,6 +292,47 @@ def scorecard(
 
     components.html(html, height=height + 10)
 
+def scorecard_button(label: str, key=None, height: int = 100, font_size: int = 28, background: str = "#0d5637", hover_color: str = "#1ed760"):
+    """
+    A full-width clickable scorecard-style button that fits neatly in Streamlit layouts.
+    Returns True when clicked.
+    """
+    if key is None:
+        key = f"scorecard_btn_{uuid.uuid4()}"
+
+    # CSS styling (self-contained)
+    st.markdown(f"""
+        <style>
+        div[data-testid="{key}"] {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: {background};
+            color: #e1ece3;
+            border: none;
+            border-radius: 5px;
+            height: {height}px;
+            font-size: {font_size}px;
+            font-weight: 600;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            text-align: center;
+        }}
+        div[data-testid="{key}"]:hover {{
+            background-color: {hover_color};
+            color: black;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Streamlit button + custom wrapper
+    button_placeholder = st.container()
+    clicked = button_placeholder.button(label, key=key, use_container_width=True)
+
+    return clicked
+
+
 def normalize_str(s):
     """Normalize string for consistent comparison (case-insensitive, strip accents)."""
     if not isinstance(s, str):
@@ -1791,7 +1832,6 @@ with st.sidebar:
         "Sheeple-O-Meter",
         "On This Day",
         "FAQs",
-        "Test"
         ]
     )
 
@@ -1876,8 +1916,8 @@ if page == "Home":
     ) else 0
 
     if labels:
-        s1, s2, s3 = st.columns([1, 1, 1])
-        with s1:
+        c1 = st.columns([1, 2.5])[0]
+        with c1:
             selected_label = st.selectbox(
                 "Choose a dataset you've uploaded", labels, index=default_index
             )
@@ -4925,67 +4965,48 @@ elif page == "On This Day":
     # Normalize listening dataframe to daily level
     df['date'] = pd.to_datetime(df['datetime']).dt.date
 
-    def scorecard_button(label: str, key=None, height: int = 100, font_size: int = 28, background: str = "#0d5637", hover_color: str = "#1ed760"):
-        """
-        A full-width clickable scorecard-style button that fits neatly in Streamlit layouts.
-        Returns True when clicked.
-        """
-        if key is None:
-            key = f"scorecard_btn_{uuid.uuid4()}"
+    # --- Initialize session vars ---
+    if "random_date_display" not in st.session_state:
+        st.session_state["random_date_display"] = "Pick a Random Day"
+    if "valid_date" not in st.session_state:
+        st.session_state["valid_date"] = None
+    if "trigger_random" not in st.session_state:
+        st.session_state["trigger_random"] = True  # auto-run first time
 
-        # CSS styling (self-contained)
-        st.markdown(f"""
-            <style>
-            div[data-testid="{key}"] {{
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                background-color: {background};
-                color: #e1ece3;
-                border: none;
-                border-radius: 5px;
-                height: {height}px;
-                font-size: {font_size}px;
-                font-weight: 600;
-                box-shadow: 0 0 8px rgba(0,0,0,0.3);
-                cursor: pointer;
-                transition: all 0.2s ease-in-out;
-                text-align: center;
-            }}
-            div[data-testid="{key}"]:hover {{
-                background-color: {hover_color};
-                color: black;
-            }}
-            </style>
-        """, unsafe_allow_html=True)
-
-        # Streamlit button + custom wrapper
-        button_placeholder = st.container()
-        clicked = button_placeholder.button(label, key=key, use_container_width=True)
-
-        return clicked
-
-    trigger_random = scorecard_button(f"🎲 {st.session_state.get('random_date_display', 'Pick a Random Day')}", key="random_day")
-
-    if "last_page" not in st.session_state or st.session_state["last_page"] != "On This Day":
-        trigger_random = True
-    st.session_state["last_page"] = "On This Day"
-
-    if trigger_random:
-        valid_date = None
+    # --- Generate a random valid date ---
+    def generate_valid_date():
         attempts = 0
-        while valid_date is None and attempts < 1000:
+        while attempts < 1000:
             attempts += 1
             random_date = df['date'].sample(n=1).iloc[0]
             has_news = not headlines_df[headlines_df['date'] == random_date].empty
             has_listening = not df[df['date'] == random_date].empty
             if has_news and has_listening:
-                valid_date = random_date
+                return random_date
+        return None
 
-        if valid_date is not None:
+    # --- Handle random trigger ---
+    if st.session_state["trigger_random"]:
+        valid_date = generate_valid_date()
+        if valid_date:
+            st.session_state["valid_date"] = valid_date
             st.session_state["random_date_display"] = valid_date.strftime('%d %B %Y')
-            # Display the date and content below
-            st.subheader(st.session_state["random_date_display"])
+        st.session_state["trigger_random"] = False
+
+    # --- Render the scorecard-style button ---
+    trigger_button = scorecard_button(
+        f"🎲 {st.session_state['random_date_display']}",
+        key="random_day"
+    )
+
+    # --- Manual trigger ---
+    if trigger_button:
+        st.session_state["trigger_random"] = True
+        st.rerun()  # ensures instant UI update
+
+    # --- Display current date and its content ---
+    if st.session_state.get("valid_date"):
+        valid_date = st.session_state["valid_date"]
 
         # --- News Section ---
         news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
@@ -4999,7 +5020,6 @@ elif page == "On This Day":
         podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
         audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
 
-        scorecard("",f"{valid_date.strftime('%d %B %Y')}",score_bold=True)
 
         col1, col2 = st.columns([1, 1])
         with col1:
@@ -5108,156 +5128,3 @@ elif page == "FAQs":
     st.markdown('')
 
     st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
-
-    # # -------------------- FORCE RE-ENRICH SECTION -------------------- #
-    # st.divider()
-
-    # st.markdown("## 🧩 Metadata Enrichment Tools")
-
-    # st.info("""
-    # Use this section to manually restart the metadata enrichment process.
-    # This will re-download and re-enrich all artist, album, and track metadata from Spotify and Discogs.
-    # Only use this if enrichment appears incomplete or out-of-date.
-    # """)
-
-    # # --- Identify user and dataset from session state ---
-    # user_id = st.session_state.get("user", {}).get("user_id")
-    # dataset_label = st.session_state.get("current_dataset_label")
-    # table_name = st.session_state.get("last_table_name")
-
-    # if not user_id or not dataset_label or not table_name:
-    #     st.warning("No dataset currently loaded. Please go to the Home page and select a dataset first.")
-    #     st.stop()
-
-    # # --- DAOs ---
-    # daos = get_daos()
-    # log_dao = daos.get("logs")
-    # status_dao = daos.get("status")
-    # user_data_dao = daos.get("user_data")
-
-    # # --- Show current status ---
-    # try:
-    #     status_d1 = status_dao.read_status(user_id, dataset_label) if hasattr(status_dao, "read_status") else {"error": "No read_status() method"}
-    # except Exception as e:
-    #     status_d1 = {"error": f"Failed to read D1 status: {e}"}
-
-    # try:
-    #     metadata_dao = daos.get("metadata")
-    #     status_r2 = metadata_dao.read_status(user_id, dataset_label) if hasattr(metadata_dao, "read_status") else {"error": "No read_status() method"}
-    # except Exception as e:
-    #     status_r2 = {"error": f"Failed to read R2 status: {e}"}
-
-    # st.markdown("### Current Enrichment Status")
-    # st.json({"D1": status_d1, "R2": status_r2})
-
-    # # --- Manage confirmation state ---
-    # if "confirm_rerun" not in st.session_state:
-    #     st.session_state.confirm_rerun = False
-
-    # if st.button("🔄 Force Re-Run Enrichment", type="primary"):
-    #     st.session_state.confirm_rerun = True
-
-    # # --- Confirmation UI ---
-    # if st.session_state.confirm_rerun:
-    #     st.warning("⚠️ Confirm before restarting enrichment — this will overwrite current metadata.")
-    #     confirmed = st.checkbox("I understand this will overwrite current metadata.", value=False)
-
-    #     if confirmed:
-    #         st.info("⚙️ Starting fresh enrichment... this may take several minutes.")
-    #         try:
-    #             from threading import Thread, Event
-
-    #             # ✅ Load the same dataset currently active in the app
-    #             cleaned_df = user_data_dao.load_user_data(table_name)
-
-    #             # ✅ Ensure 'category' column exists
-    #             if "category" not in cleaned_df.columns:
-    #                 st.warning("⚠️ 'category' column missing — adding placeholder.")
-    #                 cleaned_df["category"] = "music"
-
-    #             cancel_event = Event()
-    #             enrichment_thread = Thread(
-    #                 target=background_enrich,
-    #                 kwargs=dict(
-    #                     user_id=user_id,
-    #                     dataset_label=dataset_label,
-    #                     cleaned_df=cleaned_df,
-    #                     log_dao=log_dao,
-    #                     cancel_event=cancel_event,
-    #                 ),
-    #                 daemon=True,
-    #             )
-    #             enrichment_thread.start()
-
-    #             st.success(f"✅ Enrichment manually re-started for {dataset_label}")
-    #             log_dao.log(
-    #                 user_id=user_id,
-    #                 dataset_label=dataset_label,
-    #                 where="enrichment",
-    #                 msg="Manual re-enrichment triggered by user.",
-    #                 level="info",
-    #             )
-
-    #             # Reset confirmation
-    #             st.session_state.confirm_rerun = False
-
-    #         except Exception as e:
-    #             st.error(f"❌ Failed to start enrichment: {e}")
-    #             if log_dao:
-    #                 log_dao.log(
-    #                     user_id=user_id,
-    #                     dataset_label=dataset_label,
-    #                     where="enrichment",
-    #                     msg=f"Manual enrichment trigger failed: {e}",
-    #                     level="error",
-    #                 )
-
-    # # --- Optional: Show current live progress ---
-    # try:
-    #     status = status_dao.read_status(user_id, dataset_label)
-    #     if status and status.get("status") == "running":
-    #         st.markdown("### Live Progress")
-    #         progress_placeholder = st.empty()
-    #         phase = status.get("phase", "working...")
-    #         percent = status.get("percent", 0)
-    #         progress_placeholder.progress(percent / 100, text=f"{phase} ({percent:.1f}%)")
-    #         st.info("🔄 Refresh this page periodically to see progress updates.")
-    # except Exception as e:
-    #     st.warning(f"Could not fetch live progress: {e}")
-
-# --------------------------------- Test ------------------------------------- #
-elif page == "Test":
-
-# -------------- EXAMPLE -------------- #
-    def create_sticky_bar():
-        with stylable_container(
-            key='sty',
-            css_styles='''
-                {
-                    position: fixed;
-                    top: 0;
-                    left: 17rem;
-                    right: 0;
-                    height: 3.5rem;
-                    background: rgba(255, 255, 255, 0.95);
-                    z-index: 1000;
-                    padding: 25px 0px;
-                    corner-radius: 0px;
-                    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
-                }
-                div[data-testid="stElementContainer"] div:has(div.fixed-footer-w-buttons) div {
-                border-top: 1px solid #223398;
-                }
-            '''
-            ):
-            with st.container(height=100, border=False):
-                button_bar = st.container()
-                button_bar.write("""<div class='fixed-footer-w-buttons'><div/>""", unsafe_allow_html=True)
-                with button_bar:
-                    button_cols = st.columns([1, 1, 10])
-
-        return button_bar, button_cols
-
-    button_bar, button_cols = create_sticky_bar()
-    with button_bar:
-        st.segmented_control("",["1","2","3"], selection_mode="single", key="test_seg_control")

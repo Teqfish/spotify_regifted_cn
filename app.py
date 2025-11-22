@@ -39,6 +39,7 @@ import time
 import traceback
 from typing import Optional, Literal
 import unicodedata
+import uuid
 import zipfile
 
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
@@ -292,46 +293,67 @@ def scorecard(
 
     components.html(html, height=height + 10)
 
-def scorecard_button(label: str, key=None, height: int = 100, font_size: int = 28, background: str = "#0d5637", hover_color: str = "#1ed760"):
+def scorecard_button_legacy(label: str, key=None, height: int = 100, font_size: int = 28,
+                     background: str = "#0d5637", hover_color: str = "#1ed760"):
     """
-    A full-width clickable scorecard-style button that fits neatly in Streamlit layouts.
-    Returns True when clicked.
+    A fully custom HTML/CSS scorecard-style button that supports colors, hover effects,
+    and height control. Returns True when clicked.
     """
     if key is None:
         key = f"scorecard_btn_{uuid.uuid4()}"
 
-    # CSS styling (self-contained)
-    st.markdown(f"""
-        <style>
-        div[data-testid="{key}"] {{
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: {background};
-            color: #e1ece3;
-            border: none;
-            border-radius: 5px;
-            height: {height}px;
-            font-size: {font_size}px;
-            font-weight: 600;
-            box-shadow: 0 0 8px rgba(0,0,0,0.3);
-            cursor: pointer;
-            transition: all 0.2s ease-in-out;
-            text-align: center;
-        }}
-        div[data-testid="{key}"]:hover {{
-            background-color: {hover_color};
-            color: black;
-        }}
-        </style>
-    """, unsafe_allow_html=True)
+    button_id = f"btn_{key.replace('-', '')}"
 
-    # Streamlit button + custom wrapper
-    button_placeholder = st.container()
-    clicked = button_placeholder.button(label, key=key, use_container_width=True)
+    html = f"""
+    <style>
+    #{button_id} {{
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: {background};
+        color: #e1ece3;
+        border: none;
+        border-radius: 5px;
+        height: {height}px;
+        width: 100%;
+        font-size: {font_size}px;
+        font-weight: 600;
+        box-shadow: 0 0 8px rgba(0,0,0,0.3);
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        text-align: center;
+    }}
+    #{button_id}:hover {{
+        background-color: {hover_color};
+        color: black;
+    }}
+    </style>
+
+    <script>
+    const btn = document.getElementById("{button_id}");
+    btn?.addEventListener("click", () => {{
+        window.parent.postMessage({{ type: "scorecard_click_{key}" }}, "*");
+    }});
+    </script>
+
+    <button id="{button_id}">{label}</button>
+    """
+
+    # Inject HTML
+    components.html(html, height=height + 20)
+
+    # Listen for click
+    clicked = False
+    if f"scorecard_click_{key}" not in st.session_state:
+        st.session_state[f"scorecard_click_{key}"] = False
+
+    # Streamlit hack: detect the frontend click message
+    # (since JS can’t directly change Streamlit state)
+    if st.session_state.get(f"scorecard_clicked_{key}", False):
+        clicked = True
+        st.session_state[f"scorecard_clicked_{key}"] = False
 
     return clicked
-
 
 def normalize_str(s):
     """Normalize string for consistent comparison (case-insensitive, strip accents)."""
@@ -1807,26 +1829,23 @@ if not st.session_state.user:
 
 # --- PAGE NAVIGATION ---
 with st.sidebar:
-    st.image(LOGO_SPOTGREEN, width="stretch")
-    st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
 
-    # ✅ Render the enrichment status *right here*, before the radio
+    st.image(LOGO_SPOTGREEN, width="stretch")
     if st.session_state.get("current_dataset_label"):
         show_enrichment_status_sidebar(
             st.session_state.user["user_id"],
             st.session_state["current_dataset_label"]
         )
-
-    # Divider (optional)
+    st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
     st.divider()
-    # ✅ Then your page selector
+
     page = st.radio(
         "Navigation",
         label_visibility="hidden",
         options=
         [
         "Home",
-        "Overview",
+        "Overall Review",
         "Artists",
         "Genres",
         "Sheeple-O-Meter",
@@ -2024,6 +2043,8 @@ if page == "Home":
             print(f"[supergenre metric] Skipping due to transient data issue: {e}")
             fav_supergenre = "N/A"
 
+        st.divider()
+
         c1, c2, c3 = st.columns(3)
         with c1:
             scorecard("Recent Favourite Track", fav_track, score_size=30)
@@ -2032,7 +2053,117 @@ if page == "Home":
         with c3:
             scorecard("Recent Favourite Genre", fav_supergenre, score_size=30)
 
-        st.divider()
+        # ----------- SUNBURST -------------- #
+
+        user_df = df.copy()
+
+        df = pd.merge(
+            user_df,
+            df_album,
+            on=["album_name", "artist_name"],
+            how="left"
+        )
+
+        # Merge with artist genre info (by artist only)
+        df = pd.merge(
+            df,
+            df_artist_genre,
+            on="artist_name",
+            how="left"
+        )
+
+        # --- Datetime handling ---
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+        df = df.dropna(subset=["datetime"]).copy()
+        df["datetime"] = df["datetime"].dt.tz_localize(None)
+        df["date"] = df["datetime"].dt.date
+        df['year'] = df['datetime'].dt.year
+
+        df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
+        df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
+
+        # --- Add minutes played column ---
+        df_exploded['mins_played'] = df_exploded['ms_played'] / 60000.0
+
+        # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
+        top_genres = (
+            df_exploded.groupby(['year', 'supergenre'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'mins_played'], ascending=[True, False])
+            .groupby('year')
+            .head(5)
+        )
+
+        df_filtered = df_exploded.merge(
+            top_genres[['year', 'supergenre']], on=['year', 'supergenre']
+        )
+
+        top_artists = (
+            df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'supergenre', 'mins_played'], ascending=[True, True, False])
+            .groupby(['year', 'supergenre'])
+            .head(5)
+        )
+
+        df_filtered_artists = df_filtered.merge(
+            top_artists[['year', 'supergenre', 'artist_name']],
+            on=['year', 'supergenre', 'artist_name']
+        )
+
+        top_tracks = (
+            df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'supergenre', 'artist_name', 'mins_played'], ascending=[True, True, True, False])
+            .groupby(['year', 'supergenre', 'artist_name'])
+            .head(5)
+        )
+
+        # --- BUILD SUNBURST ---
+        fig_sunburst = px.sunburst(
+            top_tracks,
+            path=["year", "supergenre", "artist_name", "track_name"],
+            values="mins_played",
+            color="mins_played",
+            color_continuous_scale=[
+                "#062719",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                # "#90d7ad",
+                "#90d7ad",
+            ],
+            title=" ",
+        )
+
+        fig_sunburst.update_traces(
+            insidetextfont=dict(color="#c8eacd"),
+            hovertemplate="<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>",
+        )
+
+        fig_sunburst.update_layout(
+            margin=dict(t=50, l=0, r=0, b=0),
+            height=800,
+            font=dict(color="white"),
+            paper_bgcolor="rgba(0,0,0,0)",  # transparent to blend with dark background
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+
+        fig_sunburst.update_xaxes(autorange=True)
+        fig_sunburst.update_coloraxes(showscale=True)
+
+        st.plotly_chart(
+            fig_sunburst,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+            key="sunburst_moulin",
+        )
+
         st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
 
         demo_df = df.copy()
@@ -2138,10 +2269,10 @@ if page == "Home":
         except Exception as e:
             st.error(f"Failed to refresh dataset list: {e}")
 
-# -------------------------------- Overview ---------------------------------- #
-elif page == "Overview":
+# -------------------------------- Overall Review ---------------------------------- #
+elif page == "Overall Review":
 
-    st.session_state["last_page"] = "Overview"
+    st.session_state["last_page"] = "Overall Review"
 
     # ✅ Ensure dataset loaded
     if "current_df" not in st.session_state:
@@ -4913,42 +5044,39 @@ elif page == "Sheeple-O-Meter":
 # ------------------------------- FUN Page ----------------------------------- #
 elif page == "On This Day":
 
-        # ✅ Make sure dataset is loaded
+    # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
     df, current_label = require_current_df()
 
+    import uuid
+    import streamlit.components.v1 as components
+
+    # --- Safe Spotify URL helper ---
     def safe_spotify_url(uri_value, item_type):
-        """
-        Safely generate a Spotify URL from a Spotify URI.
-        item_type can be 'track', 'episode', or 'audiobook'.
-        """
         if isinstance(uri_value, str) and ":" in uri_value:
             return f"https://open.spotify.com/{item_type}/{uri_value.split(':')[-1]}"
         else:
             return None
 
-    # project title
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    # --- Page header ---
+    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment="center")
     with col1:
         st.markdown("## On This Day")
     with col3:
         st.image(LOGO_SPOTGREEN, width=200)
 
-    # Load and normalize headlines dataset
+    # --- Headlines dataset setup ---
     headlines_df = INFO_HEADLINE.copy()
-
-    # Clean and standardize columns completely
     headlines_df.columns = (
         headlines_df.columns
         .str.strip()
-        .str.replace("\ufeff", "", regex=True)  # remove invisible BOM
-        .str.lower()  # lowercase for consistency
+        .str.replace("\ufeff", "", regex=True)
+        .str.lower()
     )
 
-    # Now rename to normalized names
     rename_map = {
         "date (dd-mm-yyyy)": "date",
         "webtitle": "web_title",
@@ -4958,53 +5086,82 @@ elif page == "On This Day":
         "section": "section",
     }
     headlines_df.rename(columns=rename_map, inplace=True)
+    headlines_df["date"] = pd.to_datetime(headlines_df["date"], format="%d-%m-%Y").dt.date
 
-    # Convert date strings to datetime.date
-    headlines_df['date'] = pd.to_datetime(headlines_df['date'], format='%d-%m-%Y').dt.date
+    # --- Normalize listening dataframe ---
+    df["date"] = pd.to_datetime(df["datetime"]).dt.date
 
-    # Normalize listening dataframe to daily level
-    df['date'] = pd.to_datetime(df['datetime']).dt.date
+    # --- Custom CSS targeting the real button class ---
+    st.markdown("""
+        <style>
+        button.st-emotion-cache-9dgoxq {
+            background-color: #0d5637 !important;
+            color: #e1ece3 !important;
+            font-weight: 600 !important;
+            font-size: 40px !important;
+            height: 80px !important;
+            border: none !important;
+            border-radius: 3px !important;
+            width: 100% !important;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3) !important;
+            transition: all 0.2s ease-in-out !important;
+        }
 
-    # --- Initialize session vars ---
+        button.st-emotion-cache-9dgoxq:hover {
+            background-color: #4f9668 !important;
+            color: #002918 !important;
+            transform: translateY(-2px) !important;
+        }
+        div.st-emotion-cache-1jfgbg4 {
+            font-size: 40px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- Session setup ---
     if "random_date_display" not in st.session_state:
         st.session_state["random_date_display"] = "Pick a Random Day"
     if "valid_date" not in st.session_state:
         st.session_state["valid_date"] = None
     if "trigger_random" not in st.session_state:
-        st.session_state["trigger_random"] = True  # auto-run first time
+        st.session_state["trigger_random"] = True
+    if st.session_state["last_page"] != "On This Day":
+        st.session_state["trigger_random"] = True
+        st.session_state["last_page"] = "On This Day"
 
     # --- Generate a random valid date ---
     def generate_valid_date():
         attempts = 0
         while attempts < 1000:
             attempts += 1
-            random_date = df['date'].sample(n=1).iloc[0]
-            has_news = not headlines_df[headlines_df['date'] == random_date].empty
-            has_listening = not df[df['date'] == random_date].empty
+            random_date = df["date"].sample(n=1).iloc[0]
+            has_news = not headlines_df[headlines_df["date"] == random_date].empty
+            has_listening = not df[df["date"] == random_date].empty
             if has_news and has_listening:
                 return random_date
         return None
 
-    # --- Handle random trigger ---
+    # --- Handle trigger ---
     if st.session_state["trigger_random"]:
         valid_date = generate_valid_date()
         if valid_date:
             st.session_state["valid_date"] = valid_date
-            st.session_state["random_date_display"] = valid_date.strftime('%d %B %Y')
+            st.session_state["random_date_display"] = valid_date.strftime("%d %B %Y")
         st.session_state["trigger_random"] = False
 
-    # --- Render the scorecard-style button ---
-    trigger_button = scorecard_button(
-        f"🎲 {st.session_state['random_date_display']}",
-        key="random_day"
+    # --- Render the styled button ---
+    trigger_button = st.button(
+        f"{st.session_state['random_date_display']}",
+        key="random_day",
+        use_container_width=True
     )
 
     # --- Manual trigger ---
     if trigger_button:
         st.session_state["trigger_random"] = True
-        st.rerun()  # ensures instant UI update
+        st.rerun()
 
-    # --- Display current date and its content ---
+    # --- Display current date and content ---
     if st.session_state.get("valid_date"):
         valid_date = st.session_state["valid_date"]
 
@@ -5019,7 +5176,6 @@ elif page == "On This Day":
         track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
         podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
         audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
-
 
         col1, col2 = st.columns([1, 1])
         with col1:
@@ -5092,7 +5248,6 @@ elif page == "On This Day":
                 if isinstance(artwork_url, str) and artwork_url.startswith("http"):
                     st.image(artwork_url, width=300)
                 st.markdown(f"[Listen again]({audiobook_url})")
-
 
 # --------------------------------- FAQs ------------------------------------- #
 elif page == "FAQs":

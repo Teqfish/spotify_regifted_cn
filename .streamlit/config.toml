@@ -1,6 +1,6 @@
 [theme]
 base="dark"
-backgroundColor="#0b110bff"
+backgroundColor="#0b110b"
 primaryColor="#1DB954"
 secondaryBackgroundColor="#457e59"
 #dataframeHeaderBackgroundColor="#32CD32"
@@ -10,22 +10,22 @@ font="sans-serif"
 
 [theme.sidebar]
 primaryColor="#32CD32"
-backgroundColor="#17271bff"
-secondaryBackgroundColor="#2a4f34ff"
+backgroundColor="#17271b"
+secondaryBackgroundColor="#2a4f34"
 textColor="#e1ece3"
 
 [server]
 runOnSave = true
 
 # black="#0f1f0fff"
-# blackgreen="#002918ff"
+# blackgreen="#002918"
 # lightgrey="#a8b2a8"
 # offwhite="#e1ece3"
 # darkgreen="#0d5637"
 # midgreen="#457e59"
 # lightgreen="#62d089"
 # spotgreen="#1ed760"
-# backgroundColor="#909f92ff"
-# secondaryBackgroundColor="#2a4f34ff"
+# backgroundColor="#909f92"
+# secondaryBackgroundColor="#2a4f34"
 
 ["e67e0e","db6636","d04e5e","C53686","ba1ead","8D2DBF","5f3cd1","324BE3","0459f5","0677CC","0794a2","08B278","09cf4e","3FD774","75de99","ABE5BE","e1ece3"]

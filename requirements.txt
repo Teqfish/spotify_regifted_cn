@@ -1,41 +1,31 @@
-# Spotify Regifted — Streamlit Cloud deployment (Python 3.12.7)
-# force rebuild for PyJWT fix
-
-# --- Core Framework ---
-streamlit==1.45.1
+# Core App & Framework
+streamlit==1.51.0
 extra-streamlit-components==0.1.81
-streamlit_carousel==1.1.2
+streamlit-extras==0.7.8
 
-# --- Data stack ---
-pandas==2.2.3
-numpy==1.26.4
+# Data Analysis & Visualization
+pandas==2.3.3
+numpy==2.3.5
 matplotlib==3.10.0
 plotly==5.24.1
-country_converter==1.3
-dayplot==0.4.2
-pillow==11.3.0
 
-# --- Auth & crypto ---
-bcrypt==4.3.0
-PyJWT==2.10.1
-cryptography==46.0.3
-cffi>=1.15.1
+# Networking & APIs
+requests==2.32.5
+httpx==0.28.1
 
-# --- Cloud / Storage ---
-boto3==1.40.49
-botocore==1.40.49
-s3transfer==0.14.0
+# Database & Cloud Integration
 supabase==2.17.0
-gotrue==2.12.3
 postgrest==1.1.1
 realtime==2.6.0
 storage3==0.12.0
-supafunc==0.10.1
-requests==2.32.3
-protobuf==6.33.0
 
-# --- Utility / Misc ---
+# Utility & Support
 beautifulsoup4==4.14.2
-tenacity==9.1.2
-typing_extensions==4.15.0
-tzdata==2025.2
+lxml==6.0.2
+python-dateutil==2.9.0.post0
+pytz==2025.2
+validators==0.35.0
+
+# Optional (only if confirmed used)
+boto3==1.40.49
+cryptography==46.0.3

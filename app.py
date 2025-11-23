@@ -1851,6 +1851,7 @@ with st.sidebar:
         "Sheeple-O-Meter",
         "On This Day",
         "FAQs",
+        "Test"
         ]
     )
 
@@ -4326,120 +4327,6 @@ elif page == "Genres":
 
     # st.plotly_chart(fig_polar, use_container_width=True, config={"displayModeBar": False})
 
-    # ------------- SUNBURST CHART: GENRES ------------- #
-    # --- Explode genres ---
-    # Some artists may have multiple genres, so split them
-    df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
-    df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
-
-    # --- Add minutes played column ---
-    df_exploded['mins_played'] = df_exploded['ms_played'] / 60000.0
-
-    # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
-    top_genres = (
-        df_exploded.groupby(['year', 'supergenre'], as_index=False)['mins_played']
-        .sum()
-        .sort_values(['year', 'mins_played'], ascending=[True, False])
-        .groupby('year')
-        .head(5)
-    )
-
-    df_filtered = df_exploded.merge(
-        top_genres[['year', 'supergenre']], on=['year', 'supergenre']
-    )
-
-    top_artists = (
-        df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['mins_played']
-        .sum()
-        .sort_values(['year', 'supergenre', 'mins_played'], ascending=[True, True, False])
-        .groupby(['year', 'supergenre'])
-        .head(5)
-    )
-
-    df_filtered_artists = df_filtered.merge(
-        top_artists[['year', 'supergenre', 'artist_name']],
-        on=['year', 'supergenre', 'artist_name']
-    )
-
-    top_tracks = (
-        df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['mins_played']
-        .sum()
-        .sort_values(['year', 'supergenre', 'artist_name', 'mins_played'], ascending=[True, True, True, False])
-        .groupby(['year', 'supergenre', 'artist_name'])
-        .head(5)
-    )
-
-    # --- BUILD SUNBURST ---
-    fig_sunburst = px.sunburst(
-        top_tracks,
-        path=["year", "supergenre", "artist_name", "track_name"],
-        values="mins_played",
-        color="mins_played",
-        color_continuous_scale=[
-            "#062719",
-            "#1ed760",
-            "#1ed760",
-            "#1ed760",
-            "#1ed760",
-            "#1ed760",
-            # "#90d7ad",
-            "#90d7ad",
-        ],
-        title=" ",
-    )
-
-    fig_sunburst.update_traces(
-        insidetextfont=dict(color="#c8eacd"),
-        hovertemplate="<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>",
-    )
-
-    fig_sunburst.update_layout(
-        margin=dict(t=50, l=0, r=0, b=0),
-        height=800,
-        font=dict(color="white"),
-        paper_bgcolor="rgba(0,0,0,0)",  # transparent to blend with dark background
-        plot_bgcolor="rgba(0,0,0,0)",
-    )
-
-    fig_sunburst.update_xaxes(autorange=True)
-    fig_sunburst.update_coloraxes(showscale=True)
-
-    # --- HEADER ---
-    st.markdown(
-        "<h1 style='text-align: center;'>Le Moulin Des Genres (Windmill of Genre)</h1>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<h4 style='text-align: center;'>Choose Year 👉 Top 5 Genres 👉 Top 5 Artists 👉 Top 5 Tracks 🌞</h4>",
-        unsafe_allow_html=True,
-    )
-
-    # --- RENDER ---
-    st.plotly_chart(
-        fig_sunburst,
-        use_container_width=True,
-        config={
-            "displayModeBar": False,
-            "responsive": True,
-        },
-        key="sunburst_moulin",
-    )
-
-    # Hours of day chart logic remains the same
-
-    # MOST LISTENED TO HOURS OF THE DAY
-    # (Rest of your code remains the same)
-
-    # Convert 'datetime' to datetime type if needed
-    df['datetime'] = pd.to_datetime(df['datetime'])
-
-    # Extract hour and year
-    df['hour'] = df['datetime'].dt.hour
-    df['year'] = df['datetime'].dt.year
-
-    # Get list of available years
-    years = sorted(df['year'].unique())
-
 # ------------------------------- The Farm ----------------------------------- #
 elif page == "Sheeple-O-Meter":
 
@@ -5283,3 +5170,122 @@ elif page == "FAQs":
     st.markdown('')
 
     st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
+
+# --------------------------------- TEST ------------------------------------- #
+elif page == "Test":
+
+    st.session_state["last_page"] = "Test"
+
+    # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    # Get current user dataset
+    df, current_label = require_current_df()
+    user_df = df[df["category"] == "music"].copy()
+    df_music = df[df["category"] == "music"].copy()
+    df_album = INFO_ALBUM.copy()
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
+
+    # --- Normalize datetime column safely ---
+    df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
+    df_music = df_music.dropna(subset=["datetime"]).copy()
+    df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
+    df_music["date"] = df_music["datetime"].dt.date
+
+    # --- Header ---
+    c1, c2 = st.columns([6, 1], vertical_alignment="center")
+    with c1:
+        st.title("Test Site")
+    with c2:
+        st.image(LOGO_SPOTGREEN, width=200)
+
+    # --- Prefilter slider ---
+    st.markdown("### 🎧 Artist Listening Distribution")
+
+    # Convert to hours for better readability
+    artist_hours = (
+        df_music.groupby("artist_name")["minutes_played"]
+        .sum()
+        .div(60)  # convert minutes to hours
+        .reset_index(name="hours_played")
+    )
+
+    # Round everything to one decimal place for consistency
+    artist_hours["hours_played"] = artist_hours["hours_played"].round(1)
+
+    min_hours = float(artist_hours["hours_played"].min())
+    max_hours = float(artist_hours["hours_played"].max())
+
+    filter_threshold = st.slider(
+        "Filter out artists with total listening time below (hours):",
+        min_value=0.0,
+        max_value=round(max_hours, 1),
+        value=0.0,
+        step=0.5
+    )
+
+    # --- Apply filter ---
+    artist_hours = artist_hours[artist_hours["hours_played"] >= round(filter_threshold, 1)]
+
+    # --- Define exponential bins dynamically based on threshold ---
+    import numpy as np
+
+    max_val = round(float(artist_hours["hours_played"].max()), 2) if not artist_hours.empty else 1.0
+
+    # Number of bins increases smoothly with threshold (clamped 10–25)
+    bin_count = int(np.clip(10 + (filter_threshold / max(1, max_hours)) * 15, 10, 25))
+
+    # Avoid zero or negative start for logspace
+    start_val = max(round(filter_threshold + 0.05, 2), 0.1)
+    end_val = max(round(max_val + 0.2, 2), start_val + 0.1)
+
+    # Generate logarithmic bins, cleanly rounded
+    bins = np.unique(np.round(np.logspace(np.log10(start_val), np.log10(end_val), num=bin_count), 2))
+    bins = np.insert(bins, 0, round(filter_threshold, 1))  # Ensure first bin matches filter
+    bins = np.unique(np.clip(bins, filter_threshold, end_val))  # Enforce monotonic order
+
+    # --- Histogram data ---
+    hist_data = (
+        pd.cut(artist_hours["hours_played"], bins=bins, include_lowest=True)
+        .value_counts()
+        .sort_index()
+        .reset_index()
+    )
+    hist_data.columns = ["Listening Range (hours)", "# of Artists"]
+
+    # --- Clean labels ---
+    hist_data["Listening Range (hours)"] = (
+        hist_data["Listening Range (hours)"]
+        .astype(str)
+        .str.replace(",", "–")
+        .str.replace("(", "")
+        .str.replace("]", "")
+    )
+
+    # --- Plot ---
+    import plotly.express as px
+
+    fig = px.bar(
+        hist_data,
+        x="Listening Range (hours)",
+        y="# of Artists",
+        text="# of Artists",
+        color="# of Artists",
+        color_continuous_scale="Viridis",
+    )
+
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        title=f"Distribution of Artists by Total Listening Time (≥ {round(filter_threshold,1)} hrs)",
+        xaxis_title="Total Listening Time Range (hrs)",
+        yaxis_title="# of Artists",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white"),
+        xaxis=dict(showgrid=False, range=[round(filter_threshold, 1), None]),
+        yaxis=dict(showgrid=False),
+        height=500,
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})

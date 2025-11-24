@@ -1715,6 +1715,14 @@ if not st.session_state.user:
 
     h1, h2, h3 = st.columns(3, vertical_alignment="center")
     with h2:
+        st.markdown("""
+            <style>
+            div.st-emotion-cache-1dvmtd8 {
+                width: auto;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
         st.image(LOGO_SPOTGREEN, width=400)
 
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -1790,19 +1798,89 @@ with st.sidebar:
     st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
     st.divider()
 
+    # ---------- Load DAOs ----------
+    daos = get_daos()
+    user_dao = daos.get("user_data")
+
+    if user_dao is None:
+        st.error("UserData DAO is not configured for this server mode.")
+        st.stop()
+
+    # ---------- Existing Datasets ----------
+    try:
+        dataset_options = user_dao.list_datasets(st.session_state.user["user_id"])  # [(label, table_name), ...]
+    except Exception as e:
+        st.error(f"Failed to list datasets: {e}")
+        dataset_options = []
+
+    label_to_table = dict(dataset_options)
+    labels = list(label_to_table.keys())
+
+    # ---------- Dataset Selection ----------
+    if labels:
+        previous_label = st.session_state.get("current_dataset_label")
+        default_index = labels.index(previous_label) if previous_label in labels else 0
+
+        selected_label = st.selectbox(
+            "Choose a dataset you've uploaded",
+            labels,
+            index=default_index,
+            key="dataset_select_sidebar",
+        )
+
+        # If dataset changed or not yet loaded → load + trigger auto-check
+        if (
+            selected_label != previous_label
+            or st.session_state.get("current_df") is None
+        ):
+            selected_table = label_to_table[selected_label]
+            try:
+                df = user_dao.load_user_data(selected_table)
+                if df.empty:
+                    st.warning("Loaded dataset is empty.")
+                    st.stop()
+                df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+                df = df.dropna(subset=["datetime"])
+                df["date"] = df["datetime"].dt.date
+                df["year"] = df["datetime"].dt.year
+
+                st.session_state.current_df = df
+                st.session_state.current_dataset_label = selected_label
+                st.session_state.last_table_name = selected_table
+
+                # ✅ Only trigger enrichment auto-check on dataset change
+                from dao_selector import get_log_dao
+
+                log_dao = get_log_dao()
+                _auto_check_and_reenrich_if_needed(
+                    st.session_state.user["user_id"],
+                    selected_label.strip(),
+                    log_dao,
+                    table_name=selected_table,
+                )
+            except Exception as e:
+                st.error(f"Failed to load dataset from storage: {e}")
+                st.stop()
+
+    else:
+        st.info("No datasets uploaded yet. You can add one from the Home page.")
+
+    st.divider()
+
+    # ---------- Navigation ----------
     page = st.radio(
         "Navigation",
         label_visibility="hidden",
         options=[
-        "Home",
-        "Overall Review",
-        "Artists",
-        "Genres",
-        "Sheeple-O-Meter",
-        "On This Day",
-        "FAQs",
-        "Test"
-        ]
+            "Home",
+            "Overall Review",
+            "Artists",
+            "Genres",
+            "Sheeple-O-Meter",
+            "On This Day",
+            "FAQs",
+            "Test",
+        ],
     )
 
     st.divider()
@@ -1850,15 +1928,6 @@ if page == "Home":
     st.session_state.setdefault("last_table_name", None)
     st.session_state["last_page"] = "Home"
 
-    # ---------- Header UI ----------
-    h1, h2, h3 = st.columns(3, vertical_alignment="center")
-    with h2:
-        st.image(ICON_PAGE, width=180)
-        st.markdown(
-            "<h1 style='text-align: centre;'><em>Your life on Spotify</em></h1>",
-            unsafe_allow_html=True
-        )
-
     # ---------- Load DAOs ----------
     daos = get_daos()
     user_dao = daos.get("user_data")
@@ -1868,271 +1937,260 @@ if page == "Home":
         st.error("UserData DAO is not configured for this server mode.")
         st.stop()
 
-    # ---------- Existing Datasets ----------
-    try:
-        dataset_options = user_dao.list_datasets(user_id)  # [(label, table_name), ...]
-    except Exception as e:
-        st.error(f"Failed to list datasets: {e}")
-        dataset_options = []
+    # ---------- Verify dataset selection ----------
+    if st.session_state.get("current_df") is None or st.session_state.get("current_dataset_label") is None:
+        st.info("No dataset selected yet. Please choose one from the sidebar or upload a new dataset below.")
+        st.stop()
 
-    label_to_table = dict(dataset_options)
-    labels = list(label_to_table.keys())
+    # ---------- Retrieve dataset + metadata ----------
+    df = st.session_state["current_df"].copy()
+    selected_label = st.session_state["current_dataset_label"]
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
+    df_album = INFO_ALBUM.copy()
+    df_supergenre_map = INFO_SUPERGENRE.copy()
 
-    # Default to last-used dataset if available
-    default_index = labels.index(st.session_state["current_dataset_label"]) if (
-        labels and st.session_state.get("current_dataset_label") in labels
-    ) else 0
+    # --- Normalize datetime + summary ---
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df = df.dropna(subset=["datetime"])
+    df["date"] = df["datetime"].dt.date
+    df["year"] = df["datetime"].dt.year
 
-    if labels:
-        c1 = st.columns([1, 2.5])[0]
-        with c1:
-            selected_label = st.selectbox(
-                "Choose a dataset you've uploaded", labels, index=default_index
-            )
+    # ---------- Header UI ----------
+    h1, h2, h3 = st.columns([1,3,1], vertical_alignment="center")
+    with h2:
+        st.markdown("""
+            <style>
+            div.st-emotion-cache-p75nl5 {
+                width: auto;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
-        selected_table = label_to_table[selected_label]
-        try:
-            df = user_dao.load_user_data(selected_table)
-        except Exception as e:
-            st.error(f"Failed to load dataset from storage: {e}")
-            st.stop()
+        st.image(ICON_PAGE, width=180)
+        scorecard(
+            "",
+            "Your life on Spotify",
+            score_size=48,
+            score_bold=True,
+            score_italic=True,
+            height=60,
+            background=False)
 
+        start_date = pd.to_datetime(df["date"].min()).strftime("%d %B %Y")
+        end_date = pd.to_datetime(df["date"].max()).strftime("%d %B %Y")
+
+        scorecard(
+            "",
+            score=f"{start_date} - {end_date}",
+            score_size=36,
+            background=False,
+            height=36
+        )
+
+    # --- Ensure session variables are synced ---
+    st.session_state.current_df = df
+    st.session_state.current_dataset_label = selected_label
+    st.session_state.last_table_name = st.session_state.get("last_table_name", None)
+
+    # ---------------- Recent scorecards ---------------------
+    def get_top_combined(df, name_col, sub_col):
         if df.empty:
-            st.warning("Loaded dataset is empty.")
-            st.stop()
-
-        # Normalize datetime + summary
-        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-        df = df.dropna(subset=["datetime"])
-        df["date"] = df["datetime"].dt.date
-        df["year"] = df["datetime"].dt.year
-
-        # Update session state
-        st.session_state.current_df = df
-        st.session_state.current_dataset_label = selected_label
-        st.session_state.last_table_name = selected_table
-
-        # --- Auto check enrichment completion & rerun if needed ---
-        from dao_selector import get_log_dao
-        log_dao = get_log_dao()
-        _auto_check_and_reenrich_if_needed(
-            user_id,
-            selected_label.strip(),
-            log_dao,
-            table_name=selected_table,
+            return "N/A"
+        top = (
+            df.groupby([name_col, sub_col])["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()
         )
+        if top.empty:
+            return "N/A"
+        return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
 
-        # --- Metadata references ---
-        df_artist_genre = INFO_ARTIST_GENRE.copy()
-        df_album = INFO_ALBUM.copy()
-        df_supergenre_map = INFO_SUPERGENRE.copy()
+    # --- Filter dataset ---
+    # Ensure date column is datetime
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
-        # --- Helper functions ---
-        def format_hhmmss(minutes):
-            total_seconds = int(minutes * 60)
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            seconds = total_seconds % 60
-            return f"{hours:02}:{minutes:02}:{seconds:02}"
+    # Filter by category first
+    selected_category = "music"
+    df_filtered = df[df["category"] == selected_category].copy()
+    df_filtered = df_filtered.merge(
+        df_artist_genre[["artist_name", "supergenre"]],
+        on="artist_name", how="left"
+    )
 
-        def get_top_combined(df, name_col, sub_col):
-            if df.empty:
-                return "N/A"
-            top = (
-                df.groupby([name_col, sub_col])["minutes_played"]
-                .sum()
-                .sort_values(ascending=False)
-                .reset_index()
-            )
-            if top.empty:
-                return "N/A"
-            return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
+    # --- Use dataset's latest date as reference ---
+    latest_date = df_filtered["date"].max()
+    six_months_ago = latest_date - pd.DateOffset(months=6)
+    one_year_ago = latest_date - pd.DateOffset(years=1)
 
-        # --- Filter dataset ---
-        # Ensure date column is datetime
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    # --- Define time windows relative to dataset ---
+    last_six_months_df = df_filtered[df_filtered["date"] >= six_months_ago].copy()
+    previous_six_months_df = df_filtered[
+        (df_filtered["date"] < six_months_ago) & (df_filtered["date"] >= one_year_ago)
+    ].copy()
 
-        # Filter by category first
-        selected_category = "music"
-        df_filtered = df[df["category"] == selected_category].copy()
-        df_filtered = df_filtered.merge(
-            df_artist_genre[["artist_name", "supergenre"]],
-            on="artist_name", how="left"
-        )
+    # --- 6 month metrics ---
+    fav_track = get_top_combined(last_six_months_df, "artist_name", "track_name")
+    fav_artist = last_six_months_df["artist_name"].value_counts().idxmax() if not last_six_months_df.empty else "N/A"
 
-        # --- Use dataset's latest date as reference ---
-        latest_date = df_filtered["date"].max()
-        six_months_ago = latest_date - pd.DateOffset(months=6)
-        one_year_ago = latest_date - pd.DateOffset(years=1)
+    try:
+        if (
+            "supergenre" in last_six_months_df.columns
+            and not last_six_months_df["supergenre"].dropna().empty
+        ):
+            # Exclude "Unlisted" before counting
+            valid_genres = last_six_months_df[
+                last_six_months_df["supergenre"].str.lower() != "unlisted"
+            ]["supergenre"].dropna()
 
-        # --- Define time windows relative to dataset ---
-        last_six_months_df = df_filtered[df_filtered["date"] >= six_months_ago].copy()
-        previous_six_months_df = df_filtered[
-            (df_filtered["date"] < six_months_ago) & (df_filtered["date"] >= one_year_ago)
-        ].copy()
-
-        # --- 6 month metrics ---
-        fav_track = get_top_combined(last_six_months_df, "artist_name", "track_name")
-        fav_artist = last_six_months_df["artist_name"].value_counts().idxmax() if not last_six_months_df.empty else "N/A"
-
-        try:
-            if (
-                "supergenre" in last_six_months_df.columns
-                and not last_six_months_df["supergenre"].dropna().empty
-            ):
-                # Exclude "Unlisted" before counting
-                valid_genres = last_six_months_df[
-                    last_six_months_df["supergenre"].str.lower() != "unlisted"
-                ]["supergenre"].dropna()
-
-                fav_supergenre = valid_genres.value_counts().idxmax() if not valid_genres.empty else "N/A"
-            else:
-                fav_supergenre = "N/A"
-        except Exception as e:
-            print(f"[supergenre metric] Skipping due to transient data issue: {e}")
+            fav_supergenre = valid_genres.value_counts().idxmax() if not valid_genres.empty else "N/A"
+        else:
             fav_supergenre = "N/A"
+    except Exception as e:
+        print(f"[supergenre metric] Skipping due to transient data issue: {e}")
+        fav_supergenre = "N/A"
 
-        st.divider()
+    st.divider()
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            scorecard("Recent Favourite Track", fav_track, score_size=30)
-        with c2:
-            scorecard("Recent Favourite Artist", fav_artist, score_size=30)
-        with c3:
-            scorecard("Recent Favourite Genre", fav_supergenre, score_size=30)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        scorecard("Recent Favourite Track", fav_track, score_size=30)
+    with c2:
+        scorecard("Recent Favourite Artist", fav_artist, score_size=30)
+    with c3:
+        scorecard("Recent Favourite Genre", fav_supergenre, score_size=30)
 
-        # ----------- SUNBURST -------------- #
+    # ----------- SUNBURST -------------- #
 
-        user_df = df.copy()
+    user_df = df.copy()
 
-        df = pd.merge(
-            user_df,
-            df_album,
-            on=["album_name", "artist_name"],
-            how="left"
-        )
+    df = pd.merge(
+        user_df,
+        df_album,
+        on=["album_name", "artist_name"],
+        how="left"
+    )
 
-        # Merge with artist genre info (by artist only)
-        df = pd.merge(
-            df,
-            df_artist_genre,
-            on="artist_name",
-            how="left"
-        )
+    # Merge with artist genre info (by artist only)
+    df = pd.merge(
+        df,
+        df_artist_genre,
+        on="artist_name",
+        how="left"
+    )
 
-        # --- Datetime handling ---
-        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-        df = df.dropna(subset=["datetime"]).copy()
-        df["datetime"] = df["datetime"].dt.tz_localize(None)
-        df["date"] = df["datetime"].dt.date
-        df['year'] = df['datetime'].dt.year
+    # --- Datetime handling ---
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df = df.dropna(subset=["datetime"]).copy()
+    df["datetime"] = df["datetime"].dt.tz_localize(None)
+    df["date"] = df["datetime"].dt.date
+    df['year'] = df['datetime'].dt.year
 
-        df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
-        df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
+    df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
+    df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
 
-        # --- Add minutes played column ---
-        df_exploded['mins_played'] = df_exploded['ms_played'] / 60000.0
+    # --- Add minutes played column ---
+    df_exploded['mins_played'] = df_exploded['ms_played'] / 60000.0
 
-        # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
-        top_genres = (
-            df_exploded.groupby(['year', 'supergenre'], as_index=False)['mins_played']
-            .sum()
-            .sort_values(['year', 'mins_played'], ascending=[True, False])
-            .groupby('year')
-            .head(5)
-        )
+    # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
+    top_genres = (
+        df_exploded.groupby(['year', 'supergenre'], as_index=False)['mins_played']
+        .sum()
+        .sort_values(['year', 'mins_played'], ascending=[True, False])
+        .groupby('year')
+        .head(5)
+    )
 
-        df_filtered = df_exploded.merge(
-            top_genres[['year', 'supergenre']], on=['year', 'supergenre']
-        )
+    df_filtered = df_exploded.merge(
+        top_genres[['year', 'supergenre']], on=['year', 'supergenre']
+    )
 
-        top_artists = (
-            df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['mins_played']
-            .sum()
-            .sort_values(['year', 'supergenre', 'mins_played'], ascending=[True, True, False])
-            .groupby(['year', 'supergenre'])
-            .head(5)
-        )
+    top_artists = (
+        df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['mins_played']
+        .sum()
+        .sort_values(['year', 'supergenre', 'mins_played'], ascending=[True, True, False])
+        .groupby(['year', 'supergenre'])
+        .head(5)
+    )
 
-        df_filtered_artists = df_filtered.merge(
-            top_artists[['year', 'supergenre', 'artist_name']],
-            on=['year', 'supergenre', 'artist_name']
-        )
+    df_filtered_artists = df_filtered.merge(
+        top_artists[['year', 'supergenre', 'artist_name']],
+        on=['year', 'supergenre', 'artist_name']
+    )
 
-        top_tracks = (
-            df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['mins_played']
-            .sum()
-            .sort_values(['year', 'supergenre', 'artist_name', 'mins_played'], ascending=[True, True, True, False])
-            .groupby(['year', 'supergenre', 'artist_name'])
-            .head(5)
-        )
+    top_tracks = (
+        df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['mins_played']
+        .sum()
+        .sort_values(['year', 'supergenre', 'artist_name', 'mins_played'], ascending=[True, True, True, False])
+        .groupby(['year', 'supergenre', 'artist_name'])
+        .head(5)
+    )
 
-        # --- BUILD SUNBURST ---
-        fig_sunburst = px.sunburst(
-            top_tracks,
-            path=["year", "supergenre", "artist_name", "track_name"],
-            values="mins_played",
-            color="mins_played",
-            color_continuous_scale=[
-                "#062719",
-                "#1ed760",
-                "#1ed760",
-                "#1ed760",
-                "#1ed760",
-                "#1ed760",
-                # "#90d7ad",
-                "#90d7ad",
-            ],
-            title=" ",
-        )
+    # --- BUILD SUNBURST ---
+    fig_sunburst = px.sunburst(
+        top_tracks,
+        path=["year", "supergenre", "artist_name", "track_name"],
+        values="mins_played",
+        color="mins_played",
+        color_continuous_scale=[
+            "#062719",
+            "#1ed760",
+            "#1ed760",
+            "#1ed760",
+            "#1ed760",
+            "#1ed760",
+            # "#90d7ad",
+            "#90d7ad",
+        ],
+        title=" ",
+    )
 
-        fig_sunburst.update_traces(
-            insidetextfont=dict(color="#c8eacd"),
-            hovertemplate="<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>",
-        )
+    fig_sunburst.update_traces(
+        insidetextfont=dict(color="#c8eacd"),
+        hovertemplate="<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>",
+    )
 
-        fig_sunburst.update_layout(
-            margin=dict(t=50, l=0, r=0, b=0),
-            height=800,
-            font=dict(color="white"),
-            paper_bgcolor="rgba(0,0,0,0)",  # transparent to blend with dark background
-            plot_bgcolor="rgba(0,0,0,0)",
-        )
+    fig_sunburst.update_layout(
+        margin=dict(t=50, l=0, r=0, b=0),
+        height=800,
+        font=dict(color="white"),
+        paper_bgcolor="rgba(0,0,0,0)",  # transparent to blend with dark background
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
 
-        fig_sunburst.update_xaxes(autorange=True)
-        fig_sunburst.update_coloraxes(showscale=True)
+    fig_sunburst.update_xaxes(autorange=True)
+    fig_sunburst.update_coloraxes(showscale=True)
 
-        st.plotly_chart(
-            fig_sunburst,
-            use_container_width=True,
-            config={
-                "displayModeBar": False,
-                "responsive": True,
-            },
-            key="sunburst_moulin",
-        )
+    st.plotly_chart(
+        fig_sunburst,
+        width="stretch",
+        config={
+            "displayModeBar": False,
+            "responsive": True,
+        },
+        key="sunburst_moulin",
+    )
 
-        st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
+    st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
 
-        demo_df = df.copy()
-        st.dataframe(
-            demo_df.query('category == "music"')
-            .copy()
-            .drop(columns=[
-                "spotify_track_uri",
-                "episode_show_name",
-                "episode_name",
-                "spotify_episode_uri",
-                "audiobook_title",
-                "audiobook_uri",
-                "audiobook_chapter_uri",
-                "audiobook_chapter_title"
-            ], errors="ignore")
-            .sample(min(20, len(df))),
-            height=300
-        )
-        st.info("You haven’t uploaded any datasets yet.")
+    demo_df = df.copy()
+    st.dataframe(
+        demo_df.query('category == "music"')
+        .copy()
+        .drop(columns=[
+            "spotify_track_uri",
+            "episode_show_name",
+            "episode_name",
+            "spotify_episode_uri",
+            "audiobook_title",
+            "audiobook_uri",
+            "audiobook_chapter_uri",
+            "audiobook_chapter_title"
+        ], errors="ignore")
+        .sample(min(20, len(df))),
+        height=300
+    )
+    st.info("You haven’t uploaded any datasets yet.")
 
     # ---------- Upload New Dataset ----------
     st.divider()
@@ -2455,7 +2513,7 @@ elif page == "Overall Review":
             # ✅ Modern config usage — no warnings
             st.plotly_chart(
                 fig_artists,
-                use_container_width=True,
+                width="stretch",
                 config={
                     "displayModeBar": False,
                     "responsive": True,
@@ -2510,7 +2568,7 @@ elif page == "Overall Review":
 
             st.plotly_chart(
                 fig_tracks,
-                use_container_width=True,
+                width="stretch",
                 config={
                     "displayModeBar": False,
                     "responsive": True,
@@ -2628,7 +2686,7 @@ elif page == "Overall Review":
         # ✅ unified config pattern
         st.plotly_chart(
             fig_timeline,
-            use_container_width=True,
+            width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -2709,7 +2767,7 @@ elif page == "Overall Review":
 
         st.plotly_chart(
             fig_genre,
-            use_container_width=True,
+            width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -2737,7 +2795,7 @@ elif page == "Overall Review":
 
         st.plotly_chart(
             fig_heat,
-            use_container_width=True,
+            width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -3546,7 +3604,7 @@ elif page == "Artists":
 
     st.plotly_chart(
         fig_top_songs,
-        use_container_width=True,
+        width="stretch",
         config={
             "displayModeBar": False,
             "responsive": True,
@@ -3608,7 +3666,7 @@ elif page == "Artists":
                 pad=12,
                 color="white",
             )
-            st.pyplot(fig_cal, use_container_width=True)
+            st.pyplot(fig_cal, width="stretch")
 
         else:
             # --- Year-specific heatmap (same as before) ---
@@ -3632,7 +3690,7 @@ elif page == "Artists":
                 pad=12,
                 color="white",
             )
-            st.pyplot(fig_cal, use_container_width=True)
+            st.pyplot(fig_cal, width="stretch")
     else:
         st.info(f"No listening data for {album_selected} in {year_selected}.")
 
@@ -3805,7 +3863,7 @@ elif page == "Artists":
     # ✅ Unified rendering
     st.plotly_chart(
         fig_timeline,
-        use_container_width=True,
+        width="stretch",
         config={"displayModeBar": False, "responsive": True},
     )
 
@@ -4027,7 +4085,7 @@ elif page == "Genres":
 
             st.plotly_chart(
                 fig_top_tracks,
-                use_container_width=True,
+                width="stretch",
                 config={"displayModeBar": False, "responsive": True},
             )
         else:
@@ -4120,7 +4178,7 @@ elif page == "Genres":
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="white"),
     )
-    st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig_trend, width="stretch", config={"displayModeBar": False})
 
 # ------------- Genre by the Hour ------------------ #
     st.markdown("### ⏰ Top Genre by Hour of Day")
@@ -4211,7 +4269,7 @@ elif page == "Genres":
 
     st.plotly_chart(
         fig_hourly,
-        use_container_width=True,
+        width="stretch",
         config={"displayModeBar": False, "responsive": True},
     )
 
@@ -4273,7 +4331,7 @@ elif page == "Genres":
     #     plot_bgcolor="rgba(0,0,0,0)",
     # )
 
-    # st.plotly_chart(fig_polar, use_container_width=True, config={"displayModeBar": False})
+    # st.plotly_chart(fig_polar, width="stretch", config={"displayModeBar": False})
 
 # ------------------------------- The Farm ----------------------------------- #
 elif page == "Sheeple-O-Meter":
@@ -4330,7 +4388,7 @@ elif page == "Sheeple-O-Meter":
 
         st.plotly_chart(
             gauge,
-            use_container_width=True,
+            width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -4360,7 +4418,7 @@ elif page == "Sheeple-O-Meter":
         )
         st.plotly_chart(
             fig_artists,
-            use_container_width=True,
+            width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -4391,7 +4449,7 @@ elif page == "Sheeple-O-Meter":
         )
         st.plotly_chart(
             fig_timeline,
-            use_container_width=True,
+            width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -4478,7 +4536,7 @@ elif page == "Sheeple-O-Meter":
         # --- Updated Streamlit call (no deprecated kwargs) ---
         st.plotly_chart(
             fig,
-            use_container_width=True,
+            width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
@@ -4988,7 +5046,7 @@ elif page == "On This Day":
     trigger_button = st.button(
         f"{st.session_state['random_date_display']}",
         key="random_day",
-        use_container_width=True
+        width="stretch"
     )
 
     # --- Manual trigger ---
@@ -5236,4 +5294,4 @@ elif page == "Test":
         height=500,
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})

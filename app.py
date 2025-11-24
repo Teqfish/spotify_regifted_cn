@@ -47,9 +47,6 @@ from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanit
 from chart_scorer import parse_label_ts_from_table_name
 
 # -------------------------- CONFIG / CLIENTS -------------------------------- #
-st.set_page_config(page_title="Regifted", page_icon="./media/assets/icon_spotgreen.svg", layout="wide", initial_sidebar_state="expanded")
-clear_stale_locks(max_age_minutes=10)
-
 SPOTIFY_ID = st.secrets["spotify"]["client_id"]
 SPOTIFY_SECRET = st.secrets["spotify"]["client_secret"]
 token = SpotifyToken(SPOTIFY_ID, SPOTIFY_SECRET)
@@ -114,12 +111,8 @@ else:
     INFO_AUDIOBOOK = storage_dao.safe_download_csv("enrichment/metadata/info_audiobook.csv")
     INFO_SUPERGENRE = storage_dao.safe_download_csv("reference/info_supergenre_map.csv")
 
-LOGO_BLACK = "media/assets/logo_black.svg"
-LOGO_LIGHTGREY= "media/assets/logo_lightgrey.svg"
-LOGO_OFFWHITE = "media/assets/logo_offwhite.svg"
-LOGO_DARKGREEN = "media/assets/logo_darkgreen.svg"
-LOGO_MIDGREEN = "media/assets/logo_midgreen.svg"
-LOGO_LIGHTGREEN = "media/assets/logo_lightgreen.svg"
+ICON_BROWSER = "media/assets/icon_spotgreen.svg"
+ICON_PAGE = "media/assets/icon_page.svg"
 LOGO_SPOTGREEN = "media/assets/logo_spotgreen.svg"
 IMAGE_PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
 
@@ -293,68 +286,6 @@ def scorecard(
 
     components.html(html, height=height + 10)
 
-def scorecard_button_legacy(label: str, key=None, height: int = 100, font_size: int = 28,
-                     background: str = "#0d5637", hover_color: str = "#1ed760"):
-    """
-    A fully custom HTML/CSS scorecard-style button that supports colors, hover effects,
-    and height control. Returns True when clicked.
-    """
-    if key is None:
-        key = f"scorecard_btn_{uuid.uuid4()}"
-
-    button_id = f"btn_{key.replace('-', '')}"
-
-    html = f"""
-    <style>
-    #{button_id} {{
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background-color: {background};
-        color: #e1ece3;
-        border: none;
-        border-radius: 5px;
-        height: {height}px;
-        width: 100%;
-        font-size: {font_size}px;
-        font-weight: 600;
-        box-shadow: 0 0 8px rgba(0,0,0,0.3);
-        cursor: pointer;
-        transition: all 0.2s ease-in-out;
-        text-align: center;
-    }}
-    #{button_id}:hover {{
-        background-color: {hover_color};
-        color: black;
-    }}
-    </style>
-
-    <script>
-    const btn = document.getElementById("{button_id}");
-    btn?.addEventListener("click", () => {{
-        window.parent.postMessage({{ type: "scorecard_click_{key}" }}, "*");
-    }});
-    </script>
-
-    <button id="{button_id}">{label}</button>
-    """
-
-    # Inject HTML
-    components.html(html, height=height + 20)
-
-    # Listen for click
-    clicked = False
-    if f"scorecard_click_{key}" not in st.session_state:
-        st.session_state[f"scorecard_click_{key}"] = False
-
-    # Streamlit hack: detect the frontend click message
-    # (since JS can’t directly change Streamlit state)
-    if st.session_state.get(f"scorecard_clicked_{key}", False):
-        clicked = True
-        st.session_state[f"scorecard_clicked_{key}"] = False
-
-    return clicked
-
 def normalize_str(s):
     """Normalize string for consistent comparison (case-insensitive, strip accents)."""
     if not isinstance(s, str):
@@ -375,17 +306,7 @@ def task_registry():
         st.session_state["_enrichment_tasks"] = {}
     return st.session_state["_enrichment_tasks"]
 
-# --- SESSION INIT ---
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-st.session_state.setdefault("_enrichment_registry", {
-    "thread": None,
-    "cancel_event": None,
-    "dataset_label": None,
-})
-
-# --- AUTH FUNCTIONS ---
+# ------------------------------ AUTH FUNCTIONS ------------------------------ #
 def hash_password(password: str) -> str:
     """
     Securely hash a plaintext password using bcrypt.
@@ -560,13 +481,12 @@ def require_current_df():
         st.stop()
     return df.copy(), label
 
-# ---- Cookie Manager (singleton) ----
+# ----------------------------- Cookie/JWT Helpers --------------------------- #
 def get_cookie_manager():
     if "cookie_mgr" not in st.session_state:
         st.session_state.cookie_mgr = stx.CookieManager(key="regifted_cookies")
     return st.session_state.cookie_mgr
 
-# ---- JWT helpers ----
 def make_jwt(user: dict) -> str:
     now = datetime.now(timezone.utc)
     payload = {
@@ -651,21 +571,7 @@ def refresh_cookie_if_needed():
     set_auth_cookie(token)
     st.session_state["_cookie_refreshed_at"] = now
 
-cm = get_cookie_manager()
-_ = cm.get_all()  # hydrate component
-
-# If we just logged out, keep skipping cookie-restore until the browser shows it's gone
-if st.session_state.get("_skip_restore"):
-    if not cm.get(JWT_COOKIE_NAME):  # cookie really gone now
-        st.session_state["_skip_restore"] = False
-else:
-    try_restore_session_from_cookie()
-
-# Only refresh/slide expiry when we actually have a user
-if st.session_state.get("user"):
-    refresh_cookie_if_needed()
-
-# ---- ETL helpers (wrappers) ----
+# -------------------------- ETL helpers (wrappers) -------------------------- #
 def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
     from pathlib import Path  # Can also move to top-level import safely
 
@@ -714,7 +620,7 @@ def log_upload_event(user_id: str, table_name: str, dataset_label: str, filename
     except Exception as e:
         print(f"[upload_event] ⚠️ Failed to record upload event: {e}")
 
-# --- DATA PROCESSING ---
+# ----------------------------- DATA PROCESSING ------------------------------ #
 def ensure_daos_initialized_for_thread():
     """
     Ensure that Cloudflare DAOs (D1 + R2) are initialized in this thread.
@@ -948,117 +854,6 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
     except Exception as e:
         print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
         return "error"
-
-def log_enrichment_thread_count(context: str = ""):
-    threads = threading.enumerate()
-    enrich_threads = [
-        t for t in threads
-        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
-    ]
-    count = len(enrich_threads)
-    print(f"[thread_monitor] {count} enrichment thread(s) active "
-          f"{'after ' + context if context else ''}.")
-    return count
-
-def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
-    """
-    Display live enrichment progress in the sidebar.
-    Pulls from D1 (preferred) or R2 JSON fallback.
-    Shows:
-      - current phase
-      - batches done / total
-      - % complete
-      - number of enrichment threads
-    """
-    import json, threading
-    import streamlit as st
-    from datetime import datetime
-    from dao_selector import DAOS, load_global_daos
-
-    # --- Ensure DAOs ready ---
-    if not DAOS or "main" not in DAOS:
-        load_global_daos()
-
-    d1 = DAOS.get("main")
-    r2 = DAOS.get("r2")
-    status_row = None
-
-    # --- Try D1 first ---
-    try:
-        if d1:
-            rows = d1._query(
-                """
-                SELECT status, phase, detail, batches_done, total_batches, percent
-                FROM enrichment_status
-                WHERE user_id=? AND dataset_label=?
-                ORDER BY updated_at DESC LIMIT 1
-                """,
-                [user_id, dataset_label],
-            )
-            if rows:
-                status_row = rows[0]
-    except Exception as e:
-        print(f"[sidebar_status] ⚠️ Failed to query D1: {e}")
-
-    # --- Fallback to R2 JSON ---
-    if not status_row and r2:
-        try:
-            key = f"enrichment/status/{user_id}_{dataset_label}_status.json"
-            data = json.loads(r2._get_object(key))
-            status_row = {
-                "status": data.get("status"),
-                "phase": data.get("phase"),
-                "detail": data.get("detail"),
-                "batches_done": data.get("batches_done"),
-                "total_batches": data.get("total_batches"),
-                "percent": data.get("percent"),
-            }
-        except Exception as e:
-            print(f"[sidebar_status] ⚠️ Failed to read R2 JSON: {e}")
-
-    # --- Bail out if nothing found ---
-    if not status_row:
-        with st.sidebar:
-            st.caption("ℹ️ No enrichment status found for this dataset yet.")
-        return
-
-    # --- Parse + normalize ---
-    status = (status_row.get("status") or "").lower()
-    phase = (status_row.get("phase") or "init").capitalize()
-    detail = status_row.get("detail") or ""
-    done = int(status_row.get("batches_done") or 0)
-    total = int(status_row.get("total_batches") or 0)
-    percent = float(status_row.get("percent") or 0.0)
-
-    # --- Thread count check ---
-    threads = threading.enumerate()
-    enrich_threads = [
-        t for t in threads
-        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
-    ]
-    active_count = len(enrich_threads)
-
-    # --- Build display message ---
-    if status in {"done", "complete"}:
-        msg = f"✅ Enrichment complete for **{dataset_label}**"
-    elif status == "error":
-        msg = (
-            f"❌ Enrichment failed during {phase.lower()} — check logs."
-        )
-
-    else:
-        msg = (
-            f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
-        )
-
-    # --- Render ---
-    with st.sidebar:
-        st.caption(f"Threads: {active_count}")
-        # st.caption(msg)
-        # if detail:
-        #     st.caption(f"{detail}")
-        # st.progress(int(percent) / 100.0 if percent else 0)
-        # st.caption(f"_Please wait while we enrich your data..._")
 
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
     """
@@ -1776,41 +1571,158 @@ def info_tables_update(user_id, table_name):
     except Exception as e:
         print(f"[Background task error] {e}")
 
+def log_enrichment_thread_count(context: str = ""):
+    threads = threading.enumerate()
+    enrich_threads = [
+        t for t in threads
+        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
+    ]
+    count = len(enrich_threads)
+    print(f"[thread_monitor] {count} enrichment thread(s) active "
+          f"{'after ' + context if context else ''}.")
+    return count
 
-# --- LOGIN UI ---
+def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
+    """
+    Display live enrichment progress in the sidebar.
+    Pulls from D1 (preferred) or R2 JSON fallback.
+    Shows:
+      - current phase
+      - batches done / total
+      - % complete
+      - number of enrichment threads
+    """
+    import json, threading
+    import streamlit as st
+    from datetime import datetime
+    from dao_selector import DAOS, load_global_daos
+
+    # --- Ensure DAOs ready ---
+    if not DAOS or "main" not in DAOS:
+        load_global_daos()
+
+    d1 = DAOS.get("main")
+    r2 = DAOS.get("r2")
+    status_row = None
+
+    # --- Try D1 first ---
+    try:
+        if d1:
+            rows = d1._query(
+                """
+                SELECT status, phase, detail, batches_done, total_batches, percent
+                FROM enrichment_status
+                WHERE user_id=? AND dataset_label=?
+                ORDER BY updated_at DESC LIMIT 1
+                """,
+                [user_id, dataset_label],
+            )
+            if rows:
+                status_row = rows[0]
+    except Exception as e:
+        print(f"[sidebar_status] ⚠️ Failed to query D1: {e}")
+
+    # --- Fallback to R2 JSON ---
+    if not status_row and r2:
+        try:
+            key = f"enrichment/status/{user_id}_{dataset_label}_status.json"
+            data = json.loads(r2._get_object(key))
+            status_row = {
+                "status": data.get("status"),
+                "phase": data.get("phase"),
+                "detail": data.get("detail"),
+                "batches_done": data.get("batches_done"),
+                "total_batches": data.get("total_batches"),
+                "percent": data.get("percent"),
+            }
+        except Exception as e:
+            print(f"[sidebar_status] ⚠️ Failed to read R2 JSON: {e}")
+
+    # --- Bail out if nothing found ---
+    if not status_row:
+        with st.sidebar:
+            st.caption("ℹ️ No enrichment status found for this dataset yet.")
+        return
+
+    # --- Parse + normalize ---
+    status = (status_row.get("status") or "").lower()
+    phase = (status_row.get("phase") or "init").capitalize()
+    detail = status_row.get("detail") or ""
+    done = int(status_row.get("batches_done") or 0)
+    total = int(status_row.get("total_batches") or 0)
+    percent = float(status_row.get("percent") or 0.0)
+
+    # --- Thread count check ---
+    threads = threading.enumerate()
+    enrich_threads = [
+        t for t in threads
+        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
+    ]
+    active_count = len(enrich_threads)
+
+    # --- Build display message ---
+    if status in {"done", "complete"}:
+        msg = f"✅ Enrichment complete for **{dataset_label}**"
+    elif status == "error":
+        msg = (
+            f"❌ Enrichment failed during {phase.lower()} — check logs."
+        )
+
+    else:
+        msg = (
+            f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
+        )
+
+    # --- Render ---
+    with st.sidebar:
+        st.caption(f"Threads: {active_count}")
+        # st.caption(msg)
+        # if detail:
+        #     st.caption(f"{detail}")
+        # st.progress(int(percent) / 100.0 if percent else 0)
+        # st.caption(f"_Please wait while we enrich your data..._")
+
+# ------------------ INIT PAGE CONFIG ------------------
+st.set_page_config(page_title="Regifted", page_icon=ICON_BROWSER, layout="wide", initial_sidebar_state="expanded")
+clear_stale_locks(max_age_minutes=10)
+
+cm = get_cookie_manager()
+_ = cm.get_all()  # hydrate component
+
+# --- SESSION INIT ---
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+st.session_state.setdefault("_enrichment_registry", {
+    "thread": None,
+    "cancel_event": None,
+    "dataset_label": None,
+})
+
+# If we just logged out, keep skipping cookie-restore until the browser shows it's gone
+if st.session_state.get("_skip_restore"):
+    if not cm.get(JWT_COOKIE_NAME):  # cookie really gone now
+        st.session_state["_skip_restore"] = False
+else:
+    try_restore_session_from_cookie()
+
+# Only refresh/slide expiry when we actually have a user
+if st.session_state.get("user"):
+    refresh_cookie_if_needed()
+
+# ------------------------------- LOGIN PAGE --------------------------------- #
 if not st.session_state.user:
-    st.markdown("<h1 style='text-align: center;'>Regifted: Login</h1>", unsafe_allow_html=True)
+
+    h1, h2, h3 = st.columns(3, vertical_alignment="center")
+    with h2:
+        st.image(LOGO_SPOTGREEN, width=400)
+
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        mode = st.toggle("Sign Up")
+        tab_login, tab_signup, tab_help = st.tabs(["Login", "Sign Up", "Help"])
 
-        if mode:
-            with st.form("signup_form"):
-                first_name = st.text_input("First Name")
-                last_name = st.text_input("Last Name")
-                email = st.text_input("Email")
-                password = st.text_input("Password", type="password")
-                confirm = st.text_input("Confirm Password", type="password")
-                submitted = st.form_submit_button("Create Account")
-                if submitted:
-                    success, msg = signup(email, password, confirm, first_name, last_name)
-                    if success:
-                        # ✅ Auto-login after successful signup
-                        ok, userdata = login(email, password)
-                        if ok:
-                            st.session_state.user = userdata
-                            token = make_jwt(userdata)
-                            set_auth_cookie(token)
-                            st.rerun()
-                        else:
-                            st.success(msg)
-                            st.info("Account created. Please log in.")
-                    else:
-                        # msg may be a list of errors or a single string
-                        errors = msg if isinstance(msg, list) else [msg]
-                        for e in errors:
-                            st.error(e)
-        else:
+        # --- LOGIN TAB ---
+        with tab_login:
             with st.form("login_form"):
                 email = st.text_input("Email")
                 password = st.text_input("Password", type="password")
@@ -1825,25 +1737,63 @@ if not st.session_state.user:
                     else:
                         st.error(userdata)
 
-    st.stop()
+        # --- SIGNUP TAB ---
+        with tab_signup:
+            with st.form("signup_form"):
+                first_name = st.text_input("First Name")
+                last_name = st.text_input("Last Name")
+                email = st.text_input("Email")
+                password = st.text_input("Password", type="password")
+                confirm = st.text_input("Confirm Password", type="password")
+                submitted = st.form_submit_button("Create Account")
+                if submitted:
+                    success, msg = signup(email, password, confirm, first_name, last_name)
+                    if success:
+                        ok, userdata = login(email, password)
+                        if ok:
+                            st.session_state.user = userdata
+                            token = make_jwt(userdata)
+                            set_auth_cookie(token)
+                            st.rerun()
+                        else:
+                            st.success(msg)
+                            st.info("Account created. Please log in.")
+                    else:
+                        errors = msg if isinstance(msg, list) else [msg]
+                        for e in errors:
+                            st.error(e)
 
-# --- PAGE NAVIGATION ---
+        # --- HELP TAB ---
+        with tab_help:
+            st.markdown("### Welcome to Regifted!")
+            st.write(
+                """
+                *(This section is for onboarding help — you can fill it in with your FAQs,
+                instructions on exporting Spotify data, and any screenshots or links users
+                might need.)*
+                """
+            )
+
+        st.stop()
+
+# ----------------------------- PAGE NAVIGATION ------------------------------ #
 with st.sidebar:
 
     st.image(LOGO_SPOTGREEN, width="stretch")
-    if st.session_state.get("current_dataset_label"):
-        show_enrichment_status_sidebar(
-            st.session_state.user["user_id"],
-            st.session_state["current_dataset_label"]
-        )
+
+    # if st.session_state.get("current_dataset_label"):
+    #     show_enrichment_status_sidebar(
+    #         st.session_state.user["user_id"],
+    #         st.session_state["current_dataset_label"]
+    #     )
+
     st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
     st.divider()
 
     page = st.radio(
         "Navigation",
         label_visibility="hidden",
-        options=
-        [
+        options=[
         "Home",
         "Overall Review",
         "Artists",
@@ -1857,12 +1807,11 @@ with st.sidebar:
 
     st.divider()
 
-    # ✅ Finally, your logout button
     if st.button("Log out", key="logout_btn"):
         logout()
 
+# ------------------------------- MEGA-LOGGER -------------------------------- #
 import sys, logging
-
 class StreamToLogger:
     def __init__(self, logger, log_level=logging.INFO):
         self.logger = logger
@@ -1873,7 +1822,6 @@ class StreamToLogger:
     def flush(self):
         pass
 
-# --- Attach it once ---
 if "logger_initialized" not in st.session_state:
     logging.basicConfig(
         level=logging.INFO,
@@ -1903,11 +1851,11 @@ if page == "Home":
     st.session_state["last_page"] = "Home"
 
     # ---------- Header UI ----------
-    h1, h2, h3 = st.columns([1, 1, 1], vertical_alignment="center")
+    h1, h2, h3 = st.columns(3, vertical_alignment="center")
     with h2:
-        st.image(LOGO_SPOTGREEN, width=400)
+        st.image(ICON_PAGE, width=180)
         st.markdown(
-            "<h1 style='text-align: right;'><em>Your life on Spotify</em></h1>",
+            "<h1 style='text-align: centre;'><em>Your life on Spotify</em></h1>",
             unsafe_allow_html=True
         )
 

@@ -1722,12 +1722,12 @@ if not st.session_state.user:
             }
             </style>
         """, unsafe_allow_html=True)
-        
+
         st.image(LOGO_SPOTGREEN, width=400)
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        tab_login, tab_signup, tab_help = st.tabs(["Login", "Sign Up", "Help"])
+        tab_login, tab_signup, tab_help = st.tabs(["Login", "Sign Up", "How To"])
 
         # --- LOGIN TAB ---
         with tab_login:
@@ -1879,7 +1879,7 @@ with st.sidebar:
             "Sheeple-O-Meter",
             "On This Day",
             "FAQs",
-            "Test",
+            # "Test",
         ],
     )
 
@@ -2126,12 +2126,20 @@ if page == "Home":
         .head(5)
     )
 
+    # Create a log-transformed column for color scaling
+    top_tracks["log_mins_played"] = np.log1p(top_tracks["mins_played"])  # log(1 + x) avoids log(0)
+    # Apply exponential scaling for color intensity
+    exp_factor = 1.1  # try values between 1.2–2.5 for subtle to strong effects
+    top_tracks["exp_mins_played"] = np.power(top_tracks["mins_played"], exp_factor)
+
     # --- BUILD SUNBURST ---
     fig_sunburst = px.sunburst(
         top_tracks,
         path=["year", "supergenre", "artist_name", "track_name"],
         values="mins_played",
         color="mins_played",
+        # range_color=[1,700],
+        # color_continuous_midpoint=600,
         color_continuous_scale=[
             "#062719",
             "#1ed760",
@@ -2139,10 +2147,9 @@ if page == "Home":
             "#1ed760",
             "#1ed760",
             "#1ed760",
-            # "#90d7ad",
             "#90d7ad",
         ],
-        title=" ",
+        title="",
     )
 
     fig_sunburst.update_traces(
@@ -2159,7 +2166,21 @@ if page == "Home":
     )
 
     fig_sunburst.update_xaxes(autorange=True)
-    fig_sunburst.update_coloraxes(showscale=True)
+
+
+    fig_sunburst.update_coloraxes(
+        colorbar=dict(
+            orientation="h",
+            y=-0.15,         # moves it below the chart
+            x=0.5,
+            xanchor="center",
+            title="Minutes Played",
+            tickcolor="white",
+            tickfont=dict(color="white"),
+            titlefont=dict(color="white"),
+        ),
+        showscale=True
+    )
 
     st.plotly_chart(
         fig_sunburst,
@@ -2313,11 +2334,9 @@ elif page == "Overall Review":
         return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
 
     # --- Header ---
-    c1, c2 = st.columns([6, 1], vertical_alignment="center")
-    with c1:
-        st.title("Overall Listening Insights")
-    with c2:
-        st.image(LOGO_SPOTGREEN, width=200)
+    h1, h2, h3 = st.columns([1,3,1], vertical_alignment="center")
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Overall Review</b></em></p>")
 
     # --- Category & Year Selectors ---
     c1, c2 = st.columns([0.7, 1], vertical_alignment="center")
@@ -3145,11 +3164,9 @@ elif page == "Artists":
     df_music["date"] = df_music["datetime"].dt.date
 
     # --- Header ---
-    c1, c2 = st.columns([6, 1], vertical_alignment="center")
-    with c1:
-        st.title("Artist Insights")
-    with c2:
-        st.image(LOGO_SPOTGREEN, width=200)
+    h1, h2, h3 = st.columns([1,3,1], vertical_alignment="center")
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Artist Insights</b></em></p>")
 
     col1, col2 = st.columns([0.7, 1])
     with col1:
@@ -3891,11 +3908,9 @@ elif page == "Genres":
     df_music["date"] = df_music["datetime"].dt.date
 
     # --- Header ---
-    c1, c2 = st.columns([6, 1], vertical_alignment="center")
-    with c1:
-        st.title("Genre Insights")
-    with c2:
-        st.image(LOGO_SPOTGREEN, width=200)
+    h1, h2, h3 = st.columns([1,3,1], vertical_alignment="center")
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Genre Insights</b></em></p>")
 
     # --- Genre & Year Selectors ---
     col1, col2 = st.columns([0.7, 1])
@@ -4798,15 +4813,10 @@ elif page == "Sheeple-O-Meter":
         avg_points_per_listen = 0.0
         avg_points_per_year = 0.0
 
-    # -------------------- UI Header -------------------- #
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
-
+    # --- Header ---
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The</b></em></p>")
-        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Sheeple-O-Meter</b></em></p>")
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>The Sheeple-O-Meter</b></em></p>")
         st.html("<p style='text-align: center; font-size: 30px;'>Are you a chart-following sheep or a lone-listening wolf?</p>")
 
     # -------------------- Gauge -------------------- #
@@ -4954,12 +4964,10 @@ elif page == "On This Day":
         else:
             return None
 
-    # --- Page header ---
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment="center")
-    with col1:
-        st.markdown("## On This Day")
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
+    # --- Header ---
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>On This Day</b></em></p>")
 
     # --- Headlines dataset setup ---
     headlines_df = INFO_HEADLINE.copy()
@@ -5148,8 +5156,6 @@ elif page == "FAQs":
     st.session_state["last_page"] = "FAQs"
 
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
 
     st.title("About Us")
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
@@ -5204,8 +5210,6 @@ elif page == "Test":
     c1, c2 = st.columns([6, 1], vertical_alignment="center")
     with c1:
         st.title("Test Site")
-    with c2:
-        st.image(LOGO_SPOTGREEN, width=200)
 
     # --- Prefilter slider ---
     st.markdown("### 🎧 Artist Listening Distribution")

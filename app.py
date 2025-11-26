@@ -5099,17 +5099,16 @@ elif page == "Normality":
         ))
 
         # Fill under curve
-        fig.add_trace(go.Scatter3d(
-            x=np.concatenate([gdf["QuarterNum"], gdf["QuarterNum"][::-1]]),
-            y=np.concatenate([[i] * len(gdf) * 2]),
-            z=np.concatenate([gdf["p_value"], np.zeros(len(gdf))]),
-            mode="lines",
-            line=dict(width=0),
-            surfaceaxis=1,
-            surfacecolor=color,
-            opacity=0.25,
-            hoverinfo="skip",
-            showlegend=False
+        fig.add_trace(go.Surface(
+            x=[gdf["QuarterNum"], gdf["QuarterNum"]],
+            y=[[i]*len(gdf), [i]*len(gdf)],
+            z=[gdf["p_value"], np.zeros(len(gdf))],
+            surfacecolor=[gdf["p_value"], gdf["p_value"]],
+            colorscale=[[0, color], [1, color]],
+            cmin=gdf["p_value"].min(),
+            cmax=gdf["p_value"].max(),
+            showscale=False,
+            opacity=1
         ))
 
     # --- Configure 3D layout ---
@@ -5136,8 +5135,10 @@ elif page == "Normality":
                 gridcolor="rgba(255,255,255,0.05)",
             ),
             camera=dict(
-                eye=dict(x=1.4, y=1.4, z=1.2),
-                up=dict(x=0, y=0, z=0.5),
+                center=dict(x=0, y=0, z=0),
+                eye=dict(x=1, y=1.4, z=1.2),
+                up=dict(x=0, y=0, z=0.5)
+
             ),
         ),
         paper_bgcolor="#0b110b",

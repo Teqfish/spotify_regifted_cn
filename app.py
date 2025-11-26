@@ -1879,7 +1879,7 @@ with st.sidebar:
             "Sheeple-O-Meter",
             "On This Day",
             "FAQs",
-            # "Test",
+            "Test",
         ],
     )
 
@@ -5193,109 +5193,193 @@ elif page == "Test":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
-    # Get current user dataset
+    # --- Get current dataset ---
     df, current_label = require_current_df()
-    user_df = df[df["category"] == "music"].copy()
     df_music = df[df["category"] == "music"].copy()
     df_album = INFO_ALBUM.copy()
     df_artist_genre = INFO_ARTIST_GENRE.copy()
 
-    # --- Normalize datetime column safely ---
-    df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
-    df_music = df_music.dropna(subset=["datetime"]).copy()
-    df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
-    df_music["date"] = df_music["datetime"].dt.date
-
     # --- Header ---
-    c1, c2 = st.columns([6, 1], vertical_alignment="center")
-    with c1:
-        st.title("Test Site")
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Test Site</b></em></p>")
 
-    # --- Prefilter slider ---
-    st.markdown("### 🎧 Artist Listening Distribution")
+    # --- Genre & Year Selectors ---
+    col1, col2 = st.columns([0.7, 1])
+    with col1:
+        genres = (
+            INFO_SUPERGENRE.groupby("supergenre").count()
+            .sort_values(by="supergenre")
+            .reset_index()["supergenre"]
+            .tolist()
+        )
+        genre_options = ["All Genres"] + [str(g) for g in genres]
+        genre_selected = st.selectbox(
+            "Genre:",
+            options=genre_options,
+            index=0
+        )
 
-    # Convert to hours for better readability
-    artist_hours = (
-        df_music.groupby("artist_name")["minutes_played"]
-        .sum()
-        .div(60)  # convert minutes to hours
-        .reset_index(name="hours_played")
+    with col2:
+        # --- Year + Category selectors ---
+        years = sorted(df["year"].dropna().unique())
+        year_options = ["All Time"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year", year_options, selection_mode="single", default="All Time", width='stretch'
+        )
+
+        if not year_selected:
+            year_selected = "All Time"
+
+    # --- Merge datasets ---
+    # First: merge listening history with album info (tracks + albums + artist)
+    df = pd.merge(
+        df_music,
+        df_album,
+        on=["album_name", "artist_name"],
+        how="left"
     )
 
-    # Round everything to one decimal place for consistency
-    artist_hours["hours_played"] = artist_hours["hours_played"].round(1)
-
-    min_hours = float(artist_hours["hours_played"].min())
-    max_hours = float(artist_hours["hours_played"].max())
-
-    filter_threshold = st.slider(
-        "Filter out artists with total listening time below (hours):",
-        min_value=0.0,
-        max_value=round(max_hours, 1),
-        value=0.0,
-        step=0.5
+    # Merge with artist genre info (by artist only)
+    df = pd.merge(
+        df,
+        df_artist_genre,
+        on="artist_name",
+        how="left"
     )
 
-    # --- Apply filter ---
-    artist_hours = artist_hours[artist_hours["hours_played"] >= round(filter_threshold, 1)]
+    # --- Datetime handling ---
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df = df.dropna(subset=["datetime"]).copy()
+    df["datetime"] = df["datetime"].dt.tz_localize(None)
+    df["date"] = df["datetime"].dt.date
+    df['year'] = df['datetime'].dt.year
 
-    # --- Define exponential bins dynamically based on threshold ---
-    import numpy as np
+    # --- Filter by YEAR ---
+    if year_selected == "All Time":
+        df_year = df.copy()
+    else:
+        df_year = df[df["year"] == int(year_selected)].copy()
 
-    max_val = round(float(artist_hours["hours_played"].max()), 2) if not artist_hours.empty else 1.0
+    # --- Filter by GENRE ---
+    if genre_selected == "All Genres":
+        df_music = df_year.copy()
+    else:
+        df_music = df_year[df_year["supergenre"] == genre_selected].copy()
 
-    # Number of bins increases smoothly with threshold (clamped 10–25)
-    bin_count = int(np.clip(10 + (filter_threshold / max(1, max_hours)) * 15, 10, 25))
-
-    # Avoid zero or negative start for logspace
-    start_val = max(round(filter_threshold + 0.05, 2), 0.1)
-    end_val = max(round(max_val + 0.2, 2), start_val + 0.1)
-
-    # Generate logarithmic bins, cleanly rounded
-    bins = np.unique(np.round(np.logspace(np.log10(start_val), np.log10(end_val), num=bin_count), 2))
-    bins = np.insert(bins, 0, round(filter_threshold, 1))  # Ensure first bin matches filter
-    bins = np.unique(np.clip(bins, filter_threshold, end_val))  # Enforce monotonic order
-
-    # --- Histogram data ---
-    hist_data = (
-        pd.cut(artist_hours["hours_played"], bins=bins, include_lowest=True)
-        .value_counts()
-        .sort_index()
+    # --- Compute listening events per artist ---
+    artist_counts = (
+        df_music.groupby("artist_name")["track_name"]
+        .count()
         .reset_index()
-    )
-    hist_data.columns = ["Listening Range (hours)", "# of Artists"]
-
-    # --- Clean labels ---
-    hist_data["Listening Range (hours)"] = (
-        hist_data["Listening Range (hours)"]
-        .astype(str)
-        .str.replace(",", "–")
-        .str.replace("(", "")
-        .str.replace("]", "")
+        .rename(columns={"track_name": "listening_events"})
     )
 
-    # --- Plot ---
+    # --- Filter controls ---
+    min_events = int(artist_counts["listening_events"].min())
+    max_events = int(artist_counts["listening_events"].max())
+
+    st.markdown("### 🎧 Distribution of Listening Events per Artist")
+    filter_val = st.slider("Filter listening events", min_value=min_events, max_value=max_events, value=(min_events, max_events))
+
+    filtered = artist_counts[
+        (artist_counts["listening_events"] >= filter_val[0]) &
+        (artist_counts["listening_events"] <= filter_val[1])
+    ].copy()
+
+    from scipy.stats import skew, kurtosis, normaltest
+    import numpy as np
     import plotly.express as px
 
-    fig = px.bar(
-        hist_data,
-        x="Listening Range (hours)",
-        y="# of Artists",
-        text="# of Artists",
-        color="# of Artists",
-        color_continuous_scale="Viridis",
+    # --- Compute metrics ---
+    skewness = skew(filtered["listening_events"])
+    kurt = kurtosis(filtered["listening_events"])
+    _, pval = normaltest(filtered["listening_events"])
+
+    # --- Display metrics ---
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Skewness", f"{skewness:.2f}")
+    c2.metric("Kurtosis", f"{kurt:.2f}")
+    c3.metric("Normality p-val", f"{pval:.3f}")
+
+    # --- Normality Indicator Bar ---
+    # Green = near normal, Red = highly non-normal
+    if pval >= 0.05:
+        color = "#1ed760"  # green
+        label = "✅ Approx. Normal"
+    elif pval >= 0.01:
+        color = "#ffcc00"  # yellow
+        label = "⚠️ Moderately Non-Normal"
+    else:
+        color = "#ff4b4b"  # red
+        label = "❌ Highly Non-Normal"
+
+    st.markdown(
+        f"""
+        <div style="
+            background-color:{color};
+            color:black;
+            text-align:center;
+            padding:0.6rem;
+            border-radius:6px;
+            font-weight:600;
+            margin-bottom:1rem;
+        ">
+            {label}
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    fig.update_traces(textposition="outside")
+    # --- Bin control toggle ---
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        auto_binning = st.toggle("Use Freedman–Diaconis automatic bin width", value=True)
+
+    data = filtered["listening_events"].values
+
+    with c3:
+        if len(data) > 1:
+            if auto_binning:
+                # Freedman–Diaconis Rule
+                iqr = np.subtract(*np.percentile(data, [75, 25]))
+                bin_width = 2 * iqr * (len(data) ** (-1 / 3))
+                if bin_width > 0:
+                    num_bins = int((data.max() - data.min()) / bin_width)
+                else:
+                    num_bins = 10
+            else:
+                num_bins = st.slider("Manual number of bins", min_value=5, max_value=100, value=30, step=1)
+                bin_width = (data.max() - data.min()) / num_bins
+        else:
+            num_bins, bin_width = 10, 1
+
+        num_bins = max(5, min(num_bins, 80))
+
+    with c2:
+        # --- Bin width display ---
+        st.metric("Current Bin Width", f"{bin_width:.2f} events per bin")
+
+    # --- Histogram ---
+    fig = px.histogram(
+        filtered,
+        x="listening_events",
+        nbins=num_bins,
+        title="Listening Event Distribution (Filtered)",
+        color_discrete_sequence=["#1ed760"],
+    )
+
     fig.update_layout(
-        title=f"Distribution of Artists by Total Listening Time (≥ {round(filter_threshold,1)} hrs)",
-        xaxis_title="Total Listening Time Range (hrs)",
+        xaxis_title="Listening Events (per artist)",
         yaxis_title="# of Artists",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white"),
-        xaxis=dict(showgrid=False, range=[round(filter_threshold, 1), None]),
-        yaxis=dict(showgrid=False),
         height=500,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white"),
     )
 
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown(
+        "_Switch between auto and manual binning to explore different histogram resolutions. Bin width updates dynamically._"
+    )

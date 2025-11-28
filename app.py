@@ -1877,6 +1877,7 @@ with st.sidebar:
             "Artists",
             "Genres",
             "Popularity",
+            "Normality_legacy",
             "Normality",
             "On This Day",
             "FAQs",
@@ -4946,8 +4947,8 @@ elif page == "Popularity":
         else:
             st.info("No chart hits scored in the selected period yet.")
 
-# ------------------------------- Normality ---------------------------------- #
-elif page == "Normality":
+# -----------------------------Normality_legacy------------------------------- #
+elif page == "Normality_legacy":
     # ----------------------------------------------------------------------
     # IMPORTS
     # ----------------------------------------------------------------------
@@ -5482,6 +5483,302 @@ elif page == "Normality":
                     font=dict(color="white")
                 )
                 st.plotly_chart(fig_conv, width="stretch")
+
+# -------------------------------- Normality --------------------------------- #
+elif page == "Normality":
+    import os
+    import sys
+    import logging
+    import numpy as np
+    import pandas as pd
+    import traceback
+    import streamlit as st
+    import plotly.express as px
+    from scipy.stats import skew, kurtosis, normaltest
+    from datetime import datetime
+
+    # ----------------------------------------------------------------------
+    # LOGGER SETUP (StreamToLogger)
+    # ----------------------------------------------------------------------
+    if "logger_initialized" not in st.session_state:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            handlers=[
+                logging.FileHandler("debug_enrichment.log"),
+                logging.StreamHandler(sys.__stdout__)
+            ]
+        )
+        logger = logging.getLogger()
+        sys.stdout = StreamToLogger(logger, logging.INFO)
+        sys.stderr = StreamToLogger(logger, logging.ERROR)
+        st.session_state["logger_initialized"] = True
+        print("[logging] ✅ StreamToLogger attached")
+
+    # ----------------------------------------------------------------------
+    # DATASET VALIDATION
+    # ----------------------------------------------------------------------
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df, current_label = require_current_df()
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
+
+    # ----------------------------------------------------------------------
+    # HEADER
+    # ----------------------------------------------------------------------
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.html("<p style='text-align:center;font-size:48px;'><em><b>Normality</b></em></p>")
+        st.html("<p style='text-align:center;font-size:26px;'>How normally do you listen?</p>")
+
+    # ----------------------------------------------------------------------
+    # USER + PARQUET CONTEXT
+    # ----------------------------------------------------------------------
+    user_id = st.session_state.get("user_id", "anon")
+    base_path = os.path.join("enrichment", "normality")
+    os.makedirs(base_path, exist_ok=True)
+    parquet_path = os.path.join(base_path, f"{user_id}_{current_label}_normality.parquet")
+
+    # ----------------------------------------------------------------------
+    # ACTION BUTTON
+    # ----------------------------------------------------------------------
+    run_calcs = st.button("Run Normality Calculations")
+
+    # ----------------------------------------------------------------------
+    # MAIN COMPUTE FUNCTION (GRID + FINE GRID SEARCH)
+    # ----------------------------------------------------------------------
+    @st.cache_data(show_spinner=True)
+    def compute_all(df, df_artist_genre, parquet_path):
+        """Perform grid search followed by fine-tuned search and save combined results."""
+
+        print("[Normality] ▶ Joining dataset with genre info")
+        df_full = df.merge(df_artist_genre, on="artist_name", how="left")
+
+        df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
+        df_full.dropna(subset=["datetime"], inplace=True)
+        df_full["quarter"] = df_full["datetime"].dt.to_period("Q")
+        df_full["year"] = df_full["datetime"].dt.year
+
+        results = []
+        total_pairs = len(df_full.groupby(["supergenre", "quarter"]))
+        pair_count = 0
+
+        print(f"[Normality] ▶ Starting two-phase normality search for {total_pairs} genre/quarter pairs")
+
+        for (genre, q), gdf in df_full.groupby(["supergenre", "quarter"]):
+            pair_count += 1
+            prefix = f"[{pair_count}/{total_pairs}]"
+
+            if not isinstance(genre, str) or genre.strip() == "":
+                continue
+
+            data = gdf.groupby("artist_name")["track_name"].count().values
+            if len(data) < 8:
+                print(f"{prefix} ⚠️ Skipping {genre} {q} — insufficient data ({len(data)} artists)")
+                continue
+
+            # --- Phase 1: Coarse Grid Search ---
+            best_p, best_min, best_max, best_skew, best_kurt, best_std = 0, 0, 0, 0, 0, 0
+            for i in np.linspace(data.min(), np.percentile(data, 80), 15):
+                for j in np.linspace(np.percentile(data, 20), data.max(), 15):
+                    if j <= i:
+                        continue
+                    subset = data[(data >= i) & (data <= j)]
+                    if len(subset) < 8:
+                        continue
+                    _, p = normaltest(subset)
+                    if p > best_p:
+                        best_p, best_min, best_max = p, i, j
+                        best_skew, best_kurt, best_std = skew(subset), kurtosis(subset), np.std(subset)
+            print(f"{prefix} ✅ Grid {genre} {q} — p={best_p:.3f}, range=({best_min:.0f}-{best_max:.0f})")
+
+            results.append(dict(
+                phase="grid",
+                genre=genre,
+                quarter=str(q),
+                min=int(best_min),
+                max=int(best_max),
+                p_value=best_p,
+                skew=best_skew,
+                kurtosis=best_kurt,
+                std_dev=best_std
+            ))
+
+            # --- Phase 2: Fine Grid Search (refinement) ---
+            fine_min = np.linspace(best_min * 0.8, best_min * 1.2, 20)
+            fine_max = np.linspace(best_max * 0.8, best_max * 1.2, 20)
+
+            fine_best_p, fine_best_min, fine_best_max, fine_skew, fine_kurt, fine_std = 0, 0, 0, 0, 0, 0
+            for i in fine_min:
+                for j in fine_max:
+                    if j <= i:
+                        continue
+                    subset = data[(data >= i) & (data <= j)]
+                    if len(subset) < 8:
+                        continue
+                    _, p = normaltest(subset)
+                    if p > fine_best_p:
+                        fine_best_p, fine_best_min, fine_best_max = p, i, j
+                        fine_skew, fine_kurt, fine_std = skew(subset), kurtosis(subset), np.std(subset)
+            print(f"{prefix} ✅ Fine {genre} {q} — p={fine_best_p:.3f}, range=({fine_best_min:.0f}-{fine_best_max:.0f})")
+
+            results.append(dict(
+                phase="fine",
+                genre=genre,
+                quarter=str(q),
+                min=int(fine_best_min),
+                max=int(fine_best_max),
+                p_value=fine_best_p,
+                skew=fine_skew,
+                kurtosis=fine_kurt,
+                std_dev=fine_std
+            ))
+
+        df_results = pd.DataFrame(results)
+        df_results.columns = [c.lower() for c in df_results.columns]
+        df_results.to_parquet(parquet_path, index=False)
+        print(f"[Normality] ✅ Both phases complete — {len(df_results)} rows saved → {parquet_path}")
+        return df_results
+
+    # ----------------------------------------------------------------------
+    # LOAD OR COMPUTE RESULTS
+    # ----------------------------------------------------------------------
+    if run_calcs:
+        df_all = compute_all(df, df_artist_genre, parquet_path)
+    elif os.path.exists(parquet_path):
+        print(f"[Normality] 💾 Loading cached results from {parquet_path}")
+        df_all = pd.read_parquet(parquet_path)
+    else:
+        st.warning("⚠️ No existing results found. Click the button above to generate calculations.")
+        st.stop()
+
+    # ----------------------------------------------------------------------
+    # FILTER CONTROLS (shared across tabs)
+    # ----------------------------------------------------------------------
+    years = sorted(df_all["quarter"].apply(lambda x: int(str(x)[:4])).unique())
+    quarters = ["Q1", "Q2", "Q3", "Q4"]
+
+    st.markdown("### Filter Results")
+    c1, c2 = st.columns(2)
+
+    with c1:
+        selected_year = st.segmented_control(
+            "Select Year",
+            options=[str(y) for y in years],
+            default=str(years[-1]),
+            key="year_selector",
+            width="stretch"
+        )
+    with c2:
+        selected_quarter = st.segmented_control(
+            "Select Quarter",
+            options=quarters,
+            default="Q1",
+            key="quarter_selector",
+            width="content"
+        )
+    with c1:
+        genres = sorted(df_all["genre"].unique())
+        selected_genre = st.selectbox("Select Genre", options=genres, key="genre_selector_heatmap")
+
+    target_period = f"{selected_year}Q{selected_quarter[-1]}"
+    df_filtered = df_all[df_all["quarter"].astype(str) == target_period]
+    print(f"[DEBUG] Showing results for {target_period}: {len(df_filtered)} rows")
+
+    # ----------------------------------------------------------------------
+    # TABS FOR PHASES
+    # ----------------------------------------------------------------------
+    tab1, tab2 = st.tabs(["Grid Search", "Fine-Tuning Search"])
+    shared_cmin, shared_cmax = 0, 1
+
+    # ----------------------------------------------------------------------
+    # TAB 1 — COARSE GRID SEARCH
+    # ----------------------------------------------------------------------
+    with tab1:
+        st.markdown(f"### Coarse Grid Search Results — {selected_year} {selected_quarter}")
+        df_grid = df_filtered[df_filtered["phase"] == "grid"]
+        st.dataframe(df_grid.round(3).reset_index(drop=True), hide_index=True, width="stretch")
+
+        # --- Heatmap ---
+        df_joined = df.merge(df_artist_genre, on="artist_name", how="left")
+        df_joined["datetime"] = pd.to_datetime(df_joined["datetime"], errors="coerce")
+        df_joined["quarter"] = df_joined["datetime"].dt.to_period("Q")
+
+        genre_df = df_joined[
+            (df_joined["supergenre"] == selected_genre)
+            & (df_joined["quarter"].astype(str) == target_period)
+        ]
+        data = genre_df.groupby("artist_name")["track_name"].count().values
+        if len(data) >= 8:
+            grid_x = np.linspace(1, 10, 15)
+            grid_y = np.linspace(5, 50, 15)
+            z = np.full((len(grid_x), len(grid_y)), np.nan)
+            for i, xmin in enumerate(grid_x):
+                for j, xmax in enumerate(grid_y):
+                    if xmax <= xmin:
+                        continue
+                    subset = data[(data >= xmin) & (data <= xmax)]
+                    if len(subset) < 8:
+                        continue
+                    _, p = normaltest(subset)
+                    z[i, j] = p
+
+            fig_hm = px.imshow(
+                z,
+                x=[f"{xmax:.0f}" for xmax in grid_y],
+                y=[f"{xmin:.0f}" for xmin in grid_x],
+                color_continuous_scale="Viridis",
+                zmin=shared_cmin, zmax=shared_cmax,
+                labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
+                title=f"Grid Search Heatmap — {selected_genre} ({target_period})",
+                aspect="auto"
+            )
+            fig_hm.update_layout(width=700, height=500)
+
+            c1,c2,c3 = st.columns([1,3,1])
+            with c2:
+                st.plotly_chart(fig_hm, width="stretch")
+
+
+    # ----------------------------------------------------------------------
+    # TAB 2 — FINE GRID SEARCH
+    # ----------------------------------------------------------------------
+    with tab2:
+        st.markdown(f"### Fine Grid Search Results — {selected_year} {selected_quarter}")
+        df_fine = df_filtered[df_filtered["phase"] == "fine"]
+        st.dataframe(df_fine.round(3).reset_index(drop=True), hide_index=True, width="stretch")
+
+        # --- Heatmap (fine scan) ---
+        if len(data) >= 8:
+            fine_x = np.linspace(1, 10, 20)
+            fine_y = np.linspace(5, 50, 20)
+            z_fine = np.full((len(fine_x), len(fine_y)), np.nan)
+            for i, xmin in enumerate(fine_x):
+                for j, xmax in enumerate(fine_y):
+                    if xmax <= xmin:
+                        continue
+                    subset = data[(data >= xmin) & (data <= xmax)]
+                    if len(subset) < 8:
+                        continue
+                    _, p = normaltest(subset)
+                    z_fine[i, j] = p
+
+            fig_hm2 = px.imshow(
+                z_fine,
+                x=[f"{xmax:.0f}" for xmax in fine_y],
+                y=[f"{xmin:.0f}" for xmin in fine_x],
+                color_continuous_scale="Viridis",
+                zmin=shared_cmin, zmax=shared_cmax,
+                labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
+                title=f"Fine Search Heatmap — {selected_genre} ({target_period})",
+                aspect="auto"
+            )
+            fig_hm2.update_layout(width=700, height=500)
+            c1,c2,c3 = st.columns([1,3,1])
+            with c2:
+                st.plotly_chart(fig_hm2, width="stretch")
 
 # ------------------------------ On This Day --------------------------------- #
 elif page == "On This Day":

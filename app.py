@@ -1878,8 +1878,6 @@ with st.sidebar:
             "Artists",
             "Genres",
             "Popularity",
-            "Normality_legacy",
-            "Normality_legacy_even-older",
             "Normality",
             "On This Day",
             "FAQs",
@@ -4949,962 +4947,6 @@ elif page == "Popularity":
         else:
             st.info("No chart hits scored in the selected period yet.")
 
-# -----------------------------Normality_legacy------------------------------- #
-elif page == "Normality_legacy":
-    # ----------------------------------------------------------------------
-    # IMPORTS
-    # ----------------------------------------------------------------------
-    import os, sys, logging, traceback, warnings
-    import numpy as np
-    import pandas as pd
-    import plotly.express as px
-    import plotly.graph_objects as go
-    import streamlit as st
-    from scipy.stats import skew, kurtosis, normaltest
-    from skopt import gp_minimize
-    from skopt.space import Real
-
-    # ----------------------------------------------------------------------
-    # CONFIG
-    # ----------------------------------------------------------------------
-    METRIC_FOR_SCATTER = "std_dev"  # options: "std_dev", "skew", "kurtosis"
-    warnings.filterwarnings("ignore", message="Precision loss occurred in moment calculation")
-
-    # ----------------------------------------------------------------------
-    # LOGGER SETUP (StreamToLogger)
-    # ----------------------------------------------------------------------
-    if "logger_initialized" not in st.session_state:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            handlers=[
-                logging.FileHandler("debug_enrichment.log"),
-                logging.StreamHandler(sys.__stdout__)
-            ]
-        )
-        logger = logging.getLogger()
-        sys.stdout = StreamToLogger(logger, logging.INFO)
-        sys.stderr = StreamToLogger(logger, logging.ERROR)
-        st.session_state["logger_initialized"] = True
-        print("[logging] ✅ StreamToLogger attached")
-
-    # ----------------------------------------------------------------------
-    # DATASET VALIDATION
-    # ----------------------------------------------------------------------
-    if "current_df" not in st.session_state:
-        st.error("No dataset selected. Please go to the Home page and select a dataset.")
-        st.stop()
-
-    df, current_label = require_current_df()
-    df_artist_genre = INFO_ARTIST_GENRE.copy()
-
-    # ----------------------------------------------------------------------
-    # HEADER
-    # ----------------------------------------------------------------------
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.html("<p style='text-align:center;font-size:48px;'><em><b>Normality</b></em></p>")
-        st.html("<p style='text-align:center;font-size:26px;'>How normally do you listen?</p>")
-
-    # ----------------------------------------------------------------------
-    # USER + PARQUET CONTEXT
-    # ----------------------------------------------------------------------
-    user_id = st.session_state.get("user_id", "anon")
-    base_path = os.path.join("enrichment", "normality")
-    os.makedirs(base_path, exist_ok=True)
-    parquet_path = os.path.join(base_path, f"{user_id}_{current_label}_normality.parquet")
-
-    # ----------------------------------------------------------------------
-    # ACTION BUTTON
-    # ----------------------------------------------------------------------
-    st.subheader("🎧 Normality Analysis")
-    st.write("Click below to calculate or refresh your normality metrics.")
-    run_calcs = st.button("🧮 Run Normality Calculations")
-
-    # ----------------------------------------------------------------------
-    # MASTER CALCULATION FUNCTION
-    # ----------------------------------------------------------------------
-    @st.cache_data(show_spinner=True)
-    def compute_all(user_df, info_artist_genre, user_id, dataset_label):
-        """Compute all three ML phases (grid, fine, bayes) for Normality analysis."""
-
-        logger = logging.getLogger()
-        print("[Normality] ▶ Building fresh df_full (join with INFO_ARTIST_GENRE)")
-
-        # --- Join user data with artist genre info
-        df_full = user_df.merge(info_artist_genre, on="artist_name", how="left")
-        df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
-        df_full.dropna(subset=["datetime"], inplace=True)
-        df_full["quarter"] = df_full["datetime"].dt.to_period("Q")
-        df_full["year"] = df_full["datetime"].dt.year
-
-        results_grid, results_fine, results_bayes, convergence = [], [], [], {}
-        total_pairs = len(df_full.groupby(["supergenre", "quarter"]))
-        pair_count = 0
-
-        print(f"[Normality] ▶ Starting compute_all() for {total_pairs} genre/quarter pairs")
-
-        for (genre, q), gdf in df_full.groupby(["supergenre", "quarter"]):
-            pair_count += 1
-            prefix = f"[{pair_count}/{total_pairs}]"
-
-            if not isinstance(genre, str) or genre.strip() == "":
-                continue
-
-            data = gdf.groupby("artist_name")["track_name"].count().values
-            if len(data) < 8:
-                print(f"{prefix} [Normality] ⚠️ Skipping {genre} {q}: insufficient data ({len(data)} artists)")
-                continue
-
-            # -----------------------------------------------------------
-            # GRID SEARCH
-            # -----------------------------------------------------------
-            best_p = best_min = best_max = best_skew = best_kurt = 0
-            for i in np.linspace(data.min(), np.percentile(data, 80), 15):
-                for j in np.linspace(np.percentile(data, 20), data.max(), 15):
-                    if j <= i:
-                        continue
-                    subset = data[(data >= i) & (data <= j)]
-                    if len(subset) < 8:
-                        continue
-                    _, p = normaltest(subset)
-                    if p > best_p:
-                        best_p, best_min, best_max = p, i, j
-                        best_skew, best_kurt = skew(subset), kurtosis(subset)
-
-            print(f"{prefix} [GridSearch] ✅ {genre} {q} — p={best_p:.3f}, range=({best_min:.0f}-{best_max:.0f})")
-
-            results_grid.append(dict(
-                phase="grid", genre=genre, quarter=str(q),
-                min=int(best_min), max=int(best_max),
-                p_value=best_p, skew=best_skew, kurtosis=best_kurt
-            ))
-
-            # -----------------------------------------------------------
-            # FINE-TUNING
-            # -----------------------------------------------------------
-            fine_min = np.linspace(best_min * 0.8, best_min * 1.2, 20).astype(int)
-            fine_max = np.linspace(best_max * 0.8, best_max * 1.2, 20).astype(int)
-            best_p2 = best_min2 = best_max2 = best_skew2 = best_kurt2 = 0
-
-            for i in fine_min:
-                for j in fine_max:
-                    if j <= i:
-                        continue
-                    subset = data[(data >= i) & (data <= j)]
-                    if len(subset) < 8:
-                        continue
-                    _, p = normaltest(subset)
-                    if p > best_p2:
-                        best_p2, best_min2, best_max2 = p, i, j
-                        best_skew2, best_kurt2 = skew(subset), kurtosis(subset)
-
-            print(f"{prefix} [FineTune] ✅ {genre} {q} — p={best_p2:.3f}, range=({best_min2}-{best_max2})")
-
-            results_fine.append(dict(
-                phase="fine", genre=genre, quarter=str(q),
-                min=int(best_min2), max=int(best_max2),
-                p_value=best_p2, skew=best_skew2, kurtosis=best_kurt2
-            ))
-
-            # -----------------------------------------------------------
-            # BAYESIAN OPTIMIZATION
-            # -----------------------------------------------------------
-            if best_max2 <= best_min2 or best_min2 == 0 or best_max2 == 0:
-                print(f"{prefix} [BayesOpt] ⚠️ Skipping {genre} {q} — invalid range ({best_min2}-{best_max2})")
-                results_bayes.append(dict(
-                    phase="bayes", genre=genre, quarter=str(q),
-                    min=int(best_min2), max=int(best_max2),
-                    p_value=best_p2, skew=best_skew2, kurtosis=best_kurt2,
-                    std_dev=np.std(data[(data >= best_min2) & (data <= best_max2)]) if len(data) >= 8 else 0
-                ))
-                continue
-
-            def objective(params):
-                min_c, max_c = params
-                if max_c <= min_c:
-                    return 1.0
-                subset = data[(data >= min_c) & (data <= max_c)]
-                if len(subset) < 8:
-                    return 1.0
-                _, p = normaltest(subset)
-                return 1 - p
-
-            try:
-                result = gp_minimize(
-                    objective,
-                    [Real(best_min2 * 0.8, best_min2 * 1.2),
-                     Real(best_max2 * 0.8, best_max2 * 1.2)],
-                    n_calls=25, random_state=42
-                )
-
-                func_vals = [v for v in result.func_vals if not np.isnan(v)]
-                if not func_vals:
-                    print(f"{prefix} [BayesOpt] ⚠️ Skipped {genre} {q}: empty func_vals")
-                    continue
-
-                best_min3, best_max3 = result.x
-                subset = data[(data >= best_min3) & (data <= best_max3)]
-                _, p_val = normaltest(subset)
-                sigma = np.std(subset)
-
-                print(f"{prefix} [BayesOpt] ✅ {genre} {q} — p={p_val:.3f}, σ={sigma:.3f}, range=({best_min3:.0f}-{best_max3:.0f})")
-
-                results_bayes.append(dict(
-                    phase="bayes", genre=genre, quarter=str(q),
-                    min=int(best_min3), max=int(best_max3),
-                    p_value=p_val, skew=skew(subset),
-                    kurtosis=kurtosis(subset), std_dev=sigma
-                ))
-                convergence[f"{genre}_{q}"] = [1 - v for v in func_vals]
-
-            except Exception as e:
-                print(f"{prefix} [BayesOpt] ❌ ERROR in {genre} {q}: {e}")
-                traceback.print_exc()
-                continue
-
-        # ---------------------------------------------------------------
-        # COMBINE + SAVE
-        # ---------------------------------------------------------------
-        df_all = pd.concat(
-            [pd.DataFrame(results_grid),
-             pd.DataFrame(results_fine),
-             pd.DataFrame(results_bayes)],
-            ignore_index=True
-        )
-
-        df_all.columns = [c.lower() for c in df_all.columns]
-        parquet_path = f"enrichment/normality/{user_id}_{dataset_label}_normality.parquet"
-        os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
-        df_all.to_parquet(parquet_path, index=False)
-
-        n_grid = len(df_all[df_all["phase"] == "grid"])
-        n_fine = len(df_all[df_all["phase"] == "fine"])
-        n_bayes = len(df_all[df_all["phase"] == "bayes"])
-        n_total = len(df_all)
-
-        print(f"[Normality] ✅ compute_all() finished successfully — {n_total} total rows")
-        print(f"[Normality] 📊 Breakdown → Grid: {n_grid}, Fine: {n_fine}, Bayes: {n_bayes}")
-        print(f"[Normality] 💾 Saved results to {parquet_path}")
-
-        return df_all, convergence
-
-    # ----------------------------------------------------------------------
-    # LOAD OR COMPUTE
-    # ----------------------------------------------------------------------
-    if run_calcs:
-        df_all, convergence = compute_all(df, df_artist_genre, user_id, current_label)
-    elif os.path.exists(parquet_path):
-        print(f"[Normality] 💾 Loading cached results from {parquet_path}")
-        df_all = pd.read_parquet(parquet_path)
-        convergence = {}
-    else:
-        st.warning("⚠️ No existing results found. Click the button above to generate the calculations.")
-        st.stop()
-
-    # ----------------------------------------------------------------------
-    # MAIN VIEW: 3D SCATTER + DATA TABLE
-    # ----------------------------------------------------------------------
-    st.markdown("### 🎛️ Normality Visualization")
-
-    # Filter to Bayesian phase for visualization
-    df_q = df_all[df_all["phase"] == "bayes"].copy()
-    df_q["quarter"] = pd.PeriodIndex(df_q["quarter"], freq="Q")
-
-    unique_quarters = sorted(df_q["quarter"].unique())
-    quarter_to_num = {q: i for i, q in enumerate(unique_quarters)}
-    df_q["quarter_num"] = df_q["quarter"].map(quarter_to_num)
-
-    genres = sorted(df_q["genre"].unique())
-
-    # Tabs for scatter + data
-    tab_viz, tab_table = st.tabs(["3D Scatter", "Underlying Data"])
-
-    # ----------------------------------------------------------------------
-    # 3D SCATTER
-    # ----------------------------------------------------------------------
-    with tab_viz:
-        st.subheader("Genre Normality Over Time — Joy Division Style")
-
-        metric_col = METRIC_FOR_SCATTER
-        z_label = "Normality (p-value)"
-        color_label = metric_col
-
-        from plotly.colors import sample_colorscale
-        n_genres = len(genres)
-        sampled_colors = sample_colorscale(
-            px.colors.sequential.Viridis, [i / (n_genres - 1) for i in range(n_genres)]
-        )
-        color_map = dict(zip(genres, sampled_colors))
-
-        fig = go.Figure()
-        for i, g in enumerate(genres):
-            gdf = df_q[df_q["genre"] == g].sort_values("quarter")
-            fig.add_trace(go.Scatter3d(
-                x=[quarter_to_num[q] for q in gdf["quarter"]],
-                y=[i] * len(gdf),
-                z=gdf["p_value"],
-                mode="lines",
-                line=dict(color=color_map[g], width=3),
-                name=g,
-                hovertemplate=(
-                    f"<b>{g}</b><br>"
-                    "Quarter: %{x}<br>"
-                    f"p-value: %{{z:.3f}}<br>"
-                    f"{color_label}: %{{text:.3f}}<extra></extra>"
-                ),
-                text=gdf[metric_col],
-            ))
-
-        fig.update_layout(
-            scene=dict(
-                xaxis_title="Quarter",
-                yaxis_title="Genre",
-                zaxis_title=z_label,
-                xaxis=dict(showbackground=False),
-                yaxis=dict(showbackground=False, tickvals=[]),
-                zaxis=dict(showbackground=False),
-                camera=dict(eye=dict(x=-0.7, y=-1.8, z=0.9)),
-            ),
-            paper_bgcolor="#0b110b",
-            font=dict(color="white"),
-            height=800,
-            showlegend=True,
-        )
-        st.plotly_chart(fig, width="stretch")
-
-    # ----------------------------------------------------------------------
-    # UNDERLYING DATA TABLES
-    # ----------------------------------------------------------------------
-    with tab_table:
-        st.write("### Quarterly p-values and metrics")
-        pivot = df_q.pivot(index="genre", columns="quarter", values="p_value").fillna(0)
-        pivot["average_p_value"] = pivot.mean(axis=1)
-        st.dataframe(pivot.round(3), width="stretch")
-
-        st.write("### Spread Metric (StdDev)")
-        std_table = df_q.pivot(index="genre", columns="quarter", values="std_dev").fillna(0)
-        st.dataframe(std_table.round(3), width="stretch")
-
-    # ----------------------------------------------------------------------
-    # TOGGLE: BACKGROUND CALCULATIONS
-    # ----------------------------------------------------------------------
-    show_analysis = st.toggle("Show how we calculated this")
-
-    if show_analysis:
-        st.markdown("### 🔬 Explore Calculation Phases")
-
-        # --------------------------------------------------------------
-        # 🎚️ FILTER CONTROLS
-        # --------------------------------------------------------------
-        years = sorted(df_all["quarter"].apply(lambda x: int(str(x)[:4])).unique())
-        quarters = ["Q1", "Q2", "Q3", "Q4"]
-        genres = sorted(df_all["genre"].unique())
-
-        # Initialize session state defaults
-        st.session_state.setdefault("selected_genre", genres[0])
-        st.session_state.setdefault("selected_year", str(years[-1]))
-        st.session_state.setdefault("selected_quarter", "Q1")
-
-        # --- Layout: Genre (dropdown) | Year (segmented) | Quarter (segmented)
-        st.markdown("#### 🎚️ Filters")
-        col1, col2, col3 = st.columns([1.5, 1, 1])
-
-        with col1:
-            st.session_state["selected_genre"] = st.selectbox(
-                "Select Genre",
-                genres,
-                index=genres.index(st.session_state["selected_genre"])
-                if st.session_state["selected_genre"] in genres else 0,
-                key="genre_selector_global"
-            )
-
-        with col2:
-            st.session_state["selected_year"] = st.segmented_control(
-                "Select Year",
-                options=[str(y) for y in years],
-                default=str(st.session_state["selected_year"])
-                if str(st.session_state["selected_year"]) in [str(y) for y in years]
-                else str(years[-1]),
-                key="year_selector"
-            )
-
-        with col3:
-            st.session_state["selected_quarter"] = st.segmented_control(
-                "Select Quarter",
-                options=quarters,
-                default=st.session_state["selected_quarter"]
-                if st.session_state["selected_quarter"] in quarters
-                else "Q1",
-                key="quarter_selector"
-            )
-
-        # --------------------------------------------------------------
-        # 🧩 FILTER DATA BY SELECTED YEAR + QUARTER
-        # --------------------------------------------------------------
-        target_period = f"{st.session_state['selected_year']}Q{st.session_state['selected_quarter'][-1]}"
-        df_filtered = df_all[df_all["quarter"].astype(str) == target_period]
-
-        print(
-            f"[DEBUG] Filtered rows: {len(df_filtered)} — "
-            f"Year={st.session_state['selected_year']} "
-            f"Quarter={st.session_state['selected_quarter']} "
-            f"Genre={st.session_state['selected_genre']}"
-        )
-
-        # Split phases (each tab uses its respective subset)
-        df_grid = df_filtered[df_filtered["phase"] == "grid"].drop(columns=["phase", "quarter"], errors="ignore")
-        df_fine = df_filtered[df_filtered["phase"] == "fine"].drop(columns=["phase", "quarter"], errors="ignore")
-        df_bayes = df_filtered[df_filtered["phase"] == "bayes"].drop(columns=["phase", "quarter"], errors="ignore")
-
-        # --------------------------------------------------------------
-        # 📊 TABS: Each phase uses same filters
-        # --------------------------------------------------------------
-        tab1, tab2, tab3 = st.tabs(["Initial Grid Search", "Fine-Tuning", "Bayesian Optimization"])
-
-        shared_min, shared_max = 0, 1
-        MAX_X = 500
-
-        # ------------------------------------------------------------------
-        # TAB 1 — INITIAL GRID SEARCH
-        # ------------------------------------------------------------------
-        with tab1:
-            st.markdown(f"#### 🧮 Grid Search — {st.session_state['selected_year']} {st.session_state['selected_quarter']}")
-            st.dataframe(df_grid.round(3).reset_index(drop=True), hide_index=True, width="stretch")
-
-            # --------------------------------------------------------------
-            # 🎨 Heatmap for selected genre only (using df_grid)
-            # --------------------------------------------------------------
-            gdf = df_grid[df_grid["genre"] == st.session_state["selected_genre"]]
-            if gdf.empty:
-                st.warning(f"No grid search results found for {st.session_state['selected_genre']} in {target_period}.")
-            else:
-                # Gather artist-level track counts for selected genre + period directly from raw dataset
-                df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-                df["quarter"] = df["datetime"].dt.to_period("Q")
-
-                artists = df.loc[
-                    (df["quarter"].astype(str) == target_period)
-                    & (df["artist_name"].isin(
-                        df_artist_genre.loc[
-                            df_artist_genre["supergenre"] == st.session_state["selected_genre"],
-                            "artist_name"
-                        ]
-                    ))
-                ]["artist_name"].unique()
-
-                genre_data = df[df["artist_name"].isin(artists)].groupby("artist_name")["track_name"].count().values
-                print(f"[DEBUG] Genre data count: {len(genre_data)} | min={genre_data.min() if len(genre_data) else 'n/a'} | max={genre_data.max() if len(genre_data) else 'n/a'}")
-
-                if len(genre_data) < 8:
-                    st.warning(f"Not enough artists to plot {st.session_state['selected_genre']} in {target_period} ({len(genre_data)} artists).")
-                else:
-                    grid_x = np.linspace(0, MAX_X, 15)
-                    grid_y = np.linspace(0, MAX_X, 15)
-                    z = np.full((len(grid_x), len(grid_y)), np.nan)
-
-                    print(f"[DEBUG] grid_x range {grid_x.min()}–{grid_x.max()}, data range {genre_data.min()}–{genre_data.max()}")
-                    print(f"[Normality] ▶ Generating heatmap for {st.session_state['selected_genre']} (Grid Search)")
-
-                    for i, xmin in enumerate(grid_x):
-                        for j, xmax in enumerate(grid_y):
-                            if xmax <= xmin:
-                                continue
-                            subset = genre_data[(genre_data >= xmin) & (genre_data <= xmax)]
-                            if len(subset) < 8:
-                                continue
-                            _, p = normaltest(subset)
-                            z[i, j] = p
-
-                    valid = np.isfinite(z)
-                    print(f"[DEBUG] z has {valid.sum()} valid p-values out of {z.size}")
-
-                    fig_hm = px.imshow(
-                        z,
-                        x=[f"{x:.0f}" for x in grid_y],
-                        y=[f"{x:.0f}" for x in grid_x],
-                        color_continuous_scale="Viridis",
-                        zmin=shared_min, zmax=shared_max,
-                        labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
-                        title=f"Initial Grid Search — {st.session_state['selected_genre']}"
-                    )
-                    st.plotly_chart(fig_hm, width="stretch")
-
-        # ------------------------------------------------------------------
-        # TAB 2 — Fine-Tuning
-        # ------------------------------------------------------------------
-        with tab2:
-            st.markdown(f"#### 🎯 Fine-Tuning — {st.session_state['selected_year']} {st.session_state['selected_quarter']}")
-            st.dataframe(df_fine.round(3).reset_index(drop=True), hide_index=True, width="stretch")
-
-            fine_x = np.linspace(0, MAX_X, 20)
-            fine_y = np.linspace(0, MAX_X, 20)
-            z = np.full((len(fine_x), len(fine_y)), np.nan)
-
-            print(f"[Normality] ▶ Generating heatmap for {st.session_state['selected_genre']} (Fine-Tuning)")
-            for i, xmin in enumerate(fine_x):
-                for j, xmax in enumerate(fine_y):
-                    if xmax <= xmin:
-                        continue
-                    subset = genre_data[(genre_data >= xmin) & (genre_data <= xmax)]
-                    if len(subset) < 8:
-                        continue
-                    _, p = normaltest(subset)
-                    z[i, j] = p
-
-            fig_hm2 = px.imshow(
-                z,
-                x=[f"{x:.0f}" for x in fine_y],
-                y=[f"{x:.0f}" for x in fine_x],
-                color_continuous_scale="Viridis",
-                zmin=shared_min, zmax=shared_max,
-                labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
-                title=f"Fine-Tuning — {st.session_state['selected_genre']}"
-            )
-            st.plotly_chart(fig_hm2, width="stretch")
-
-        # ------------------------------------------------------------------
-        # TAB 3 — Bayesian Optimization
-        # ------------------------------------------------------------------
-        with tab3:
-            st.markdown(f"#### 🤖 Bayesian Optimization — {st.session_state['selected_year']} {st.session_state['selected_quarter']}")
-            st.dataframe(df_bayes.round(3).reset_index(drop=True),  hide_index=True, width="stretch")
-
-            key = [k for k in convergence.keys() if k.startswith(st.session_state["selected_genre"])]
-            if key:
-                fig_conv = px.line(
-                    y=convergence[key[0]],
-                    markers=True,
-                    title=f"Bayesian Optimization Convergence — {st.session_state['selected_genre']}",
-                    labels={"x": "Iteration", "y": "Best p-value"}
-                )
-                fig_conv.update_layout(
-                    height=300,
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="white")
-                )
-                st.plotly_chart(fig_conv, width="stretch")
-
-# ---------------------- Normality_legacy_even-older ------------------------- #
-elif page =="Normality_legacy_even-older":
-    import numpy as np
-    import pandas as pd
-    import plotly.express as px
-    import plotly.graph_objects as go
-    from scipy.stats import skew, kurtosis, normaltest
-    from skopt import gp_minimize
-    from skopt.space import Real
-    import traceback
-    import streamlit as st
-
-    print("[Normality] ✅ Page initialized")
-
-    # ----------------------------------------------------------------------
-    # Ensure dataset loaded
-    # ----------------------------------------------------------------------
-    if "current_df" not in st.session_state:
-        st.error("No dataset selected. Please go to the Home page and select a dataset.")
-        print("[Normality] ❌ No dataset loaded — stopping.")
-        st.stop()
-
-    df, current_label = require_current_df()
-    df_music = df[df["category"] == "music"].copy()
-    df_album = INFO_ALBUM.copy()
-    df_artist_genre = INFO_ARTIST_GENRE.copy()
-
-    # ----------------------------------------------------------------------
-    # HEADER
-    # ----------------------------------------------------------------------
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.html("<p style='text-align:center;font-size:48px;'><em><b>Normality</b></em></p>")
-        st.html("<p style='text-align:center;font-size:26px;'>How normally do you listen?</p>")
-
-    # ----------------------------------------------------------------------
-    # PREP DATA FOR RIDGELINE FIRST
-    # ----------------------------------------------------------------------
-    print("[Normality] ▶ Preparing dataset for ridgeline visualization")
-
-    # --- Join with album + genre info ---
-    df_full = pd.merge(df, INFO_ALBUM, on=["album_name", "artist_name"], how="left")
-    df_full = pd.merge(df_full, INFO_ARTIST_GENRE, on="artist_name", how="left")
-
-    if "supergenre" not in df_full.columns:
-        st.error("Missing genre information — could not merge with INFO_ARTIST_GENRE.")
-        print("[Normality] ❌ Missing 'supergenre' column after join.")
-        st.stop()
-
-    df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
-    df_full = df_full.dropna(subset=["datetime"])
-    df_full["quarter"] = df_full["datetime"].dt.to_period("Q")
-
-    # --- Compute normality p-values per genre per quarter ---
-    records = []
-    for (genre, q), gdf in df_full.groupby(["supergenre", "quarter"]):
-        if not isinstance(genre, str) or genre.strip() == "":
-            continue
-        data = (
-            gdf.groupby("artist_name")["track_name"]
-            .count()
-            .reset_index()["track_name"]
-            .values
-        )
-        if len(data) < 8:
-            continue
-        try:
-            _, p = normaltest(data)
-            records.append(dict(Genre=genre, Quarter=str(q), p_value=p))
-        except Exception as e:
-            print(f"[Normality] ⚠️ Skipping {genre} {q}: {e}")
-            continue
-
-    df_q = pd.DataFrame(records)
-    if df_q.empty:
-        st.warning("Not enough data for quarterly breakdown.")
-        print("[Normality] ⚠️ No quarterly data for ridgeline.")
-        st.stop()
-
-    # --- Convert Quarter column to Period and sort chronologically ---
-    df_q["Quarter"] = pd.PeriodIndex(df_q["Quarter"], freq="Q")
-    df_q = df_q.sort_values(["Quarter", "Genre"])
-
-    # --- Create quarter tick labels (Q1, Q2, etc.) ---
-    df_q["QuarterShort"] = df_q["Quarter"].apply(lambda q: f"Q{q.quarter}")
-    unique_quarters = df_q[["Quarter", "QuarterShort"]].drop_duplicates().sort_values("Quarter")
-    quarter_order = unique_quarters["Quarter"].astype(str).tolist()
-    tickvals = list(range(len(quarter_order)))
-    ticktext = unique_quarters["QuarterShort"].tolist()
-    df_q["QuarterNum"] = df_q["Quarter"].apply(lambda q: quarter_order.index(str(q)))
-
-    # --- Year markers for annotation layer ---
-    year_labels = pd.PeriodIndex(df_q["Quarter"].drop_duplicates(), freq="Q").to_timestamp().year
-    year_ticks = []
-    for year in sorted(year_labels.unique()):
-        q_index = df_q[df_q["Quarter"].dt.year == year]["QuarterNum"].median()
-        year_ticks.append((q_index, year))
-
-    # --- Compute average p-value per genre to sort ---
-    genre_order = (
-        df_q.groupby("Genre")["p_value"]
-        .mean()
-        .sort_values(ascending=True)
-        .index
-        .tolist()
-    )
-    df_q["Genre"] = pd.Categorical(df_q["Genre"], categories=genre_order, ordered=True)
-    df_q = df_q.sort_values(["Genre", "Quarter"])
-    genres = genre_order
-
-    print(f"[Normality] ✅ Computed quarterly p-values for {len(genres)} genres")
-
-    # --- Generate color mapping ---
-    from plotly.colors import sample_colorscale
-    n_genres = len(genres)
-    try:
-        sampled_colors = sample_colorscale(
-            neon_colorscale, [i / (n_genres - 1) for i in range(n_genres)]
-        )
-    except Exception:
-        sampled_colors = sample_colorscale(
-            px.colors.sequential.Viridis, [i / (n_genres - 1) for i in range(n_genres)]
-        )
-    color_map = dict(zip(genres, sampled_colors))
-
-    # ----------------------------------------------------------------------
-    # BUILD 3D JOY DIVISION RIDGELINE
-    # ----------------------------------------------------------------------
-    fig = go.Figure()
-    z_label = "Normality (p-value)"
-
-    for i, g in enumerate(genres):
-        gdf = df_q[df_q["Genre"] == g].sort_values("QuarterNum")
-        color = color_map.get(g, "white")
-        hover_tmpl = (
-            f"<b>{g}</b><br>"
-            "Quarter: %{x}<br>"
-            f"{z_label}: %{{z:.3f}}<extra></extra>"
-        )
-
-        # Main waveform
-        fig.add_trace(go.Scatter3d(
-            x=gdf["QuarterNum"],
-            y=[i] * len(gdf),
-            z=gdf["p_value"],
-            mode="lines",
-            line=dict(color=color, width=2.5),
-            name=g,
-            hovertemplate=hover_tmpl,
-            showlegend=True
-        ))
-
-        # Fill under curve
-        fig.add_trace(go.Surface(
-            x=[gdf["QuarterNum"], gdf["QuarterNum"]],
-            y=[[i]*len(gdf), [i]*len(gdf)],
-            z=[gdf["p_value"], np.zeros(len(gdf))],
-            surfacecolor=[gdf["p_value"], gdf["p_value"]],
-            colorscale=[[0, color], [1, color]],
-            cmin=gdf["p_value"].min(),
-            cmax=gdf["p_value"].max(),
-            showscale=False,
-            opacity=1
-        ))
-
-    # --- Configure 3D layout ---
-    fig.update_layout(
-        scene=dict(
-            xaxis_title="Quarter",
-            yaxis_title="Genre",
-            zaxis_title=z_label,
-            xaxis=dict(
-                tickvals=tickvals,
-                ticktext=ticktext,
-                showbackground=False,
-                gridcolor="rgba(255,255,255,0.05)",
-                mirror=True,
-            ),
-            yaxis=dict(
-                showbackground=False,
-                gridcolor="rgba(255,255,255,0.05)",
-                tickvals=[],  # remove numeric genre ticks
-                title="",
-            ),
-            zaxis=dict(
-                showbackground=False,
-                gridcolor="rgba(255,255,255,0.05)",
-            ),
-            camera=dict(
-                center=dict(x=0, y=0, z=0),
-                eye=dict(x=1, y=1.4, z=1.2),
-                up=dict(x=0, y=0, z=0.5)
-
-            ),
-        ),
-        paper_bgcolor="#0b110b",
-        plot_bgcolor="#0b110b",
-        font=dict(color="white"),
-        showlegend=True,
-        legend=dict(
-            bgcolor="#0b110b",
-            font=dict(color="white"),
-            orientation="v",
-            yanchor="middle",
-            y=0.5,
-            xanchor="right",
-            x=1.1
-        ),
-        height=800,
-        margin=dict(l=200, r=80, b=80, t=40),
-    )
-
-    # --- Add fake genre & year labels ---
-    annotations = []
-    for i, g in enumerate(genres):
-        annotations.append(dict(
-            showarrow=False,
-            text=f"<b>{g}</b>",
-            x=-3,
-            y=i,
-            z=0,
-            xanchor="right",
-            font=dict(color="white", size=10),
-        ))
-    for qx, yr in year_ticks:
-        annotations.append(dict(
-            showarrow=False,
-            text=f"<b>{yr}</b>",
-            x=qx,
-            y=-3,
-            z=0,
-            xanchor="center",
-            font=dict(color="white", size=10),
-        ))
-    fig.update_layout(scene_annotations=annotations)
-
-    # --- Display ridgeline first ---
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
-    print("[Normality] ✅ Ridgeline rendered")
-
-    # ----------------------------------------------------------------------
-    # TOGGLE: ANALYSIS BREAKDOWN
-    # ----------------------------------------------------------------------
-    show_analysis = st.toggle("Show how we calculated this")
-
-    if show_analysis:
-        # -------------------- YEAR SELECTOR -------------------- #
-        years = sorted(df["year"].dropna().unique())
-        year_options = ["All Time"] + [str(y) for y in years]
-        year_selected = st.segmented_control(
-            "Select Year",
-            year_options,
-            selection_mode="single",
-            default="All Time",
-            width="stretch",
-        )
-        if not year_selected:
-            year_selected = "All Time"
-
-        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-        df["year"] = df["datetime"].dt.year
-        df["date"] = df["datetime"].dt.date
-        df_year = df.copy() if year_selected == "All Time" else df[df["year"] == int(year_selected)].copy()
-        df_year = pd.merge(df_year, df_album, on=["album_name", "artist_name"], how="left")
-        df_year = pd.merge(df_year, df_artist_genre, on="artist_name", how="left")
-
-        if df_year.empty:
-            st.warning("No data found for the selected year.")
-            print(f"[Normality] ⚠️ No data for year {year_selected}.")
-            st.stop()
-
-        print(f"[Normality] ▶ Processing dataset for year: {year_selected} ({len(df_year)} rows)")
-
-        # -------------------- CACHE FUNCTIONS -------------------- #
-        @st.cache_data(show_spinner=True)
-        def run_initial_grid_search(df_year):
-            results = []
-            supergenres = df_year["supergenre"].dropna().unique().tolist()
-            print(f"[GridSearch] Starting for {len(supergenres)} genres")
-            for genre in supergenres:
-                gdf = df_year[df_year["supergenre"] == genre]
-                data = (
-                    gdf.groupby("artist_name")["track_name"]
-                    .count()
-                    .reset_index()["track_name"]
-                    .values
-                )
-                if len(data) < 8:
-                    continue
-                best_p = best_min = best_max = best_skew = best_kurt = 0
-                for i in np.linspace(data.min(), np.percentile(data, 80), 15):
-                    for j in np.linspace(np.percentile(data, 20), data.max(), 15):
-                        if j <= i:
-                            continue
-                        subset = data[(data >= i) & (data <= j)]
-                        if len(subset) < 8:
-                            continue
-                        _, p = normaltest(subset)
-                        if p > best_p:
-                            best_p, best_min, best_max = p, i, j
-                            best_skew, best_kurt = skew(subset), kurtosis(subset)
-                results.append(dict(Genre=genre, Min=int(best_min), Max=int(best_max),
-                                    p_value=best_p, Skew=best_skew, Kurtosis=best_kurt))
-            df_out = pd.DataFrame(results)
-            return df_out.sort_values("p_value", ascending=False).reset_index(drop=True)
-
-        @st.cache_data(show_spinner=True)
-        def run_fine_tuning(df_year, df_summary):
-            results = []
-            for _, row in df_summary.iterrows():
-                genre = row["Genre"]
-                gdf = df_year[df_year["supergenre"] == genre]
-                data = (
-                    gdf.groupby("artist_name")["track_name"]
-                    .count()
-                    .reset_index()["track_name"]
-                    .values
-                )
-                if len(data) < 8:
-                    continue
-                fine_min = np.linspace(row["Min"] * 0.8, row["Min"] * 1.2, 25).astype(int)
-                fine_max = np.linspace(row["Max"] * 0.8, row["Max"] * 1.2, 25).astype(int)
-                best_p = best_min = best_max = best_skew = best_kurt = 0
-                for i in fine_min:
-                    for j in fine_max:
-                        if j <= i:
-                            continue
-                        subset = data[(data >= i) & (data <= j)]
-                        if len(subset) < 8:
-                            continue
-                        _, p = normaltest(subset)
-                        if p > best_p:
-                            best_p, best_min, best_max = p, i, j
-                            best_skew, best_kurt = skew(subset), kurtosis(subset)
-                results.append(dict(Genre=genre, FineMin=int(best_min), FineMax=int(best_max),
-                                    p_value=best_p, Skew=best_skew, Kurtosis=best_kurt))
-            df_out = pd.DataFrame(results)
-            df_out["Genre"] = pd.Categorical(df_out["Genre"], categories=df_summary["Genre"], ordered=True)
-            return df_out.sort_values("Genre").reset_index(drop=True)
-
-        @st.cache_data(show_spinner=True)
-        def run_bayesian_optimization(df_year, df_summary):
-            results, conv = [], {}
-            for _, row in df_summary.iterrows():
-                genre = row["Genre"]
-                gdf = df_year[df_year["supergenre"] == genre]
-                data = (
-                    gdf.groupby("artist_name")["track_name"]
-                    .count()
-                    .reset_index()["track_name"]
-                    .values
-                )
-                if len(data) < 8:
-                    continue
-
-                def objective(params):
-                    min_c, max_c = params
-                    if max_c <= min_c:
-                        return 1.0
-                    subset = data[(data >= min_c) & (data <= max_c)]
-                    if len(subset) < 8:
-                        return 1.0
-                    _, p = normaltest(subset)
-                    return 1 - p
-
-                space = [Real(row["Min"] * 0.8, row["Min"] * 1.2),
-                         Real(row["Max"] * 0.8, row["Max"] * 1.2)]
-                try:
-                    result = gp_minimize(objective, space, n_calls=30, random_state=42)
-                    func_vals = [v for v in result.func_vals if not np.isnan(v)]
-                    if not func_vals:
-                        continue
-                    best_min, best_max = result.x
-                    subset = data[(data >= best_min) & (data <= best_max)]
-                    _, p_val = normaltest(subset)
-                    results.append(dict(Genre=genre, BayesMin=int(best_min),
-                                        BayesMax=int(best_max), p_value=p_val,
-                                        Skew=skew(subset), Kurtosis=kurtosis(subset)))
-                    conv[genre] = [1 - v for v in func_vals]
-                except Exception as e:
-                    print(f"[BayesOpt] ERROR in {genre}: {e}")
-                    traceback.print_exc()
-                    continue
-            df_out = pd.DataFrame(results)
-            df_out["Genre"] = pd.Categorical(df_out["Genre"], categories=df_summary["Genre"], ordered=True)
-            return df_out.sort_values("Genre").reset_index(drop=True), conv
-
-        # -------------------- RUN ALL ANALYSIS -------------------- #
-        print("[Normality] === Running analyses ===")
-        df_summary = run_initial_grid_search(df_year)
-        df_fine = run_fine_tuning(df_year, df_summary)
-        df_bayes, convergence = run_bayesian_optimization(df_year, df_summary)
-        print("[Normality] ✅ All analysis complete")
-
-        tab1, tab2, tab3 = st.tabs(["Initial Grid Search", "Fine-Tuning", "Bayesian Optimization"])
-
-        with tab1:
-            st.dataframe(df_summary, use_container_width=True)
-
-        with tab2:
-            st.dataframe(df_fine, use_container_width=True)
-
-        with tab3:
-            st.dataframe(df_bayes, use_container_width=True)
-            genre = st.selectbox("Select genre:", df_bayes["Genre"], key="bayes_genre")
-            if genre in convergence:
-                fig_conv = px.line(
-                    y=convergence[genre], markers=True,
-                    title=f"Convergence — {genre}",
-                    labels={"x": "Iteration", "y": "Best p-value"}
-                )
-                fig_conv.update_layout(
-                    height=300,
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="white")
-                )
-                st.plotly_chart(fig_conv, use_container_width=True)
-
 # -------------------------------- Normality --------------------------------- #
 elif page == "Normality":
     import os
@@ -5975,21 +5017,44 @@ elif page == "Normality":
     def compute_all(df, df_artist_genre, parquet_path):
         """Perform grid, fine, and Bayesian search and save combined results once."""
 
-        print("[Normality] ▶ Joining dataset with genre info")
-        df_full = df.merge(df_artist_genre, on="artist_name", how="left")
+        # ------------------------------------------------------------------
+        # DATA PREPARATION — Filter, Join, and Quarter Assignment
+        # ------------------------------------------------------------------
+        print("[Normality] ▶ Preparing dataset for normality analysis")
 
+        # 1️⃣ Filter for musical events only
+        df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
+        print(f"[Normality] ✅ Filtered for musical events: {len(df_music):,} rows remain")
+
+        # 2️⃣ Merge with artist→genre mapping
+        df_full = df_music.merge(df_artist_genre, on="artist_name", how="left")
+
+        # 3️⃣ Handle missing genre labels
+        df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
+
+        # 4️⃣ Convert to datetime and assign quarters using PeriodIndex
         df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
-        df_full.dropna(subset=["datetime"], inplace=True)
-        df_full["quarter"] = df_full["datetime"].dt.to_period("Q")
-        df_full["year"] = df_full["datetime"].dt.year
+        df_full = df_full.dropna(subset=["datetime"])
+        df_full["quarter"] = pd.PeriodIndex(df_full["datetime"], freq="Q")
 
+        # 5️⃣ Derive year as integer for convenience
+        df_full["year"] = df_full["quarter"].dt.year
+
+        # 6️⃣ Confirm grouping scope
+        unique_pairs = df_full.groupby(["supergenre", "quarter"]).ngroups
+        print(f"[Normality] ▶ Detected {unique_pairs} (genre, quarter) pairs for testing")
+
+        # ------------------------------------------------------------------
+        # PHASED NORMALITY COMPUTATION — GRID → FINE → BAYESIAN
+        # ------------------------------------------------------------------
         results = []
         convergence = {}
-        total_pairs = len(df_full.groupby(["supergenre", "quarter"]))
+
         pair_count = 0
+        total_pairs = df_full.groupby(["supergenre", "quarter"]).ngroups
+        print(f"[Normality] ▶ Starting three-phase normality search for {total_pairs:,} genre/quarter pairs")
 
-        print(f"[Normality] ▶ Starting three-phase normality search for {total_pairs} genre/quarter pairs")
-
+        # Group by genre + quarter
         for (genre, q), gdf in df_full.groupby(["supergenre", "quarter"]):
             pair_count += 1
             prefix = f"[{pair_count}/{total_pairs}]"
@@ -5997,15 +5062,19 @@ elif page == "Normality":
             if not isinstance(genre, str) or genre.strip() == "":
                 continue
 
+            # 🎯 Get total listening counts per artist (not unique tracks)
             data = gdf.groupby("artist_name")["track_name"].count().values
+
+            # Skip small samples
             if len(data) < 8:
                 print(f"{prefix} ⚠️ Skipping {genre} {q} — insufficient data ({len(data)} artists)")
                 continue
 
-            # ------------------------------------------------------------------
-            # PHASE 1 — GRID SEARCH
-            # ------------------------------------------------------------------
+            # ==============================================================
+            # PHASE 1 — COARSE GRID SEARCH
+            # ==============================================================
             best_p, best_min, best_max, best_skew, best_kurt, best_std = 0, 0, 0, 0, 0, 0
+
             for i in np.linspace(data.min(), np.percentile(data, 80), 15):
                 for j in np.linspace(np.percentile(data, 20), data.max(), 15):
                     if j <= i:
@@ -6017,7 +5086,6 @@ elif page == "Normality":
                     if p > best_p:
                         best_p, best_min, best_max = p, i, j
                         best_skew, best_kurt, best_std = skew(subset), kurtosis(subset), np.std(subset)
-            print(f"{prefix} ✅ Grid {genre} {q} — p={best_p:.3f}, range=({best_min:.0f}-{best_max:.0f})")
 
             results.append(dict(
                 phase="grid",
@@ -6031,9 +5099,11 @@ elif page == "Normality":
                 std_dev=best_std
             ))
 
-            # ------------------------------------------------------------------
+            print(f"{prefix} ✅ Grid {genre} {q} — p={best_p:.3f}, range=({best_min:.0f}-{best_max:.0f})")
+
+            # ==============================================================
             # PHASE 2 — FINE GRID SEARCH
-            # ------------------------------------------------------------------
+            # ==============================================================
             fine_min = np.linspace(best_min * 0.8, best_min * 1.2, 20)
             fine_max = np.linspace(best_max * 0.8, best_max * 1.2, 20)
 
@@ -6049,7 +5119,6 @@ elif page == "Normality":
                     if p > fine_best_p:
                         fine_best_p, fine_best_min, fine_best_max = p, i, j
                         fine_skew, fine_kurt, fine_std = skew(subset), kurtosis(subset), np.std(subset)
-            print(f"{prefix} ✅ Fine {genre} {q} — p={fine_best_p:.3f}, range=({fine_best_min:.0f}-{fine_best_max:.0f})")
 
             results.append(dict(
                 phase="fine",
@@ -6063,14 +5132,15 @@ elif page == "Normality":
                 std_dev=fine_std
             ))
 
-            # ------------------------------------------------------------------
+            print(f"{prefix} ✅ Fine {genre} {q} — p={fine_best_p:.3f}, range=({fine_best_min:.0f}-{fine_best_max:.0f})")
+
+            # ==============================================================
             # PHASE 3 — BAYESIAN OPTIMIZATION
-            # ------------------------------------------------------------------
+            # ==============================================================
             if fine_best_max <= fine_best_min or fine_best_min == 0 or fine_best_max == 0:
                 print(f"{prefix} ⚠️ Skipping Bayes {genre} {q} — invalid range ({fine_best_min}-{fine_best_max})")
                 continue
 
-            # Validate data: drop NaN / inf
             valid_data = data[np.isfinite(data)]
             if len(valid_data) < 8:
                 print(f"{prefix} ⚠️ Skipping Bayes {genre} {q} — insufficient valid data ({len(valid_data)} samples)")
@@ -6085,42 +5155,33 @@ elif page == "Normality":
                     return 1.0
                 try:
                     _, p = normaltest(subset)
-                    if not np.isfinite(p):
-                        return 1.0
-                    return 1 - p  # minimize (1 - p_value)
+                    return 1 - p if np.isfinite(p) else 1.0
                 except Exception:
                     return 1.0
 
             try:
                 result = gp_minimize(
                     objective,
-                    [
-                        Real(fine_best_min * 0.8, fine_best_min * 1.2),
-                        Real(fine_best_max * 0.8, fine_best_max * 1.2)
-                    ],
+                    [Real(fine_best_min * 0.8, fine_best_min * 1.2),
+                    Real(fine_best_max * 0.8, fine_best_max * 1.2)],
                     n_calls=25,
                     random_state=42
                 )
 
                 func_vals = [v for v in result.func_vals if np.isfinite(v)]
                 if not func_vals:
-                    print(f"{prefix} ⚠️ Bayes {genre} {q} — no valid function values, skipping")
                     continue
 
                 best_min3, best_max3 = result.x
                 subset = valid_data[(valid_data >= best_min3) & (valid_data <= best_max3)]
                 if len(subset) < 8:
-                    print(f"{prefix} ⚠️ Bayes {genre} {q} — insufficient subset after optimization")
                     continue
 
                 _, p_val = normaltest(subset)
                 if not np.isfinite(p_val):
-                    print(f"{prefix} ⚠️ Bayes {genre} {q} — invalid p-value, skipping")
                     continue
 
                 sigma = np.std(subset)
-
-                print(f"{prefix} ✅ Bayes {genre} {q} — p={p_val:.3f}, σ={sigma:.3f}, range=({best_min3:.0f}-{best_max3:.0f})")
 
                 results.append(dict(
                     phase="bayes",
@@ -6135,6 +5196,7 @@ elif page == "Normality":
                 ))
 
                 convergence[f"{genre}_{q}"] = [1 - v for v in func_vals]
+                print(f"{prefix} ✅ Bayes {genre} {q} — p={p_val:.3f}, σ={sigma:.3f}")
 
             except Exception as e:
                 print(f"{prefix} ❌ Bayes error {genre} {q}: {e}")
@@ -6142,14 +5204,16 @@ elif page == "Normality":
                 continue
 
         # ------------------------------------------------------------------
-        # SAVE ALL RESULTS TO PARQUET
+        # SAVE RESULTS TO PARQUET
         # ------------------------------------------------------------------
         df_results = pd.DataFrame(results)
         df_results.columns = [c.lower() for c in df_results.columns]
-        df_results.to_parquet(parquet_path, index=False)
 
-        print(f"[Normality] ✅ All phases complete — {len(df_results)} rows saved → {parquet_path}")
-        return df_results, convergence
+        print(f"[Normality] ✅ Computation finished — {len(df_results)} phase results")
+
+        # Cache to disk
+        df_results.to_parquet(parquet_path, index=False)
+        print(f"[Normality] 💾 Saved to {parquet_path}")
 
     # ----------------------------------------------------------------------
     # LOAD OR COMPUTE RESULTS
@@ -6165,115 +5229,34 @@ elif page == "Normality":
         st.warning("⚠️ No existing results found. Click the button above to generate calculations.")
         st.stop()
 
-    # # ----------------------------------------------------------------------
-    # # 3D "Unknown Pleasures" Waterfall — Bayesian p-values by Genre/Quarter
-    # # ----------------------------------------------------------------------
-    # st.markdown("### Bayesian P-Values Over Time — Genre 'Waterfall' View")
-
-    # # Filter to Bayesian results only
-    # df_bayes_all = df_all[df_all["phase"] == "bayes"].copy()
-
-    # if not df_bayes_all.empty and "p_value" in df_bayes_all.columns:
-    #     # --- Prepare data
-    #     df_bayes_all["quarter_str"] = df_bayes_all["quarter"].astype(str)
-
-    #     # Sort quarters chronologically
-    #     quarter_order = sorted(df_bayes_all["quarter_str"].unique(), key=lambda x: (int(x[:4]), int(x[-1])))
-    #     df_bayes_all["quarter_str"] = pd.Categorical(df_bayes_all["quarter_str"], categories=quarter_order, ordered=True)
-
-    #     # Compute mean p-value per genre for sorting
-    #     genre_order = (
-    #         df_bayes_all.groupby("genre")["p_value"]
-    #         .mean()
-    #         .sort_values(ascending=True)
-    #         .index.tolist()
-    #     )
-    #     df_bayes_all["genre"] = pd.Categorical(df_bayes_all["genre"], categories=genre_order, ordered=True)
-
-    #     # Build "waveform" traces — one per genre
-    #     import plotly.graph_objects as go
-    #     fig_waterfall = go.Figure()
-
-    #     for genre in genre_order:
-    #         gdf = df_bayes_all[df_bayes_all["genre"] == genre]
-    #         if gdf.empty:
-    #             continue
-    #         # Sort quarters for correct x order
-    #         gdf = gdf.sort_values("quarter_str")
-
-    #         # Add a slight vertical offset per genre to mimic waveform spacing
-    #         genre_index = genre_order.index(genre)
-    #         y_offset = genre_index * 1.0  # vertical spacing between genres
-
-    #         fig_waterfall.add_trace(go.Scatter3d(
-    #             x=gdf["quarter_str"],
-    #             y=[y_offset] * len(gdf),
-    #             z=gdf["p_value"],
-    #             mode="lines",
-    #             line=dict(width=2),
-    #             name=genre,
-    #             hovertext=[
-    #                 f"Genre: {genre}<br>Quarter: {q}<br>p={p:.3f}"
-    #                 for q, p in zip(gdf["quarter_str"], gdf["p_value"])
-    #             ],
-    #             hoverinfo="text"
-    #         ))
-
-    #     # --- Layout and aesthetics
-    #     fig_waterfall.update_layout(
-    #         scene=dict(
-    #             xaxis_title="Quarter",
-    #             yaxis_title="Genre (sorted by avg p-value)",
-    #             zaxis_title="p-value",
-    #             yaxis=dict(showticklabels=False),  # hide numerical y ticks
-    #         ),
-    #         showlegend=False,
-    #         height=700,
-    #         margin=dict(l=0, r=0, t=50, b=0),
-    #         plot_bgcolor="rgba(0,0,0,0)",
-    #         paper_bgcolor="rgba(0,0,0,0)",
-    #         font=dict(color="white"),
-    #         scene_camera=dict(
-    #                 center=dict(x=0, y=-0.5, z=0),
-    #                 eye=dict(x=-0.6932, y=-1.806, z=0.927),
-    #                 up=dict(x=-0.01, y=0.006, z=1.0)
-    #                 )
-    #     )
-    #     # --- Add manual y-axis tick labels to emulate genre names stacked vertically
-    #     fig_waterfall.update_layout(
-    #         scene=dict(
-    #             yaxis=dict(
-    #                 tickmode="array",
-    #                 tickvals=[i for i in range(len(genre_order))],
-    #                 ticktext=genre_order,
-    #             )
-    #         )
-    #     )
-
-    #     st.plotly_chart(fig_waterfall, use_container_width=True)
-    # else:
-    #     st.info("Bayesian optimization results not yet available for waterfall visualization.")
-
     # ----------------------------------------------------------------------
-    # BAYESIAN P-VALUE "UNKNOWN PLEASURES" RIDGELINE + TABLE
+    # POSTPROCESSING — NaN toggle + legacy quarter/genre prep
     # ----------------------------------------------------------------------
-    st.markdown("### Bayesian P-Values — Genre Ridgeline Visualization")
+    st.markdown("### P-Value Ridgeline")
 
-    # Filter to Bayesian results only
+    # 1️⃣ Optional NaN replacement toggle
+    fill_nans = True
+
+    # 2️⃣ Filter to Bayesian phase
     df_bayes_all = df_all[df_all["phase"] == "bayes"].copy()
-    df_bayes_all = df_bayes_all.replace([np.nan, np.inf, -np.inf], 0)
+
+    # Apply NaN/inf replacement directly to working DataFrame
+    if fill_nans:
+        df_bayes_all = df_bayes_all.replace([np.nan, np.inf, -np.inf], 0)
+        print("[Normality] ⚙️ NaN/inf replaced with 0 for visualization")
+    else:
+        print("[Normality] ⚙️ NaN/inf retained (missing values will appear as gaps)")
 
     if not df_bayes_all.empty:
-        # --- Prepare data ---
+        # --- Prepare quarter info (legacy method) ---
         df_bayes_all["quarter_str"] = df_bayes_all["quarter"].astype(str)
         df_bayes_all["year_num"] = df_bayes_all["quarter_str"].str.extract(r"(\d{4})").astype(int)
         df_bayes_all["qtr_num"] = df_bayes_all["quarter_str"].str.extract(r"Q(\d)").astype(int)
         df_bayes_all["quarter_num"] = df_bayes_all["year_num"] + (df_bayes_all["qtr_num"] - 1) / 4
 
-        # Order quarters chronologically
         quarter_order = sorted(df_bayes_all["quarter_str"].unique(), key=lambda x: (int(x[:4]), int(x[-1])))
 
-        # Sort genres by average Bayesian p-value (descending)
+        # --- Compute genre order by average p-value (ascending = more normal first) ---
         genre_order = (
             df_bayes_all.groupby("genre")["p_value"]
             .mean()
@@ -6282,73 +5265,143 @@ elif page == "Normality":
         )
         df_bayes_all["genre"] = pd.Categorical(df_bayes_all["genre"], categories=genre_order, ordered=True)
 
-        # --- 3D Ridgeline Plot ---
+        print(f"[Normality] ✅ Prepared {len(df_bayes_all)} Bayesian records for visualization")
+
+    else:
+        st.info("Bayesian results not available for visualization yet.")
+        st.stop()
+
+    # ----------------------------------------------------------------------
+    # BAYESIAN P-VALUE "UNKNOWN PLEASURES" RIDGELINE + TABLE
+    # ----------------------------------------------------------------------
+    if not df_bayes_all.empty:
         tab_viz, tab_table = st.tabs(["3D Ridgeline", "Underlying Data"])
 
+        # ===============================================================
+        # TAB 1 — 3D RIDGELINE VISUALIZATION
+        # ===============================================================
         with tab_viz:
             import plotly.graph_objects as go
-            fig = go.Figure()
-            z_label = "Normality (p-value)"
 
-            # Define custom neon colorscale and map to genres
-            neon_palette = [
-                "#e67e0e", "#db6636", "#d04e5e", "#C53686", "#ba1ead",
-                "#8D2DBF", "#5f3cd1", "#324BE3", "#0459f5", "#0677CC",
-                "#0794a2", "#08B278", "#22cb85", "#1FD553"
-            ][::-1]
+            if not df_bayes_all.empty:
+                import plotly.graph_objects as go
 
-            def make_colorscale(palette):
-                """Convert a list of hex colors to a Plotly colorscale."""
-                return [[i / (len(palette) - 1), c] for i, c in enumerate(palette)]
+                fig = go.Figure()
+                z_label = "Normality (p-value)"
 
-            neon_colorscale = make_colorscale(neon_palette)
+                # --- Neon Colorscale ---
+                neon_palette = [
+                    "#e67e0e",
+                    "#d04e5e",
+                    "#db6636",
+                    "#ba1ead",
+                    "#C53686",
+                    "#5f3cd1",
+                    "#8D2DBF",
+                    "#0459f5",
+                    "#324BE3",
+                    "#0794a2",
+                    "#0677CC",
+                    "#22cb85",
+                    "#08B278",
+                    "#1FD553"
+                ][::-1]
 
-            # Map each genre to a color from the scale evenly across the palette
-            n_genres = len(genre_order)
-            color_map = {
-                genre: neon_palette[int(i / max(1, n_genres - 1) * (len(neon_palette) - 1))]
-                for i, genre in enumerate(genre_order)
-            }
+                def make_colorscale(palette):
+                    return [[i / (len(palette) - 1), c] for i, c in enumerate(palette)]
 
-            # Reverse the legend order so top genre (highest index) is shown last
-            legend_order = genre_order[::-1]
+                neon_colorscale = make_colorscale(neon_palette)
 
-            for i, genre in enumerate(genre_order):
-                gdf = df_bayes_all[df_bayes_all["genre"] == genre].sort_values("quarter_num")
-                if gdf.empty:
-                    continue
+                # Map genres evenly across the palette
+                n_genres = len(genre_order)
+                color_map = {
+                    genre: neon_palette[int(i / max(1, n_genres - 1) * (len(neon_palette) - 1))]
+                    for i, genre in enumerate(genre_order)
+                }
 
-                color = color_map.get(genre, "white")
-                hover_tmpl = f"<b>{genre}</b><br>Quarter: %{{x}}<br>{z_label}: %{{z:.3f}}<extra></extra>"
+                # ------------------------------------------------------------------
+                # USER-CONTROLLED Z-AXIS COMPRESSION
+                # ------------------------------------------------------------------
+                col1, col2 = st.columns(2)
+                with col1:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        exp = st.slider("Curvature exponent (nonlinear compression)", 0.01, 5.0, 0.5, 0.01)
+                    with col2:
+                        st.markdown(
+                            f"**Exponent:** `{exp:.2f}` — "
+                            + ("Flatter curves" if exp < 1 else "Steeper peaks")
+                        )
 
-                # Add main line trace
-                fig.add_trace(go.Scatter3d(
-                    x=gdf["quarter_num"],
-                    y=[i] * len(gdf),
-                    z=gdf["p_value"],
-                    mode="lines",
-                    line=dict(color=color, width=2.5),
-                    name=genre,
-                    legendrank=legend_order.index(genre),
-                    hovertemplate=hover_tmpl,
-                    showlegend=True
-                ))
+                # ------------------------------------------------------------------
+                # ADD ONE TRACE PER GENRE
+                # ------------------------------------------------------------------
+                for i, genre in enumerate(genre_order):
+                    gdf = df_bayes_all[df_bayes_all["genre"] == genre].sort_values("quarter_num")
+                    if gdf.empty:
+                        continue
 
-                # Add filled surface under each trace (waveform effect)
+                    color = color_map.get(genre, "white")
+                    hover_tmpl = (
+                        f"<b>{genre}</b><br>"
+                        "Quarter: %{x}<br>"
+                        f"{z_label}: %{{z:.3f}}<extra></extra>"
+                    )
+
+                    # --- Compute z-values with compression ---
+                    # Apply nonlinear curvature transform
+                    z_vals = np.power(gdf["p_value"], exp)
+
+                    # Main waveform line
+                    fig.add_trace(go.Scatter3d(
+                        x=gdf["quarter_num"],
+                        y=[i] * len(gdf),
+                        z=z_vals,
+                        mode="lines",
+                        line=dict(color=color, width=2.0),
+                        name=genre,
+                        hovertemplate=hover_tmpl,
+                        showlegend=True
+                    ))
+
+                    # Fill under curve to base
+                    fig.add_trace(go.Surface(
+                        x=[gdf["quarter_num"], gdf["quarter_num"]],
+                        y=[[i] * len(gdf), [i] * len(gdf)],
+                        z=[z_vals, np.zeros(len(gdf))],
+                        surfacecolor=[gdf["p_value"], gdf["p_value"]],
+                        colorscale=[[0, color], [1, color]],
+                        showscale=False,
+                        opacity=1
+                    ))
+
+                # ------------------------------------------------------------------
+                # ADD HORIZONTAL p=0.5 REFERENCE PLANE
+                # ------------------------------------------------------------------
+                p_ref = 0.5  # reference p-value threshold
+                x_range = np.linspace(df_bayes_all["quarter_num"].min(), df_bayes_all["quarter_num"].max(), 20)
+                y_range = np.arange(len(genre_order))
+
+                # Create meshgrid to span entire chart area
+                X, Y = np.meshgrid(x_range, y_range)
+                Z = np.full_like(X, p_ref)
+
                 fig.add_trace(go.Surface(
-                    x=[gdf["quarter_num"], gdf["quarter_num"]],
-                    y=[[i] * len(gdf), [i] * len(gdf)],
-                    z=[gdf["p_value"], np.zeros(len(gdf))],
-                    surfacecolor=[gdf["p_value"], gdf["p_value"]],
-                    colorscale=[[0, color], [1, color]],
+                    x=X,
+                    y=Y,
+                    z=Z,
                     showscale=False,
-                    opacity=1
+                    opacity=0.2,
+                    colorscale=[[0, "#ffffff"], [1, "#ff0095"]],
+                    name="p=0.5 reference",
+                    hoverinfo="skip"
                 ))
 
-            # --- Axis + Camera setup ---
+                # ------------------------------------------------------------------
+                # AXIS & CAMERA CONFIGURATION
+                # ------------------------------------------------------------------
                 tickvals = []
                 ticktext = []
-
                 for q in quarter_order:
                     year = int(q[:4])
                     quarter = q[-2:]
@@ -6357,78 +5410,116 @@ elif page == "Normality":
                         tickvals.append(qnum)
                         ticktext.append(str(year))
 
-            year_ticks = [(tickvals[i], int(str(ticktext[i])[:4])) for i in range(len(ticktext)) if ticktext[i].endswith("Q1")]
-
-            fig.update_layout(
-                scene=dict(
-                    xaxis_title="Quarter",
-                    yaxis_title="Genre",
-                    zaxis_title=z_label,
-                    xaxis=dict(
-                        tickvals=tickvals,
-                        ticktext=ticktext,
-                        showbackground=False,
-                        gridcolor="rgba(255,255,255,0.05)",
+                fig.update_layout(
+                    scene=dict(
+                        xaxis_title="Year",
+                        yaxis_title="Genre",
+                        zaxis_title=z_label,
+                        xaxis=dict(
+                            tickvals=tickvals,
+                            ticktext=ticktext,
+                            showbackground=False,
+                            gridcolor="rgba(255,255,255,0.05)",
+                        ),
+                        yaxis=dict(
+                            showbackground=False,
+                            tickvals=[],
+                            gridcolor="rgba(255,255,255,0.05)",
+                            title=""
+                        ),
+                        zaxis=dict(
+                            showbackground=False,
+                            gridcolor="rgba(255,255,255,0.05)",
+                            type="linear",
+                        ),
+                        camera=dict(
+                            center=dict(x=0, y=-0.5, z=0),
+                            eye=dict(x=-0.6932, y=-1.806, z=0.927),
+                            up=dict(x=-0.01, y=0.006, z=2.0),
+                        ),
                     ),
-                    yaxis=dict(
-                        showbackground=False,
-                        tickvals=[],
-                        # ticktext=genre_order,
-                        title="",
-                        gridcolor="rgba(255,255,255,0.05)",
+                    paper_bgcolor="#0b110b",
+                    font=dict(color="white"),
+                    showlegend=True,
+                    height=800,
+                    margin=dict(l=200, r=80, b=80, t=40),
+                    legend=dict(
+                        bgcolor="#0b110b",
+                        font=dict(color="white"),
+                        orientation="v",
+                        yanchor="middle",
+                        y=0.5,
+                        xanchor="right",
+                        x=1.1,
+                        traceorder="reversed"  # 👈 reversed legend order
                     ),
-                    zaxis=dict(
-                        # dtick=1,
-                        # type='linear',
-                        showbackground=False),
-                    camera=dict(
-                        center=dict(x=0, y=-0.5, z=0),
-                        eye=dict(x=-0.6932, y=-1.806, z=0.927),
-                        up=dict(x=-0.01, y=0.006, z=2.0),
-                    ),
-                ),
-                paper_bgcolor="#0b110b",
-                font=dict(color="white"),
-                showlegend=True,
-                height=800,
-                margin=dict(l=200, r=80, b=80, t=40),
-            )
+                    scene_zaxis=dict(range=[0, 1])
+                )
 
-            fig.update_layout(legend_traceorder="normal")
+                # ------------------------------------------------------------------
+                # CLEAN GENRE LABELS BESIDE TRACES
+                # ------------------------------------------------------------------
+                annotations = []
+                for i, genre in enumerate(genre_order):
+                    annotations.append(dict(
+                        showarrow=False,
+                        text=f"<b>{genre}</b>",
+                        x=tickvals[0] - 0.3,
+                        y=i,
+                        z=0,
+                        xanchor="right",
+                        font=dict(color="white", size=11),
+                        bgcolor="rgba(0,0,0,0)",
+                        opacity=0.9
+                    ))
 
-            # --- Add clean genre labels beside each waveform ---
-            annotations = []
-            for i, genre in enumerate(genre_order):
-                annotations.append(dict(
-                    showarrow=False,
-                    text=f"<b>{genre}</b>",
-                    x=tickvals[0] - 0.3,  # slightly before the first x value (push left of the plot)
-                    y=i,
-                    z=0,
-                    xanchor="right",
-                    font=dict(color="white", size=11),
-                    bgcolor="rgba(0,0,0,0)",  # transparent background
-                    opacity=0.9
-                ))
+                fig.update_layout(scene_annotations=annotations)
 
-            fig.update_layout(scene_annotations=annotations)
-            st.dataframe(df_bayes_all)
-            st.plotly_chart(fig, width="stretch", config={"scrollZoom": True})
+                # ------------------------------------------------------------------
+                # DISPLAY RIDGELINE PLOT
+                # ------------------------------------------------------------------
+                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
 
-        # --- Underlying Data Table ---
+        # ===============================================================
+        # TAB 2 — UNDERLYING DATA (Pivot Table with Color Gradient)
+        # ===============================================================
         with tab_table:
+            import seaborn as sns
+            st.markdown("#### Underlying Bayesian p-Values per Genre × Quarter")
+
+            # --- Build pivot table ---
             pivot_df = df_bayes_all.pivot(index="genre", columns="quarter_str", values="p_value")
 
-            # Replace NaN and infinite values with 0
-            pivot_df = pivot_df.replace([np.nan, np.inf, -np.inf], 0)
-
+            # Compute average p-value and sort by it (descending = less normal)
             pivot_df["Average p-value"] = pivot_df.mean(axis=1)
             pivot_df = pivot_df.sort_values("Average p-value", ascending=False)
 
-            st.dataframe(pivot_df.round(5), width="stretch")
+            # Move "Average p-value" to the first column
+            first_col = pivot_df["Average p-value"]
+            pivot_df = pivot_df.drop(columns=["Average p-value"])
+            pivot_df.insert(0, "Average p-value", first_col)
 
-    else:
-        st.info("Bayesian results not available for visualization yet.")
+            # --- Apply neon/Spotify-inspired gradient ---
+            def style_pivot(df):
+                """Return a styled DataFrame with a neon green gradient."""
+                cm = sns.light_palette("#1ed760", as_cmap=True, reverse=False)
+                styled = (
+                    df.style
+                    .background_gradient(cmap=cm, axis=None, vmin=0, vmax=1)
+                    .set_properties(**{
+                        "background-color": "#0b110b",
+                        "color": "white",
+                        "border-color": "#222",
+                        "font-family": "monospace",
+                    })
+                    .format("{:.3f}")
+                )
+                return styled
+
+            styled_df = style_pivot(pivot_df.round(3))
+
+            # --- Show styled pivot table ---
+            st.dataframe(styled_df, use_container_width=True)
 
     # ----------------------------------------------------------------------
     # FILTER CONTROLS (shared across tabs)

@@ -17,6 +17,7 @@ import dayplot as dp
 import extra_streamlit_components as stx
 import json
 import jwt
+from matplotlib.font_manager import X11FontDirectories
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -3731,7 +3732,7 @@ elif page == "Artists":
         df_artist_album = None
 
     # === NORMALIZATION SETTINGS ===
-    NORMALIZATION_MODE = "relative_to_mean"
+    NORMALIZATION_MODE = "scale_to_max"
     # Options: "none", "scale_to_max", "relative_to_mean", "per_artist_average"
 
     # Helper function for normalization
@@ -3748,7 +3749,6 @@ elif page == "Artists":
             num_artists = ref_df["artist_name"].nunique()
             return series / num_artists if num_artists > 0 else series
         return series
-
 
     # ======== ALL TIME MODE ========
     if year_selected == "All Time":
@@ -3782,103 +3782,245 @@ elif page == "Artists":
         else:
             timeline_album = None
 
-        # --- Plot ---
+        # ===============================================================
+        # AGGREGATION & NORMALIZATION — with date reindexing
+        # ===============================================================
+        # Aggregate global listening across entire dataset
+        timeline_all = (
+            df.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+
+        # Create a continuous date range across the entire dataset
+        full_date_index = pd.date_range(
+            start=timeline_all["date"].min(),
+            end=timeline_all["date"].max(),
+            freq="D"
+        )
+
+        # --- Artist timeline ---
+        timeline_artist = (
+            df_artist.groupby("date")["hours_played"]
+            .sum()
+            .reindex(full_date_index, fill_value=0)
+            .reset_index()
+            .rename(columns={"index": "date", "hours_played": "hours_played"})
+            .sort_values("date")
+        )
+
+        # --- Album timeline (if available) ---
+        if df_artist_album is not None and not df_artist_album.empty:
+            timeline_album = (
+                df_artist_album.groupby("date")["hours_played"]
+                .sum()
+                .reindex(full_date_index, fill_value=0)
+                .reset_index()
+                .rename(columns={"index": "date", "hours_played": "hours_played"})
+                .sort_values("date")
+            )
+        else:
+            timeline_album = None
+
+        # --- Apply rolling averages ---
+        for tdf in [timeline_all, timeline_artist, timeline_album]:
+            if tdf is not None:
+                tdf["rolling_avg"] = tdf["hours_played"].rolling(window=30, min_periods=1).mean()
+
+        # --- Normalize each timeline ---
+        timeline_all["normalized"] = normalize_series(timeline_all["rolling_avg"], NORMALIZATION_MODE, df)
+        timeline_artist["normalized"] = normalize_series(timeline_artist["rolling_avg"], NORMALIZATION_MODE, df)
+        if timeline_album is not None:
+            timeline_album["normalized"] = normalize_series(timeline_album["rolling_avg"], NORMALIZATION_MODE, df)
+
+        # ===============================================================
+        # PLOTTING — Unified All Time View
+        # ===============================================================
+        # --- Base global listening trend ---
         fig_timeline = px.line(
             timeline_all,
             x="date",
             y="normalized",
             title="Listening Trend (All Time)",
             labels={"normalized": "Normalized Hours Played", "date": "Date"},
-            color_discrete_sequence=["#1ed760"],
+            color_discrete_sequence=["#0034ce"],  # global blue
         )
+        fig_timeline.update_traces(line=dict(width=1))
 
+        # Explicitly label global trace
+        fig_timeline.data[0].name = "All Artists (Global)"
+        fig_timeline.data[0].showlegend = True
+
+        # --- Add artist trace ---
         fig_timeline.add_scatter(
             x=timeline_artist["date"],
             y=timeline_artist["normalized"],
             mode="lines",
             name=f"{artist_selected} (Artist)",
-            line=dict(color="#00b386", width=3),
+            line=dict(color="#1ed760", width=2),
+            showlegend=True,
         )
 
+        # --- Add album trace (if applicable) ---
         if timeline_album is not None:
             fig_timeline.add_scatter(
                 x=timeline_album["date"],
                 y=timeline_album["normalized"],
                 mode="lines",
                 name=f"{album_selected} (Album)",
-                line=dict(color="#f4c542", width=3, dash="dot"),
+                line=dict(color="#d342f4", width=3),
+                showlegend=True,
             )
 
+        # ===============================================================
+        # LAYOUT — Dark theme + clean legend
+        # ===============================================================
         fig_timeline.update_layout(
             plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             yaxis_title="Normalized Hours per Day (30-Day Rolling Avg)",
+            xaxis_title="Date",
             legend_title_text="Listening Source",
+            font=dict(color="white"),
             height=450,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+                bgcolor="rgba(0,0,0,0)",
+            ),
         )
-
 
     # ======== SPECIFIC YEAR MODE ========
     else:
         year_int = int(year_selected)
+
+        # --- Filter data for selected year ---
         df_year = df[df["datetime"].dt.year == year_int].copy()
         df_artist_year = df_artist[df_artist["datetime"].dt.year == year_int].copy()
+
         if df_artist_album is not None:
             df_album_year = df_artist_album[df_artist_album["datetime"].dt.year == year_int].copy()
         else:
             df_album_year = None
 
-        # Aggregate and normalize
-        timeline_all = df_year.groupby("date")["hours_played"].sum().reset_index().sort_values("date")
-        timeline_artist = df_artist_year.groupby("date")["hours_played"].sum().reset_index().sort_values("date")
+        # ===============================================================
+        # AGGREGATION & NORMALIZATION — with date reindexing
+        # ===============================================================
+        # Aggregate total listening across all artists for the year
+        timeline_all = (
+            df_year.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
 
-        timeline_all["rolling_avg"] = timeline_all["hours_played"].rolling(window=7, min_periods=1).mean()
-        timeline_artist["rolling_avg"] = timeline_artist["hours_played"].rolling(window=7, min_periods=1).mean()
-        timeline_all["normalized"] = normalize_series(timeline_all["rolling_avg"], NORMALIZATION_MODE, df_year)
-        timeline_artist["normalized"] = normalize_series(timeline_artist["rolling_avg"], NORMALIZATION_MODE, df_year)
+        # Establish a complete date range for the selected year
+        full_date_index = pd.date_range(
+            start=timeline_all["date"].min(),
+            end=timeline_all["date"].max(),
+            freq="D"
+        )
 
+        # --- Artist timeline ---
+        timeline_artist = (
+            df_artist_year.groupby("date")["hours_played"]
+            .sum()
+            .reindex(full_date_index, fill_value=0)
+            .reset_index()
+            .rename(columns={"index": "date", "hours_played": "hours_played"})
+            .sort_values("date")
+        )
+
+        # --- Album timeline (if available) ---
         if df_album_year is not None and not df_album_year.empty:
             timeline_album = (
-                df_album_year.groupby("date")["hours_played"].sum().reset_index().sort_values("date")
+                df_album_year.groupby("date")["hours_played"]
+                .sum()
+                .reindex(full_date_index, fill_value=0)
+                .reset_index()
+                .rename(columns={"index": "date", "hours_played": "hours_played"})
+                .sort_values("date")
             )
-            timeline_album["rolling_avg"] = timeline_album["hours_played"].rolling(window=7, min_periods=1).mean()
-            timeline_album["normalized"] = normalize_series(timeline_album["rolling_avg"], NORMALIZATION_MODE, df_year)
         else:
             timeline_album = None
 
-        # --- Plot ---
+        # --- Apply 7-day rolling average ---
+        for tdf in [timeline_all, timeline_artist, timeline_album]:
+            if tdf is not None:
+                tdf["rolling_avg"] = tdf["hours_played"].rolling(window=7, min_periods=1).mean()
+
+        # --- Normalize each series (consistent scale) ---
+        timeline_all["normalized"] = normalize_series(timeline_all["rolling_avg"], NORMALIZATION_MODE, df_year)
+        timeline_artist["normalized"] = normalize_series(timeline_artist["rolling_avg"], NORMALIZATION_MODE, df_year)
+        if timeline_album is not None:
+            timeline_album["normalized"] = normalize_series(timeline_album["rolling_avg"], NORMALIZATION_MODE, df_year)
+
+        # ===============================================================
+        # PLOTTING — Unified Year View
+        # ===============================================================
+        import plotly.express as px
+        import plotly.graph_objects as go
+
+        # --- Base global listening trend ---
         fig_timeline = px.line(
             timeline_all,
             x="date",
             y="normalized",
             title=f"Listening Trend ({year_selected})",
             labels={"normalized": "Normalized Hours Played", "date": "Date"},
-            color_discrete_sequence=["#1ed760"],
+            color_discrete_sequence=["#0034ce"],  # blue for global
         )
+        fig_timeline.update_traces(line=dict(width=1))
 
+        # Explicitly label the global trace
+        fig_timeline.data[0].name = "All Artists (Global)"
+        fig_timeline.data[0].showlegend = True
+
+        # --- Add selected artist trace ---
         fig_timeline.add_scatter(
             x=timeline_artist["date"],
             y=timeline_artist["normalized"],
             mode="lines",
             name=f"{artist_selected} (Artist)",
-            line=dict(color="#00b386", width=3),
+            line=dict(color="#1ed760", width=2),
+            showlegend=True,
         )
 
+        # --- Add album trace if applicable ---
         if timeline_album is not None:
             fig_timeline.add_scatter(
                 x=timeline_album["date"],
                 y=timeline_album["normalized"],
                 mode="lines",
                 name=f"{album_selected} (Album)",
-                line=dict(color="#f4c542", width=3, dash="dot"),
+                line=dict(color="#d342f4", width=3),
+                showlegend=True,
             )
 
+        # ===============================================================
+        # LAYOUT — Clean, dark theme with centered legend
+        # ===============================================================
         fig_timeline.update_layout(
-            height=450,
             plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
             yaxis_title="Normalized Hours per Day (7-Day Rolling Avg)",
+            xaxis_title="Date",
             legend_title_text="Listening Source",
+            height=450,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+                bgcolor="rgba(0,0,0,0)",
+            ),
         )
-
 
     # ✅ Unified rendering
     st.plotly_chart(
@@ -4133,81 +4275,175 @@ elif page == "Genres":
         if album_image_list:
             carousel(items=album_image_list, wrap=False, container_height=500)
 
-    # ------------- Trend Chart ------------- #
+    # ===============================================================
+    # LISTENING TREND (GENRE vs OVERALL)
+    # ===============================================================
     st.markdown("### Listening Trend (Genre vs Overall)")
 
-    # Aggregate by date
+    # --- Ensure date consistency ---
+    df_year["date"] = pd.to_datetime(df_year["date"], errors="coerce")
+
+    # ===============================================================
+    # AGGREGATION — compute total minutes played per day
+    # ===============================================================
     timeline_all = (
-        df_year.groupby("date")["minutes_played"].sum().reset_index()
+        df_year.groupby("date")["minutes_played"]
+        .sum()
+        .reset_index()
+        .sort_values("date")
     )
     timeline_genre = (
-        df_genre.groupby("date")["minutes_played"].sum().reset_index()
+        df_genre.groupby("date")["minutes_played"]
+        .sum()
+        .reset_index()
+        .sort_values("date")
     )
 
-    # Rolling averages
-    timeline_all["rolling_avg"] = timeline_all["minutes_played"].rolling(window=7, min_periods=1).mean()
-    timeline_genre["rolling_avg"] = timeline_genre["minutes_played"].rolling(window=7, min_periods=1).mean()
+    # --- Create full continuous date range for the selected year ---
+    full_date_index = pd.date_range(
+        start=timeline_all["date"].min(),
+        end=timeline_all["date"].max(),
+        freq="D"
+    )
 
-    # --- Normalisation options ---
-    # Option 1: Raw (no scaling)
-    timeline_all["norm"] = timeline_all["rolling_avg"]
+    # --- Fill missing dates with 0 to keep timelines continuous ---
+    timeline_all = (
+        timeline_all.set_index("date")
+        .reindex(full_date_index, fill_value=0)
+        .rename_axis("date")
+        .reset_index()
+    )
+    timeline_genre = (
+        timeline_genre.set_index("date")
+        .reindex(full_date_index, fill_value=0)
+        .rename_axis("date")
+        .reset_index()
+    )
 
-    # Option 2: Averaged by total artists
-    genre_count = df_year["supergenre"].nunique()
-    timeline_all["avg_per_genre"] = timeline_all["rolling_avg"] / genre_count
+    # ===============================================================
+    # ROLLING AVERAGES (30-day, with early-window correction)
+    # ===============================================================
+    window_size = 30
 
-    # Option 3: Scaled to genre’s max
-    scale_factor = timeline_genre["rolling_avg"].max() / timeline_all["rolling_avg"].max()
-    timeline_all["scaled"] = timeline_all["rolling_avg"] * scale_factor
+    # --- Compute rolling averages with full window requirement ---
+    timeline_all["rolling_avg"] = (
+        timeline_all["minutes_played"].rolling(window=window_size, min_periods=window_size).mean()
+    )
+    timeline_genre["rolling_avg"] = (
+        timeline_genre["minutes_played"].rolling(window=window_size, min_periods=window_size).mean()
+    )
 
-    # --- Pick normalisation method ---
-    normalisation_method = "Average per Genre"
-        # "Raw Total", "Average per Genre", "Scaled to Genre"
+    # --- Fill early NaNs with first valid value (smooth start) ---
+    for tdf in [timeline_all, timeline_genre]:
+        first_valid = tdf["rolling_avg"].first_valid_index()
+        if first_valid is not None:
+            first_value = tdf.loc[first_valid, "rolling_avg"]
+            tdf["rolling_avg"] = tdf["rolling_avg"].fillna(first_value)
+        else:
+            tdf["rolling_avg"] = tdf["minutes_played"]  # fallback if no valid window yet
 
-    if normalisation_method == "Average per Genre":
-        y_col = "avg_per_genre"
-    elif normalisation_method == "Scaled to Genre":
-        y_col = "scaled"
-    else:
-        y_col = "norm"
+    # ===============================================================
+    # NORMALIZATION MODES (same options as artist/global chart)
+    # ===============================================================
+    NORMALIZATION_MODE = "scale_to_max"
+        # "none", "scale_to_max", "relative_to_mean", "per_genre_average"
 
-    # --- Plot ---
+    def normalize_series(series, mode="none", ref_df=None):
+        if series.empty:
+            return series
+        if mode == "none":
+            return series
+        elif mode == "scale_to_max":
+            return series / series.max() if series.max() > 0 else series
+        elif mode == "relative_to_mean":
+            return series / series.mean() if series.mean() > 0 else series
+        elif mode == "per_genre_average" and ref_df is not None:
+            num_genres = ref_df["supergenre"].nunique()
+            return series / num_genres if num_genres > 0 else series
+        return series
+
+    # Apply normalization
+    timeline_genre["normalized"] = normalize_series(
+        timeline_genre["rolling_avg"], NORMALIZATION_MODE, df_year
+    )
+    timeline_all["normalized"] = normalize_series(
+        timeline_all["rolling_avg"], NORMALIZATION_MODE, df_year
+    )
+
+    # ===============================================================
+    # PLOT — Genre vs. Overall Listening Trend
+    # ===============================================================
     import plotly.express as px
 
     fig_trend = px.line(
         timeline_genre,
         x="date",
-        y="rolling_avg",
+        y="normalized",
         title=f"{genre_selected} vs Overall Listening Trend ({year_selected})",
-        labels={"rolling_avg": "Minutes Played (7-day avg)", "date": "Date"},
-        color_discrete_sequence=["#1ed760"],
+        labels={"normalized": "Normalized Minutes Played (7-Day Rolling Avg)", "date": "Date"},
+        color_discrete_sequence=["#1ed760"],  # neon green for genre
     )
+    fig_trend.update_traces(line=dict(width=2))
 
+    # Explicitly name genre trace
+    fig_trend.data[0].name = f"{genre_selected} (Genre)"
+    fig_trend.data[0].showlegend = True
+
+    # Add global listening trend trace
     fig_trend.add_scatter(
         x=timeline_all["date"],
-        y=timeline_all[y_col],
+        y=timeline_all["normalized"],
         mode="lines",
-        name="Overall",
-        line=dict(color="#90d7ad", width=3, dash="dot"),
+        name="All Genres (Global)",
+        line=dict(color="#0034ce", width=1),  # mint green dashed
+        showlegend=True,
     )
 
+    # ===============================================================
+    # LAYOUT — Unified dark style
+    # ===============================================================
     fig_trend.update_layout(
         height=450,
         plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        yaxis_title="Normalized Minutes per Day (7-Day Rolling Avg)",
+        xaxis_title="Date",
         font=dict(color="white"),
+        legend_title_text="Listening Source",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5,
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        margin=dict(t=60, l=50, r=20, b=50),
     )
-    st.plotly_chart(fig_trend, width="stretch", config={"displayModeBar": False})
 
-# ------------- Genre by the Hour ------------------ #
+    # ===============================================================
+    # DISPLAY — Streamlit
+    # ===============================================================
+    st.plotly_chart(
+        fig_trend,
+        width="stretch",
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+    # ===============================================================
+    # ⏰ GENRE BY HOUR OF DAY — Circular Bar Plot (Unique Legend + Rings)
+    # ===============================================================
     st.markdown("### ⏰ Top Genre by Hour of Day")
 
     from plotly.colors import sample_colorscale
+    import numpy as np
+    import plotly.graph_objects as go
 
     # --- Step 1: Prep data ---
     df_hour = df_year.copy()
     df_hour["hour"] = df_hour["datetime"].dt.hour.astype(float)
 
-    # Remove unlisted
+    # Remove "unlisted"
     df_hour = df_hour[df_hour["supergenre"].str.lower() != "unlisted"]
 
     # Aggregate listening by hour + genre
@@ -4232,57 +4468,122 @@ elif page == "Genres":
         .fillna({"supergenre": "No Data", "minutes_played": 0})
     )
 
-    # --- Step 2: Create color map consistent with your genre diversity chart ---
+    # --- Step 2: Color Mapping (consistent with neon palette) ---
     ordered_genres = sorted(top_genre_per_hour["supergenre"].unique())
     n_genres = len(ordered_genres)
-
-    # Use the same global neon_colorscale you defined elsewhere
     sampled_colors = sample_colorscale(
         neon_colorscale, [i / max(1, n_genres - 1) for i in range(n_genres)]
     )
     color_map = dict(zip(ordered_genres, sampled_colors))
 
-    # --- Step 3: Plot ---
-    fig_hourly = px.bar(
-        top_genre_per_hour,
-        x="hour",
-        y="minutes_played",
-        color="supergenre",
-        text="supergenre",
-        color_discrete_map=color_map,  # 🎨 consistent color mapping
-    )
+    # --- Step 3: Convert hours to circular coordinates ---
+    # Each hour represents a 15° step (360° / 24 = 15°)
+    angles = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+    top_genre_per_hour["angle"] = angles
+    top_genre_per_hour["radius"] = top_genre_per_hour["minutes_played"]
 
-    fig_hourly.update_traces(
-        textposition="inside",
-        insidetextanchor="middle",
-        width=1.0,
-        offset=0,
-        base=0,
-    )
+    # Normalize radius for better scaling
+    max_radius = top_genre_per_hour["radius"].max()
+    if max_radius > 0:
+        top_genre_per_hour["radius_scaled"] = top_genre_per_hour["radius"] / max_radius
+    else:
+        top_genre_per_hour["radius_scaled"] = 0
 
-    # Dynamic y-axis scaling
-    y_max = top_genre_per_hour["minutes_played"].max() * 1.1
+    # --- Step 4: Create polar bar chart ---
+    fig_hourly = go.Figure()
 
+    # Track which genres already added to legend
+    legend_seen = set()
+
+    for _, row in top_genre_per_hour.iterrows():
+        genre_name = row["supergenre"]
+        show_legend = genre_name not in legend_seen and genre_name != "No Data"
+        if show_legend:
+            legend_seen.add(genre_name)
+
+        fig_hourly.add_trace(go.Barpolar(
+            r=[row["radius_scaled"]],
+            theta=[row["hour"] * 15],
+            name=genre_name,
+            marker_color=color_map.get(genre_name, "#888"),
+            marker_line_color="rgba(255,255,255,0.2)",
+            marker_line_width=2,
+            opacity=0.95,
+            hovertemplate=(
+                f"<b>Hour:</b> {int(row['hour']):02d}:00<br>"
+                f"<b>Genre:</b> {genre_name}<br>"
+                f"<b>Minutes:</b> {int(row['minutes_played']):,}<extra></extra>"
+            ),
+            showlegend=show_legend,
+        ))
+
+    # --- Step 5: Add 25% radius rings (neon gridlines) ---
+    ring_levels = [0.25, 0.5, 0.75, 1.0]
+    for level in ring_levels:
+        fig_hourly.add_trace(go.Scatterpolar(
+            r=[level] * 361,
+            theta=np.linspace(0, 360, 361),
+            mode="lines",
+            line=dict(
+                color="rgba(255,255,255,0.08)" if level < 1.0 else "rgba(255,255,255,0.15)",
+                width=1.2 if level < 1.0 else 2.0,
+                dash="dot" if level < 1.0 else "solid",
+            ),
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+
+    # --- Step 6: Layout + Style ---
     fig_hourly.update_layout(
-        height=450,
-        bargap=0,
-        xaxis=dict(
-            tickmode="array",
-            tickvals=list(range(24)),
-            ticktext=[f"{h:02d}:00" for h in range(24)],
-            title=None,
-            type="linear",
-            range=[0, 24],
-            fixedrange=True,
+        title=dict(
+            text=f"Top Genre by Hour of Day ({year_selected})",
+            # x=0.5,
+            font=dict(size=18, color="white"),
         ),
-        yaxis=dict(
-            title="Minutes Played",
-            range=[0, y_max],
-            fixedrange=True,
+        polar=dict(
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(
+                visible=False,
+                range=[0, 1],
+            ),
+            angularaxis=dict(
+                tickmode="array",
+                tickvals=np.arange(0, 360, 45),
+                ticktext=["Midnight", "3 AM", "6 AM", "9 AM", "Noon", "3 PM", "6 PM", "9 PM"],
+                direction="clockwise",
+                rotation=90,  # 0° = top
+                tickfont=dict(color="white", size=10),
+            ),
         ),
+        paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=60, b=80, l=40, r=40),
+        height=650,
         font=dict(color="white"),
-        showlegend=False,
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="center",
+            x=1,
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(size=11, color="white"),
+            traceorder="normal"
+        ),
+    )
+
+    # ===============================================================
+    # DISPLAY — Streamlit (true full width)
+    # ===============================================================
+    st.markdown(
+        """
+        <style>
+        .stPlotlyChart {
+            width: 100% !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.plotly_chart(
@@ -4290,66 +4591,6 @@ elif page == "Genres":
         width="stretch",
         config={"displayModeBar": False, "responsive": True},
     )
-
-    # # ------------- Polar Chart ------------------------ #
-    # st.markdown("### 🎡 Genre Activity by Hour (Fixed Polar Chart)")
-
-    # df_polar = df_year.copy()
-    # df_polar["hour"] = df_polar["datetime"].dt.hour
-
-    # # Aggregate listening time per genre per hour
-    # polar_data = (
-    #     df_polar.groupby(["supergenre", "hour"])["minutes_played"]
-    #     .sum()
-    #     .reset_index()
-    # )
-
-    # # Normalize within each genre
-    # polar_data["minutes_norm"] = polar_data.groupby("supergenre")["minutes_played"].transform(
-    #     lambda x: x / x.max() if x.max() > 0 else 0
-    # )
-
-    # # Map hours (0–23) → angles (0–360°)
-    # polar_data["angle"] = (polar_data["hour"] / 24) * 360
-
-    # import plotly.graph_objects as go
-    # import plotly.express as px
-
-    # fig_polar = go.Figure()
-
-    # for genre in polar_data["supergenre"].unique():
-    #     genre_df = polar_data[polar_data["supergenre"] == genre].sort_values("angle")
-    #     # Close the loop for full circle
-    #     genre_df = pd.concat([genre_df, genre_df.iloc[[0]]])
-    #     fig_polar.add_trace(
-    #         go.Scatterpolar(
-    #             r=genre_df["minutes_norm"],
-    #             theta=genre_df["angle"],
-    #             fill="toself",
-    #             name=genre,
-    #             line=dict(width=1),
-    #         )
-    #     )
-
-    # fig_polar.update_layout(
-    #     polar=dict(
-    #         angularaxis=dict(
-    #             tickmode="array",
-    #             tickvals=list(range(0, 360, 30)),
-    #             ticktext=[f"{(h//15):02d}:00" for h in range(0, 360, 30)],
-    #             direction="clockwise",
-    #             rotation=90,
-    #         ),
-    #         radialaxis=dict(showticklabels=False, visible=False),
-    #     ),
-    #     showlegend=True,
-    #     height=650,
-    #     title=f"Listening Intensity by Hour — {year_selected}",
-    #     template="plotly_dark",
-    #     plot_bgcolor="rgba(0,0,0,0)",
-    # )
-
-    # st.plotly_chart(fig_polar, width="stretch", config={"displayModeBar": False})
 
 # ------------------------------- Popularity --------------------------------- #
 elif page == "Popularity":
@@ -5004,7 +5245,9 @@ elif page == "Normality":
     user_id = st.session_state.get("user_id", "anon")
     base_path = os.path.join("enrichment", "normality")
     os.makedirs(base_path, exist_ok=True)
+
     parquet_path = os.path.join(base_path, f"{user_id}_{current_label}_normality.parquet")
+    conv_path = parquet_path.replace(".parquet", "_convergence.json")
 
     # ----------------------------------------------------------------------
     # ACTION BUTTON
@@ -5017,9 +5260,6 @@ elif page == "Normality":
     def compute_all(df, df_artist_genre, parquet_path):
         """Perform grid, fine, and Bayesian search and save combined results once."""
 
-        # ------------------------------------------------------------------
-        # DATA PREPARATION — Filter, Join, and Quarter Assignment
-        # ------------------------------------------------------------------
         print("[Normality] ▶ Preparing dataset for normality analysis")
 
         # 1️⃣ Filter for musical events only
@@ -5032,29 +5272,23 @@ elif page == "Normality":
         # 3️⃣ Handle missing genre labels
         df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
 
-        # 4️⃣ Convert to datetime and assign quarters using PeriodIndex
+        # 4️⃣ Convert to datetime and assign quarters
         df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
         df_full = df_full.dropna(subset=["datetime"])
         df_full["quarter"] = pd.PeriodIndex(df_full["datetime"], freq="Q")
-
-        # 5️⃣ Derive year as integer for convenience
         df_full["year"] = df_full["quarter"].dt.year
 
-        # 6️⃣ Confirm grouping scope
-        unique_pairs = df_full.groupby(["supergenre", "quarter"]).ngroups
-        print(f"[Normality] ▶ Detected {unique_pairs} (genre, quarter) pairs for testing")
+        # 5️⃣ Confirm grouping scope
+        total_pairs = df_full.groupby(["supergenre", "quarter"]).ngroups
+        print(f"[Normality] ▶ Detected {total_pairs:,} (genre, quarter) pairs for testing")
 
-        # ------------------------------------------------------------------
-        # PHASED NORMALITY COMPUTATION — GRID → FINE → BAYESIAN
-        # ------------------------------------------------------------------
         results = []
         convergence = {}
 
+        # ------------------------------------------------------------------
+        # PHASED NORMALITY COMPUTATION
+        # ------------------------------------------------------------------
         pair_count = 0
-        total_pairs = df_full.groupby(["supergenre", "quarter"]).ngroups
-        print(f"[Normality] ▶ Starting three-phase normality search for {total_pairs:,} genre/quarter pairs")
-
-        # Group by genre + quarter
         for (genre, q), gdf in df_full.groupby(["supergenre", "quarter"]):
             pair_count += 1
             prefix = f"[{pair_count}/{total_pairs}]"
@@ -5062,19 +5296,15 @@ elif page == "Normality":
             if not isinstance(genre, str) or genre.strip() == "":
                 continue
 
-            # 🎯 Get total listening counts per artist (not unique tracks)
             data = gdf.groupby("artist_name")["track_name"].count().values
-
-            # Skip small samples
             if len(data) < 8:
                 print(f"{prefix} ⚠️ Skipping {genre} {q} — insufficient data ({len(data)} artists)")
                 continue
 
             # ==============================================================
-            # PHASE 1 — COARSE GRID SEARCH
+            # PHASE 1 — COARSE GRID
             # ==============================================================
-            best_p, best_min, best_max, best_skew, best_kurt, best_std = 0, 0, 0, 0, 0, 0
-
+            best_p, best_min, best_max = 0, 0, 0
             for i in np.linspace(data.min(), np.percentile(data, 80), 15):
                 for j in np.linspace(np.percentile(data, 20), data.max(), 15):
                     if j <= i:
@@ -5088,26 +5318,18 @@ elif page == "Normality":
                         best_skew, best_kurt, best_std = skew(subset), kurtosis(subset), np.std(subset)
 
             results.append(dict(
-                phase="grid",
-                genre=genre,
-                quarter=str(q),
-                min=int(best_min),
-                max=int(best_max),
-                p_value=best_p,
-                skew=best_skew,
-                kurtosis=best_kurt,
-                std_dev=best_std
+                phase="grid", genre=genre, quarter=str(q),
+                min=int(best_min), max=int(best_max), p_value=best_p,
+                skew=best_skew, kurtosis=best_kurt, std_dev=best_std
             ))
-
             print(f"{prefix} ✅ Grid {genre} {q} — p={best_p:.3f}, range=({best_min:.0f}-{best_max:.0f})")
 
             # ==============================================================
-            # PHASE 2 — FINE GRID SEARCH
+            # PHASE 2 — FINE GRID
             # ==============================================================
+            fine_best_p, fine_best_min, fine_best_max = 0, 0, 0
             fine_min = np.linspace(best_min * 0.8, best_min * 1.2, 20)
             fine_max = np.linspace(best_max * 0.8, best_max * 1.2, 20)
-
-            fine_best_p, fine_best_min, fine_best_max, fine_skew, fine_kurt, fine_std = 0, 0, 0, 0, 0, 0
             for i in fine_min:
                 for j in fine_max:
                     if j <= i:
@@ -5121,18 +5343,11 @@ elif page == "Normality":
                         fine_skew, fine_kurt, fine_std = skew(subset), kurtosis(subset), np.std(subset)
 
             results.append(dict(
-                phase="fine",
-                genre=genre,
-                quarter=str(q),
-                min=int(fine_best_min),
-                max=int(fine_best_max),
-                p_value=fine_best_p,
-                skew=fine_skew,
-                kurtosis=fine_kurt,
-                std_dev=fine_std
+                phase="fine", genre=genre, quarter=str(q),
+                min=int(fine_best_min), max=int(fine_best_max), p_value=fine_best_p,
+                skew=fine_skew, kurtosis=fine_kurt, std_dev=fine_std
             ))
-
-            print(f"{prefix} ✅ Fine {genre} {q} — p={fine_best_p:.3f}, range=({fine_best_min:.0f}-{fine_best_max:.0f})")
+            print(f"{prefix} ✅ Fine {genre} {q} — p={fine_best_p:.3f}")
 
             # ==============================================================
             # PHASE 3 — BAYESIAN OPTIMIZATION
@@ -5143,7 +5358,6 @@ elif page == "Normality":
 
             valid_data = data[np.isfinite(data)]
             if len(valid_data) < 8:
-                print(f"{prefix} ⚠️ Skipping Bayes {genre} {q} — insufficient valid data ({len(valid_data)} samples)")
                 continue
 
             def objective(params):
@@ -5163,9 +5377,8 @@ elif page == "Normality":
                 result = gp_minimize(
                     objective,
                     [Real(fine_best_min * 0.8, fine_best_min * 1.2),
-                    Real(fine_best_max * 0.8, fine_best_max * 1.2)],
-                    n_calls=25,
-                    random_state=42
+                     Real(fine_best_max * 0.8, fine_best_max * 1.2)],
+                    n_calls=25, random_state=42
                 )
 
                 func_vals = [v for v in result.func_vals if np.isfinite(v)]
@@ -5184,15 +5397,9 @@ elif page == "Normality":
                 sigma = np.std(subset)
 
                 results.append(dict(
-                    phase="bayes",
-                    genre=genre,
-                    quarter=str(q),
-                    min=int(best_min3),
-                    max=int(best_max3),
-                    p_value=p_val,
-                    skew=skew(subset),
-                    kurtosis=kurtosis(subset),
-                    std_dev=sigma
+                    phase="bayes", genre=genre, quarter=str(q),
+                    min=int(best_min3), max=int(best_max3), p_value=p_val,
+                    skew=skew(subset), kurtosis=kurtosis(subset), std_dev=sigma
                 ))
 
                 convergence[f"{genre}_{q}"] = [1 - v for v in func_vals]
@@ -5201,19 +5408,26 @@ elif page == "Normality":
             except Exception as e:
                 print(f"{prefix} ❌ Bayes error {genre} {q}: {e}")
                 traceback.print_exc()
-                continue
 
         # ------------------------------------------------------------------
-        # SAVE RESULTS TO PARQUET
+        # SAVE RESULTS
         # ------------------------------------------------------------------
         df_results = pd.DataFrame(results)
         df_results.columns = [c.lower() for c in df_results.columns]
 
-        print(f"[Normality] ✅ Computation finished — {len(df_results)} phase results")
-
-        # Cache to disk
         df_results.to_parquet(parquet_path, index=False)
         print(f"[Normality] 💾 Saved to {parquet_path}")
+
+        # Save convergence JSON
+        import json
+        try:
+            with open(conv_path, "w") as f:
+                json.dump(convergence, f, indent=2)
+            print(f"[Normality] 💾 Convergence data saved to {conv_path} ({len(convergence)} keys)")
+        except Exception as e:
+            print(f"[Normality] ⚠️ Failed to save convergence JSON: {e}")
+
+        return df_results, convergence
 
     # ----------------------------------------------------------------------
     # LOAD OR COMPUTE RESULTS
@@ -5221,10 +5435,23 @@ elif page == "Normality":
     if run_calcs:
         df_all, convergence = compute_all(df, df_artist_genre, parquet_path)
         st.session_state["convergence"] = convergence
+
     elif os.path.exists(parquet_path):
         print(f"[Normality] 💾 Loading cached results from {parquet_path}")
         df_all = pd.read_parquet(parquet_path)
-        convergence = st.session_state.get("convergence", {})
+
+        import json
+        if os.path.exists(conv_path):
+            with open(conv_path, "r") as f:
+                convergence = json.load(f)
+            print(f"[Normality] 🔁 Loaded convergence data from {conv_path} ({len(convergence)} keys)")
+        else:
+            convergence = st.session_state.get("convergence", {})
+            print("[Normality] ⚠️ No convergence JSON found; using session data if available.")
+
+        # Always push to session for downstream tabs
+        st.session_state["convergence"] = convergence
+
     else:
         st.warning("⚠️ No existing results found. Click the button above to generate calculations.")
         st.stop()
@@ -5478,7 +5705,7 @@ elif page == "Normality":
                 # ------------------------------------------------------------------
                 # DISPLAY RIDGELINE PLOT
                 # ------------------------------------------------------------------
-                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
+                st.plotly_chart(fig, width="stretch", config={"scrollZoom": True})
 
         # ===============================================================
         # TAB 2 — UNDERLYING DATA (Pivot Table with Color Gradient)
@@ -5519,7 +5746,7 @@ elif page == "Normality":
             styled_df = style_pivot(pivot_df.round(3))
 
             # --- Show styled pivot table ---
-            st.dataframe(styled_df, use_container_width=True)
+            st.dataframe(styled_df, width="stretch")
 
     # ----------------------------------------------------------------------
     # FILTER CONTROLS (shared across tabs)
@@ -5656,30 +5883,70 @@ elif page == "Normality":
 
         convergence = st.session_state.get("convergence", {})
         df_bayes = df_filtered[df_filtered["phase"] == "bayes"].drop(columns=["phase", "quarter"], errors="ignore")
+
         if df_bayes.empty:
             st.info("No Bayesian optimization results available yet.")
         else:
             st.dataframe(df_bayes.round(3).reset_index(drop=True), hide_index=True, width="stretch")
 
+            # ===============================================================
             # Plot convergence if available
-            matching_keys = [k for k in convergence.keys() if k.startswith(selected_genre)]
-            if matching_keys:
-                key = matching_keys[0]
+            # ===============================================================
+            import re
+
+            # --- Debug info ---
+            print(f"[Normality] 🎯 Checking convergence keys for: {selected_genre} / {selected_quarter}")
+            print(f"[Normality] Available convergence keys (first 10): {list(convergence.keys())[:10]}")
+
+            # --- Normalize genre name ---
+            selected_genre_norm = re.sub(r"\W+", "", selected_genre.lower())
+
+            # --- Determine quarter string safely ---
+            if isinstance(selected_quarter, str) and selected_quarter.startswith(str(selected_year)):
+                quarter_str = selected_quarter
+            else:
+                # e.g. Q1 → 2024Q1
+                quarter_str = f"{selected_year}Q{str(selected_quarter)[-1]}"
+
+            # --- Build expected convergence key ---
+            expected_key = f"{selected_genre}_{quarter_str}"
+
+            # --- Try to match the exact key ---
+            matching_key = None
+            for k in convergence.keys():
+                k_norm = re.sub(r"\W+", "", k.lower())
+                if selected_genre_norm in k_norm and quarter_str.lower() in k.lower():
+                    matching_key = k
+                    break
+
+            # --- Plot if found ---
+            if matching_key:
+                y_vals = convergence[matching_key]
+                x_vals = list(range(1, len(y_vals) + 1))
+                print(f"[Normality] ✅ Matched convergence key: {matching_key} ({len(y_vals)} points)")
+
                 fig_conv = px.line(
-                    y=convergence[key],
+                    x=x_vals,
+                    y=y_vals,
                     markers=True,
-                    title=f"Bayesian Optimization Convergence — {selected_genre}",
-                    labels={"x": "Iteration", "y": "Best p-value"}
+                    title=f"Bayesian Optimization Convergence — {selected_genre} ({quarter_str})",
+                    labels={"x": "Iteration", "y": "Best p-value"},
                 )
+
+                fig_conv.update_traces(line=dict(color="#1ed760", width=2.5))
                 fig_conv.update_layout(
                     height=300,
                     plot_bgcolor="rgba(0,0,0,0)",
                     paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="white")
+                    font=dict(color="white"),
+                    margin=dict(t=40, b=40, l=40, r=40),
                 )
-                st.plotly_chart(fig_conv, width="stretch")
+
+                st.plotly_chart(fig_conv, use_container_width=True, config={"displayModeBar": False})
+
             else:
-                st.info("No convergence data found for the selected genre.")
+                print(f"[Normality] ⚠️ No match found for {expected_key}")
+                st.info("⚠️ No convergence data found for the selected genre and quarter.")
 
 # ------------------------------ On This Day --------------------------------- #
 elif page == "On This Day":

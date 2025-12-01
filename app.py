@@ -26,7 +26,7 @@ from pandas.api.types import DatetimeTZDtype
 from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.colors import make_colorscale
+from plotly.colors import make_colorscale, sample_colorscale
 import re
 import secrets
 import streamlit as st
@@ -117,6 +117,7 @@ ICON_BROWSER = "media/assets/icon_spotgreen.svg"
 ICON_PAGE = "media/assets/icon_page.svg"
 LOGO_SPOTGREEN = "media/assets/logo_spotgreen.svg"
 IMAGE_PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
+CAROUSEL_PLACEHOLDER = "media/assets/Image-Coming-Soon_vector.png"
 
 JWT_COOKIE_NAME = "regifted_auth"
 JWT_ALG = "HS256"
@@ -130,19 +131,20 @@ TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 
 # ---------- Plotly colorscales ----------
 neon_palette =["#e67e0e",
-               "#db6636",
                "#d04e5e",
+               "#db6636",
                "#C53686",
-               "#ba1ead",
                "#8D2DBF",
+               "#ba1ead",
                "#5f3cd1",
-               "#324BE3",
                "#0459f5",
+               "#324BE3",
                "#0677CC",
-               "#0794a2",
                "#08B278",
-               "#22cb85",
-               "#1FD553"][::-1]
+               "#0794a2",
+               "#1FD553",
+               "#00ff2a"
+               ][::-1]
 neon_colorscale = make_colorscale(neon_palette)
 
 spotify_palette = ["#062719","#1ed760","#90d7ad"]
@@ -1643,7 +1645,7 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     # --- Bail out if nothing found ---
     if not status_row:
         with st.sidebar:
-            st.caption("ℹ️ No enrichment status found for this dataset yet.")
+            st.caption("⚠️ No enrichment status found for this dataset yet.")
         return
 
     # --- Parse + normalize ---
@@ -1672,18 +1674,20 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
 
     else:
         msg = (
-            f"🔄 {phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
+            f"{phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
         )
 
     # --- Render ---
     with st.sidebar:
-        st.caption(f"Threads: {active_count}")
-        # st.caption(msg)
-        # if detail:
-        #     st.caption(f"{detail}")
-        # st.progress(int(percent) / 100.0 if percent else 0)
-        # st.caption(f"_Please wait while we enrich your data..._")
-
+        if int(percent) != 100:
+            st.caption(f"Threads: {active_count}")
+            st.caption(msg)
+            if detail:
+                st.caption(f"{detail}")
+            st.progress(int(percent) / 100.0 if percent else 0)
+            st.caption(f"_Please wait while we enrich your data..._")
+        else:
+            st.caption(f"This dataset has been fully enriched")
 # ------------------ INIT PAGE CONFIG ------------------
 st.set_page_config(page_title="Regifted", page_icon=ICON_BROWSER, layout="wide", initial_sidebar_state="expanded")
 clear_stale_locks(max_age_minutes=10)
@@ -1790,13 +1794,6 @@ if not st.session_state.user:
 with st.sidebar:
 
     st.image(LOGO_SPOTGREEN, width="stretch")
-
-    # if st.session_state.get("current_dataset_label"):
-    #     show_enrichment_status_sidebar(
-    #         st.session_state.user["user_id"],
-    #         st.session_state["current_dataset_label"]
-    #     )
-
     st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
     st.divider()
 
@@ -1867,6 +1864,11 @@ with st.sidebar:
     else:
         st.info("No datasets uploaded yet. You can add one from the Home page.")
 
+    if st.session_state.get("current_dataset_label"):
+        show_enrichment_status_sidebar(
+            st.session_state.user["user_id"],
+            st.session_state["current_dataset_label"]
+        )
     st.divider()
 
     # ---------- Navigation ----------
@@ -2322,7 +2324,6 @@ elif page == "Overall Review":
     df_artist_genre = INFO_ARTIST_GENRE.copy()
     df_album = INFO_ALBUM.copy()
     df_supergenre_map = INFO_SUPERGENRE.copy()
-    IMAGE_PLACEHOLDER = "media/assets/Image-Coming-Soon_vector.svg"
 
     def get_top_combined(df, name_col, sub_col):
         if df.empty:
@@ -2469,19 +2470,21 @@ elif page == "Overall Review":
         c1, c2, c3 = st.columns(3)
         with c1:
             # Calculate metrics
-            scorecard("You listened for",f"{total_days} days",total_days_delta)
-            scorecard("Favourite Track", fav_track)
-            scorecard("Most Skipped Track", skipped_track)
+            scorecard("Total Listening Time",f"{total_days} days",total_days_delta)
+            scorecard("Favourite Genre", fav_supergenre)
+            scorecard("Least Listened Genre(s)", least_genre)
+
             # scorecard("Song of the Summer", fav_summer)
         with c2:
             scorecard("Unique Tracks", f"{unique_tracks}", delta=unique_tracks_delta)
-            scorecard("Favourite Artist", fav_artist)
-            scorecard("Most Skipped Artist", skipped_artist)
+            scorecard("Favourite Track", fav_track)
+            scorecard("Most Skipped Track", skipped_track)
+
             # scorecard("Xmas Anthem", fav_xmas)
         with c3:
             scorecard("Unique Artists", f"{unique_artists}", delta=unique_artists_delta)
-            scorecard("Favourite Genre", fav_supergenre)
-            scorecard("Least Listened Genre(s)", least_genre)
+            scorecard("Favourite Artist", fav_artist)
+            scorecard("Most Skipped Artist", skipped_artist)
 
         c1, c2, c3, c4 = st.columns([1,2,2,1])
         with c2:
@@ -2492,6 +2495,7 @@ elif page == "Overall Review":
         # --- Top 10 Artists ---
         st.markdown("## Top 10 Artists")
         c1, c2 = st.columns([3, 2])
+
         top_artists = (
             df_filtered.groupby("artist_name")["minutes_played"]
             .sum()
@@ -2500,27 +2504,39 @@ elif page == "Overall Review":
             .reset_index()
         )
         top_artists["hhmmss"] = top_artists["minutes_played"].apply(format_hhmmss)
+
+        n_artist = len(top_artists)
+        sampled_colors = sample_colorscale(
+            spotify_colorscale,
+            [i / max(1, n_artist - 1) for i in range(n_artist)]
+        )
+
+        top_artists = top_artists.reset_index(drop=True)
+        top_artists["color"] = sampled_colors[::-1]  # optional: reverse gradient
+
         with c1:
-            # --- Build bar chart ---
+            # --- Build bar chart (assign text here, not in update_traces) ---
             fig_artists = px.bar(
                 top_artists,
                 y="artist_name",
                 x="minutes_played",
                 orientation="h",
-                color_discrete_sequence=["#1ed760"],
+                text="hhmmss",  # ✅ associate text with each bar
+                color="color",
+                color_discrete_map="identity",
                 labels={
-                    "minutes_played": "Time Played (HH:MM:SS)",
                     "artist_name": "Artist",
+                    "minutes_played": "Time Played",
+                    "hhmmss":"Time Played"
                 },
             )
 
-            # --- Manually add artist name labels inside bars ---
+            # --- Update trace appearance ---
             fig_artists.update_traces(
-                text=top_artists["hhmmss"],        # label inside bars
                 texttemplate="%{text}",
                 textposition="inside",
                 insidetextanchor="end",
-                insidetextfont=dict(color="#002918", size=12, family="Arial"),
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
             )
 
             # --- Layout and formatting ---
@@ -2531,9 +2547,10 @@ elif page == "Overall Review":
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#e1ece3", size=14),
+                showlegend=False,
             )
 
-            # ✅ Modern config usage — no warnings
+            # --- Display ---
             st.plotly_chart(
                 fig_artists,
                 width="stretch",
@@ -2545,16 +2562,40 @@ elif page == "Overall Review":
 
         with c2:
             artist_image_list = []
+
+            # Iterate through top artists and get their artwork
             for idx, artist in enumerate(top_artists["artist_name"], start=1):
-                match = df_artist_genre.loc[df_artist_genre["artist_name"] == artist]
-                img = match["artist_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
+                # Try to find a match in df_artist_genre
+                if "df_artist_genre" in locals() and not df_artist_genre.empty:
+                    match = df_artist_genre.loc[df_artist_genre["artist_name"] == artist]
+                else:
+                    match = None
+
+                # Get image or fallback to placeholder
+                img = (
+                    match["artist_image"].iloc[0]
+                    if match is not None
+                    and not match.empty
+                    and "artist_image" in match.columns
+                    and isinstance(match["artist_image"].iloc[0], str)
+                    and match["artist_image"].iloc[0].strip()
+                    else CAROUSEL_PLACEHOLDER
+                )
+
+                # Add to carousel items
                 artist_image_list.append(dict(text=artist, title=f"#{idx}", img=img))
+
+            # --- Render carousel ---
             if artist_image_list:
                 carousel(items=artist_image_list, wrap=False, container_height=500)
+            else:
+                st.info("No artist images available for this timeframe.")
 
         # --- Top 10 Tracks ---
         st.markdown("## Top 10 Tracks")
         c1, c2 = st.columns([3, 2])
+
+        # --- Aggregate top tracks ---
         top_tracks = (
             df_filtered.groupby(["track_name", "artist_name"])["minutes_played"]
             .sum()
@@ -2564,31 +2605,54 @@ elif page == "Overall Review":
         )
         top_tracks["label"] = top_tracks["artist_name"] + " — " + top_tracks["track_name"]
         top_tracks["hhmmss"] = top_tracks["minutes_played"].apply(format_hhmmss)
+
+        # --- Spotify color gradient ---
+        n_tracks = len(top_tracks)
+        sampled_colors = sample_colorscale(
+            spotify_colorscale,
+            [i / max(1, n_tracks - 1) for i in range(n_tracks)]
+        )
+
+        # Assign colors (reversed if you prefer gradient high→low)
+        top_tracks = top_tracks.reset_index(drop=True)
+        top_tracks["color"] = sampled_colors[::-1]
+
+        # --- Plot ---
         with c1:
             fig_tracks = px.bar(
                 top_tracks,
                 y="label",
                 x="minutes_played",
                 orientation="h",
-                text="hhmmss",
-                color_discrete_sequence=["#1ed760"],
+                text="hhmmss",  # ✅ attach text here, not in update_traces
+                color="color",
+                color_discrete_map="identity",  # use exact sampled hex colors
                 labels={
-                    "minutes_played": "Time Played (HH:MM:SS)",
-                    "label": "",
+                    "minutes_played": "Time Played",
+                    "label": "Track",
+                    "hhmmss":"Time Played"
                 },
             )
+
+            # --- Style text and layout ---
             fig_tracks.update_traces(
-                text=top_tracks["hhmmss"],        # label inside bars
                 texttemplate="%{text}",
                 textposition="inside",
                 insidetextanchor="end",
-                insidetextfont=dict(color="#002918", size=12, family="Arial"),
-            )
-            fig_tracks.update_layout(
-                yaxis={"categoryorder": "total ascending"},
-                height=500,
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
             )
 
+            fig_tracks.update_layout(
+                yaxis=dict(categoryorder="total ascending"),
+                height=500,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+                showlegend=False,
+                margin=dict(l=0, r=0, t=30, b=0),
+            )
+
+            # --- Display ---
             st.plotly_chart(
                 fig_tracks,
                 width="stretch",
@@ -2600,17 +2664,37 @@ elif page == "Overall Review":
 
         with c2:
             track_image_list = []
+
+            # Iterate through top tracks and match their album artwork
             for idx, row in top_tracks.iterrows():
                 track = row["track_name"]
-                match = df_album.loc[
-                    df_album["album_name"].isin(
-                        df_filtered.loc[df_filtered["track_name"] == track, "album_name"]
-                    )
-                ]
-                img = match["album_artwork"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
-                track_image_list.append(dict(text=row["label"], title=f"#{idx+1}", img=img))
+
+                # Try to find a matching album in df_album using the track’s album_name
+                if "df_album" in locals() and not df_album.empty:
+                    related_albums = df_filtered.loc[df_filtered["track_name"] == track, "album_name"]
+                    match = df_album.loc[df_album["album_name"].isin(related_albums)]
+                else:
+                    match = None
+
+                # Get image or fallback to placeholder
+                img = (
+                    match["album_artwork"].iloc[0]
+                    if match is not None
+                    and not match.empty
+                    and "album_artwork" in match.columns
+                    and isinstance(match["album_artwork"].iloc[0], str)
+                    and match["album_artwork"].iloc[0].strip()
+                    else CAROUSEL_PLACEHOLDER
+                )
+
+                # Add to carousel items
+                track_image_list.append(dict(text=row["label"], title=f"#{idx + 1}", img=img))
+
+            # --- Render carousel ---
             if track_image_list:
                 carousel(items=track_image_list, container_height=500)
+            else:
+                st.info("No track images available for this timeframe.")
 
         # --- Listening Trend ---
         st.markdown("### Listening Trend")
@@ -2649,7 +2733,7 @@ elif page == "Overall Review":
                     "rolling_avg": "Hours Played (30-Day Rolling Avg)",
                     "date": "Date",
                 },
-                color_discrete_sequence=["#1ed760"],
+                color_discrete_sequence=["#23f96e"],
             )
 
             fig_timeline.add_scatter(
@@ -2657,7 +2741,7 @@ elif page == "Overall Review":
                 y=timeline["trendline"],
                 mode="lines",
                 name="Log Trendline",
-                line=dict(color="white", width=3, dash="dot"),
+                line=dict(color="#137b37", width=2),
             )
 
         else:
@@ -2870,41 +2954,106 @@ elif page == "Overall Review":
         with c2:
             scorecard("⭐ Most Listened Podcast", fav_show)
 
-        # -------------------- Top 10 Podcasts -------------------- #
-        st.markdown("## Top 10 Podcasts")
+        # -------------------- Top 5 Podcasts -------------------- #
+        st.markdown("## Top 5 Podcasts")
         c1, c2 = st.columns([3, 2])
 
+        # --- Aggregate top podcasts ---
         top_podcasts = (
             df_filtered.groupby("episode_show_name")["minutes_played"]
             .sum()
             .sort_values(ascending=False)
-            .head(10)
+            .head(5)
             .reset_index()
         )
         top_podcasts["hhmmss"] = top_podcasts["minutes_played"].apply(format_hhmmss)
 
+        # --- Spotify color gradient ---
+        n_podcasts = len(top_podcasts)
+        sampled_colors = sample_colorscale(
+            spotify_colorscale,
+            [i / max(1, n_podcasts - 1) for i in range(n_podcasts)]
+        )
+
+        # Assign colors (reversed if you prefer bottom-to-top flow)
+        top_podcasts = top_podcasts.reset_index(drop=True)
+        top_podcasts["color"] = sampled_colors[::-1]
+
+        # --- Plot ---
         with c1:
             fig_pod = px.bar(
                 top_podcasts,
                 y="episode_show_name",
                 x="minutes_played",
                 orientation="h",
-                text="hhmmss",
-                color_discrete_sequence=["#1ed760"],
-                labels={"minutes_played": "Time Played (HH:MM:SS)", "episode_show_name": "Podcast"},
+                text="hhmmss",  # ✅ bind label to each bar
+                color="color",
+                color_discrete_map="identity",  # exact Spotify hex colors
+                labels={
+                    "minutes_played": "Time Played",
+                    "episode_show_name": "Podcast",
+                    "hhmmss": "Time Played",
+                },
             )
-            fig_pod.update_traces(texttemplate="%{text}", textposition="outside")
-            fig_pod.update_layout(yaxis={"categoryorder": "total ascending"}, height=500)
-            st.plotly_chart(fig_pod, width='stretch')
+
+            # --- Style text + layout ---
+            fig_pod.update_traces(
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="end",
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+            )
+
+            fig_pod.update_layout(
+                yaxis=dict(categoryorder="total ascending"),
+                height=500,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+                showlegend=False,
+                margin=dict(l=0, r=0, t=30, b=0),
+            )
+
+            # --- Display ---
+            st.plotly_chart(
+                fig_pod,
+                width="stretch",
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
 
         with c2:
             podcast_image_list = []
+
+            # Iterate through top 10 podcast shows and match artwork
             for idx, show in enumerate(top_podcasts["episode_show_name"], start=1):
-                match = INFO_SHOW.loc[INFO_SHOW["show_name"] == show]
-                img = match["show_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
+                # Try to find a match in INFO_SHOW
+                if "INFO_SHOW" in locals() and not INFO_SHOW.empty:
+                    match = INFO_SHOW.loc[INFO_SHOW["show_name"] == show]
+                else:
+                    match = None
+
+                # Get image or fallback to placeholder
+                img = (
+                    match["show_image"].iloc[0]
+                    if match is not None
+                    and not match.empty
+                    and "show_image" in match.columns
+                    and isinstance(match["show_image"].iloc[0], str)
+                    and match["show_image"].iloc[0].strip()
+                    else CAROUSEL_PLACEHOLDER
+                )
+
+                # Add to carousel items
                 podcast_image_list.append(dict(text=show, title=f"#{idx}", img=img))
+
+            # --- Render carousel if we have items ---
             if podcast_image_list:
                 carousel(items=podcast_image_list, container_height=500)
+            else:
+                st.info("No podcast images available for this timeframe.")
 
         # -------------------- Listening Trend -------------------- #
         st.markdown("## Listening Trend")
@@ -2943,8 +3092,9 @@ elif page == "Overall Review":
                 y=timeline["trendline"],
                 mode="lines",
                 name="Log Trendline",
-                line=dict(color="white", width=3, dash="dot"),
+                line=dict(color="#137b37", width=2),
             )
+
         else:
             # Show *all years overlapped*, regardless of the single year selected
             df_filtered["month_day"] = df_filtered["datetime"].dt.strftime("%m-%d")
@@ -3028,6 +3178,105 @@ elif page == "Overall Review":
         with c3:
             scorecard("⭐ Most Listened Audiobook", fav_book)
 
+        st.markdown("## Top 10 Audiobooks")
+        c1, c2 = st.columns([3, 2])
+
+        # --- Aggregate listening by audiobook title ---
+        top_audiobooks = (
+            df_filtered.groupby("audiobook_title")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(5)
+            .reset_index()
+        )
+        top_audiobooks["hhmmss"] = top_audiobooks["minutes_played"].apply(format_hhmmss)
+
+        # --- Spotify color gradient ---
+        n_books = len(top_audiobooks)
+        sampled_colors = sample_colorscale(
+            spotify_colorscale,
+            [i / max(1, n_books - 1) for i in range(n_books)]
+        )
+
+        # Assign reversed gradient (light → dark)
+        top_audiobooks = top_audiobooks.reset_index(drop=True)
+        top_audiobooks["color"] = sampled_colors[::-1]
+
+        # --- Plot ---
+        with c1:
+            fig_books = px.bar(
+                top_audiobooks,
+                y="audiobook_title",
+                x="minutes_played",
+                orientation="h",
+                text="hhmmss",  # ✅ label each bar
+                color="color",
+                color_discrete_map="identity",
+                labels={
+                    "minutes_played": "Time Played (HH:MM:SS)",
+                    "audiobook_title": "Audiobook",
+                    "hhmmss": "Time Played"
+                },
+            )
+
+            # --- Style text & layout ---
+            fig_books.update_traces(
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="end",
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+            )
+
+            fig_books.update_layout(
+                yaxis=dict(categoryorder="total ascending"),
+                height=500,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+                showlegend=False,
+                margin=dict(l=0, r=0, t=30, b=0),
+            )
+
+            # --- Display ---
+            st.plotly_chart(
+                fig_books,
+                width="stretch",
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
+        with c2:
+            audiobook_image_list = []
+
+            # Iterate through top 10 audiobooks and match artwork
+            for idx, book in enumerate(top_audiobooks["audiobook_title"], start=1):
+                # Try to find a match in INFO_AUDIOBOOK
+                if "INFO_AUDIOBOOK" in locals() and not INFO_AUDIOBOOK.empty:
+                    match = INFO_AUDIOBOOK.loc[INFO_AUDIOBOOK["audiobook_title"] == book]
+                else:
+                    match = None
+
+                # Get image or fallback to placeholder
+                img = (
+                    match["audiobook_image"].iloc[0]
+                    if match is not None
+                    and not match.empty
+                    and "audiobook_image" in match.columns
+                    and isinstance(match["audiobook_image"].iloc[0], str)
+                    and match["audiobook_image"].iloc[0].strip()
+                    else CAROUSEL_PLACEHOLDER
+                )
+
+                # Add to carousel items
+                audiobook_image_list.append(dict(text=book, title=f"#{idx}", img=img))
+
+            # --- Render carousel if we have items ---
+            if audiobook_image_list:
+                carousel(items=audiobook_image_list, container_height=500)
+            else:
+                st.info("No audiobook cover images available for this timeframe.")
+
         # --- Listening Trend ---
         st.markdown("### Listening Trend")
 
@@ -3067,7 +3316,7 @@ elif page == "Overall Review":
                 y=timeline["trendline"],
                 mode="lines",
                 name="Log Trendline",
-                line=dict(color="white", width=3, dash="dot"),
+                line=dict(color="#137b37", width=2),
             )
 
         else:
@@ -3512,7 +3761,6 @@ elif page == "Artists":
         scorecard("Longest Streak", f"{max_streak} Days", streak_delta)
         scorecard(rpa_label, f"{avg_returns:.1f}", rpa_delta)
         scorecard("Days since last listen", f"{days_since} Days")
-        st.metric("Longest Streak", f"{max_streak} Days", streak_delta)
 
     with col2:
         if album_selected == "All Albums":
@@ -3588,17 +3836,34 @@ elif page == "Artists":
 
     st.markdown(f"<h2 style='text-align: center;'>{chart_title}</h2>", unsafe_allow_html=True)
 
+    # --- Spotify colorscale sampling (match artist chart style) ---
+    n_songs = len(top_songs)
+    sampled_colors = sample_colorscale(
+        spotify_colorscale,
+        [i / max(1, n_songs - 1) for i in range(n_songs)]
+    )
+
+    top_songs = top_songs.reset_index(drop=True)
+    top_songs["color"] = sampled_colors[::-1]  # reverse for top→bottom gradient
+    top_songs["hhmmss"] = top_songs["minutes_played"].apply(format_hhmmss)
+
     # --- Plotly bar chart ---
     fig_top_songs = px.bar(
         top_songs,
-        x="minutes_played",
         y="track_name",
+        x="minutes_played",
         orientation="h",
-        color_discrete_sequence=["#1ed760"],
-        text=top_songs["minutes_played"].apply(lambda x: f"{int(x):,}"),
+        text="hhmmss",
+        color="color",
+        color_discrete_map="identity",  # use exact hex colors, not auto-assigned
+        labels={
+            "minutes_played": "Time Played (HH:MM:SS)",
+            "track_name": "Track",
+            "hhmmss": "Time Played"
+        },
     )
 
-    # Wrap long track names (split into chunks of ~20 chars)
+    # --- Wrap long track names (split into chunks of ~20 chars) ---
     fig_top_songs.update_yaxes(
         ticktext=[
             "<br>".join([t[i:i+20] for i in range(0, len(t), 20)]) for t in top_songs["track_name"]
@@ -3608,21 +3873,25 @@ elif page == "Artists":
         title=None,
     )
 
+    # --- Text and style formatting ---
     fig_top_songs.update_traces(
+        texttemplate="%{text}",
         textposition="inside",
-        insidetextanchor="middle",
-        textfont=dict(color="#002918", size=12),
+        insidetextanchor="end",
+        insidetextfont=dict(color="#000B06", size=12, family="Arial"),
     )
 
-    fig_top_songs.update_xaxes(title="Total Minutes")
+    # --- Layout and styling ---
     fig_top_songs.update_layout(
         height=500,
-        plot_bgcolor="rgba(0,0,0,0)",
-        title_font_size=20,
-        font=dict(color="white"),
         margin=dict(l=0, r=0, t=30, b=0),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e1ece3", size=14),
+        showlegend=False,
     )
 
+    # --- Display ---
     st.plotly_chart(
         fig_top_songs,
         width="stretch",
@@ -3844,7 +4113,7 @@ elif page == "Artists":
             y="normalized",
             title="Listening Trend (All Time)",
             labels={"normalized": "Normalized Hours Played", "date": "Date"},
-            color_discrete_sequence=["#0034ce"],  # global blue
+            color_discrete_sequence=["#137b37"],  # global blue
         )
         fig_timeline.update_traces(line=dict(width=1))
 
@@ -3869,7 +4138,7 @@ elif page == "Artists":
                 y=timeline_album["normalized"],
                 mode="lines",
                 name=f"{album_selected} (Album)",
-                line=dict(color="#d342f4", width=3),
+                line=dict(color="#e1ece3", width=3),
                 showlegend=True,
             )
 
@@ -3972,7 +4241,7 @@ elif page == "Artists":
             y="normalized",
             title=f"Listening Trend ({year_selected})",
             labels={"normalized": "Normalized Hours Played", "date": "Date"},
-            color_discrete_sequence=["#0034ce"],  # blue for global
+            color_discrete_sequence=["#137b37"],  # blue for global
         )
         fig_timeline.update_traces(line=dict(width=1))
 
@@ -3997,7 +4266,7 @@ elif page == "Artists":
                 y=timeline_album["normalized"],
                 mode="lines",
                 name=f"{album_selected} (Album)",
-                line=dict(color="#d342f4", width=3),
+                line=dict(color="#e1ece3", width=3),
                 showlegend=True,
             )
 
@@ -4191,6 +4460,15 @@ elif page == "Genres":
                 top_tracks["artist_name"] + " — " + top_tracks["track_name"]
             )
 
+            # --- Spotify gradient color sampling ---
+            n_tracks = len(top_tracks)
+            sampled_colors = sample_colorscale(
+                spotify_colorscale,
+                [i / max(1, n_tracks - 1) for i in range(n_tracks)]
+            )
+            top_tracks = top_tracks.reset_index(drop=True)
+            top_tracks["color"] = sampled_colors[::-1]  # reverse gradient top→bottom
+
             # --- Bar chart ---
             fig_top_tracks = px.bar(
                 top_tracks,
@@ -4198,10 +4476,16 @@ elif page == "Genres":
                 y="label",
                 text="hhmmss",
                 orientation="h",
-                color_discrete_sequence=["#1ed760"],
+                color="color",
+                color_discrete_map="identity",  # use exact color hexes
+                labels={
+                    "minutes_played": "Listening Time (HH:MM:SS)",
+                    "label": "",
+                    "hhmmss": "Time Played",
+                },
             )
 
-            # Wrap labels across two lines
+            # --- Wrap labels across two lines ---
             import textwrap
             fig_top_tracks.update_yaxes(
                 categoryorder="total ascending",
@@ -4217,12 +4501,12 @@ elif page == "Genres":
 
             # --- Format x-axis as hh:mm:ss ---
             max_minutes = top_tracks["minutes_played"].max()
-            tick_interval = max_minutes / 5  # roughly 5 evenly spaced ticks
+            tick_interval = max_minutes / 5 if max_minutes > 0 else 1
             tickvals = [i for i in range(0, int(max_minutes) + 1, int(tick_interval) or 1)]
             ticktext = [format_hhmmss(x) for x in tickvals]
 
             fig_top_tracks.update_xaxes(
-                title="Listening Time (hh:mm:ss)",
+                title="Listening Time (HH:MM:SS)",
                 tickvals=tickvals,
                 ticktext=ticktext,
                 showgrid=False,
@@ -4230,19 +4514,25 @@ elif page == "Genres":
 
             # --- Style bars ---
             fig_top_tracks.update_traces(
+                texttemplate="%{text}",
                 textposition="inside",
                 insidetextanchor="end",
-                textfont=dict(color="black", size=12),
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
             )
 
+            # --- Layout ---
             fig_top_tracks.update_layout(
                 height=500,
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="white"),
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
                 xaxis=dict(showgrid=False),
                 yaxis=dict(showgrid=False),
+                margin=dict(l=0, r=0, t=30, b=0),
+                showlegend=False,
             )
 
+            # --- Display ---
             st.plotly_chart(
                 fig_top_tracks,
                 width="stretch",
@@ -4254,26 +4544,45 @@ elif page == "Genres":
     # --- Album artwork carousel ---
     with c2:
         album_image_list = []
+
+        # Iterate through top tracks and match their album artwork
         for idx, row in top_tracks.iterrows():
-            album_match = INFO_ALBUM.loc[
-                INFO_ALBUM["album_name"] == row["album_name"]
-            ]
+            album_name = row.get("album_name", "")
+            artist_name = row.get("artist_name", "")
+
+            # Try to find a matching album in INFO_ALBUM
+            if "INFO_ALBUM" in locals() and not INFO_ALBUM.empty:
+                match = INFO_ALBUM.loc[
+                    INFO_ALBUM["album_name"].str.lower() == str(album_name).lower()
+                ]
+            else:
+                match = None
+
+            # Get image or fallback to placeholder
             img = (
-                album_match["album_artwork"].iloc[0]
-                if not album_match.empty
-                else IMAGE_PLACEHOLDER
+                match["album_artwork"].iloc[0]
+                if match is not None
+                and not match.empty
+                and "album_artwork" in match.columns
+                and isinstance(match["album_artwork"].iloc[0], str)
+                and match["album_artwork"].iloc[0].strip().lower().startswith(("http://", "https://"))
+                else CAROUSEL_PLACEHOLDER
             )
+
+            # Add to carousel items
             album_image_list.append(
                 dict(
-                    text=f"{row['artist_name']} — {row['album_name']}",
+                    text=f"{artist_name} — {album_name}",
                     title=f"#{idx + 1}",
                     img=img,
                 )
             )
 
-        # Only render carousel if there are valid images
+        # --- Render carousel ---
         if album_image_list:
             carousel(items=album_image_list, wrap=False, container_height=500)
+        else:
+            st.info("No album images available for this timeframe.")
 
     # ===============================================================
     # LISTENING TREND (GENRE vs OVERALL)
@@ -4381,7 +4690,7 @@ elif page == "Genres":
         y="normalized",
         title=f"{genre_selected} vs Overall Listening Trend ({year_selected})",
         labels={"normalized": "Normalized Minutes Played (7-Day Rolling Avg)", "date": "Date"},
-        color_discrete_sequence=["#1ed760"],  # neon green for genre
+        color_discrete_sequence=["#23f96e"],  # neon green for genre
     )
     fig_trend.update_traces(line=dict(width=2))
 
@@ -4395,7 +4704,7 @@ elif page == "Genres":
         y=timeline_all["normalized"],
         mode="lines",
         name="All Genres (Global)",
-        line=dict(color="#0034ce", width=1),  # mint green dashed
+        line=dict(color="#137b37", width=1),  # mint green dashed
         showlegend=True,
     )
 
@@ -4433,7 +4742,7 @@ elif page == "Genres":
     # ===============================================================
     # ⏰ GENRE BY HOUR OF DAY — Circular Bar Plot (Unique Legend + Rings)
     # ===============================================================
-    st.markdown("### ⏰ Top Genre by Hour of Day")
+    st.markdown("### Top Genre by Hour of Day")
 
     from plotly.colors import sample_colorscale
     import numpy as np
@@ -4503,7 +4812,7 @@ elif page == "Genres":
 
         fig_hourly.add_trace(go.Barpolar(
             r=[row["radius_scaled"]],
-            theta=[row["hour"] * 15],
+            theta=[(row["hour"] * 15 + 7.5) % 360],
             name=genre_name,
             marker_color=color_map.get(genre_name, "#888"),
             marker_line_color="rgba(255,255,255,0.2)",
@@ -4528,6 +4837,23 @@ elif page == "Genres":
                 color="rgba(255,255,255,0.08)" if level < 1.0 else "rgba(255,255,255,0.15)",
                 width=1.2 if level < 1.0 else 2.0,
                 dash="dot" if level < 1.0 else "solid",
+            ),
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+
+    # --- Step 5b: Add faint hour subdivision lines (every 15°) ---
+    for deg in range(0, 360, 15):  # every hour
+        # skip the existing bold 3-hour lines (already drawn at 0,45,90,...)
+        if deg % 45 == 0:
+            continue
+        fig_hourly.add_trace(go.Scatterpolar(
+            r=[0, 1],
+            theta=[deg, deg],
+            mode="lines",
+            line=dict(
+                color="rgba(255,255,255,0.06)",  # faint neon white
+                width=0.8,
             ),
             hoverinfo="skip",
             showlegend=False,
@@ -5618,8 +5944,8 @@ elif page == "Normality":
                     y=Y,
                     z=Z,
                     showscale=False,
-                    opacity=0.2,
-                    colorscale=[[0, "#ffffff"], [1, "#ff0095"]],
+                    opacity=0.3,
+                    colorscale=[[0, "#ffcdcd"], [1, "#ff7171"]],
                     name="p=0.5 reference",
                     hoverinfo="skip"
                 ))
@@ -5942,7 +6268,7 @@ elif page == "Normality":
                     margin=dict(t=40, b=40, l=40, r=40),
                 )
 
-                st.plotly_chart(fig_conv, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig_conv, width="stretch", config={"displayModeBar": False})
 
             else:
                 print(f"[Normality] ⚠️ No match found for {expected_key}")

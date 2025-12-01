@@ -130,24 +130,32 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 
 # ---------- Plotly colorscales ----------
-neon_palette =["#e67e0e",
-               "#d04e5e",
-               "#db6636",
-               "#C53686",
-               "#8D2DBF",
-               "#ba1ead",
-               "#5f3cd1",
+neon_palette =["#ff8400",
+               "#c9633b",
+               "#d61e33",
+               "#C6468F",
+               "#e70cd5",
+               "#9945C5",
+               "#3f0aee",
+               "#474DC8",
                "#0459f5",
-               "#324BE3",
-               "#0677CC",
-               "#08B278",
-               "#0794a2",
-               "#1FD553",
-               "#00ff2a"
+               "#4991C7",
+               "#09def1",
+               "#4FC19B",
+               "#0CEB4B",
+               "#49c15d",
                ][::-1]
 neon_colorscale = make_colorscale(neon_palette)
 
-spotify_palette = ["#062719","#1ed760","#90d7ad"]
+spotify_palette = ["#062719",
+                   "#013C24",
+                   "#106441",
+                   "#2aa355",
+                   "#2bba6d",
+                   "#1ed760",
+                   "#62d089",
+                   "#80f2af",
+                   "#e1ece3"]
 spotify_colorscale = make_colorscale(spotify_palette)
 
 # -------------------------- GENERIC HELPERS --------------------------------- #
@@ -1095,12 +1103,12 @@ def background_enrich(
     from dao_selector import DAOS, get_log_dao
 
     thread_name = threading.current_thread().name
-    print(f"[enrich:{thread_name}] 🏁 Starting enrichment thread for {dataset_label}")
+    print(f"[enrich:{thread_name}] Starting enrichment thread for {dataset_label}")
 
     # --- Acquire per-user lock with retries ---
     user_lock = get_user_lock(user_id)
     mark_lock_acquired(user_id)
-    print(f"[enrich:{thread_name}] 🔒 Proceeding with enrichment under lock for {user_id}")
+    print(f"[enrich:{thread_name}] Proceeding with enrichment under lock for {user_id}")
 
     try:
         # ✅ Ensure DAOs initialized inside this thread
@@ -1230,7 +1238,7 @@ def background_enrich(
         print(f"[enrich:{thread_name}] ✅ Enrichment completed for {dataset_label}")
 
     except CancelledError:
-        print(f"[enrich:{thread_name}] 🧱 Cancelled by user or dataset switch.")
+        print(f"[enrich:{thread_name}] 🛑 Cancelled by user or dataset switch.")
         try:
             status_dao.finish_standard_error(user_id, dataset_label, detail="🛑 Cancelled by user or dataset switch.")
         except Exception:
@@ -2187,6 +2195,10 @@ if page == "Home":
         ),
         showscale=True
     )
+    st.divider()
+    h1, h2, h3 = st.columns([1,3,1])
+    with h2:
+        st.html("<p style='text-align: center;font-size: 30px;'><em><b>Top 5 Tracks | Top 5 Artists | Top 5 Genre | Every Year</b></em></p>")
 
     st.plotly_chart(
         fig_sunburst,
@@ -2197,6 +2209,8 @@ if page == "Home":
         },
         key="sunburst_moulin",
     )
+
+    st.divider()
 
     st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
 
@@ -2339,12 +2353,12 @@ elif page == "Overall Review":
         return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
 
     # --- Header ---
-    h1, h2, h3 = st.columns([1,3,1], vertical_alignment="center")
+    h1, h2, h3 = st.columns([1,3,1])
     with h2:
         st.html("<p style='text-align: center; font-size: 48px;'><em><b>Overall Review</b></em></p>")
 
     # --- Category & Year Selectors ---
-    c1, c2 = st.columns([0.7, 1], vertical_alignment="center")
+    c1, c2 = st.columns([0.7, 1])
     with c1:
         categories = ["music", "podcast"]
         if "audiobook" in df["category"].unique():
@@ -2358,7 +2372,7 @@ elif page == "Overall Review":
         years = sorted(df["year"].dropna().unique())
         year_options = ["All Time"] + [str(y) for y in years]
         year_selected = st.segmented_control(
-            "Select Year", year_options, selection_mode="single", default="All Time", width="stretch"
+            "Select Year", year_options, selection_mode="single", default="All Time", width="content"
         )
         if not year_selected:
             year_selected = "All Time"
@@ -3417,7 +3431,7 @@ elif page == "Artists":
     df_music["date"] = df_music["datetime"].dt.date
 
     # --- Header ---
-    h1, h2, h3 = st.columns([1,3,1], vertical_alignment="center")
+    h1, h2, h3 = st.columns([1,3,1])
     with h2:
         st.html("<p style='text-align: center; font-size: 48px;'><em><b>Artist Insights</b></em></p>")
 
@@ -3439,7 +3453,7 @@ elif page == "Artists":
         years = sorted(df["year"].dropna().unique())
         year_options = ["All Time"] + [str(y) for y in years]
         year_selected = st.segmented_control(
-            "Select Year", year_options, selection_mode="single", default="All Time", width='stretch'
+            "Select Year", year_options, selection_mode="single", default="All Time", width='content'
         )
         if not year_selected:
             year_selected = "All Time"
@@ -3903,7 +3917,7 @@ elif page == "Artists":
 
     # --- Year selection & visuals ---
     st.title("")
-    col1, col2 = st.columns([4, 1.5], vertical_alignment="center")
+    col1, col2 = st.columns([4, 1.5])
 
         # --- Dayplot calendar heatmap ---
     if album_selected == "All Albums":
@@ -4322,7 +4336,7 @@ elif page == "Genres":
     df_music["date"] = df_music["datetime"].dt.date
 
     # --- Header ---
-    h1, h2, h3 = st.columns([1,3,1], vertical_alignment="center")
+    h1, h2, h3 = st.columns([1,3,1])
     with h2:
         st.html("<p style='text-align: center; font-size: 48px;'><em><b>Genre Insights</b></em></p>")
 
@@ -4346,7 +4360,7 @@ elif page == "Genres":
         years = sorted(df["year"].dropna().unique())
         year_options = ["All Time"] + [str(y) for y in years]
         year_selected = st.segmented_control(
-            "Select Year", year_options, selection_mode="single", default="All Time", width='stretch'
+            "Select Year", year_options, selection_mode="single", default="All Time", width='content'
         )
 
         if not year_selected:
@@ -4426,16 +4440,16 @@ elif page == "Genres":
     # --- DISPLAY SCORECARDS ---
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        scorecard("🎧 Favourite Genre", fav_genre)
+        scorecard("Favourite Genre", fav_genre)
     with c2:
-        scorecard("🎧 Favourite Subgenre", fav_subgenre)
+        scorecard("Favourite Subgenre", fav_subgenre)
     with c3:
-        scorecard("🎤 Favourite Artist", fav_artist)
+        scorecard("Favourite Artist", fav_artist)
     with c4:
-        scorecard("🎵 Favourite Track", fav_track_display)
+        scorecard("Favourite Track", fav_track_display)
 
     # ------------- Top 10 Chart ----------------------- #
-    st.markdown("### 🎧 Top Tracks in Selected Genre")
+    st.markdown("### Top Tracks in Selected Genre")
 
     c1, c2 = st.columns([3, 2])
     with c1:
@@ -5416,7 +5430,7 @@ elif page == "Popularity":
 
     if st.session_state[deep_key]:
         # Controls appear *after* the cards, but write to session state then rerun → top picks them up
-        c1, c2, c3 = st.columns([3, 1, 1], vertical_alignment='center')
+        c1, c2, c3 = st.columns([3, 1, 1])
         with c1:
             year_options = ["All"] + [str(y) for y in year_list]
             new_year = st.segmented_control("Year", year_options, selection_mode="single", default=st.session_state.farm_filter_year)
@@ -5796,9 +5810,9 @@ elif page == "Normality":
     # Apply NaN/inf replacement directly to working DataFrame
     if fill_nans:
         df_bayes_all = df_bayes_all.replace([np.nan, np.inf, -np.inf], 0)
-        print("[Normality] ⚙️ NaN/inf replaced with 0 for visualization")
+        print("[Normality] NaN/inf replaced with 0 for visualization")
     else:
-        print("[Normality] ⚙️ NaN/inf retained (missing values will appear as gaps)")
+        print("[Normality] NaN/inf retained (missing values will appear as gaps)")
 
     if not df_bayes_all.empty:
         # --- Prepare quarter info (legacy method) ---
@@ -5842,24 +5856,6 @@ elif page == "Normality":
                 fig = go.Figure()
                 z_label = "Normality (p-value)"
 
-                # --- Neon Colorscale ---
-                neon_palette = [
-                    "#e67e0e",
-                    "#d04e5e",
-                    "#db6636",
-                    "#ba1ead",
-                    "#C53686",
-                    "#5f3cd1",
-                    "#8D2DBF",
-                    "#0459f5",
-                    "#324BE3",
-                    "#0794a2",
-                    "#0677CC",
-                    "#22cb85",
-                    "#08B278",
-                    "#1FD553"
-                ][::-1]
-
                 def make_colorscale(palette):
                     return [[i / (len(palette) - 1), c] for i, c in enumerate(palette)]
 
@@ -5886,6 +5882,26 @@ elif page == "Normality":
                             + ("Flatter curves" if exp < 1 else "Steeper peaks")
                         )
 
+                        # years = sorted(df_all["quarter"].apply(lambda x: int(str(x)[:4])).unique())
+                        # quarters = ["Q1", "Q2", "Q3", "Q4"]
+
+                        # st.markdown("### Filter Results")
+
+                        # selected_year = st.segmented_control(
+                        #     "Select Year",
+                        #     options=[str(y) for y in years],
+                        #     default=str(years[-1]),
+                        #     key="year_selector",
+                        #     width="content"
+                        # )
+
+                        # selected_quarter = st.segmented_control(
+                        #     "Select Quarter",
+                        #     options=quarters,
+                        #     default="Q1",
+                        #     key="quarter_selector",
+                        #     width="content"
+                        # )
                 # ------------------------------------------------------------------
                 # ADD ONE TRACE PER GENRE
                 # ------------------------------------------------------------------
@@ -6077,415 +6093,402 @@ elif page == "Normality":
     # ----------------------------------------------------------------------
     # FILTER CONTROLS (shared across tabs)
     # ----------------------------------------------------------------------
-    years = sorted(df_all["quarter"].apply(lambda x: int(str(x)[:4])).unique())
-    quarters = ["Q1", "Q2", "Q3", "Q4"]
+    back_calcs = st.checkbox(label="Checkout the ML results", value= False, label_visibility="visible")
+    if back_calcs == True:
 
-    st.markdown("### Filter Results")
-    c1, c2 = st.columns(2)
+        years = sorted(df_all["quarter"].apply(lambda x: int(str(x)[:4])).unique())
+        quarters = ["Q1", "Q2", "Q3", "Q4"]
 
-    with c1:
-        selected_year = st.segmented_control(
-            "Select Year",
-            options=[str(y) for y in years],
-            default=str(years[-1]),
-            key="year_selector",
-            width="stretch"
-        )
-    with c2:
-        selected_quarter = st.segmented_control(
-            "Select Quarter",
-            options=quarters,
-            default="Q1",
-            key="quarter_selector",
-            width="content"
-        )
-    with c1:
-        genres = sorted(df_all["genre"].unique())
-        selected_genre = st.selectbox("Select Genre", options=genres, key="genre_selector_heatmap")
+        st.markdown("### Filter Results")
+        c1, c2 = st.columns(2)
 
-    target_period = f"{selected_year}Q{selected_quarter[-1]}"
-    df_filtered = df_all[df_all["quarter"].astype(str) == target_period]
-    print(f"[DEBUG] Showing results for {target_period}: {len(df_filtered)} rows")
-
-    # ----------------------------------------------------------------------
-    # TABS FOR PHASES
-    # ----------------------------------------------------------------------
-    tab1, tab2, tab3 = st.tabs(["Grid Search", "Fine-Tuning Search","Bayesian Optimization"])
-    shared_cmin, shared_cmax = 0, 1
-
-    # ----------------------------------------------------------------------
-    # TAB 1 — COARSE GRID SEARCH
-    # ----------------------------------------------------------------------
-    with tab1:
-        st.markdown(f"### Coarse Grid Search Results — {selected_year} {selected_quarter}")
-        df_grid = df_filtered[df_filtered["phase"] == "grid"].drop(columns=["phase", "quarter"], errors="ignore")
-        st.dataframe(df_grid.round(3).reset_index(drop=True), hide_index=True, width="stretch")
-
-        # --- Heatmap ---
-        df_joined = df.merge(df_artist_genre, on="artist_name", how="left")
-        df_joined["datetime"] = pd.to_datetime(df_joined["datetime"], errors="coerce")
-        if isinstance(df_joined["datetime"].dtype, DatetimeTZDtype):
-            df_joined["datetime"] = df_joined["datetime"].dt.tz_convert(None)
-        df_joined["quarter"] = df_joined["datetime"].dt.to_period("Q")
-
-        genre_df = df_joined[
-            (df_joined["supergenre"] == selected_genre)
-            & (df_joined["quarter"].astype(str) == target_period)
-        ]
-        data = genre_df.groupby("artist_name")["track_name"].count().values
-        if len(data) >= 8:
-            grid_x = np.linspace(1, 10, 15)
-            grid_y = np.linspace(5, 50, 15)
-            z = np.full((len(grid_x), len(grid_y)), np.nan)
-            for i, xmin in enumerate(grid_x):
-                for j, xmax in enumerate(grid_y):
-                    if xmax <= xmin:
-                        continue
-                    subset = data[(data >= xmin) & (data <= xmax)]
-                    if len(subset) < 8:
-                        continue
-                    _, p = normaltest(subset)
-                    z[i, j] = p
-
-            fig_hm = px.imshow(
-                z,
-                x=[f"{xmax:.0f}" for xmax in grid_y],
-                y=[f"{xmin:.0f}" for xmin in grid_x],
-                color_continuous_scale="Viridis",
-                zmin=shared_cmin, zmax=shared_cmax,
-                labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
-                title=f"Grid Search Heatmap — {selected_genre} ({target_period})",
-                aspect="auto"
+        with c1:
+            selected_year = st.segmented_control(
+                "Select Year",
+                options=[str(y) for y in years],
+                default=str(years[-1]),
+                key="year_selector",
+                width="content"
             )
-            fig_hm.update_layout(width=700, height=500)
-
-            c1,c2,c3 = st.columns([1,3,1])
-            with c2:
-                st.plotly_chart(fig_hm, width="stretch")
-
-    # ----------------------------------------------------------------------
-    # TAB 2 — FINE GRID SEARCH
-    # ----------------------------------------------------------------------
-    with tab2:
-        st.markdown(f"### Fine Grid Search Results — {selected_year} {selected_quarter}")
-        df_fine = df_filtered[df_filtered["phase"] == "fine"].drop(columns=["phase", "quarter"], errors="ignore")
-        st.dataframe(df_fine.round(3).reset_index(drop=True), hide_index=True, width="stretch")
-
-        # --- Heatmap (fine scan) ---
-        if len(data) >= 8:
-            fine_x = np.linspace(1, 10, 20)
-            fine_y = np.linspace(5, 50, 20)
-            z_fine = np.full((len(fine_x), len(fine_y)), np.nan)
-            for i, xmin in enumerate(fine_x):
-                for j, xmax in enumerate(fine_y):
-                    if xmax <= xmin:
-                        continue
-                    subset = data[(data >= xmin) & (data <= xmax)]
-                    if len(subset) < 8:
-                        continue
-                    _, p = normaltest(subset)
-                    z_fine[i, j] = p
-
-            fig_hm2 = px.imshow(
-                z_fine,
-                x=[f"{xmax:.0f}" for xmax in fine_y],
-                y=[f"{xmin:.0f}" for xmin in fine_x],
-                color_continuous_scale="Viridis",
-                zmin=shared_cmin, zmax=shared_cmax,
-                labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
-                title=f"Fine Search Heatmap — {selected_genre} ({target_period})",
-                aspect="auto"
+        with c2:
+            selected_quarter = st.segmented_control(
+                "Select Quarter",
+                options=quarters,
+                default="Q1",
+                key="quarter_selector",
+                width="content"
             )
-            fig_hm2.update_layout(width=700, height=500)
-            c1,c2,c3 = st.columns([1,3,1])
-            with c2:
-                st.plotly_chart(fig_hm2, width="stretch")
+        with c1:
+            genres = sorted(df_all["genre"].unique())
+            selected_genre = st.selectbox("Select Genre", options=genres, key="genre_selector_heatmap")
 
-    # ----------------------------------------------------------------------
-    # TAB 3 — BAYESIAN OPTIMIZATION
-    # ----------------------------------------------------------------------
-    with tab3:
-        st.markdown(f"### Bayesian Optimization Results — {selected_year} {selected_quarter}")
+        target_period = f"{selected_year}Q{selected_quarter[-1]}"
+        df_filtered = df_all[df_all["quarter"].astype(str) == target_period]
+        print(f"[DEBUG] Showing results for {target_period}: {len(df_filtered)} rows")
 
-        convergence = st.session_state.get("convergence", {})
-        df_bayes = df_filtered[df_filtered["phase"] == "bayes"].drop(columns=["phase", "quarter"], errors="ignore")
+        # ----------------------------------------------------------------------
+        # TABS FOR PHASES
+        # ----------------------------------------------------------------------
+        tab1, tab2, tab3 = st.tabs(["Grid Search", "Fine-Tuning Search","Bayesian Optimization"])
+        shared_cmin, shared_cmax = 0, 1
 
-        if df_bayes.empty:
-            st.info("No Bayesian optimization results available yet.")
-        else:
-            st.dataframe(df_bayes.round(3).reset_index(drop=True), hide_index=True, width="stretch")
+        # ----------------------------------------------------------------------
+        # TAB 1 — COARSE GRID SEARCH
+        # ----------------------------------------------------------------------
+        with tab1:
+            st.markdown(f"### Coarse Grid Search Results — {selected_year} {selected_quarter}")
+            df_grid = df_filtered[df_filtered["phase"] == "grid"].drop(columns=["phase", "quarter"], errors="ignore")
+            st.dataframe(df_grid.round(3).reset_index(drop=True), hide_index=True, width="stretch")
 
-            # ===============================================================
-            # Plot convergence if available
-            # ===============================================================
-            import re
+            # --- Heatmap ---
+            df_joined = df.merge(df_artist_genre, on="artist_name", how="left")
+            df_joined["datetime"] = pd.to_datetime(df_joined["datetime"], errors="coerce")
+            if isinstance(df_joined["datetime"].dtype, DatetimeTZDtype):
+                df_joined["datetime"] = df_joined["datetime"].dt.tz_convert(None)
+            df_joined["quarter"] = df_joined["datetime"].dt.to_period("Q")
 
-            # --- Debug info ---
-            print(f"[Normality] 🎯 Checking convergence keys for: {selected_genre} / {selected_quarter}")
-            print(f"[Normality] Available convergence keys (first 10): {list(convergence.keys())[:10]}")
+            genre_df = df_joined[
+                (df_joined["supergenre"] == selected_genre)
+                & (df_joined["quarter"].astype(str) == target_period)
+            ]
+            data = genre_df.groupby("artist_name")["track_name"].count().values
+            if len(data) >= 8:
+                grid_x = np.linspace(1, 10, 15)
+                grid_y = np.linspace(5, 50, 15)
+                z = np.full((len(grid_x), len(grid_y)), np.nan)
+                for i, xmin in enumerate(grid_x):
+                    for j, xmax in enumerate(grid_y):
+                        if xmax <= xmin:
+                            continue
+                        subset = data[(data >= xmin) & (data <= xmax)]
+                        if len(subset) < 8:
+                            continue
+                        _, p = normaltest(subset)
+                        z[i, j] = p
 
-            # --- Normalize genre name ---
-            selected_genre_norm = re.sub(r"\W+", "", selected_genre.lower())
-
-            # --- Determine quarter string safely ---
-            if isinstance(selected_quarter, str) and selected_quarter.startswith(str(selected_year)):
-                quarter_str = selected_quarter
-            else:
-                # e.g. Q1 → 2024Q1
-                quarter_str = f"{selected_year}Q{str(selected_quarter)[-1]}"
-
-            # --- Build expected convergence key ---
-            expected_key = f"{selected_genre}_{quarter_str}"
-
-            # --- Try to match the exact key ---
-            matching_key = None
-            for k in convergence.keys():
-                k_norm = re.sub(r"\W+", "", k.lower())
-                if selected_genre_norm in k_norm and quarter_str.lower() in k.lower():
-                    matching_key = k
-                    break
-
-            # --- Plot if found ---
-            if matching_key:
-                y_vals = convergence[matching_key]
-                x_vals = list(range(1, len(y_vals) + 1))
-                print(f"[Normality] ✅ Matched convergence key: {matching_key} ({len(y_vals)} points)")
-
-                fig_conv = px.line(
-                    x=x_vals,
-                    y=y_vals,
-                    markers=True,
-                    title=f"Bayesian Optimization Convergence — {selected_genre} ({quarter_str})",
-                    labels={"x": "Iteration", "y": "Best p-value"},
+                fig_hm = px.imshow(
+                    z,
+                    x=[f"{xmax:.0f}" for xmax in grid_y],
+                    y=[f"{xmin:.0f}" for xmin in grid_x],
+                    color_continuous_scale="Viridis",
+                    zmin=shared_cmin, zmax=shared_cmax,
+                    labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
+                    title=f"Grid Search Heatmap — {selected_genre} ({target_period})",
+                    aspect="auto"
                 )
+                fig_hm.update_layout(width=700, height=500)
 
-                fig_conv.update_traces(line=dict(color="#1ed760", width=2.5))
-                fig_conv.update_layout(
-                    height=300,
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="white"),
-                    margin=dict(t=40, b=40, l=40, r=40),
+                c1,c2,c3 = st.columns([1,3,1])
+                with c2:
+                    st.plotly_chart(fig_hm, width="stretch")
+
+        # ----------------------------------------------------------------------
+        # TAB 2 — FINE GRID SEARCH
+        # ----------------------------------------------------------------------
+        with tab2:
+            st.markdown(f"### Fine Grid Search Results — {selected_year} {selected_quarter}")
+            df_fine = df_filtered[df_filtered["phase"] == "fine"].drop(columns=["phase", "quarter"], errors="ignore")
+            st.dataframe(df_fine.round(3).reset_index(drop=True), hide_index=True, width="stretch")
+
+            # --- Heatmap (fine scan) ---
+            if len(data) >= 8:
+                fine_x = np.linspace(1, 10, 20)
+                fine_y = np.linspace(5, 50, 20)
+                z_fine = np.full((len(fine_x), len(fine_y)), np.nan)
+                for i, xmin in enumerate(fine_x):
+                    for j, xmax in enumerate(fine_y):
+                        if xmax <= xmin:
+                            continue
+                        subset = data[(data >= xmin) & (data <= xmax)]
+                        if len(subset) < 8:
+                            continue
+                        _, p = normaltest(subset)
+                        z_fine[i, j] = p
+
+                fig_hm2 = px.imshow(
+                    z_fine,
+                    x=[f"{xmax:.0f}" for xmax in fine_y],
+                    y=[f"{xmin:.0f}" for xmin in fine_x],
+                    color_continuous_scale="Viridis",
+                    zmin=shared_cmin, zmax=shared_cmax,
+                    labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
+                    title=f"Fine Search Heatmap — {selected_genre} ({target_period})",
+                    aspect="auto"
                 )
+                fig_hm2.update_layout(width=700, height=500)
+                c1,c2,c3 = st.columns([1,3,1])
+                with c2:
+                    st.plotly_chart(fig_hm2, width="stretch")
 
-                st.plotly_chart(fig_conv, width="stretch", config={"displayModeBar": False})
+        # ----------------------------------------------------------------------
+        # TAB 3 — BAYESIAN OPTIMIZATION
+        # ----------------------------------------------------------------------
+        with tab3:
+            st.markdown(f"### Bayesian Optimization Results — {selected_year} {selected_quarter}")
 
+            convergence = st.session_state.get("convergence", {})
+            df_bayes = df_filtered[df_filtered["phase"] == "bayes"].drop(columns=["phase", "quarter"], errors="ignore")
+
+            if df_bayes.empty:
+                st.info("No Bayesian optimization results available yet.")
             else:
-                print(f"[Normality] ⚠️ No match found for {expected_key}")
-                st.info("⚠️ No convergence data found for the selected genre and quarter.")
+                st.dataframe(df_bayes.round(3).reset_index(drop=True), hide_index=True, width="stretch")
 
-# ------------------------------ On This Day --------------------------------- #
-elif page == "On This Day":
+                # ===============================================================
+                # Plot convergence if available
+                # ===============================================================
+                import re
 
-    # ✅ Make sure dataset is loaded
-    if "current_df" not in st.session_state:
-        st.error("No dataset selected. Please go to the Home page and select a dataset.")
-        st.stop()
+                # --- Debug info ---
+                print(f"[Normality] 🎯 Checking convergence keys for: {selected_genre} / {selected_quarter}")
+                print(f"[Normality] Available convergence keys (first 10): {list(convergence.keys())[:10]}")
 
-    df, current_label = require_current_df()
+                # --- Normalize genre name ---
+                selected_genre_norm = re.sub(r"\W+", "", selected_genre.lower())
 
-    import uuid
-    import streamlit.components.v1 as components
+                # --- Determine quarter string safely ---
+                if isinstance(selected_quarter, str) and selected_quarter.startswith(str(selected_year)):
+                    quarter_str = selected_quarter
+                else:
+                    # e.g. Q1 → 2024Q1
+                    quarter_str = f"{selected_year}Q{str(selected_quarter)[-1]}"
 
-    # --- Safe Spotify URL helper ---
-    def safe_spotify_url(uri_value, item_type):
-        if isinstance(uri_value, str) and ":" in uri_value:
-            return f"https://open.spotify.com/{item_type}/{uri_value.split(':')[-1]}"
-        else:
+                # --- Build expected convergence key ---
+                expected_key = f"{selected_genre}_{quarter_str}"
+
+                # --- Try to match the exact key ---
+                matching_key = None
+                for k in convergence.keys():
+                    k_norm = re.sub(r"\W+", "", k.lower())
+                    if selected_genre_norm in k_norm and quarter_str.lower() in k.lower():
+                        matching_key = k
+                        break
+
+                # --- Plot if found ---
+                if matching_key:
+                    y_vals = convergence[matching_key]
+                    x_vals = list(range(1, len(y_vals) + 1))
+                    print(f"[Normality] ✅ Matched convergence key: {matching_key} ({len(y_vals)} points)")
+
+                    fig_conv = px.line(
+                        x=x_vals,
+                        y=y_vals,
+                        markers=True,
+                        title=f"Bayesian Optimization Convergence — {selected_genre} ({quarter_str})",
+                        labels={"x": "Iteration", "y": "Best p-value"},
+                    )
+
+                    fig_conv.update_traces(line=dict(color="#1ed760", width=2.5))
+                    fig_conv.update_layout(
+                        height=300,
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="white"),
+                        margin=dict(t=40, b=40, l=40, r=40),
+                    )
+
+                    st.plotly_chart(fig_conv, width="stretch", config={"displayModeBar": False})
+
+                else:
+                    print(f"[Normality] ⚠️ No match found for {expected_key}")
+                    st.info("⚠️ No convergence data found for the selected genre and quarter.")
+
+    # ------------------------------ On This Day --------------------------------- #
+    elif page == "On This Day":
+
+        # ✅ Make sure dataset is loaded
+        if "current_df" not in st.session_state:
+            st.error("No dataset selected. Please go to the Home page and select a dataset.")
+            st.stop()
+
+        df, current_label = require_current_df()
+
+        import uuid
+        import streamlit.components.v1 as components
+
+        # --- Safe Spotify URL helper ---
+        def safe_spotify_url(uri_value, item_type):
+            if isinstance(uri_value, str) and ":" in uri_value:
+                return f"https://open.spotify.com/{item_type}/{uri_value.split(':')[-1]}"
+            else:
+                return None
+
+        # --- Header ---
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            st.html("<p style='text-align: center; font-size: 48px;'><em><b>On This Day</b></em></p>")
+
+        # --- Headlines dataset setup ---
+        headlines_df = INFO_HEADLINE.copy()
+        headlines_df.columns = (
+            headlines_df.columns
+            .str.strip()
+            .str.replace("\ufeff", "", regex=True)
+            .str.lower()
+        )
+
+        rename_map = {
+            "date (dd-mm-yyyy)": "date",
+            "webtitle": "web_title",
+            "short_description": "short_description",
+            "weburl": "web_url",
+            "imageurl": "image_url",
+            "section": "section",
+        }
+        headlines_df.rename(columns=rename_map, inplace=True)
+        headlines_df["date"] = pd.to_datetime(headlines_df["date"], format="%d-%m-%Y").dt.date
+
+        # --- Normalize listening dataframe ---
+        df["date"] = pd.to_datetime(df["datetime"]).dt.date
+
+        # --- Custom CSS targeting the real button class ---
+        st.markdown("""
+            <style>
+            button.st-emotion-cache-9dgoxq {
+                background-color: #0d5637 !important;
+                color: #e1ece3 !important;
+                font-weight: 600 !important;
+                font-size: 40px !important;
+                height: 80px !important;
+                border: none !important;
+                border-radius: 3px !important;
+                width: 100% !important;
+                box-shadow: 0 0 8px rgba(0,0,0,0.3) !important;
+                transition: all 0.2s ease-in-out !important;
+            }
+
+            button.st-emotion-cache-9dgoxq:hover {
+                background-color: #4f9668 !important;
+                color: #002918 !important;
+                transform: translateY(-2px) !important;
+            }
+            div.st-emotion-cache-1jfgbg4 {
+                font-size: 40px !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # --- Session setup ---
+        if "random_date_display" not in st.session_state:
+            st.session_state["random_date_display"] = "Pick a Random Day"
+        if "valid_date" not in st.session_state:
+            st.session_state["valid_date"] = None
+        if "trigger_random" not in st.session_state:
+            st.session_state["trigger_random"] = True
+        if st.session_state["last_page"] != "On This Day":
+            st.session_state["trigger_random"] = True
+            st.session_state["last_page"] = "On This Day"
+
+        # --- Generate a random valid date ---
+        def generate_valid_date():
+            attempts = 0
+            while attempts < 1000:
+                attempts += 1
+                random_date = df["date"].sample(n=1).iloc[0]
+                has_news = not headlines_df[headlines_df["date"] == random_date].empty
+                has_listening = not df[df["date"] == random_date].empty
+                if has_news and has_listening:
+                    return random_date
             return None
 
-    # --- Header ---
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.html("<p style='text-align: center; font-size: 48px;'><em><b>On This Day</b></em></p>")
+        # --- Handle trigger ---
+        if st.session_state["trigger_random"]:
+            valid_date = generate_valid_date()
+            if valid_date:
+                st.session_state["valid_date"] = valid_date
+                st.session_state["random_date_display"] = valid_date.strftime("%d %B %Y")
+            st.session_state["trigger_random"] = False
 
-    # --- Headlines dataset setup ---
-    headlines_df = INFO_HEADLINE.copy()
-    headlines_df.columns = (
-        headlines_df.columns
-        .str.strip()
-        .str.replace("\ufeff", "", regex=True)
-        .str.lower()
-    )
+        # --- Render the styled button ---
+        trigger_button = st.button(
+            f"{st.session_state['random_date_display']}",
+            key="random_day",
+            width="stretch"
+        )
 
-    rename_map = {
-        "date (dd-mm-yyyy)": "date",
-        "webtitle": "web_title",
-        "short_description": "short_description",
-        "weburl": "web_url",
-        "imageurl": "image_url",
-        "section": "section",
-    }
-    headlines_df.rename(columns=rename_map, inplace=True)
-    headlines_df["date"] = pd.to_datetime(headlines_df["date"], format="%d-%m-%Y").dt.date
+        # --- Manual trigger ---
+        if trigger_button:
+            st.session_state["trigger_random"] = True
+            st.rerun()
 
-    # --- Normalize listening dataframe ---
-    df["date"] = pd.to_datetime(df["datetime"]).dt.date
+        # --- Display current date and content ---
+        if st.session_state.get("valid_date"):
+            valid_date = st.session_state["valid_date"]
 
-    # --- Custom CSS targeting the real button class ---
-    st.markdown("""
-        <style>
-        button.st-emotion-cache-9dgoxq {
-            background-color: #0d5637 !important;
-            color: #e1ece3 !important;
-            font-weight: 600 !important;
-            font-size: 40px !important;
-            height: 80px !important;
-            border: none !important;
-            border-radius: 3px !important;
-            width: 100% !important;
-            box-shadow: 0 0 8px rgba(0,0,0,0.3) !important;
-            transition: all 0.2s ease-in-out !important;
-        }
+            # --- News Section ---
+            news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
 
-        button.st-emotion-cache-9dgoxq:hover {
-            background-color: #4f9668 !important;
-            color: #002918 !important;
-            transform: translateY(-2px) !important;
-        }
-        div.st-emotion-cache-1jfgbg4 {
-            font-size: 40px !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+            # --- Listening Section ---
+            daily_df = df[df['date'] == valid_date]
+            top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
+            category = top_item['category']
 
-    # --- Session setup ---
-    if "random_date_display" not in st.session_state:
-        st.session_state["random_date_display"] = "Pick a Random Day"
-    if "valid_date" not in st.session_state:
-        st.session_state["valid_date"] = None
-    if "trigger_random" not in st.session_state:
-        st.session_state["trigger_random"] = True
-    if st.session_state["last_page"] != "On This Day":
-        st.session_state["trigger_random"] = True
-        st.session_state["last_page"] = "On This Day"
+            track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
+            podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
+            audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
 
-    # --- Generate a random valid date ---
-    def generate_valid_date():
-        attempts = 0
-        while attempts < 1000:
-            attempts += 1
-            random_date = df["date"].sample(n=1).iloc[0]
-            has_news = not headlines_df[headlines_df["date"] == random_date].empty
-            has_listening = not df[df["date"] == random_date].empty
-            if has_news and has_listening:
-                return random_date
-        return None
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.subheader(f"**{news['web_title']}**")
 
-    # --- Handle trigger ---
-    if st.session_state["trigger_random"]:
-        valid_date = generate_valid_date()
-        if valid_date:
-            st.session_state["valid_date"] = valid_date
-            st.session_state["random_date_display"] = valid_date.strftime("%d %B %Y")
-        st.session_state["trigger_random"] = False
+            with col2:
+                if category == "music":
+                    st.subheader(f"{top_item['artist_name']}")
+                    st.write(f"**Album:** {top_item['album_name']}")
+                    st.write(f"**Track:** {top_item['track_name']}")
+                elif category == "podcast":
+                    st.subheader(f"**Show:** {top_item['episode_show_name']}")
+                    st.write(f"**Episode:** {top_item['episode_name']}")
+                elif category == "audiobook":
+                    st.subheader(f"**Book:** {top_item['audiobook_title']}")
+                    st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
 
-    # --- Render the styled button ---
-    trigger_button = st.button(
-        f"{st.session_state['random_date_display']}",
-        key="random_day",
-        width="stretch"
-    )
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if isinstance(news['image_url'], str) and news['image_url'].startswith("http"):
+                    st.image(news['image_url'], width='stretch')
+                st.write(news['short_description'])
 
-    # --- Manual trigger ---
-    if trigger_button:
-        st.session_state["trigger_random"] = True
-        st.rerun()
+            with col2:
+                if category == "music":
+                    album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
+                    artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
+                    if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                        st.image(artwork_url, width='stretch')
 
-    # --- Display current date and content ---
-    if st.session_state.get("valid_date"):
-        valid_date = st.session_state["valid_date"]
+                elif category == "podcast":
+                    show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
+                    artwork_url = show_info['show_image'].iloc[0] if not show_info.empty else None
+                    if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                        st.image(artwork_url, width="stretch")
 
-        # --- News Section ---
-        news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
+                elif category == "audiobook":
+                    book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
+                    artwork_url = book_info['audiobook_image'].iloc[0] if not book_info.empty else None
+                    if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                        st.image(artwork_url, width="stretch")
 
-        # --- Listening Section ---
-        daily_df = df[df['date'] == valid_date]
-        top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
-        category = top_item['category']
+            col1, col2 = st.columns([1, 1])
+            with col1:
 
-        track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
-        podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
-        audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
+                st.markdown(f"[Read more]({news['web_url']})")
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.subheader(f"**{news['web_title']}**")
+            with col2:
+                if category == "music":
+                    st.markdown(f"[Listen again]({track_url})")
 
-        with col2:
-            if category == "music":
-                st.subheader(f"{top_item['artist_name']}")
-                st.write(f"**Album:** {top_item['album_name']}")
-                st.write(f"**Track:** {top_item['track_name']}")
-            elif category == "podcast":
-                st.subheader(f"**Show:** {top_item['episode_show_name']}")
-            elif category == "audiobook":
-                st.subheader(f"**Book:** {top_item['audiobook_title']}")
+                elif category == "podcast":
+                    st.markdown(f"[Listen again]({podcast_url})")
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if isinstance(news['image_url'], str) and news['image_url'].startswith("http"):
-                st.image(news['image_url'], width='stretch')
-            st.write(news['short_description'])
-
-        with col2:
-            if category == "music":
-                album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
-                artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width='stretch')
-
-            elif category == "podcast":
-                st.subheader(f"**Show:** {top_item['episode_show_name']}")
-                st.write(f"**Episode:** {top_item['episode_name']}")
-                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
-                artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                st.markdown(f"[Listen again]({podcast_url})")
-
-            elif category == "audiobook":
-                st.subheader(f"**Book:** {top_item['audiobook_title']}")
-                st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
-                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
-                artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                st.markdown(f"[Listen again]({audiobook_url})")
-
-        col1, col2 = st.columns([1, 1])
-        with col1:
-
-            st.markdown(f"[Read more]({news['web_url']})")
-
-        with col2:
-            if category == "music":
-                st.markdown(f"[Listen again]({track_url})")
-
-            elif category == "podcast":
-                st.subheader(f"**Show:** {top_item['episode_show_name']}")
-                st.write(f"**Episode:** {top_item['episode_name']}")
-                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
-                artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                st.markdown(f"[Listen again]({podcast_url})")
-
-            elif category == "audiobook":
-                st.subheader(f"**Book:** {top_item['audiobook_title']}")
-                st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
-                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
-                artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                st.markdown(f"[Listen again]({audiobook_url})")
+                elif category == "audiobook":
+                    st.markdown(f"[Listen again]({audiobook_url})")
 
 # --------------------------------- FAQs ------------------------------------- #
 elif page == "FAQs":
 
     st.session_state["last_page"] = "FAQs"
 
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment="center")
 
     st.title("About Us")
     st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")

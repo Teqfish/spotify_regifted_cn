@@ -193,6 +193,91 @@ def _save_genre_map(gmap: pd.DataFrame) -> None:
     out = gmap[["primary_genre", "supergenre"]].copy()
     out.to_csv(GENRE_MAP_LOCAL_PATH, index=False)
 
+# ---------------- Exceptions ----------------
+class TransientProviderError(Exception):
+    """Retryable provider failure (timeouts, gateway errors, transient network)."""
+    pass
+
+
+# ---------------- Adaptive controller ----------------
+import random
+
+class AdaptiveController:
+    """
+    Keeps the pipeline smooth by adjusting batch size and sleep based on success/fail patterns.
+    - Shrinks batches on timeouts / rate limits.
+    - Gradually grows batches after consecutive successes.
+    - Increases sleep (backoff) under pressure, reduces it when healthy.
+    """
+    def __init__(
+        self,
+        init_batch: int,
+        min_batch: int = 5,
+        max_batch: int = 50,
+        base_sleep: float = 0.5,
+        max_sleep: float = 8.0,
+        grow_every: int = 3,     # grow after N consecutive successes
+        grow_step: int = 2,      # +2 items when growing
+    ):
+        self.batch = max(min_batch, min(max_batch, int(init_batch)))
+        self.min_batch = min_batch
+        self.max_batch = max_batch
+        self.base_sleep = base_sleep
+        self.sleep = base_sleep
+        self.max_sleep = max_sleep
+        self._succ = 0
+
+    def on_success(self, usage=None, payload_chars: int | None = None):
+        # reset pressure counters
+        self._succ += 1
+
+        # if we see big payloads/usage, be conservative
+        try:
+            total_tokens = getattr(usage, "total_token_count", None) or getattr(usage, "total_tokens", None)
+        except Exception:
+            total_tokens = None
+
+        # Heuristics: if payload text is huge OR tokens exceed soft area → avoid growing
+        soft_payload = (payload_chars is not None and payload_chars > 18000)  # ~ rough safety
+        soft_tokens = (total_tokens is not None and total_tokens > 24000)     # very conservative
+
+        if not soft_payload and not soft_tokens and self._succ >= 3 and self.batch < self.max_batch:
+            self.batch = min(self.max_batch, self.batch + 2)
+            self._succ = 0  # reset growth counter
+
+        # Nudge sleep back down toward base
+        self.sleep = max(self.base_sleep, self.sleep * 0.8)
+
+    def on_timeout(self):
+        # shrink batch and increase sleep
+        self._succ = 0
+        self.batch = max(self.min_batch, int(self.batch * 0.6))
+        self.sleep = min(self.max_sleep, self.sleep * 1.5 + 0.5)
+
+    def on_rate_limit(self):
+        # more aggressive shrink
+        self._succ = 0
+        self.batch = max(self.min_batch, int(self.batch * 0.5))
+        self.sleep = min(self.max_sleep, self.sleep * 2.0)
+
+    def on_payload_too_large(self):
+        # strong shrink (we overshot token/payload limits)
+        self._succ = 0
+        self.batch = max(self.min_batch, int(self.batch * 0.5))
+        self.sleep = min(self.max_sleep, self.sleep * 1.2 + 0.4)
+
+def _sleep_with_jitter(base: float, attempt: int):
+    """Exponential backoff with jitter; cap politely."""
+    delay = base * (2 ** (attempt - 1)) + random.uniform(0, 0.4)
+    time.sleep(min(delay, 8.0))
+
+def _estimate_payload_chars(records: list[dict]) -> int:
+    """Very rough character estimate of the JSON payload we send to the model."""
+    try:
+        return len(json.dumps(records, ensure_ascii=False))
+    except Exception:
+        return 0
+
 # ------------------------------------------------------------------------------
 # Logging
 # ------------------------------------------------------------------------------
@@ -425,7 +510,8 @@ class GeminiProvider(GenreProvider):
 
         try:
             resp = self.model.generate_content(user_msg)
-            # Prefer resp.text; else stitch from parts
+            # capture usage metadata if available (for adaptive heuristics)
+            self.last_usage = getattr(resp, "usage_metadata", None)
             content = getattr(resp, "text", None)
             if not content:
                 parts = []
@@ -440,10 +526,16 @@ class GeminiProvider(GenreProvider):
                 content = "".join(parts) if parts else "{}"
         except Exception as e:
             msg = str(e).lower()
-            # Common quota/rate errors
-            if "quota" in msg or "resource exhausted" in msg or "429" in msg:
+            # Treat timeouts/gateway as transient
+            if any(t in msg for t in ["deadline exceeded", "504", "gateway timeout", "timed out", "timeout"]):
+                raise TransientProviderError(str(e))
+            # Payload / token too large → caller should shrink
+            if any(t in msg for t in ["payload too large", "request too large", "413"]):
+                raise TransientProviderError(str(e))
+            # Rate/quota exhaustion (not retryable in short loop)
+            if "quota" in msg or "resource exhausted" in msg or "429" in msg or "rate limit" in msg:
                 raise InsufficientQuotaError(str(e))
-            # 404 model not found → suggest user sets GEMINI_MODEL explicitly
+            # Model not found
             if "404" in msg and "not found" in msg:
                 raise RuntimeError(
                     f"Gemini model '{self.model_name}' not found by this SDK. "
@@ -476,7 +568,6 @@ class GeminiProvider(GenreProvider):
         if not uniq:
             return {}
 
-        # All instruction goes in the user message for Gemini
         instruction = (
             "You are a music taxonomy assistant. "
             "For each 'primary_genre' (a niche subgenre string), choose exactly ONE 'supergenre' "
@@ -492,10 +583,15 @@ class GeminiProvider(GenreProvider):
 
         try:
             resp = self.model.generate_content(user_msg)
+            self.last_usage = getattr(resp, "usage_metadata", None)
             content = getattr(resp, "text", "") or "{}"
         except Exception as e:
             msg = str(e).lower()
-            if "quota" in msg or "resource exhausted" in msg or "429" in msg:
+            if any(t in msg for t in ["deadline exceeded", "504", "gateway timeout", "timed out", "timeout"]):
+                raise TransientProviderError(str(e))
+            if any(t in msg for t in ["payload too large", "request too large", "413"]):
+                raise TransientProviderError(str(e))
+            if "quota" in msg or "resource exhausted" in msg or "429" in msg or "rate limit" in msg:
                 raise InsufficientQuotaError(str(e))
             raise
 
@@ -579,7 +675,8 @@ def _get_gemini_api_key() -> str:
 # ------------------------------------------------------------------------------
 def enrich_dataframe_with_primary_genre(
     df: pd.DataFrame,
-    provider: GenreProvider,
+    provider: "GenreProvider",
+    *,
     batch_size: int = 100,
     sleep_between_batches: float = 0.0,
     max_retries: int = 2,
@@ -587,77 +684,120 @@ def enrich_dataframe_with_primary_genre(
     limit: int | None = None,
 ) -> Tuple[pd.DataFrame, int]:
     """
-    - If force=False: select rows where `primary_genre` is missing.
-    - If force=True: select ALL rows with a non-empty artist_id (overwrite).
-    - If limit is not None: only process the first `limit` target rows.
-    - Chunk, call provider, and fill `primary_genre`.
+    Find artists needing primary_genre, batch them, call provider, and update df.
+    Now adaptive: auto-shrinks/grows batch size and adjusts sleep based on errors/success.
     """
-    df_out = _prepare_schema(df.copy())
-
-    id_ok = df_out["artist_id"].astype(str).str.strip().ne("")
-    if force:
-        target = df_out[id_ok]
-    else:
-        mask_missing = df_out["primary_genre"].apply(_is_missing)
-        target = df_out[mask_missing & id_ok]
+    # --- Identify targets
+    df = df.copy()
+    need_mask = df["primary_genre"].isna() | (df["primary_genre"].astype(str).str.strip().str.lower().isin(["", "none", "null", "nan"]))
+    targets = df.loc[need_mask, ["artist_id", "artist_name"]].dropna(subset=["artist_id"]).copy()
 
     if limit is not None:
-        # Keep only the first `limit` rows for this run
-        target = target.head(int(limit))
+        targets = targets.head(limit)
 
-    if target.empty:
-        logging.info("Nothing to enrich (no valid targets under current settings).")
-        return df_out, 0
+    logging.info(f"Artists targeted for enrichment: {len(targets)} (force={force}, limit={limit})")
+    if targets.empty:
+        return df, 0
 
-    logging.info(
-        f"Artists targeted for enrichment: {len(target)} (force={force}, limit={limit})"
+    # --- Adaptive controller
+    ctrl = AdaptiveController(
+        init_batch=max(1, batch_size),
+        min_batch=5,
+        max_batch=max(5, batch_size),
+        base_sleep=max(0.0, float(sleep_between_batches)),
     )
 
-    rows = target.to_dict(orient="records")
-    batches = _chunk(rows, batch_size)
+    # --- Iterate batches dynamically
+    updated = 0
+    rows = targets.to_dict(orient="records")
+    idx = 0
+    total = len(rows)
+    batch_num = 0
 
-    # artist_id -> list[row indices] (handles duplicates)
-    id_to_indices = df_out.index.to_series().groupby(df_out["artist_id"]).apply(list).to_dict()
+    while idx < total:
+        # choose current batch size adaptively
+        bsize = min(ctrl.batch, total - idx)
+        batch = rows[idx: idx + bsize]
+        batch_num += 1
+        logging.info(f"Batch {batch_num}/{(total + ctrl.batch - 1) // ctrl.batch} (size={len(batch)})")
 
-    total_updates = 0
+        payload_chars = _estimate_payload_chars(
+            [{"artist_id": r["artist_id"], "artist_name": r.get("artist_name", "")} for r in batch]
+        )
 
-    for bidx, batch in enumerate(batches, start=1):
-        logging.info(f"Batch {bidx}/{len(batches)} (size={len(batch)})")
-
-        # Retry loop per batch
-        result_map: Dict[str, str] = {}
-        for attempt in range(1, max_retries + 2):  # attempts 1..(retries+1)
+        # retry loop for this batch
+        result = None
+        for attempt in range(1, max_retries + 1):
             try:
-                result_map = provider.enrich_batch(batch)
+                result = provider.enrich_batch(batch)
+                usage = getattr(provider, "last_usage", None)
+                ctrl.on_success(usage=usage, payload_chars=payload_chars)
                 break
             except InsufficientQuotaError as e:
-                logging.error("Provider reports insufficient quota. Aborting run early.\n%s", e)
-                raise
+                logging.warning("Provider quota/rate error: %s", e)
+                ctrl.on_rate_limit()
+                _sleep_with_jitter(ctrl.sleep, attempt)
+            except TransientProviderError as e:
+                logging.warning("Transient provider error on attempt %d: %s", attempt, e)
+                ctrl.on_timeout()
+                _sleep_with_jitter(ctrl.sleep, attempt)
             except Exception as e:
-                logging.warning(f"Provider error on attempt {attempt}: {e}")
-                if attempt >= max_retries + 1:
-                    logging.error("Max retries reached; continuing with empty results for this batch.")
-                    result_map = {}
-                else:
-                    time.sleep(min(2**attempt, 10))  # simple backoff
+                logging.warning("Provider error on attempt %d: %s", attempt, e)
+                ctrl.on_timeout()
+                _sleep_with_jitter(ctrl.sleep, attempt)
 
-        # Apply results to df_out
-        updated = 0
-        for aid, genre in result_map.items():
-            indices = id_to_indices.get(aid, [])
-            for i in indices:
-                if force or _is_missing(df_out.at[i, "primary_genre"]):
-                    df_out.at[i, "primary_genre"] = str(genre).strip()
-                    updated += 1
+        # If still no result, try auto-split into halves (recursive-ish once)
+        if result is None and len(batch) > 1:
+            mid = len(batch) // 2
+            halves = [batch[:mid], batch[mid:]]
+            merged = {}
+            for h in halves:
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        rsub = provider.enrich_batch(h)
+                        usage = getattr(provider, "last_usage", None)
+                        ctrl.on_success(usage=usage, payload_chars=_estimate_payload_chars(
+                            [{"artist_id": x["artist_id"], "artist_name": x.get("artist_name", "")} for x in h]
+                        ))
+                        merged.update(rsub)
+                        break
+                    except InsufficientQuotaError as e:
+                        logging.warning("Provider quota/rate error (split): %s", e)
+                        ctrl.on_rate_limit()
+                        _sleep_with_jitter(ctrl.sleep, attempt)
+                    except TransientProviderError as e:
+                        logging.warning("Transient provider error (split) attempt %d: %s", attempt, e)
+                        ctrl.on_timeout()
+                        _sleep_with_jitter(ctrl.sleep, attempt)
+                    except Exception as e:
+                        logging.warning("Provider error (split) attempt %d: %s", attempt, e)
+                        ctrl.on_timeout()
+                        _sleep_with_jitter(ctrl.sleep, attempt)
+            result = merged
 
-        logging.info(f"Batch {bidx}: updated {updated} row(s).")
-        total_updates += updated
+        if not result:
+            logging.error("Max retries reached; continuing with empty results for this batch.")
+            # shrink further for next loop since this one failed
+            ctrl.on_timeout()
+        else:
+            # --- Apply results to df
+            # result: {artist_id: primary_genre}
+            id_to_genre = {str(k): v for k, v in result.items()}
+            # Update only rows that are missing or when force=True
+            mask_apply = df["artist_id"].astype(str).isin(id_to_genre.keys())
+            if not force:
+                # only where currently missing/placeholder
+                mask_apply = mask_apply & (df["primary_genre"].isna() | df["primary_genre"].astype(str).str.strip().str.lower().isin(["", "none", "null", "nan"]))
+            df.loc[mask_apply, "primary_genre"] = df.loc[mask_apply, "artist_id"].astype(str).map(id_to_genre)
+            updated += int(mask_apply.sum())
 
-        if sleep_between_batches > 0:
-            time.sleep(sleep_between_batches)
+        # move index and sleep a little
+        idx += bsize
+        if ctrl.sleep > 0:
+            time.sleep(ctrl.sleep)
 
-    logging.info(f"Finished. Total rows updated: {total_updates}")
-    return df_out, total_updates
+    logging.info(f"Finished. Total rows updated: {updated}")
+    return df, updated
 
 def _is_missing_super(val: object) -> bool:
     if pd.isna(val):
@@ -667,30 +807,38 @@ def _is_missing_super(val: object) -> bool:
 
 def _map_supergenres_and_update(
     df_unlisted: pd.DataFrame,
-    provider: GenreProvider,
+    provider: "GenreProvider",
     *,
     io_mode: str = "auto",
     merge_scope: str = "all_assigned",           # fresh, non-cached
-    debug_dump_merges_to_r2: bool = False,       # 👈 NEW
-    debug_prev_super: pd.Series | None = None,   # 👈 NEW (for newly_assigned view)
+    debug_dump_merges_to_r2: bool = False,
+    debug_prev_super: pd.Series | None = None,
+    max_retries: int = 3,                         # ← NEW: adaptive retry budget for mapping
 ) -> Tuple[pd.DataFrame, int, int]:
     """
-    - Extend genre map (excluding placeholders)
+    - Extend genre map (excluding placeholder primary_genres)
     - Fill supergenre in unlisted for real primary_genre only
     - Merge artists whose supergenre is currently valid (fresh filter)
     - Remove merged artists from unlisted
-    Also (optionally) dumps the merged rows to R2 for inspection.
+    Optionally dumps merged rows to R2 for inspection (all_assigned + newly_assigned).
+    Returns: (updated_unlisted_df, num_new_pairs_added_to_map, num_artists_merged_to_master)
     """
-    # ---- load and sanitize map (same as your latest version)
+    # ---- 4) Load & sanitize the map (placeholders & blanks already scrubbed in _load_genre_map)
     gmap = _load_genre_map()
+
+    # ---- Prepare unlisted table
     df_unlisted = _ensure_cols(df_unlisted, ["artist_id", "primary_genre", "supergenre"])
     df_unlisted["__key"] = df_unlisted["primary_genre"].map(_norm)
 
+    # Real (non-placeholder) primary genres only
     real_mask = ~df_unlisted["primary_genre"].apply(_is_placeholder_pg)
     real_keys = set(df_unlisted.loc[real_mask, "__key"].dropna())
     known_keys = set(gmap["__key"])
 
+    # ---- 5) New keys to map (real - known)
     new_keys = sorted(real_keys - known_keys)
+
+    # Recover original labels for those keys from the unlisted table
     key_to_label = (
         df_unlisted.loc[real_mask, ["__key", "primary_genre"]]
         .drop_duplicates("__key")
@@ -700,50 +848,113 @@ def _map_supergenres_and_update(
     new_labels = [key_to_label[k] for k in new_keys]
 
     new_pairs = pd.DataFrame(columns=["primary_genre", "supergenre"])
+
+    # ---- 5–6) Adaptive mapping loop to classify subgenres → allowed supergenres
     if new_labels:
         if not hasattr(provider, "map_subgenres_to_super"):
             raise RuntimeError("Selected provider does not support subgenre→supergenre mapping.")
-        B = 50
-        mapped: Dict[str, str] = {}
-        for i in range(0, len(new_labels), B):
-            chunk = new_labels[i:i+B]
-            try:
-                out = provider.map_subgenres_to_super(chunk, ALLOWED_SUPERGENRES)
-            except InsufficientQuotaError:
-                raise
-            except Exception as e:
-                logging.warning(f"Supergenre mapping batch failed: {e}")
-                out = {}
-            mapped.update(out)
 
+        # Adaptive controller for this phase (starts at 50, shrinks/grows as needed)
+        ctrl_map = AdaptiveController(init_batch=50, min_batch=5, max_batch=50, base_sleep=0.5)
+        mapped: Dict[str, str] = {}
+
+        i = 0
+        total = len(new_labels)
+        while i < total:
+            bsize = min(ctrl_map.batch, total - i)
+            chunk = new_labels[i : i + bsize]
+            payload_chars = _estimate_payload_chars([{"primary_genre": s} for s in chunk])
+
+            ok = False
+            for attempt in range(1, max_retries + 1):
+                try:
+                    out = provider.map_subgenres_to_super(chunk, ALLOWED_SUPERGENRES)
+                    usage = getattr(provider, "last_usage", None)
+                    ctrl_map.on_success(usage=usage, payload_chars=payload_chars)
+                    mapped.update(out or {})
+                    ok = True
+                    break
+                except InsufficientQuotaError as e:
+                    logging.warning("Supergenre mapping quota/rate error: %s", e)
+                    ctrl_map.on_rate_limit()
+                    _sleep_with_jitter(ctrl_map.sleep, attempt)
+                except TransientProviderError as e:
+                    logging.warning("Supergenre mapping transient error (attempt %d): %s", attempt, e)
+                    ctrl_map.on_timeout()
+                    _sleep_with_jitter(ctrl_map.sleep, attempt)
+                except Exception as e:
+                    logging.warning("Supergenre mapping provider error (attempt %d): %s", attempt, e)
+                    ctrl_map.on_timeout()
+                    _sleep_with_jitter(ctrl_map.sleep, attempt)
+
+            # If the whole chunk failed, try splitting into two halves as a last resort
+            if not ok and bsize > 1:
+                mid = len(chunk) // 2
+                halves = [chunk[:mid], chunk[mid:]]
+                for h in halves:
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            out = provider.map_subgenres_to_super(h, ALLOWED_SUPERGENRES)
+                            usage = getattr(provider, "last_usage", None)
+                            ctrl_map.on_success(
+                                usage=usage,
+                                payload_chars=_estimate_payload_chars([{"primary_genre": s} for s in h]),
+                            )
+                            mapped.update(out or {})
+                            break
+                        except InsufficientQuotaError as e:
+                            logging.warning("Supergenre mapping quota/rate error (split): %s", e)
+                            ctrl_map.on_rate_limit()
+                            _sleep_with_jitter(ctrl_map.sleep, attempt)
+                        except TransientProviderError as e:
+                            logging.warning("Supergenre mapping transient error (split, attempt %d): %s", attempt, e)
+                            ctrl_map.on_timeout()
+                            _sleep_with_jitter(ctrl_map.sleep, attempt)
+                        except Exception as e:
+                            logging.warning("Supergenre mapping provider error (split, attempt %d): %s", attempt, e)
+                            ctrl_map.on_timeout()
+                            _sleep_with_jitter(ctrl_map.sleep, attempt)
+
+            # Advance & polite sleep between chunks
+            i += bsize
+            if ctrl_map.sleep > 0:
+                time.sleep(ctrl_map.sleep)
+
+        # Build new-pairs DataFrame (fill unmapped with 'Other' conservatively)
         rows = [{"primary_genre": pg, "supergenre": mapped.get(pg, "Other")} for pg in new_labels]
         new_pairs = pd.DataFrame(rows)
         new_pairs["__key"] = new_pairs["primary_genre"].map(_norm)
         new_pairs["supergenre"] = new_pairs["supergenre"].astype(str).str.strip()
         new_pairs = new_pairs[new_pairs["supergenre"] != ""]
+
+        # Merge into map without overwriting existing keys
         gmap = pd.concat([gmap, new_pairs[~new_pairs["__key"].isin(known_keys)]], ignore_index=True)
         gmap = gmap.drop_duplicates(subset="__key", keep="first")
+
+        # 7) Save updated map locally
         _save_genre_map(gmap)
         logging.info(f"Supergenre map: added {len(new_pairs)} new pair(s).")
 
-    # ---- fill supergenres for real primary_genre only
+    # ---- 8) Fill supergenres for real primary_genre rows only
     map_dict = dict(zip(gmap["__key"], gmap["supergenre"]))
     assigned = df_unlisted["__key"].map(map_dict)
     df_unlisted.loc[real_mask, "supergenre"] = assigned[real_mask].where(
         assigned[real_mask].notna(), df_unlisted.loc[real_mask, "supergenre"]
     )
+
+    # Normalize any leftover blanks/None/placeholder → "Unlisted"
     df_unlisted["supergenre"] = df_unlisted["supergenre"].apply(
         lambda x: x if not _is_missing_super(x) else "Unlisted"
     )
 
-    # ---- fresh eligible set (current state)
+    # ---- 9) Fresh eligible set for merging (current state only)
     sg_clean = df_unlisted["supergenre"].astype(str).str.strip()
     eligible_now = (~sg_clean.eq("")) & (~sg_clean.str.lower().eq("unlisted"))
 
     if merge_scope == "all_assigned":
         merge_mask = eligible_now
     else:
-        # Optional path: newly-assigned only (not used by default)
+        # Optional path: only rows newly assigned this run (if prev values provided)
         if debug_prev_super is not None:
             prev = debug_prev_super.reindex(df_unlisted.index)
             prev_missing = prev.apply(_is_missing_super)
@@ -751,37 +962,46 @@ def _map_supergenres_and_update(
         else:
             merge_mask = eligible_now
 
-    df_merge = df_unlisted.loc[
-        merge_mask, ["artist_id", "artist_name", "primary_genre", "supergenre", "artist_image"]
-    ].copy().dropna(subset=["artist_id"])
+    df_merge = (
+        df_unlisted.loc[
+            merge_mask, ["artist_id", "artist_name", "primary_genre", "supergenre", "artist_image"]
+        ]
+        .copy()
+        .dropna(subset=["artist_id"])
+    )
 
-    # ---- DEBUG: dump merged rows to R2 (and a newly_assigned view)
+    # ---- Debug: dump merged sets to R2 (both all_assigned and newly_assigned for contrast)
     if debug_dump_merges_to_r2 and not df_merge.empty:
         try:
             from dao_selector import get_daos
             daos = get_daos()
             metadata = daos.get("metadata") or daos.get("r2")
             ts = time.strftime(DEBUG_TAG_FMT)
-            # all-assigned merged this run
+
+            # All assigned (merged this run given the chosen scope)
             path_all = f"{DEBUG_DIR}/merged_all_assigned_{ts}.csv"
             metadata.upload_csv(df_merge, path=path_all, overwrite=True)
             logging.info(f"[debug] Uploaded merged set (all_assigned) → {path_all}")
 
-            # also dump newly_assigned for contrast (if prev available)
+            # Newly assigned (snapshot vs prev), if previous values provided
             if debug_prev_super is not None:
                 prev = debug_prev_super.reindex(df_unlisted.index)
                 prev_missing = prev.apply(_is_missing_super)
                 new_mask = eligible_now & prev_missing
-                df_new = df_unlisted.loc[
-                    new_mask, ["artist_id", "artist_name", "primary_genre", "supergenre", "artist_image"]
-                ].copy().dropna(subset=["artist_id"])
+                df_new = (
+                    df_unlisted.loc[
+                        new_mask, ["artist_id", "artist_name", "primary_genre", "supergenre", "artist_image"]
+                    ]
+                    .copy()
+                    .dropna(subset=["artist_id"])
+                )
                 path_new = f"{DEBUG_DIR}/merged_newly_assigned_{ts}.csv"
                 metadata.upload_csv(df_new, path=path_new, overwrite=True)
                 logging.info(f"[debug] Uploaded merged set (newly_assigned) → {path_new}")
         except Exception as e:
             logging.warning(f"[debug] Failed to upload debug CSV(s): {e}")
 
-    # ---- merge to master
+    # ---- 9→10) Merge to master and prune merged rows from unlisted
     artists_merged = 0
     try:
         from dao_selector import get_daos
@@ -800,11 +1020,11 @@ def _map_supergenres_and_update(
         logging.warning(f"Master merge failed/skipped: {e}")
         artists_merged = 0
 
-    # ---- remove merged from unlisted
     if artists_merged > 0 and not df_merge.empty:
         ids_done = set(df_merge["artist_id"].unique())
         df_unlisted = df_unlisted[~df_unlisted["artist_id"].isin(ids_done)].copy()
 
+    # Clean temp column and return
     df_unlisted.drop(columns=["__key"], inplace=True, errors="ignore")
     return df_unlisted, len(new_pairs), artists_merged
 

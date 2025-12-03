@@ -1856,7 +1856,6 @@ with st.sidebar:
                 print(f"[genre_detective] already running: {th.name if th else 'unknown'} (status={status}, alive={alive})")
                 return
 
-        # Mirror GEMINI_API_KEY from secrets into env so the worker inherits it
         try:
             gem_key = st.secrets.get("gemini", {}).get("api_key")
             if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
@@ -1875,10 +1874,10 @@ with st.sidebar:
                 enrich_file_in_place(
                     provider_name="gemini",
                     batch_size=20,
-                    sleep_between_batches=0.5,
-                    max_retries=2,
+                    sleep_between_batches=0.8,
+                    max_retries=4,
                     force=False,
-                    limit=10,
+                    limit=None,
                     io_mode="r2",
                     debug_dump_merges_to_r2=False,  # 👈 new: dump merged rows to R2 for inspection
                 )
@@ -1913,7 +1912,7 @@ with st.sidebar:
         t.start()
 
         try:
-            st.toast("Started genre detection in the background.")
+            st.toast("Started genre detection in the background.",duration="short")
         except Exception:
             st.info("Started genre detection in the background.")
 
@@ -6486,194 +6485,194 @@ elif page == "Normality":
             fig.update_layout(height=600, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, width="stretch")
     # ------------------------------ On This Day --------------------------------- #
-    elif page == "On This Day":
+elif page == "On This Day":
 
-        # ✅ Make sure dataset is loaded
-        if "current_df" not in st.session_state:
-            st.error("No dataset selected. Please go to the Home page and select a dataset.")
-            st.stop()
+    # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
 
-        df, current_label = require_current_df()
+    df, current_label = require_current_df()
 
-        import uuid
-        import streamlit.components.v1 as components
+    import uuid
+    import streamlit.components.v1 as components
 
-        # --- Safe Spotify URL helper ---
-        def safe_spotify_url(uri_value, item_type):
-            if isinstance(uri_value, str) and ":" in uri_value:
-                return f"https://open.spotify.com/{item_type}/{uri_value.split(':')[-1]}"
-            else:
-                return None
-
-        # --- Header ---
-        c1, c2, c3 = st.columns([1, 2, 1])
-        with c2:
-            st.html("<p style='text-align: center; font-size: 48px;'><em><b>On This Day</b></em></p>")
-
-        # --- Headlines dataset setup ---
-        headlines_df = INFO_HEADLINE.copy()
-        headlines_df.columns = (
-            headlines_df.columns
-            .str.strip()
-            .str.replace("\ufeff", "", regex=True)
-            .str.lower()
-        )
-
-        rename_map = {
-            "date (dd-mm-yyyy)": "date",
-            "webtitle": "web_title",
-            "short_description": "short_description",
-            "weburl": "web_url",
-            "imageurl": "image_url",
-            "section": "section",
-        }
-        headlines_df.rename(columns=rename_map, inplace=True)
-        headlines_df["date"] = pd.to_datetime(headlines_df["date"], format="%d-%m-%Y").dt.date
-
-        # --- Normalize listening dataframe ---
-        df["date"] = pd.to_datetime(df["datetime"]).dt.date
-
-        # --- Custom CSS targeting the real button class ---
-        st.markdown("""
-            <style>
-            button.st-emotion-cache-9dgoxq {
-                background-color: #0d5637 !important;
-                color: #e1ece3 !important;
-                font-weight: 600 !important;
-                font-size: 40px !important;
-                height: 80px !important;
-                border: none !important;
-                border-radius: 3px !important;
-                width: 100% !important;
-                box-shadow: 0 0 8px rgba(0,0,0,0.3) !important;
-                transition: all 0.2s ease-in-out !important;
-            }
-
-            button.st-emotion-cache-9dgoxq:hover {
-                background-color: #4f9668 !important;
-                color: #002918 !important;
-                transform: translateY(-2px) !important;
-            }
-            div.st-emotion-cache-1jfgbg4 {
-                font-size: 40px !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
-        # --- Session setup ---
-        if "random_date_display" not in st.session_state:
-            st.session_state["random_date_display"] = "Pick a Random Day"
-        if "valid_date" not in st.session_state:
-            st.session_state["valid_date"] = None
-        if "trigger_random" not in st.session_state:
-            st.session_state["trigger_random"] = True
-        if st.session_state["last_page"] != "On This Day":
-            st.session_state["trigger_random"] = True
-            st.session_state["last_page"] = "On This Day"
-
-        # --- Generate a random valid date ---
-        def generate_valid_date():
-            attempts = 0
-            while attempts < 1000:
-                attempts += 1
-                random_date = df["date"].sample(n=1).iloc[0]
-                has_news = not headlines_df[headlines_df["date"] == random_date].empty
-                has_listening = not df[df["date"] == random_date].empty
-                if has_news and has_listening:
-                    return random_date
+    # --- Safe Spotify URL helper ---
+    def safe_spotify_url(uri_value, item_type):
+        if isinstance(uri_value, str) and ":" in uri_value:
+            return f"https://open.spotify.com/{item_type}/{uri_value.split(':')[-1]}"
+        else:
             return None
 
-        # --- Handle trigger ---
-        if st.session_state["trigger_random"]:
-            valid_date = generate_valid_date()
-            if valid_date:
-                st.session_state["valid_date"] = valid_date
-                st.session_state["random_date_display"] = valid_date.strftime("%d %B %Y")
-            st.session_state["trigger_random"] = False
+    # --- Header ---
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>On This Day</b></em></p>")
 
-        # --- Render the styled button ---
-        trigger_button = st.button(
-            f"{st.session_state['random_date_display']}",
-            key="random_day",
-            width="stretch"
-        )
+    # --- Headlines dataset setup ---
+    headlines_df = INFO_HEADLINE.copy()
+    headlines_df.columns = (
+        headlines_df.columns
+        .str.strip()
+        .str.replace("\ufeff", "", regex=True)
+        .str.lower()
+    )
 
-        # --- Manual trigger ---
-        if trigger_button:
-            st.session_state["trigger_random"] = True
-            st.rerun()
+    rename_map = {
+        "date (dd-mm-yyyy)": "date",
+        "webtitle": "web_title",
+        "short_description": "short_description",
+        "weburl": "web_url",
+        "imageurl": "image_url",
+        "section": "section",
+    }
+    headlines_df.rename(columns=rename_map, inplace=True)
+    headlines_df["date"] = pd.to_datetime(headlines_df["date"], format="%d-%m-%Y").dt.date
 
-        # --- Display current date and content ---
-        if st.session_state.get("valid_date"):
-            valid_date = st.session_state["valid_date"]
+    # --- Normalize listening dataframe ---
+    df["date"] = pd.to_datetime(df["datetime"]).dt.date
 
-            # --- News Section ---
-            news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
+    # --- Custom CSS targeting the real button class ---
+    st.markdown("""
+        <style>
+        button.st-emotion-cache-9dgoxq {
+            background-color: #0d5637 !important;
+            color: #e1ece3 !important;
+            font-weight: 600 !important;
+            font-size: 40px !important;
+            height: 80px !important;
+            border: none !important;
+            border-radius: 3px !important;
+            width: 100% !important;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3) !important;
+            transition: all 0.2s ease-in-out !important;
+        }
 
-            # --- Listening Section ---
-            daily_df = df[df['date'] == valid_date]
-            top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
-            category = top_item['category']
+        button.st-emotion-cache-9dgoxq:hover {
+            background-color: #4f9668 !important;
+            color: #002918 !important;
+            transform: translateY(-2px) !important;
+        }
+        div.st-emotion-cache-1jfgbg4 {
+            font-size: 40px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-            track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
-            podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
-            audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
+    # --- Session setup ---
+    if "random_date_display" not in st.session_state:
+        st.session_state["random_date_display"] = "Pick a Random Day"
+    if "valid_date" not in st.session_state:
+        st.session_state["valid_date"] = None
+    if "trigger_random" not in st.session_state:
+        st.session_state["trigger_random"] = True
+    if st.session_state["last_page"] != "On This Day":
+        st.session_state["trigger_random"] = True
+        st.session_state["last_page"] = "On This Day"
 
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.subheader(f"**{news['web_title']}**")
+    # --- Generate a random valid date ---
+    def generate_valid_date():
+        attempts = 0
+        while attempts < 1000:
+            attempts += 1
+            random_date = df["date"].sample(n=1).iloc[0]
+            has_news = not headlines_df[headlines_df["date"] == random_date].empty
+            has_listening = not df[df["date"] == random_date].empty
+            if has_news and has_listening:
+                return random_date
+        return None
 
-            with col2:
-                if category == "music":
-                    st.subheader(f"{top_item['artist_name']}")
-                    st.write(f"**Album:** {top_item['album_name']}")
-                    st.write(f"**Track:** {top_item['track_name']}")
-                elif category == "podcast":
-                    st.subheader(f"**Show:** {top_item['episode_show_name']}")
-                    st.write(f"**Episode:** {top_item['episode_name']}")
-                elif category == "audiobook":
-                    st.subheader(f"**Book:** {top_item['audiobook_title']}")
-                    st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
+    # --- Handle trigger ---
+    if st.session_state["trigger_random"]:
+        valid_date = generate_valid_date()
+        if valid_date:
+            st.session_state["valid_date"] = valid_date
+            st.session_state["random_date_display"] = valid_date.strftime("%d %B %Y")
+        st.session_state["trigger_random"] = False
 
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if isinstance(news['image_url'], str) and news['image_url'].startswith("http"):
-                    st.image(news['image_url'], width='stretch')
-                st.write(news['short_description'])
+    # --- Render the styled button ---
+    trigger_button = st.button(
+        f"{st.session_state['random_date_display']}",
+        key="random_day",
+        width="stretch"
+    )
 
-            with col2:
-                if category == "music":
-                    album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
-                    artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
-                    if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                        st.image(artwork_url, width='stretch')
+    # --- Manual trigger ---
+    if trigger_button:
+        st.session_state["trigger_random"] = True
+        st.rerun()
 
-                elif category == "podcast":
-                    show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
-                    artwork_url = show_info['show_image'].iloc[0] if not show_info.empty else None
-                    if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                        st.image(artwork_url, width="stretch")
+    # --- Display current date and content ---
+    if st.session_state.get("valid_date"):
+        valid_date = st.session_state["valid_date"]
 
-                elif category == "audiobook":
-                    book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
-                    artwork_url = book_info['audiobook_image'].iloc[0] if not book_info.empty else None
-                    if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                        st.image(artwork_url, width="stretch")
+        # --- News Section ---
+        news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
 
-            col1, col2 = st.columns([1, 1])
-            with col1:
+        # --- Listening Section ---
+        daily_df = df[df['date'] == valid_date]
+        top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
+        category = top_item['category']
 
-                st.markdown(f"[Read more]({news['web_url']})")
+        track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
+        podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
+        audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
 
-            with col2:
-                if category == "music":
-                    st.markdown(f"[Listen again]({track_url})")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.subheader(f"**{news['web_title']}**")
 
-                elif category == "podcast":
-                    st.markdown(f"[Listen again]({podcast_url})")
+        with col2:
+            if category == "music":
+                st.subheader(f"{top_item['artist_name']}")
+                st.write(f"**Album:** {top_item['album_name']}")
+                st.write(f"**Track:** {top_item['track_name']}")
+            elif category == "podcast":
+                st.subheader(f"**Show:** {top_item['episode_show_name']}")
+                st.write(f"**Episode:** {top_item['episode_name']}")
+            elif category == "audiobook":
+                st.subheader(f"**Book:** {top_item['audiobook_title']}")
+                st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
 
-                elif category == "audiobook":
-                    st.markdown(f"[Listen again]({audiobook_url})")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if isinstance(news['image_url'], str) and news['image_url'].startswith("http"):
+                st.image(news['image_url'], width='stretch')
+            st.write(news['short_description'])
+
+        with col2:
+            if category == "music":
+                album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
+                artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width='stretch')
+
+            elif category == "podcast":
+                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
+                artwork_url = show_info['show_image'].iloc[0] if not show_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width="stretch")
+
+            elif category == "audiobook":
+                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
+                artwork_url = book_info['audiobook_image'].iloc[0] if not book_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width="stretch")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+
+            st.markdown(f"[Read more]({news['web_url']})")
+
+        with col2:
+            if category == "music":
+                st.markdown(f"[Listen again]({track_url})")
+
+            elif category == "podcast":
+                st.markdown(f"[Listen again]({podcast_url})")
+
+            elif category == "audiobook":
+                st.markdown(f"[Listen again]({audiobook_url})")
 
 # --------------------------------- FAQs ------------------------------------- #
 elif page == "FAQs":

@@ -1823,6 +1823,100 @@ with st.sidebar:
     label_to_table = dict(dataset_options)
     labels = list(label_to_table.keys())
 
+    def start_missing_genre_detective_task(dataset_label: str) -> None:
+        """
+        Start/ensure a single global background task for missing_genre_detective.
+        Uses task_registry() and a GLOBAL key (since the unlisted table is shared).
+        Detects stale entries and restarts if needed.
+        """
+        import os, threading, time, sys
+
+        reg = task_registry()
+        key = "genre_detective::GLOBAL"   # 🔒 single worker, regardless of dataset
+        entry = reg.get(key)
+
+        # Decide if we should (re)start
+        should_start = False
+        if not entry:
+            should_start = True
+        else:
+            th = entry.get("thread")
+            status = entry.get("status")
+            started_at = entry.get("started_at", 0)
+            alive = bool(th and th.is_alive())
+
+            # stale = no thread, or dead thread, or "starting" way too long without being alive
+            too_long = (time.time() - started_at) > 60 * 30  # 30 min
+            if not alive and status != "running":
+                should_start = True
+            elif status == "starting" and not alive and too_long:
+                print("[genre_detective] detected stale 'starting' entry (>30min) — restarting")
+                should_start = True
+            else:
+                print(f"[genre_detective] already running: {th.name if th else 'unknown'} (status={status}, alive={alive})")
+                return
+
+        # Mirror GEMINI_API_KEY from secrets into env so the worker inherits it
+        try:
+            gem_key = st.secrets.get("gemini", {}).get("api_key")
+            if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
+                os.environ["GEMINI_API_KEY"] = str(gem_key)
+                print("[genre_detective] GEMINI_API_KEY set from st.secrets")
+        except Exception as e:
+            print(f"[genre_detective] WARNING: cannot read st.secrets: {e}", file=sys.stderr)
+
+        # Worker (no st.* calls here)
+        def _worker(label_for_log: str) -> None:
+            try:
+                from missing_genre_detective import enrich_file_in_place
+                reg[key]["status"] = "running"
+                print(f"[genre_detective] ▶ starting (global) for '{label_for_log}'")
+                # R2 mode + debug dump enabled (see patch below)
+                enrich_file_in_place(
+                    provider_name="gemini",
+                    batch_size=20,
+                    sleep_between_batches=0.5,
+                    max_retries=2,
+                    force=False,
+                    limit=10,
+                    io_mode="r2",
+                    debug_dump_merges_to_r2=False,  # 👈 new: dump merged rows to R2 for inspection
+                )
+                reg[key]["status"] = "done"
+                print(f"[genre_detective] ✅ completed (global) for '{label_for_log}'")
+            except Exception as e:
+                reg[key]["status"] = "error"
+                reg[key]["error"] = str(e)
+                print(f"[genre_detective] ❌ error (global) for '{label_for_log}': {e}", file=sys.stderr)
+
+        t = threading.Thread(
+            target=_worker,
+            args=(dataset_label,),
+            name="genre_detective::GLOBAL",
+            daemon=True,
+        )
+
+        # attach Streamlit run context (best effort)
+        try:
+            from streamlit.runtime.scriptrunner import add_script_run_ctx
+            add_script_run_ctx(t)
+        except Exception:
+            pass
+
+        reg[key] = {
+            "thread": t,
+            "status": "starting",
+            "label": dataset_label,
+            "started_at": time.time(),
+            "error": None,
+        }
+        t.start()
+
+        try:
+            st.toast("Started genre detection in the background.")
+        except Exception:
+            st.info("Started genre detection in the background.")
+
     # ---------- Dataset Selection ----------
     if labels:
         previous_label = st.session_state.get("current_dataset_label")
@@ -1842,6 +1936,7 @@ with st.sidebar:
         ):
             selected_table = label_to_table[selected_label]
             try:
+                # ---- Load dataset from storage
                 df = user_dao.load_user_data(selected_table)
                 if df.empty:
                     st.warning("Loaded dataset is empty.")
@@ -1857,7 +1952,6 @@ with st.sidebar:
 
                 # ✅ Only trigger enrichment auto-check on dataset change
                 from dao_selector import get_log_dao
-
                 log_dao = get_log_dao()
                 _auto_check_and_reenrich_if_needed(
                     st.session_state.user["user_id"],
@@ -1872,6 +1966,12 @@ with st.sidebar:
     else:
         st.info("No datasets uploaded yet. You can add one from the Home page.")
 
+    # --- Ensure genre detective runs once per active dataset (even if no reload happened) ---
+    active_label = st.session_state.get("current_dataset_label") or (selected_label if labels else None)
+    if active_label:
+        start_missing_genre_detective_task(active_label)
+
+    # Existing status UI
     if st.session_state.get("current_dataset_label"):
         show_enrichment_status_sidebar(
             st.session_state.user["user_id"],
@@ -6129,7 +6229,7 @@ elif page == "Normality":
         # ----------------------------------------------------------------------
         # TABS FOR PHASES
         # ----------------------------------------------------------------------
-        tab1, tab2, tab3 = st.tabs(["Grid Search", "Fine-Tuning Search","Bayesian Optimization"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Grid Search", "Fine-Tuning Search","Bayesian Optimization", "Dimensionality Reduction "])
         shared_cmin, shared_cmax = 0, 1
 
         # ----------------------------------------------------------------------
@@ -6232,13 +6332,6 @@ elif page == "Normality":
             if df_bayes.empty:
                 st.info("No Bayesian optimization results available yet.")
             else:
-                st.dataframe(df_bayes.round(3).reset_index(drop=True), hide_index=True, width="stretch")
-
-                # ===============================================================
-                # Plot convergence if available
-                # ===============================================================
-                import re
-
                 # --- Debug info ---
                 print(f"[Normality] 🎯 Checking convergence keys for: {selected_genre} / {selected_quarter}")
                 print(f"[Normality] Available convergence keys (first 10): {list(convergence.keys())[:10]}")
@@ -6250,7 +6343,6 @@ elif page == "Normality":
                 if isinstance(selected_quarter, str) and selected_quarter.startswith(str(selected_year)):
                     quarter_str = selected_quarter
                 else:
-                    # e.g. Q1 → 2024Q1
                     quarter_str = f"{selected_year}Q{str(selected_quarter)[-1]}"
 
                 # --- Build expected convergence key ---
@@ -6267,32 +6359,132 @@ elif page == "Normality":
                 # --- Plot if found ---
                 if matching_key:
                     y_vals = convergence[matching_key]
-                    x_vals = list(range(1, len(y_vals) + 1))
-                    print(f"[Normality] ✅ Matched convergence key: {matching_key} ({len(y_vals)} points)")
+                    if not y_vals:
+                        st.info("No convergence data available for this key.")
+                    else:
+                        x_vals = np.arange(1, len(y_vals) + 1)
+                        p_vals = np.array(y_vals)
+                        mean_p = np.array([np.mean(p_vals[:i]) for i in range(1, len(p_vals)+1)])
+                        std_p = np.array([np.std(p_vals[:i]) for i in range(1, len(p_vals)+1)])
+                        best_p = np.maximum.accumulate(p_vals)
 
-                    fig_conv = px.line(
-                        x=x_vals,
-                        y=y_vals,
-                        markers=True,
-                        title=f"Bayesian Optimization Convergence — {selected_genre} ({quarter_str})",
-                        labels={"x": "Iteration", "y": "Best p-value"},
-                    )
+                        fig_conv = go.Figure()
 
-                    fig_conv.update_traces(line=dict(color="#1ed760", width=2.5))
-                    fig_conv.update_layout(
-                        height=300,
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="white"),
-                        margin=dict(t=40, b=40, l=40, r=40),
-                    )
+                        # --- Base line (original p-values by iteration) ---
+                        fig_conv.add_trace(go.Scatter(
+                            x=x_vals, y=p_vals,
+                            mode="lines+markers",
+                            name="Iteration p-values",
+                            line=dict(color="#71207d", width=1.5),
+                            marker=dict(size=6, color="#c46adb"),
+                            hovertemplate="Iter %{x}<br>p=%{y:.4f}<extra></extra>",
+                        ))
 
-                    st.plotly_chart(fig_conv, width="stretch", config={"displayModeBar": False})
+                        # --- Scatter: all samples ---
+                        fig_conv.add_trace(go.Scatter(
+                            x=x_vals, y=p_vals,
+                            mode="markers",
+                            name="Samples",
+                            marker=dict(size=5, color="rgba(255,255,255,0.3)"),
+                            hoverinfo="skip"
+                        ))
+
+                        # --- Line: best-so-far ---
+                        fig_conv.add_trace(go.Scatter(
+                            x=x_vals, y=best_p,
+                            mode="lines+markers",
+                            name="Best-so-far p",
+                            line=dict(color="#1ed760", width=3)
+                        ))
+
+                        # --- Line: mean p ---
+                        fig_conv.add_trace(go.Scatter(
+                            x=x_vals, y=mean_p,
+                            mode="lines",
+                            name="Mean p",
+                            line=dict(color="#90d7ad", width=2, dash="dot")
+                        ))
+
+                        # --- Band: ±1 std ---
+                        fig_conv.add_trace(go.Scatter(
+                            x=np.concatenate([x_vals, x_vals[::-1]]),
+                            y=np.concatenate([mean_p + std_p, (mean_p - std_p)[::-1]]),
+                            fill="toself",
+                            fillcolor="rgba(30,215,96,0.1)",
+                            line=dict(color="rgba(255,255,255,0)"),
+                            name="±1 Std"
+                        ))
+
+                        fig_conv.update_layout(
+                            height=350,
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            font=dict(color="white"),
+                            yaxis_title="Best p-value",
+                            xaxis_title="Iteration",
+                            legend=dict(
+                                orientation="h",
+                                x=0.5, xanchor="center",
+                                y=-0.25, yanchor="top",
+                                bgcolor="rgba(0,0,0,0)"
+                            ),
+                            margin=dict(t=40, b=40, l=40, r=40),
+                        )
+
+                        st.plotly_chart(fig_conv, use_container_width=True, config={"displayModeBar": False})
+
+                    st.dataframe(df_bayes.round(3).reset_index(drop=True), hide_index=True, width="stretch")
 
                 else:
                     print(f"[Normality] ⚠️ No match found for {expected_key}")
                     st.info("⚠️ No convergence data found for the selected genre and quarter.")
 
+        with tab4:
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.decomposition import PCA
+            from sklearn.manifold import TSNE
+            import plotly.express as px
+            import umap
+
+            # Example subset
+            df = df_all.copy()
+            df = df.groupby("genre")[["p_value", "kurtosis", "skew", "std_dev"]].mean().dropna()
+
+            X = df.values
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+
+            algo_list = ["PCA","TSNE","UMAP"]
+
+            algo_choice = st.segmented_control("Choose algorithm",algo_list, default="PCA")
+
+            if algo_choice == "PCA":
+                pca = PCA(n_components=2)
+                X_pca = pca.fit_transform(X_scaled)
+                df["x"], df["y"] = X_pca[:,0], X_pca[:,1]
+
+            elif algo_choice == "TSNE":
+                tsne = TSNE(n_components=2, perplexity=5, learning_rate='auto', random_state=42)
+                X_tsne = tsne.fit_transform(X_scaled)
+                df["x"], df["y"] = X_tsne[:,0], X_tsne[:,1]
+
+            else:
+                umap_model = umap.UMAP(n_neighbors=5, min_dist=0.3, metric="euclidean", random_state=42)
+                X_umap = umap_model.fit_transform(X_scaled)
+                df["x"], df["y"] = X_umap[:,0], X_umap[:,1]
+
+            fig = px.scatter(
+                df,
+                x="x", y="y",
+                color="p_value",
+                size="std_dev",
+                text=df.index,
+                color_continuous_scale="Viridis",
+                title="Genre Embedding Map (PCA/t-SNE/UMAP)"
+            )
+            fig.update_traces(textposition="top center")
+            fig.update_layout(height=600, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig, width="stretch")
     # ------------------------------ On This Day --------------------------------- #
     elif page == "On This Day":
 

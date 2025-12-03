@@ -916,7 +916,8 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             df_combined.drop_duplicates(subset=keys, keep="last", inplace=True)
 
         after = len(df_combined)
-        print(f"[merge_into_master] Merged {len(df_new)} new → total {after} (before={before})")
+        effective = after - before
+        print(f"[merge_into_master] Applied {len(df_new)} rows → Δ{effective} → total {after} (before={before})")
 
         # --- Sanity checks
         if after < before:

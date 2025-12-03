@@ -45,6 +45,45 @@ R2_KEY = "enrichment/metadata/info_artist_genre_unlisted.csv"
 DEBUG_DIR = "enrichment/debug/genre_detective"
 DEBUG_TAG_FMT = "%Y%m%d-%H%M%S"
 
+MASTER_ARTIST_KEY = "enrichment/metadata/info_artist_genre.csv"
+MASTER_LOCAL_PATH = "datasets/enrichment/info_artist_genre.csv"  # local fallback
+
+GENRE_MAP_R2_KEY = "regifted-data/reference/info_supergenre_map.csv"
+GENRE_MAP_LOCAL_PATH = "datasets/enrichment/reference_info_supergenre_map.csv"
+
+ALLOWED_SUPERGENRES = [
+    "Rock",
+    "House & EDM",
+    "Techno & Trance",
+    "Bass Music",
+    "Garage & Breaks",
+    "Ambient & Experimental Electronic",
+    "Pop",
+    "Hip Hop/Rap",
+    "Jazz",
+    "Classical/Orchestral",
+    "Folk/Acoustic",
+    "Metal",
+    "Punk/Hardcore",
+    "R&B/Soul",
+    "Reggae/Caribbean",
+    "Country/Americana",
+    "Latin",
+    "World/Traditional",
+    "Funk/Disco",
+    "Alternative/Indie",
+    "Blues",
+    "New Age/Meditation",
+    "Soundtrack/Instrumental",
+    "Novelty/Spoken Word",
+    "Other",
+]
+
+BAD_PRIMARY_GENRE_KEYS = {
+    "", "none", "no genre", "unknown", "unk", "null", "n/a", "na", "not set",
+    "unlisted", "tbd", "missing",
+}
+
 def _read_source_df(io_mode: str = "auto") -> pd.DataFrame:
     """
     Read the CSV either from R2 (recommended) or local, depending on io_mode:
@@ -88,11 +127,55 @@ def _write_source_df(df: pd.DataFrame, io_mode: str = "auto") -> None:
     # Local fallback
     df.to_csv(FILE_PATH, index=False)
 
-# Placeholders that should be treated as "missing" and NEVER mapped or merged
-BAD_PRIMARY_GENRE_KEYS = {
-    "", "none", "no genre", "unknown", "unk", "null", "n/a", "na", "not set",
-    "unlisted", "tbd", "missing",
-}
+def _read_master_df(io_mode: str = "auto") -> pd.DataFrame:
+    """
+    Load the master artist table from R2 (or local fallback).
+    Ensures required columns exist and names are normalized.
+    """
+    required = ["artist_id", "artist_name", "primary_genre", "supergenre", "artist_image"]
+    mode = (io_mode or "auto").lower()
+    if mode in {"r2", "auto"}:
+        try:
+            from dao_selector import get_daos, get_server_mode
+            if mode == "r2" or get_server_mode(default="cloudflare") == "cloudflare":
+                daos = get_daos()
+                metadata = daos.get("metadata") or daos.get("r2")
+                df = metadata.safe_download_csv(path=MASTER_ARTIST_KEY, required_cols=required)
+                return df
+        except Exception as e:
+            logging.warning(f"Master R2 read failed/NA ({e}); falling back to local.")
+    # local fallback
+    try:
+        df = pd.read_csv(MASTER_LOCAL_PATH)
+    except Exception:
+        df = pd.DataFrame(columns=required)
+    # normalize columns
+    df.columns = (
+        df.columns.astype(str)
+        .str.strip().str.lower()
+        .str.replace(r"[\u200b\xa0]", "", regex=True)
+    )
+    for col in required:
+        if col not in df.columns:
+            df[col] = pd.Series(dtype="object")
+    return df
+
+def _write_master_df(df: pd.DataFrame, io_mode: str = "auto") -> None:
+    """
+    Save the master artist table back to R2 (or local fallback).
+    """
+    mode = (io_mode or "auto").lower()
+    if mode in {"r2", "auto"}:
+        try:
+            from dao_selector import get_daos, get_server_mode
+            if mode == "r2" or get_server_mode(default="cloudflare") == "cloudflare":
+                daos = get_daos()
+                metadata = daos.get("metadata") or daos.get("r2")
+                metadata.upload_csv(df, path=MASTER_ARTIST_KEY, overwrite=True)
+                return
+        except Exception as e:
+            logging.warning(f"Master R2 write failed/NA ({e}); writing to local.")
+    df.to_csv(MASTER_LOCAL_PATH, index=False)
 
 def _is_placeholder_pg(s: object) -> bool:
     if s is None or pd.isna(s):
@@ -100,39 +183,6 @@ def _is_placeholder_pg(s: object) -> bool:
     return str(s).strip().lower() in BAD_PRIMARY_GENRE_KEYS
 
 # ---------------- Supergenre taxonomy (fixed 25) ----------------
-ALLOWED_SUPERGENRES = [
-    "Rock",
-    "House & EDM",
-    "Techno & Trance",
-    "Bass Music",
-    "Garage & Breaks",
-    "Ambient & Experimental Electronic",
-    "Pop",
-    "Hip Hop/Rap",
-    "Jazz",
-    "Classical/Orchestral",
-    "Folk/Acoustic",
-    "Metal",
-    "Punk/Hardcore",
-    "R&B/Soul",
-    "Reggae/Caribbean",
-    "Country/Americana",
-    "Latin",
-    "World/Traditional",
-    "Funk/Disco",
-    "Alternative/Indie",
-    "Blues",
-    "New Age/Meditation",
-    "Soundtrack/Instrumental",
-    "Novelty/Spoken Word",
-    "Other",
-]
-
-# Local path for the mapping dictionary (your current location)
-GENRE_MAP_LOCAL_PATH = "datasets/enrichment/reference_info_supergenre_map.csv"
-# R2 location for the unlisted table (already set earlier as R2_KEY)
-MASTER_ARTIST_KEY = "enrichment/metadata/info_artist_genre.csv"  # master table on R2
-
 def _norm(s: str) -> str:
     """Normalize genre strings for matching (lowercase, trim, collapse spaces)."""
     if s is None:
@@ -149,55 +199,121 @@ def _ensure_cols(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 
 def _load_genre_map() -> pd.DataFrame:
     """
-    Load your local mapping CSV and normalize columns.
-    Keep only valid (primary_genre, supergenre) pairs.
-    Drop placeholder primary genres (e.g. 'none') to avoid mass-assignment.
+    Load the genre map from R2 (preferred) or local fallback and normalize it.
+    - Accepts 'subgenre' (original) or legacy aliases ('primary_genre', 'genre', 'primary_subgenre').
+    - Internally we standardize to columns: 'primary_genre', 'supergenre', and add '__key'.
+    - Drops placeholder primary genres and blank supergenres.
     """
+    # 1) Try R2 first
+    gmap = None
     try:
-        gmap = pd.read_csv(GENRE_MAP_LOCAL_PATH)
-    except Exception:
-        gmap = pd.DataFrame(columns=["primary_genre", "supergenre"])
+        from dao_selector import get_daos, get_server_mode
+        daos = get_daos()
+        metadata = daos.get("metadata") or daos.get("r2")
+        if metadata is not None:
+            # safe_download_csv lowercases/normalizes cols and ensures required cols
+            gmap = metadata.safe_download_csv(
+                path=GENRE_MAP_R2_KEY,
+                required_cols=["subgenre", "supergenre"],
+            )
+            logging.info(f"[genre_map] Loaded from R2: {GENRE_MAP_R2_KEY} (rows={len(gmap)})")
+    except Exception as e:
+        logging.warning(f"[genre_map] R2 load failed/NA ({e}); falling back to local file.")
 
-    # Normalize column names
+    # 2) Fallback: local file
+    if gmap is None or gmap.empty:
+        try:
+            gmap = pd.read_csv(GENRE_MAP_LOCAL_PATH)
+            logging.info(f"[genre_map] Loaded from local: {GENRE_MAP_LOCAL_PATH} (rows={len(gmap)})")
+        except Exception:
+            gmap = pd.DataFrame(columns=["subgenre", "supergenre"])
+            logging.info("[genre_map] No local map found; starting empty.")
+
+    # 3) Normalize column names
     gmap.columns = (
-        gmap.columns.astype(str).str.strip().str.lower()
+        gmap.columns.astype(str)
+        .str.strip()
+        .str.lower()
         .str.replace(r"[\u200b\xa0]", "", regex=True)
     )
 
-    # Map column aliases
-    if "primary_genre" not in gmap.columns:
-        for cand in ["subgenre", "genre", "primary_subgenre"]:
-            if cand in gmap.columns:
-                gmap.rename(columns={cand: "primary_genre"}, inplace=True)
-                break
+    # 4) Identify the subgenre source column
+    sub_col = None
+    for cand in ["subgenre", "primary_genre", "genre", "primary_subgenre"]:
+        if cand in gmap.columns:
+            sub_col = cand
+            break
 
+    if sub_col is None:
+        # Nothing usable → return normalized empty
+        out = pd.DataFrame(columns=["primary_genre", "supergenre"])
+        out["__key"] = pd.Series(dtype="object")
+        return out
+
+    # Ensure 'supergenre' exists
     if "supergenre" not in gmap.columns:
         gmap["supergenre"] = ""
 
-    # Keep only the two columns we need
-    gmap = gmap[["primary_genre", "supergenre"]].copy()
+    # 5) Build internal canonical view
+    gmap = gmap[[sub_col, "supergenre"]].copy()
+    gmap.rename(columns={sub_col: "primary_genre"}, inplace=True)
 
-    # Drop placeholders and blanks from the map
+    # 6) Clean & filter
     gmap = gmap[~gmap["primary_genre"].apply(_is_placeholder_pg)]
     gmap["supergenre"] = gmap["supergenre"].astype(str).str.strip()
     gmap = gmap[gmap["supergenre"] != ""]
 
-    # Normalized key
+    # 7) Create normalized key for joins and dedupe
     gmap["__key"] = gmap["primary_genre"].map(_norm)
-    # Deduplicate on normalized key
     gmap = gmap.drop_duplicates(subset="__key", keep="first")
+
     return gmap
 
 def _save_genre_map(gmap: pd.DataFrame) -> None:
-    """Persist updated map locally; keep only (primary_genre, supergenre) columns."""
-    out = gmap[["primary_genre", "supergenre"]].copy()
-    out.to_csv(GENRE_MAP_LOCAL_PATH, index=False)
+    """
+    Persist updated map to R2 (preferred) or local fallback using ORIGINAL columns:
+      - 'subgenre' (NOT 'primary_genre')
+      - 'supergenre'
+    Drops empties and dedupes on normalized subgenre.
+    """
+    # 1) Build output in original schema
+    if "primary_genre" in gmap.columns:
+        out = gmap[["primary_genre", "supergenre"]].copy()
+        out.rename(columns={"primary_genre": "subgenre"}, inplace=True)
+    elif "subgenre" in gmap.columns and "supergenre" in gmap.columns:
+        out = gmap[["subgenre", "supergenre"]].copy()
+    else:
+        out = pd.DataFrame(columns=["subgenre", "supergenre"])
+
+    # 2) Normalize and dedupe
+    out["subgenre"] = out["subgenre"].astype(str).str.strip()
+    out["supergenre"] = out["supergenre"].astype(str).str.strip()
+    out = out[(out["subgenre"] != "") & (out["supergenre"] != "")]
+    out["__key"] = out["subgenre"].map(_norm)
+    out = out.drop_duplicates(subset="__key", keep="first").drop(columns="__key", errors="ignore")
+
+    # 3) Try R2 first
+    wrote = False
+    try:
+        from dao_selector import get_daos, get_server_mode
+        daos = get_daos()
+        metadata = daos.get("metadata") or daos.get("r2")
+        if metadata is not None:
+            metadata.upload_csv(out, path=GENRE_MAP_R2_KEY, overwrite=True)
+            logging.info(f"[genre_map] Saved to R2: {GENRE_MAP_R2_KEY} (rows={len(out)})")
+            wrote = True
+    except Exception as e:
+        logging.warning(f"[genre_map] R2 save failed/NA ({e}); falling back to local file.")
+
+    # 4) Fallback: local file
+    if not wrote:
+        out.to_csv(GENRE_MAP_LOCAL_PATH, index=False)
+        logging.info(f"[genre_map] Saved locally: {GENRE_MAP_LOCAL_PATH} (rows={len(out)})")
 
 # ---------------- Exceptions ----------------
 class TransientProviderError(Exception):
     """Retryable provider failure (timeouts, gateway errors, transient network)."""
     pass
-
 
 # ---------------- Adaptive controller ----------------
 import random
@@ -670,6 +786,85 @@ def _get_gemini_api_key() -> str:
         "GEMINI_API_KEY is not set. Set the env var or add [gemini].api_key in secrets.toml."
     )
 
+def _reassign_other_supergenres_from_map(
+    *,
+    io_mode: str = "auto",
+    debug_dump_to_r2: bool = False,
+) -> int:
+    """
+    Reassigns supergenres in the MASTER table where supergenre == 'Other'
+    using the local genre map (primary_genre -> supergenre).
+    Returns: number of rows updated in the master.
+    """
+    # Load master + map
+    dfm = _read_master_df(io_mode=io_mode)
+    gmap = _load_genre_map()  # already scrubs placeholders and blanks
+
+    if dfm.empty:
+        logging.info("Master is empty; nothing to fix.")
+        return 0
+
+    # Normalize convenience columns
+    dfm = _ensure_cols(dfm, ["artist_id", "primary_genre", "supergenre"])
+    dfm["__key"] = dfm["primary_genre"].map(_norm)
+
+    # Build mapping dict
+    map_dict = dict(zip(gmap["__key"], gmap["supergenre"]))
+
+    # Candidates: currently 'Other' + primary_genre is not placeholder
+    sg = dfm["supergenre"].astype(str).str.strip().str.lower()
+    is_other = sg.eq("other")
+    not_placeholder_pg = ~dfm["primary_genre"].apply(_is_placeholder_pg)
+
+    cand_mask = is_other & not_placeholder_pg
+
+    # Proposed new supergenre from map
+    proposed = dfm["__key"].map(map_dict)
+
+    # Accept only non-empty and not 'Other'
+    def _valid_super(x: object) -> bool:
+        if pd.isna(x):
+            return False
+        s = str(x).strip()
+        return s != "" and s.lower() != "other"
+
+    accept_mask = cand_mask & proposed.apply(_valid_super)
+
+    # Prepare debug dump (before/after)
+    changed_rows = pd.DataFrame()
+    if accept_mask.any():
+        changed_rows = dfm.loc[accept_mask, ["artist_id", "artist_name", "primary_genre", "supergenre", "artist_image"]].copy()
+        dfm.loc[accept_mask, "supergenre"] = proposed[accept_mask].astype(str).str.strip()
+
+    updated = int(accept_mask.sum())
+
+    # Write debug CSV if requested
+    if debug_dump_to_r2 and updated > 0:
+        try:
+            from dao_selector import get_daos
+            daos = get_daos()
+            metadata = daos.get("metadata") or daos.get("r2")
+            ts = time.strftime(DEBUG_TAG_FMT)
+            path_dbg = f"{DEBUG_DIR}/other_fix_{ts}.csv"
+            metadata.upload_csv(changed_rows.assign(new_supergenre=dfm.loc[accept_mask, 'supergenre']),
+                                path=path_dbg, overwrite=True)
+            logging.info(f"[debug] Uploaded 'Other' fixes → {path_dbg}")
+        except Exception as e:
+            logging.warning(f"[debug] Failed to upload 'Other' fixes CSV: {e}")
+
+    # Persist the master back
+    if updated > 0:
+        _write_master_df(dfm.drop(columns=["__key"], errors="ignore"), io_mode=io_mode)
+        logging.info(f"'Other' remediation: updated {updated} row(s) in master.")
+    else:
+        logging.info("'Other' remediation: no rows needed updating.")
+
+    # Clean tmp col if we didn't write above (no-op if we rewrote)
+    if "__key" in dfm.columns:
+        dfm.drop(columns=["__key"], inplace=True, errors="ignore")
+
+    return updated
+
 # ------------------------------------------------------------------------------
 # Core enrichment (in-memory)
 # ------------------------------------------------------------------------------
@@ -1039,14 +1234,33 @@ def enrich_file_in_place(
     force: bool = False,
     limit: int | None = None,
     io_mode: str = "auto",            # "auto" | "r2" | "local"
-    debug_dump_merges_to_r2: bool = False,   # 👈 NEW
+    debug_dump_merges_to_r2: bool = False,
+    run_other_fix_when_unlisted_empty: bool = True,   # 👈 NEW
+    debug_dump_other_fix_to_r2: bool = False,         # 👈 NEW
 ) -> int:
+    """
+    Phase 1 (default): enrich Unlisted → map supergenre → merge to master → prune Unlisted.
+    Phase 2 (conditional): if Unlisted is empty, reassign 'Other' in master using the genre map.
+    Returns: number of rows updated in Phase 1 (primary-genre updates).
+    """
+    # --- Load Unlisted upfront
     logging.info(f"Loading CSV via io_mode='{io_mode}' (key/path: {R2_KEY if io_mode!='local' else FILE_PATH})")
     df = _read_source_df(io_mode=io_mode)
 
+    # --- If Unlisted is empty → run 'Other' remediation (Phase 2) and exit early
+    if run_other_fix_when_unlisted_empty and df.empty:
+        logging.info("Unlisted is empty. Running 'Other' remediation against master...")
+        updated_other = _reassign_other_supergenres_from_map(
+            io_mode=io_mode,
+            debug_dump_to_r2=debug_dump_other_fix_to_r2,
+        )
+        logging.info(f"'Other' remediation completed: {updated_other} updated.")
+        return 0  # no primary-genre updates were needed in this path
+
+    # --- Phase 1: normal primary-genre enrichment on Unlisted
     prev_super = df["supergenre"].copy() if "supergenre" in df.columns else pd.Series(index=df.index, dtype="object")
 
-    # choose provider (unchanged) ...
+    # Choose provider
     pname = provider_name.lower()
     if pname == "openai":
         provider = OpenAIProvider()
@@ -1057,7 +1271,7 @@ def enrich_file_in_place(
     else:
         raise ValueError(f"Unknown provider: {provider_name}")
 
-    # (1–3) primary genre
+    # 1–3: primary_genre enrichment
     updated_df, n_primary = enrich_dataframe_with_primary_genre(
         df=df,
         provider=provider,
@@ -1069,15 +1283,16 @@ def enrich_file_in_place(
     )
     logging.info(f"Primary-genre enrichment updated {n_primary} row(s).")
 
-    # (4–10) supergenre mapping + merge + prune, with debug dump
+    # 4–10: supergenre mapping + merge + prune (with optional debug dumps)
     try:
         updated_df, n_pairs, n_artists = _map_supergenres_and_update(
             updated_df,
             provider,
             io_mode=io_mode,
-            merge_scope="all_assigned",          # fresh analysis (your requirement)
-            debug_dump_merges_to_r2=debug_dump_merges_to_r2,  # 👈 NEW
-            debug_prev_super=prev_super,         # we’ll also dump “newly_assigned” for clarity
+            merge_scope="all_assigned",                # fresh analysis
+            debug_dump_merges_to_r2=debug_dump_merges_to_r2,
+            debug_prev_super=prev_super,               # enables newly_assigned debug file
+            max_retries=max_retries,                   # pass adaptive retry budget
         )
         logging.info(f"Supergenre mapping: added {n_pairs} new map pair(s); merged {n_artists} artist(s) into master.")
     except InsufficientQuotaError as e:
@@ -1086,10 +1301,22 @@ def enrich_file_in_place(
     except Exception as e:
         logging.warning(f"Supergenre mapping phase skipped/failed: {e}")
 
+    # Write Unlisted back
     logging.info(f"Writing CSV via io_mode='{io_mode}' (key/path: {R2_KEY if io_mode!='local' else FILE_PATH})")
     _write_source_df(updated_df, io_mode=io_mode)
     logging.info(f"Wrote CSV. Primary-genre rows updated: {n_primary}")
+
+    # --- If Unlisted is now empty → run 'Other' remediation (Phase 2)
+    if run_other_fix_when_unlisted_empty and updated_df.empty:
+        logging.info("Unlisted is now empty after Phase 1. Running 'Other' remediation...")
+        updated_other = _reassign_other_supergenres_from_map(
+            io_mode=io_mode,
+            debug_dump_to_r2=debug_dump_other_fix_to_r2,
+        )
+        logging.info(f"'Other' remediation completed: {updated_other} updated.")
+
     return n_primary
+
 # ------------------------------------------------------------------------------
 # CLI
 # ------------------------------------------------------------------------------

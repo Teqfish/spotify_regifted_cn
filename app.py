@@ -4547,6 +4547,180 @@ elif page == "Genres":
     with c4:
         scorecard("Favourite Track", fav_track_display)
 
+    # ---------------- Treemap -------------- #
+    st.markdown("### Top Genres for Selected Year (Treemap with Drilldown)")
+
+    try:
+        import plotly.graph_objects as go
+
+        # --- 1) Aggregate total minutes by genre for the selected year ---
+        genre_totals = (
+            df_year[
+                df_year["supergenre"].notna()
+                & (df_year["supergenre"].str.strip() != "")
+                & (df_year["supergenre"].str.lower() != "unlisted")
+            ]
+            .groupby("supergenre", as_index=False)["minutes_played"]
+            .sum()
+        )
+
+        if genre_totals.empty:
+            st.info("No genre data found for this year selection.")
+        else:
+            # Keep Top 10 genres by total time
+            top10_genres = (
+                genre_totals.sort_values("minutes_played", ascending=False)
+                .head(10)
+                .copy()
+            )
+            top10_genre_names = top10_genres["supergenre"].tolist()
+
+            # --- 2) Compute per-artist minutes for those genres (selected year) ---
+            df_candidates = df_year[df_year["supergenre"].isin(top10_genre_names)].copy()
+            per_artist = (
+                df_candidates
+                .groupby(["supergenre", "artist_name"], as_index=False)["minutes_played"]
+                .sum()
+            )
+
+            # Top artist per genre for the parent tile subtitle
+            top_artist_per_genre = (
+                per_artist
+                .sort_values(["supergenre", "minutes_played"], ascending=[True, False])
+                .drop_duplicates(subset=["supergenre"])
+                .rename(columns={"artist_name": "top_artist"})
+            )
+
+            # Top 10 artists *within each* genre (for drilldown)
+            per_artist_sorted = per_artist.sort_values(
+                ["supergenre", "minutes_played"], ascending=[True, False]
+            )
+            top10_artists_each_genre = (
+                per_artist_sorted.groupby("supergenre", as_index=False).head(10).copy()
+            )
+            
+            # Merge to decorate parent tiles with their top artist
+            genres_with_top = top10_genres.merge(
+                top_artist_per_genre[["supergenre", "top_artist"]],
+                on="supergenre",
+                how="left"
+            ).copy()
+
+            # --- 3) Colors: sample neon palette for genres; reuse for children ---
+            n_genres = len(genres_with_top)
+            positions = [i / max(1, n_genres - 1) for i in range(n_genres)]
+
+            # Resolve colorscale robustly: neon_colorscale -> neon_coloscale (typo) -> spotify_colorscale
+            neon_scale = None
+            try:
+                neon_scale = neon_colorscale
+            except Exception:
+                try:
+                    neon_scale = neon_coloscale  # in case the var was misspelled
+                except Exception:
+                    neon_scale = None
+
+            try:
+                if neon_scale is not None:
+                    genre_colors = sample_colorscale(neon_scale, positions)
+                else:
+                    genre_colors = sample_colorscale(spotify_colorscale, positions)
+            except Exception:
+                genre_colors = sample_colorscale(spotify_colorscale, positions)
+
+            # Reverse for a pleasing ramp, largest often gets the first bold hue
+            genres_with_top = genres_with_top.reset_index(drop=True)
+            genre_colors = genre_colors[::-1]
+            color_by_genre = dict(zip(genres_with_top["supergenre"], genre_colors))
+
+            # --- 4) Build hierarchical arrays with UNIQUE ids ---
+            ids = []        # unique node ids (required to disambiguate duplicates)
+            labels = []     # display labels (genre or artist)
+            parents = []    # parent ids ("" for root level)
+            values = []     # minutes
+            texts = []      # what we print inside each tile
+            colors = []     # per-node color
+            custom = []     # HH:MM:SS for hover
+
+            # Helper: safe unique ids
+            def gid(genre: str) -> str:
+                return f"g|{genre}"
+
+            def aid(genre: str, artist: str) -> str:
+                return f"a|{genre}|{artist}"
+
+            # Parent GENRE nodes
+            for _, row in genres_with_top.iterrows():
+                g = str(row["supergenre"])
+                total_min = float(row["minutes_played"])
+                top_artist = (row.get("top_artist") or "N/A")
+                c = color_by_genre.get(g, "#888888")
+
+                ids.append(gid(g))
+                labels.append(g)                  # big label = Genre
+                parents.append("")                # root
+                values.append(total_min)          # total minutes for the genre
+                texts.append(top_artist)          # show top artist on the genre tile
+                colors.append(c)
+                custom.append(format_hhmmss(total_min))
+
+                # Child ARTIST nodes (Top 10 within this genre)
+                child_rows = top10_artists_each_genre[top10_artists_each_genre["supergenre"] == g]
+                for _, cr in child_rows.iterrows():
+                    artist = str(cr["artist_name"])
+                    mins = float(cr["minutes_played"])
+
+                    ids.append(aid(g, artist))
+                    labels.append(artist)         # child label = Artist
+                    parents.append(gid(g))        # parent is the genre's id
+                    values.append(mins)           # artist minutes within genre
+                    texts.append(format_hhmmss(mins))  # display time on child tile
+                    colors.append(c)              # reuse parent's color for cohesion
+                    custom.append(format_hhmmss(mins))
+
+            # --- 5) Treemap with explicit ids (fixes drilldown) ---
+            fig_treemap = go.Figure(
+                go.Treemap(
+                    ids=ids,
+                    labels=labels,
+                    parents=parents,
+                    values=values,
+                    text=texts,
+                    textinfo="label+text",               # show label (genre/artist) + text
+                    texttemplate="<b>%{label}</b><br>%{text}",
+                    hovertemplate="<b>%{label}</b><br>"
+                                    "Value: %{value} min<br>"
+                                    "Time: %{customdata}<extra></extra>",
+                    customdata=custom,
+                    marker=dict(colors=colors),
+                    tiling=dict(pad=4, squarifyratio=1),
+                    # 'remainder' = parent value is its own total; children occupy part of it
+                    branchvalues="remainder",
+                    pathbar=dict(visible=True),          # breadcrumb for navigation
+                    maxdepth=1,                          # start collapsed at genre level
+                    root_color="rgba(0,0,0,0)",
+                )
+            )
+
+            # --- 6) Styling consistent with your theme ---
+            fig_treemap.update_layout(
+                height=500,
+                margin=dict(l=0, r=0, t=30, b=0),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+            )
+            fig_treemap.update_traces(textfont=dict(color="#000B06", size=12, family="Arial"))
+
+            st.plotly_chart(
+                fig_treemap,
+                use_container_width=True,
+                config={"displayModeBar": False, "responsive": True},
+            )
+
+    except Exception as e:
+        st.error(f"Failed to build Treemap with drilldown: {e}")
+
     # ------------- Top 10 Chart ----------------------- #
     st.markdown("### Top Tracks in Selected Genre")
 
@@ -4696,6 +4870,137 @@ elif page == "Genres":
             carousel(items=album_image_list, wrap=False, container_height=500)
         else:
             st.info("No album images available for this timeframe.")
+
+    # ------------ Top 10 Genres ----------- #
+    with c1:
+        st.markdown("### Top Genres for Selected Year")
+        try:
+            # --- 1) Aggregate total minutes by genre for the selected year ---
+            # We exclude null/blank genres and "unlisted"
+            genre_totals = (
+                df_year[
+                    df_year["supergenre"].notna()
+                    & (df_year["supergenre"].str.strip() != "")
+                    & (df_year["supergenre"].str.lower() != "unlisted")
+                ]
+                .groupby("supergenre", as_index=False)["minutes_played"]
+                .sum()
+            )
+
+            # If nothing to show, bail out early
+            if genre_totals.empty:
+                st.info("No genre data found for this year selection.")
+            else:
+                # Keep Top 10 genres by total time
+                top10_genres = (
+                    genre_totals.sort_values("minutes_played", ascending=False)
+                    .head(10)
+                    .copy()
+                )
+
+                # --- 2) Find the top artist per each of those Top 10 genres (this year) ---
+                df_candidates = df_year[df_year["supergenre"].isin(top10_genres["supergenre"])].copy()
+
+                # Sum per (genre, artist), then pick the artist with the highest time for each genre
+                top_artist_per_genre = (
+                    df_candidates
+                    .groupby(["supergenre", "artist_name"], as_index=False)["minutes_played"]
+                    .sum()
+                    .sort_values(["supergenre", "minutes_played"], ascending=[True, False])
+                    .drop_duplicates(subset=["supergenre"])
+                    .rename(columns={"artist_name": "top_artist"})
+                )
+
+                # Merge back to get a tidy table with totals + the top artist name
+                plot_df = top10_genres.merge(
+                    top_artist_per_genre[["supergenre", "top_artist"]],
+                    on="supergenre",
+                    how="left"
+                )
+
+                # --- 3) Prepare colors: sample from neon_colorscale (fallback to spotify_colorscale) ---
+                n = len(plot_df)
+                positions = [i / max(1, n - 1) for i in range(n)]  # 0..1 spaced
+
+                try:
+                    # If neon_colorscale and sample_colorscale are available, use them
+                    sampled = sample_colorscale(neon_colorscale, positions)
+                except Exception:
+                    # Fallback to Spotify colors if neon isn't available
+                    # (also keeps the code resilient if neon_colorscale isn't defined)
+                    sampled = sample_colorscale(spotify_colorscale, positions)
+
+                # Reverse so the longest bar (which will be at the bottom in h-bar ascending sort) pops
+                plot_df = plot_df.reset_index(drop=True)
+                plot_df["color"] = sampled[::-1]
+
+                # For pretty x-axis tick labels later
+                plot_df["hhmmss"] = plot_df["minutes_played"].apply(format_hhmmss)
+
+                # --- 4) Build the horizontal bar chart ---
+                # Sort ascending so Plotly places the largest at the bottom (clean ladder look)
+                plot_df_sorted = plot_df.sort_values("minutes_played", ascending=True)
+
+                fig_top_genres = px.bar(
+                    plot_df_sorted,
+                    x="minutes_played",
+                    y="supergenre",
+                    text="top_artist",            # label inside bar = top artist
+                    orientation="h",
+                    color="color",
+                    color_discrete_map="identity",
+                    labels={
+                        "minutes_played": "Listening Time (HH:MM:SS)",
+                        "supergenre": "",
+                        "top_artist": "Top Artist"
+                    },
+                )
+
+                # Format x-axis ticks as HH:MM:SS
+                max_minutes = plot_df_sorted["minutes_played"].max()
+                tick_interval = max_minutes / 5 if max_minutes > 0 else 1
+                # Build integer tick positions (defensive cast)
+                tickvals = [int(i) for i in range(0, int(max_minutes) + 1, max(1, int(tick_interval)))]
+                ticktext = [format_hhmmss(x) for x in tickvals]
+
+                fig_top_genres.update_xaxes(
+                    title="Listening Time (HH:MM:SS)",
+                    tickvals=tickvals,
+                    ticktext=ticktext,
+                    showgrid=False,
+                )
+
+                # Style the text to sit nicely inside the bars
+                fig_top_genres.update_traces(
+                    texttemplate="%{text}",
+                    textposition="inside",
+                    insidetextanchor="middle",
+                    insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+                    hovertemplate="<b>%{y}</b><br>Top Artist: %{text}<br>Total: %{x} min<br>Time: %{customdata}",
+                    customdata=plot_df_sorted["hhmmss"],
+                )
+
+                # Layout styling to match your theme
+                fig_top_genres.update_layout(
+                    height=500,
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e1ece3", size=14),
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(showgrid=False),
+                    margin=dict(l=0, r=0, t=30, b=0),
+                    showlegend=False,
+                )
+
+                # Render the chart
+                st.plotly_chart(
+                    fig_top_genres,
+                    use_container_width=True,
+                    config={"displayModeBar": False, "responsive": True},
+                )
+
+        except Exception as e:
+            st.error(f"Failed to build Top Genres chart: {e}")
 
     # ===============================================================
     # LISTENING TREND (GENRE vs OVERALL)

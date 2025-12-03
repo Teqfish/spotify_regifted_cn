@@ -1,10 +1,14 @@
-primary_genre,supergenre
+subgenre,supergenre
 21st century classical,Classical/Orchestral
 432hz,New Age/Meditation
 48g,Pop
+50s pop,Pop
 5th wave emo,Punk/Hardcore
+60s pop,Pop
 8-bit,Ambient & Experimental Electronic
+80s Pop,Pop
 8d,Other
+90s pop,Pop
 A cappella,Pop
 Aarhus indie,Alternative/Indie
 Aberdeen indie,Alternative/Indie
@@ -27,6 +31,7 @@ Acid trance,Techno & Trance
 Acidcore,Bass Music
 Acousmatic,Ambient & Experimental Electronic
 Acoustic,Folk/Acoustic
+Acoustic World Fusion,World/Traditional
 Acoustic blues,Blues
 Acoustic chill,Folk/Acoustic
 Acoustic cover,Folk/Acoustic
@@ -42,6 +47,7 @@ Adivasi pop,Pop
 Adoracao,R&B/Soul
 Adoracion,R&B/Soul
 Adoracion pentecostal,R&B/Soul
+Adult Contemporary,Pop
 Adult standards,Pop
 Adventista,R&B/Soul
 Aesthetic rap,Hip Hop/Rap
@@ -49,6 +55,7 @@ Afghan pop,Pop
 Afghan rap,Hip Hop/Rap
 Afghan traditional,World/Traditional
 African,World/Traditional
+African Folk,World/Traditional
 African electronic,House & EDM
 African experimental,Alternative/Indie
 African gospel,R&B/Soul
@@ -67,6 +74,7 @@ Afro house,House & EDM
 Afro psych,Rock
 Afro r&b,R&B/Soul
 Afro soul,R&B/Soul
+Afro-Brazilian,World/Traditional
 Afro-cuban,Latin
 Afro-cuban jazz,Jazz
 Afro-cuban percussion,World/Traditional
@@ -103,11 +111,15 @@ Alberta hip hop,Hip Hop/Rap
 Album rock,Rock
 Albuquerque indie,Alternative/Indie
 Aleatoric,Classical/Orchestral
+Algerian classical,Classical/Orchestral
 Algerian folk,Folk/Acoustic
 Alpenpanorama,Folk/Acoustic
 Alphorn,World/Traditional
 Alpine yodeling,Folk/Acoustic
+Alt country,Country/Americana
 Alt z,Pop
+Alt-Country,Country/Americana
+Alt-R&B,R&B/Soul
 Alt-idol,Pop
 Alt-pop,Pop
 Alte,World/Traditional
@@ -128,6 +140,9 @@ Alternative roots rock,Rock
 Amapiano,World/Traditional
 Ambeat,Hip Hop/Rap
 Ambient,Ambient & Experimental Electronic
+Ambient Drone,Ambient & Experimental Electronic
+Ambient Electronic,Ambient & Experimental Electronic
+Ambient Jazz,Jazz
 Ambient black metal,Metal
 Ambient dub techno,Ambient & Experimental Electronic
 Ambient folk,Folk/Acoustic
@@ -158,6 +173,7 @@ American post-rock,Alternative/Indie
 American primitive,Folk/Acoustic
 American romanticism,Classical/Orchestral
 American shoegaze,Alternative/Indie
+Americana,Country/Americana
 Amharic pop,Pop
 Anadolu rock,Rock
 Anarcho-punk,Punk/Hardcore
@@ -243,6 +259,7 @@ Arunachal indie,Alternative/Indie
 Asakaa,World/Traditional
 Asbury park indie,Alternative/Indie
 Asheville indie,Alternative/Indie
+Asian Underground,Ambient & Experimental Electronic
 Asian american hip hop,Hip Hop/Rap
 Asmr,New Age/Meditation
 Assamese hip hop,Hip Hop/Rap
@@ -389,6 +406,7 @@ Balkan brass,World/Traditional
 Balkan classical piano,Classical/Orchestral
 Balkan drill,Hip Hop/Rap
 Balkan folk metal,Metal
+Balkan fusion,World/Traditional
 Balkan hip hop,Hip Hop/Rap
 Balkan post punk,Rock
 Balkan punk,Punk/Hardcore
@@ -445,6 +463,7 @@ Barnmusik,Novelty/Spoken Word
 Barnsagor,Novelty/Spoken Word
 Barockinterpreten,Classical/Orchestral
 Baroque,Classical/Orchestral
+Baroque Classical,Classical/Orchestral
 Baroque brass,Classical/Orchestral
 Baroque cello,Classical/Orchestral
 Baroque ensemble,Classical/Orchestral
@@ -662,6 +681,7 @@ Brass band brasileiro,Latin
 Brass ensemble,Classical/Orchestral
 Brass instrument,Classical/Orchestral
 Brass quintet,Classical/Orchestral
+Brasshouse,House & EDM
 Brazilian bass,Bass Music
 Brazilian black metal,Metal
 Brazilian blues,Blues
@@ -707,7 +727,7 @@ Brazilian surf rock,Rock
 Brazilian tech house,House & EDM
 Brazilian techno,Techno & Trance
 Brazilian thrash metal,Metal
-Break-in,Garage & Breaks
+Break-in,Other
 Breakbeat,Garage & Breaks
 Breakcore,Bass Music
 Breaks,Garage & Breaks
@@ -726,6 +746,7 @@ Bristol indie,Alternative/Indie
 Brit funk,Funk/Disco
 Brit pop,Rock
 Britcore,Punk/Hardcore
+British Beat,Rock
 British alternative rock,Alternative/Indie
 British black metal,Metal
 British blues,Blues
@@ -1008,6 +1029,7 @@ Chilean indie,Alternative/Indie
 Chilean metal,Metal
 Chilean rock,Rock
 Chilena,Latin
+Chill Electronic,Ambient & Experimental Electronic
 Chill baile,Latin
 Chill beats,Hip Hop/Rap
 Chill breakcore,Bass Music
@@ -1018,6 +1040,7 @@ Chill lounge,Pop
 Chill out,Ambient & Experimental Electronic
 Chill pop,Pop
 Chill r&b,R&B/Soul
+Chill-out,Ambient & Experimental Electronic
 Chill-out trance,Techno & Trance
 Chillhop,Hip Hop/Rap
 Chillstep,Ambient & Experimental Electronic
@@ -1063,6 +1086,7 @@ Chip hop,Hip Hop/Rap
 Chiptune,Ambient & Experimental Electronic
 Chopped and screwed,Hip Hop/Rap
 Choral,Classical/Orchestral
+Choral Classical,Classical/Orchestral
 Choro,Latin
 Choro contemporaneo,Latin
 Christchurch indie,Alternative/Indie
@@ -1089,6 +1113,8 @@ Christian thrash metal,Metal
 Christian trap,Hip Hop/Rap
 Christian uplift,R&B/Soul
 Christlicher rap,Hip Hop/Rap
+Christmas,Jazz
+Christmas Music,Jazz
 Christmas instrumental,New Age/Meditation
 Christmas product,Pop
 Chutney,World/Traditional
@@ -1097,6 +1123,8 @@ Cimbalom,World/Traditional
 Cimbalova muzika,World/Traditional
 Cincinnati indie,Alternative/Indie
 Cincinnati rap,Hip Hop/Rap
+Cinematic Ambient,Soundtrack/Instrumental
+Cinematic Instrumental,Soundtrack/Instrumental
 Cinematic dubstep,Bass Music
 Cinematic post-rock,Alternative/Indie
 Circassian folk,Folk/Acoustic
@@ -1119,6 +1147,7 @@ Classic canadian rock,Rock
 Classic cantopop,Pop
 Classic city pop,Pop
 Classic colombian pop,Pop
+Classic country,Country/Americana
 Classic country pop,Country/Americana
 Classic czech pop,Pop
 Classic danish pop,Pop
@@ -1190,6 +1219,8 @@ Classic uk pop,Pop
 Classic ukrainian pop,Pop
 Classic venezuelan pop,Pop
 Classical,Classical/Orchestral
+Classical Sacred,Classical/Orchestral
+Classical Violin,Classical/Orchestral
 Classical accordion,Classical/Orchestral
 Classical baritone,Classical/Orchestral
 Classical bass,Classical/Orchestral
@@ -1255,6 +1286,7 @@ Comedia,Novelty/Spoken Word
 Comedie musicale,Soundtrack/Instrumental
 Comedienne,Novelty/Spoken Word
 Comedy,Novelty/Spoken Word
+Comedy Hip Hop,Hip Hop/Rap
 Comedy rap,Hip Hop/Rap
 Comedy rock,Rock
 Comfy synth,Ambient & Experimental Electronic
@@ -1262,6 +1294,7 @@ Comic,Novelty/Spoken Word
 Comic metal,Metal
 Commons,Other
 Compas,Reggae/Caribbean
+Compilation,Other
 Complextro,House & EDM
 Compositional ambient,Ambient & Experimental Electronic
 Comptine,Novelty/Spoken Word
@@ -1274,6 +1307,7 @@ Concerto,Classical/Orchestral
 Concerto grosso,Classical/Orchestral
 Concurso de talentos argentino,Pop
 Congolese gospel,R&B/Soul
+Congotronics,World/Traditional
 Conjunto,Latin
 Connecticut hardcore,Punk/Hardcore
 Connecticut indie,Alternative/Indie
@@ -1309,6 +1343,8 @@ Corridos cristianos,Latin
 Corridos tumbados,Latin
 Corrosion,Metal
 Corsican folk,Folk/Acoustic
+Cosmic Americana,Country/Americana
+Cosmic Jazz,Jazz
 Cosmic american,Country/Americana
 Cosmic black metal,Metal
 Cosmic death metal,Metal
@@ -1318,6 +1354,7 @@ Country,Country/Americana
 Country blues,Blues
 Country boogie,Country/Americana
 Country dawn,Country/Americana
+Country folk,Folk/Acoustic
 Country gospel,R&B/Soul
 Country pop,Country/Americana
 Country quebecois,Country/Americana
@@ -1330,6 +1367,7 @@ Cover acustico,Folk/Acoustic
 Coverchill,Ambient & Experimental Electronic
 Covertrance,Techno & Trance
 Covertronica,Ambient & Experimental Electronic
+Cowboy Music,Country/Americana
 Cowboy western,Country/Americana
 Cowpunk,Punk/Hardcore
 Crack rock steady,Punk/Hardcore
@@ -1429,6 +1467,7 @@ Dainuojamoji poezija,Folk/Acoustic
 Dakke dak,House & EDM
 Dalarna indie,Alternative/Indie
 Dallas indie,Alternative/Indie
+Dance Band,Jazz
 Dance pop,Pop
 Dance rock,Rock
 Dance-pop,Pop
@@ -1668,6 +1707,7 @@ Disco,Funk/Disco
 Disco house,House & EDM
 Disco polo,Pop
 Discofox,Pop
+Disney Soundtrack,Soundtrack/Instrumental
 Dissonant death metal,Metal
 Diva house,House & EDM
 Divertimento,Classical/Orchestral
@@ -1791,6 +1831,7 @@ Dutch trap,Hip Hop/Rap
 Dutch underground hip hop,Hip Hop/Rap
 Dweilorkest,Pop
 Dytyachi pisni,Novelty/Spoken Word
+EDM Pop,Pop
 Early,Classical/Orchestral
 Early american folk,Folk/Acoustic
 Early avant garde,Ambient & Experimental Electronic
@@ -1823,6 +1864,7 @@ Edm,House & EDM
 Edmonton indie,Alternative/Indie
 Education,Novelty/Spoken Word
 Educational,Novelty/Spoken Word
+Educational Classical,Classical/Orchestral
 Egg punk,Punk/Hardcore
 Egyptian alternative,Alternative/Indie
 Egyptian hip hop,Hip Hop/Rap
@@ -1834,6 +1876,7 @@ Electra,Pop
 Electric bass,Jazz
 Electric blues,Blues
 Electro,House & EDM
+Electro Pop,Pop
 Electro bailando,House & EDM
 Electro dub,House & EDM
 Electro house,House & EDM
@@ -1841,7 +1884,10 @@ Electro jazz,Jazz
 Electro latino,Latin
 Electro swing,Funk/Disco
 Electro trash,House & EDM
+Electro-Indie,Alternative/Indie
+Electro-Rock,Rock
 Electro-industrial,Ambient & Experimental Electronic
+Electro-pop,Pop
 Electro-pop francais,Pop
 Electroacoustic,Ambient & Experimental Electronic
 Electroacoustic composition,Ambient & Experimental Electronic
@@ -1849,6 +1895,12 @@ Electroacoustic improvisation,Ambient & Experimental Electronic
 Electroclash,House & EDM
 Electrofox,House & EDM
 Electronic,House & EDM
+Electronic Ambient,Ambient & Experimental Electronic
+Electronic Hip Hop,Hip Hop/Rap
+Electronic Music,Ambient & Experimental Electronic
+Electronic Pop,Pop
+Electronic Soul,R&B/Soul
+Electronic Spoken Word,Novelty/Spoken Word
 Electronic djent,Metal
 Electronic rock,Rock
 Electronic trap,Hip Hop/Rap
@@ -1865,6 +1917,7 @@ Elektropunk,Punk/Hardcore
 Elephant 6,Alternative/Indie
 Eletronica underground brasileira,House & EDM
 Emo,Punk/Hardcore
+Emo Pop,Pop
 Emo mexicano,Punk/Hardcore
 Emo punk,Punk/Hardcore
 Emo rap,Hip Hop/Rap
@@ -1874,6 +1927,7 @@ Emo trap italiana,Hip Hop/Rap
 Emocore,Punk/Hardcore
 Emoplugg,Hip Hop/Rap
 Emoviolence,Punk/Hardcore
+English Classical,Classical/Orchestral
 English baroque,Classical/Orchestral
 English indie rock,Alternative/Indie
 English renaissance,Classical/Orchestral
@@ -1892,7 +1946,7 @@ Erotic,Other
 Erotic product,Other
 Erotica,Other
 Escape room,Other
-Esperanto,World/Traditional
+Esperanto,Other
 Essex indie,Alternative/Indie
 Estonian electronic,House & EDM
 Estonian folk,Folk/Acoustic
@@ -1931,6 +1985,7 @@ Euskal rock,Rock
 Eventyr,Novelty/Spoken Word
 Exotica,Pop
 Experimental,Ambient & Experimental Electronic
+Experimental Punk,Punk/Hardcore
 Experimental ambient,Ambient & Experimental Electronic
 Experimental bass,Bass Music
 Experimental big band,Jazz
@@ -1967,6 +2022,7 @@ Family gospel,R&B/Soul
 Fan chant,Pop
 Fantasia,Classical/Orchestral
 Fantasy,Soundtrack/Instrumental
+Fantasy Soundtrack,Soundtrack/Instrumental
 Faroese folk,Folk/Acoustic
 Faroese indie,Alternative/Indie
 Faroese jazz,Jazz
@@ -1980,6 +2036,9 @@ Fidget house,House & EDM
 Field recording,New Age/Meditation
 Fife and drum,Classical/Orchestral
 Fijian pop,Pop
+Filipino Folk,World/Traditional
+Filipino Indie,Alternative/Indie
+Filipino Pop,Pop
 Filk,Other
 Filmi,Soundtrack/Instrumental
 Filter house,House & EDM
@@ -2031,6 +2090,7 @@ Finnish worship,R&B/Soul
 Firenze indie,Alternative/Indie
 Fisarmonica,Folk/Acoustic
 Flamenco,World/Traditional
+Flamenco Pop,Latin
 Flamenco fusion,World/Traditional
 Flamenco guitar,World/Traditional
 Flamenco urbano,World/Traditional
@@ -2060,6 +2120,7 @@ Folclore salteno,Folk/Acoustic
 Folclore santiagueno,Folk/Acoustic
 Folclore tucumano,Folk/Acoustic
 Folk,Folk/Acoustic
+Folk Blues,Blues
 Folk black metal,Metal
 Folk brasileiro,Folk/Acoustic
 Folk cantabria,Folk/Acoustic
@@ -2124,6 +2185,7 @@ French contemporary classical,Classical/Orchestral
 French death metal,Metal
 French dnb,Bass Music
 French dub,Reggae/Caribbean
+French electronic,Ambient & Experimental Electronic
 French experimental rock,Alternative/Indie
 French folk,Folk/Acoustic
 French folk pop,Folk/Acoustic
@@ -2193,6 +2255,7 @@ Funky house,House & EDM
 Funky tech house,House & EDM
 Fusion,Jazz
 Fussball,Other
+Future R&B,R&B/Soul
 Future ambient,Ambient & Experimental Electronic
 Future bass,Bass Music
 Future funk,Funk/Disco
@@ -2342,6 +2405,7 @@ Ghettotech,House & EDM
 Ghoststep,Bass Music
 Girl group,Pop
 Glam,Rock
+Glam Pop,Pop
 Glam metal,Metal
 Glam punk,Punk/Hardcore
 Glam rock,Rock
@@ -2380,6 +2444,7 @@ Gothabilly,Rock
 Gothenburg hip hop,Hip Hop/Rap
 Gothenburg indie,Alternative/Indie
 Gothenburg metal,Metal
+Gothic Acoustic,Alternative/Indie
 Gothic alternative,Alternative/Indie
 Gothic americana,Country/Americana
 Gothic black metal,Metal
@@ -2498,6 +2563,7 @@ Hammond organ,Jazz
 Hampton roads indie,Alternative/Indie
 Handbells,Classical/Orchestral
 Handpan,World/Traditional
+Handpan Ambient,New Age/Meditation
 Hands up,House & EDM
 Hangoskonyvek,Novelty/Spoken Word
 Happy hardcore,Garage & Breaks
@@ -2549,7 +2615,7 @@ Hawaiian indie,Alternative/Indie
 Hawaiian punk,Punk/Hardcore
 Hazaragi pop,Pop
 Healing,New Age/Meditation
-Health-fitness,House & EDM
+Health-fitness,Other
 Heartland rock,Rock
 Heavy alternative,Rock
 Heavy gothic rock,Rock
@@ -2613,6 +2679,8 @@ Honky-tonk piano,Country/Americana
 Honkyoku,World/Traditional
 Hopebeat,Pop
 Horo,World/Traditional
+Horror Game Soundtrack,Soundtrack/Instrumental
+Horror Spoken Word,Novelty/Spoken Word
 Horror punk,Punk/Hardcore
 Horror punk brasileiro,Punk/Hardcore
 Horror rock,Rock
@@ -2692,6 +2760,7 @@ Ilocano pop,Pop
 Impressionism,Classical/Orchestral
 Impressionist,Classical/Orchestral
 Incidental music,Soundtrack/Instrumental
+Indian Disco,Funk/Disco
 Indian ambient,Ambient & Experimental Electronic
 Indian classical,World/Traditional
 Indian edm,House & EDM
@@ -2713,19 +2782,8 @@ Indian violin,World/Traditional
 Indiana hip hop,Hip Hop/Rap
 Indiana indie,Alternative/Indie
 Indie,Alternative/Indie
-Americana,Country/Americana
-Proto-punk,Punk/Hardcore
-Classic country,Country/Americana
-Neoclassical,Classical/Orchestral
-"folk, world, & country",Folk/Acoustic
-swing music,Jazz
-Alt country,Country/Americana
-Christmas,Jazz
-Surf rock,Rock
-southern gothic,Country/Americana
-j-dance,Bass Music
-psytrance,Techno & Trance
-electrocumbia,House & EDM
+Indie Dance,Alternative/Indie
+Indie Funk,Alternative/Indie
 Indie anthem-folk,Folk/Acoustic
 Indie arequipeno,Alternative/Indie
 Indie boliviano,Alternative/Indie
@@ -2794,6 +2852,7 @@ Indie veneto,Alternative/Indie
 Indie viet,Alternative/Indie
 Indiecoustica,Folk/Acoustic
 Indietronica,Alternative/Indie
+Indigenous Music,World/Traditional
 Indo-pop,Pop
 Indonesian alternative rock,Alternative/Indie
 Indonesian bamboo,World/Traditional
@@ -2838,6 +2897,7 @@ Indonesian viral pop,Pop
 Indonesian worship,R&B/Soul
 Indorock,Rock
 Industrial,Alternative/Indie
+Industrial Electronic,Ambient & Experimental Electronic
 Industrial black metal,Metal
 Industrial hardcore,Punk/Hardcore
 Industrial hip hop,Hip Hop/Rap
@@ -2848,6 +2908,9 @@ Industrial rock,Rock
 Industrial techno,Techno & Trance
 Indy indie,Alternative/Indie
 Instrumental,Soundtrack/Instrumental
+Instrumental Hip Hop,Hip Hop/Rap
+Instrumental Hip-Hop,Hip Hop/Rap
+Instrumental Pop,Pop
 Instrumental acoustic guitar,Folk/Acoustic
 Instrumental black metal,Metal
 Instrumental bluegrass,Country/Americana
@@ -2924,6 +2987,8 @@ Israeli techno,Techno & Trance
 Israeli traditional,World/Traditional
 Israeli trap,Hip Hop/Rap
 Israelite hip hop,Hip Hop/Rap
+Italian Electronic,Ambient & Experimental Electronic
+Italian Vocal Jazz,Jazz
 Italian adult pop,Pop
 Italian alternative,Alternative/Indie
 Italian baritone,Classical/Orchestral
@@ -2943,6 +3008,7 @@ Italian doom metal,Metal
 Italian electronica,House & EDM
 Italian emo,Punk/Hardcore
 Italian experimental,Alternative/Indie
+Italian film score,Soundtrack/Instrumental
 Italian folk,Folk/Acoustic
 Italian folk metal,Metal
 Italian gothic,Alternative/Indie
@@ -2997,6 +3063,7 @@ Italodance,House & EDM
 Italogaze,Alternative/Indie
 Izvorna,Folk/Acoustic
 Izvorna muzika,Folk/Acoustic
+J-Hip Hop,Hip Hop/Rap
 J-acoustic,Folk/Acoustic
 J-ambient,Ambient & Experimental Electronic
 J-core,House & EDM
@@ -3188,6 +3255,8 @@ Jumptek,House & EDM
 Jungle,Bass Music
 Junior songfestival,Pop
 Junkanoo,Reggae/Caribbean
+K-R&B,R&B/Soul
+K-house,House & EDM
 K-indie,Alternative/Indie
 K-pop,Pop
 K-pop boy group,Pop
@@ -3391,6 +3460,8 @@ Lata,World/Traditional
 Late romantic,Classical/Orchestral
 Late romantic era,Classical/Orchestral
 Latin,Latin
+Latin Electronic,Latin
+Latin Urban,Latin
 Latin afrobeat,World/Traditional
 Latin alternative,Latin
 Latin american baroque,Classical/Orchestral
@@ -3458,6 +3529,7 @@ Lilith,Folk/Acoustic
 Limerick indie,Alternative/Indie
 Lincoln ne indie,Alternative/Indie
 Lion city hardcore,Punk/Hardcore
+Liquid Drum & Bass,Bass Music
 Liquid funk,Bass Music
 Liscio,Pop
 Lithuanian edm,House & EDM
@@ -3471,11 +3543,13 @@ Lithuanian pop,Pop
 Lithuanian rock,Rock
 Lithuanian trap,Hip Hop/Rap
 Little rock indie,Alternative/Indie
+Live Looping,Ambient & Experimental Electronic
 Liverpool indie,Alternative/Indie
 Livetronica,House & EDM
 Lldm,R&B/Soul
 Lo star,Pop
 Lo-fi,Hip Hop/Rap
+Lo-fi R&B,R&B/Soul
 Lo-fi beats,Hip Hop/Rap
 Lo-fi brasileiro,Hip Hop/Rap
 Lo-fi chill,Hip Hop/Rap
@@ -3487,6 +3561,7 @@ Lo-fi jazzhop,Hip Hop/Rap
 Lo-fi latino,Hip Hop/Rap
 Lo-fi product,Hip Hop/Rap
 Lo-fi rap,Hip Hop/Rap
+Lo-fi soul,R&B/Soul
 Lo-fi vgm,Hip Hop/Rap
 Lok dohori,World/Traditional
 Lombok indie,Alternative/Indie
@@ -3568,6 +3643,7 @@ Malaysian tamil pop,Pop
 Malaysian tamil rap,Hip Hop/Rap
 Malaysian traditional,World/Traditional
 Maldivian pop,Pop
+Malian Wassoulou,World/Traditional
 Malian blues,Blues
 Malian traditional,World/Traditional
 Mallet,Classical/Orchestral
@@ -3634,11 +3710,13 @@ Mbira,World/Traditional
 Mecha,Soundtrack/Instrumental
 Medical,Other
 Medieval,Classical/Orchestral
+Medieval Music,Classical/Orchestral
 Medieval ensemble,Classical/Orchestral
 Medieval folk,Folk/Acoustic
 Medieval rock,Rock
 Medimeisterschaften,Pop
 Meditation,New Age/Meditation
+Meditation Music,New Age/Meditation
 Medway sound,Rock
 Meenawati,World/Traditional
 Mega funk,Funk/Disco
@@ -3815,6 +3893,7 @@ Modern hardcore,Punk/Hardcore
 Modern indie folk,Folk/Acoustic
 Modern indie pop,Pop
 Modern jangle pop,Pop
+Modern jazz,Jazz
 Modern jazz piano,Jazz
 Modern jazz trio,Jazz
 Modern melodic hardcore,Punk/Hardcore
@@ -3850,6 +3929,7 @@ Montenegrin pop,Pop
 Monterrey indie,Alternative/Indie
 Montreal indie,Alternative/Indie
 Moog,Ambient & Experimental Electronic
+Moog lounge,Ambient & Experimental Electronic
 Moombahton,Bass Music
 Moorish traditional,World/Traditional
 Moravian folk,Folk/Acoustic
@@ -4015,6 +4095,8 @@ Musica valenciana,Folk/Acoustic
 Musica wixarika,World/Traditional
 Musica yucateca,Latin
 Musical,Soundtrack/Instrumental
+Musical Comedy,Novelty/Spoken Word
+Musical Theatre,Soundtrack/Instrumental
 Musical advocacy,Folk/Acoustic
 Musicas espiritas,World/Traditional
 Musiikkia lapista,Folk/Acoustic
@@ -4086,6 +4168,7 @@ Native american contemporary,World/Traditional
 Native american flute,World/Traditional
 Native american hip hop,Hip Hop/Rap
 Native american spiritual,World/Traditional
+Nature Sounds,New Age/Meditation
 Navajo,World/Traditional
 Ndombolo,World/Traditional
 Ndw,Pop
@@ -4104,6 +4187,7 @@ Neo r&b,R&B/Soul
 Neo soul,R&B/Soul
 Neo soul-jazz,Jazz
 Neo trance,Techno & Trance
+Neo-Soul,R&B/Soul
 Neo-classical,Classical/Orchestral
 Neo-classical metal,Metal
 Neo-crust,Punk/Hardcore
@@ -4124,6 +4208,8 @@ Neo-trad metal,Metal
 Neo-trad prog,Rock
 Neo-traditional bluegrass,Country/Americana
 Neo-traditional country,Country/Americana
+Neoclassical,Classical/Orchestral
+Neoclassical Piano,Classical/Orchestral
 Neoclassical darkwave,Classical/Orchestral
 Neoclassicism,Classical/Orchestral
 Neofolk,Folk/Acoustic
@@ -4146,6 +4232,8 @@ Neue neue deutsche welle,Pop
 Neue volksmusik,Folk/Acoustic
 Neurofunk,Bass Music
 Neurostep,Bass Music
+New Orleans R&B,R&B/Soul
+New Wave Revival,Alternative/Indie
 New age,New Age/Meditation
 New age piano,New Age/Meditation
 New americana,Country/Americana
@@ -4301,6 +4389,8 @@ Nova musica maranhense,Latin
 Nova musica paulista,Latin
 Nova musica pernambucana,Latin
 Novelty,Novelty/Spoken Word
+Novelty Music,Novelty/Spoken Word
+Novelty Rock,Novelty/Spoken Word
 Novo rock gaucho,Rock
 Novos talentos brasileiros,Pop
 Nu age,New Age/Meditation
@@ -4407,6 +4497,7 @@ Opm,Pop
 Oratorio,Classical/Orchestral
 Oratory,Classical/Orchestral
 Orchestra,Classical/Orchestral
+Orchestral Video Game Music,Soundtrack/Instrumental
 Orchestral performance,Classical/Orchestral
 Orchestral soundtrack,Soundtrack/Instrumental
 Orebro indie,Alternative/Indie
@@ -4444,6 +4535,7 @@ Outer hip hop,Hip Hop/Rap
 Outlaw country,Country/Americana
 Outsider,Alternative/Indie
 Outsider house,House & EDM
+Outsider music,Alternative/Indie
 Overtone singing,World/Traditional
 Overture,Classical/Orchestral
 Oxford choir,Classical/Orchestral
@@ -4526,6 +4618,7 @@ Phonk,Hip Hop/Rap
 Piada,Novelty/Spoken Word
 Pianissimo,Classical/Orchestral
 Piano,Classical/Orchestral
+Piano Pop,Pop
 Piano blues,Blues
 Piano cover,Soundtrack/Instrumental
 Piano house,House & EDM
@@ -4697,6 +4790,8 @@ Portuguese rock,Rock
 Portuguese techno,Techno & Trance
 Post bop,Jazz
 Post rock,Alternative/Indie
+Post-Dubstep,Bass Music
+Post-Punk Revival,Alternative/Indie
 Post-black metal,Metal
 Post-disco,Funk/Disco
 Post-disco soul,R&B/Soul
@@ -4737,10 +4832,12 @@ Prelude,Classical/Orchestral
 Prepared piano,Classical/Orchestral
 Preschool children's music,Novelty/Spoken Word
 Previa,Latin
+Production Music,Soundtrack/Instrumental
 Prog metal,Metal
 Prog quebec,Rock
 Prog rock,Rock
 Program music,Classical/Orchestral
+Progressive Folk,Folk/Acoustic
 Progressive alternative,Alternative/Indie
 Progressive black metal,Metal
 Progressive bluegrass,Country/Americana
@@ -4766,8 +4863,10 @@ Progressive trance house,House & EDM
 Progressive uplifting trance,Techno & Trance
 Promotional,Other
 Protest folk,Folk/Acoustic
+Proto-Trance,Techno & Trance
 Proto-hyperpop,Pop
 Proto-metal,Metal
+Proto-punk,Punk/Hardcore
 Proto-rap,Hip Hop/Rap
 Proto-techno,Techno & Trance
 Protopunk,Punk/Hardcore
@@ -4778,8 +4877,10 @@ Psicodelia mexicana,Rock
 Psy-trance,Techno & Trance
 Psybass,Bass Music
 Psybreaks,Bass Music
+Psych Funk,Funk/Disco
 Psych gaze,Rock
 Psychedelic,Rock
+Psychedelic Funk,Funk/Disco
 Psychedelic blues-rock,Blues
 Psychedelic doom,Rock
 Psychedelic folk,Folk/Acoustic
@@ -4864,6 +4965,7 @@ Ragtime,Jazz
 Rai,World/Traditional
 Rai algerien,World/Traditional
 Rain,New Age/Meditation
+Rain Sounds,New Age/Meditation
 Rajasthani folk,Folk/Acoustic
 Rajasthani pop,Pop
 Rakugo,Pop
@@ -4982,6 +5084,7 @@ Recorder,Classical/Orchestral
 Red dirt,Country/Americana
 Redneck,Country/Americana
 Reggae,Reggae/Caribbean
+Reggae Pop,Reggae/Caribbean
 Reggae catala,Reggae/Caribbean
 Reggae cover,Reggae/Caribbean
 Reggae cristao,Reggae/Caribbean
@@ -5005,7 +5108,9 @@ Reggaeton flow,Latin
 Reggaeton mexicano,Latin
 Regional mexicano femenil,Latin
 Reiki,New Age/Meditation
+Relaxation Music,New Age/Meditation
 Relaxative,New Age/Meditation
+Relaxing Music,New Age/Meditation
 Religious,R&B/Soul
 Remix product,Pop
 Renaissance,Classical/Orchestral
@@ -5209,6 +5314,7 @@ Ryå«kåka,Pop
 Råkyoku,Pop
 Sacramento hip hop,Hip Hop/Rap
 Sacramento indie,Alternative/Indie
+Sacred Music,World/Traditional
 Sacred harp,R&B/Soul
 Sacred steel,Country/Americana
 Sad lo-fi,Hip Hop/Rap
@@ -5299,6 +5405,7 @@ Scream rap,Hip Hop/Rap
 Screamo,Punk/Hardcore
 Screamocore,Punk/Hardcore
 Screw,Hip Hop/Rap
+Scrumpy and Western,Novelty/Spoken Word
 Sda choir,Classical/Orchestral
 Sea shanties,Folk/Acoustic
 Sean-nos singing,Folk/Acoustic
@@ -5423,6 +5530,7 @@ Slc hardcore,Punk/Hardcore
 Slc indie,Alternative/Indie
 Sleaze rock,Rock
 Sleep,New Age/Meditation
+Sleep Music,New Age/Meditation
 Slovak electronic,House & EDM
 Slovak folk,Folk/Acoustic
 Slovak hip hop,Hip Hop/Rap
@@ -5479,10 +5587,12 @@ Sorani pop,Pop
 Sotalaulut,Folk/Acoustic
 Soukous,World/Traditional
 Soul,R&B/Soul
+Soul Pop,R&B/Soul
 Soul blues,Blues
 Soul flow,R&B/Soul
 Soul jazz,Jazz
 Soul-jazz,Jazz
+Soul-pop,R&B/Soul
 Souldies,R&B/Soul
 Soulful house,House & EDM
 Sound,New Age/Meditation
@@ -5529,6 +5639,7 @@ Southern soul blues,R&B/Soul
 Soviet synthpop,Pop
 Sovietwave,Ambient & Experimental Electronic
 Spa,New Age/Meditation
+Spa Music,New Age/Meditation
 Space age pop,Pop
 Space ambient,Ambient & Experimental Electronic
 Space rock,Rock
@@ -5653,6 +5764,7 @@ Surabaya indie,Alternative/Indie
 Surf,Rock
 Surf music,Rock
 Surf punk,Punk/Hardcore
+Surf rock,Rock
 Surinamese hip hop,Hip Hop/Rap
 Surinamese pop,Pop
 Svensk indie,Alternative/Indie
@@ -5728,6 +5840,7 @@ Swedish trap pop,Pop
 Swedish tropical house,House & EDM
 Swedish underground rap,Hip Hop/Rap
 Swing,Jazz
+Swing Jazz,Jazz
 Swing italiano,Jazz
 Swing revival,Jazz
 Swingbeat,R&B/Soul
@@ -5778,6 +5891,7 @@ Szanty,Folk/Acoustic
 Sã¡mi music,World/Traditional
 Sã©ga,Reggae/Caribbean
 T-pop girl group,Pop
+TV Score,Soundtrack/Instrumental
 Taarab,World/Traditional
 Tabla,World/Traditional
 Tagalog rap,Hip Hop/Rap
@@ -5852,6 +5966,7 @@ Technical melodic death metal,Metal
 Technical thrash,Metal
 Techno,Techno & Trance
 Techno argentina,Techno & Trance
+Techno brass,Techno & Trance
 Techno kayo,Techno & Trance
 Techno rave,Techno & Trance
 Tecnobanda,Latin
@@ -5936,6 +6051,8 @@ Toronto rap,Hip Hop/Rap
 Touhou,Soundtrack/Instrumental
 Trad jazz catala,Jazz
 Trad quebecois,Folk/Acoustic
+Traditional Jazz,Jazz
+Traditional Pop,Pop
 Traditional bluegrass,Country/Americana
 Traditional blues,Blues
 Traditional british folk,Folk/Acoustic
@@ -5950,6 +6067,7 @@ Traditional scottish folk,Folk/Acoustic
 Traditional ska,Reggae/Caribbean
 Traditional soul,R&B/Soul
 Traditional southern folk,Folk/Acoustic
+Trailer music,Soundtrack/Instrumental
 Trallalero,World/Traditional
 Trance,Techno & Trance
 Trance brasileiro,Techno & Trance
@@ -6006,6 +6124,7 @@ Trombone brasileiro,Latin
 Trondersk musikk,Folk/Acoustic
 Trondheim indie,Alternative/Indie
 Tropical,Latin
+Tropical Pop,Pop
 Tropical alternativo,Latin
 Tropical house,House & EDM
 Tropical tecladista,Latin
@@ -6023,6 +6142,7 @@ Tulum,World/Traditional
 Tuna,Pop
 Tuna estudiantil,Pop
 Tunantada,Latin
+Tunisian folk,World/Traditional
 Tunisian pop,Pop
 Turbo folk,Folk/Acoustic
 Turin indie,Alternative/Indie
@@ -6064,6 +6184,7 @@ Turkmen hip hop,Hip Hop/Rap
 Turkmen pop,Pop
 Turntablism,Hip Hop/Rap
 Tuvan folk,Folk/Acoustic
+Tuvan throat singing,World/Traditional
 Twee indie pop,Pop
 Twee pop,Pop
 Twelve-tone,Classical/Orchestral
@@ -6071,6 +6192,8 @@ Twin cities indie,Alternative/Indie
 Twist,Pop
 Twoubadou,Reggae/Caribbean
 Tzadik,World/Traditional
+UK Hardcore,House & EDM
+UK techno,Techno & Trance
 Ua trap,Hip Hop/Rap
 Uae indie,Alternative/Indie
 Ugandan gospel,R&B/Soul
@@ -6204,6 +6327,7 @@ Vgm remix,Soundtrack/Instrumental
 Via,Other
 Victoria bc indie,Alternative/Indie
 Victorian britain,Classical/Orchestral
+Video Game Soundtrack,Soundtrack/Instrumental
 Video game music,Soundtrack/Instrumental
 Vienna indie,Alternative/Indie
 Viet edm,House & EDM
@@ -6242,6 +6366,7 @@ Vintage italian soundtrack,Soundtrack/Instrumental
 Vintage jazz,Jazz
 Vintage norwegian pop,Pop
 Vintage old-time,Folk/Acoustic
+Vintage pop,Pop
 Vintage radio show,Novelty/Spoken Word
 Vintage reggae,Reggae/Caribbean
 Vintage rockabilly,Rock
@@ -6303,6 +6428,7 @@ Washington indie,Alternative/Indie
 Wassoulou,World/Traditional
 Water,New Age/Meditation
 Wave,Pop
+Weather Sounds,New Age/Meditation
 Weightless,New Age/Meditation
 Weirdcore,Ambient & Experimental Electronic
 Wellington indie,Alternative/Indie
@@ -6315,10 +6441,10 @@ Welsh rock,Rock
 West african jazz,Jazz
 West australian hip hop,Hip Hop/Rap
 West bengali pop,Pop
+West coast hip hop,Hip Hop/Rap
 West coast rap,Hip Hop/Rap
 West coast reggae,Reggae/Caribbean
 West coast trap,Hip Hop/Rap
-West coast hip hop,Hip Hop/Rap
 West end,Soundtrack/Instrumental
 West virginia indie,Alternative/Indie
 West virginia metal,Metal
@@ -6345,8 +6471,9 @@ Women's music,Folk/Acoustic
 Wonky,Ambient & Experimental Electronic
 Woodwind instrument,Classical/Orchestral
 Worcester ma indie,Alternative/Indie
-Workout product,House & EDM
+Workout product,Other
 World,World/Traditional
+World Music,World/Traditional
 World chill,New Age/Meditation
 World devotional,World/Traditional
 World fusion,World/Traditional
@@ -6394,6 +6521,7 @@ Zambian gospel,R&B/Soul
 Zambian hip hop,Hip Hop/Rap
 Zambian pop,Pop
 Zampogna,World/Traditional
+Zamrock,Rock
 Zarzuela,Classical/Orchestral
 Zcc,R&B/Soul
 Zemer ivri,World/Traditional
@@ -6421,286 +6549,161 @@ Zurich indie,Alternative/Indie
 Zxc,Hip Hop/Rap
 Zydeco,Country/Americana
 acoustic country,Country/Americana
+acoustic instrumental,Folk/Acoustic
+afro-electronic,House & EDM
 afro-fusion,World/Traditional
+afro-house,House & EDM
+afro-jazz,Jazz
 afrobeats,World/Traditional
+alt country,Country/Americana
 alté,World/Traditional
-Ambient Electronic,Ambient & Experimental Electronic
+ambient classical,Classical/Orchestral
+ambient nature,New Age/Meditation
+ambient piano,Ambient & Experimental Electronic
+american primitive guitar,Folk/Acoustic
 argentine trap,Latin
+audio drama,Novelty/Spoken Word
+australian metal,Metal
+azerbaijani pop,Pop
 ballroom vogue,House & EDM
+beat music,Rock
+big band jazz,Jazz
 blue-eyed soul,R&B/Soul
 bongo piano,House & EDM
+brass band music,Classical/Orchestral
+brazilian psychedelic,Rock
+british rhythm and blues,R&B/Soul
 cha cha cha,Latin
+changüí,Latin
 chanson québécoise,Pop
+chill house,House & EDM
 chinese rock,Rock
 christian,Pop
 christian country,Country/Americana
 christian folk,Folk/Acoustic
+christian worship,New Age/Meditation
 classic blues,Blues
+classic vocal jazz,Jazz
+classical brass,Classical/Orchestral
+classical chamber music,Classical/Orchestral
+classical crossover,Classical/Orchestral
 cold wave,Alternative/Indie
+comedy music,Novelty/Spoken Word
+contemporary christian,OthNew Age/Meditationer
+country guitar,Country/Americana
 country hip hop,Hip Hop/Rap
+country soul,R&B/Soul
+country trap,Hip Hop/Rap
 cumbia norteña,Latin
 dansk pop,Pop
+dark electronic,Ambient & Experimental Electronic
 dark r&b,R&B/Soul
 devotional,World/Traditional
 drumstep,Bass Music
+dutch classical,Classical/Orchestral
+early jazz,Jazz
+easy listening orchestra,Soundtrack/Instrumental
 edm trap,Bass Music
 egyptian shaabi,World/Traditional
+electrocumbia,House & EDM
+electronic classical,Classical/Orchestral
+electronic dance music,House & EDM
+electronic instrumental,Ambient & Experimental Electronic
 ethiopian jazz,Jazz
+euro-pop,Pop
 film score,Soundtrack/Instrumental
 flamenco rock,Rock
 folk pop,Pop
+"folk, world, & country",Folk/Acoustic
 french rap,Hip Hop/Rap
+future beats,Hip Hop/Rap
+glitch-hop,Bass Music
+global bass,Bass Music
+gullah folk,World/Traditional
+hawaiian folk,World/Traditional
 hollands,Pop
-Indie Dance,Alternative/Indie
+house music,House & EDM
 indie electronic,Alternative/Indie
+instrumental jazz,Jazz
+instrumental surf rock,Rock
 iskelmä,Pop
 italian singer-songwriter,Folk/Acoustic
 italian trap,Hip Hop/Rap
 italo disco,Funk/Disco
+j-dance,Bass Music
 j-r&b,R&B/Soul
+japanese ambient,Ambient & Experimental Electronic
 japanese indie,Alternative/Indie
 jazz beats,Jazz
+jazz hop,Hip Hop/Rap
+jazz vocal,Jazz
 k-ballad,Pop
+korean psychedelic rock,Rock
 latin afrobeats,Latin
 latin folk,Latin
 latin folklore,Latin
 latin indie,Latin
 latin r&b,Latin
-laïko,World/Traditional
-lo-fi hip hop,Hip Hop/Rap
-melodic bass,Bass Music
-melodic house,House & EDM
-Musical Theatre,Soundtrack/Instrumental
-musicals,Soundtrack/Instrumental
-música mexicana,Latin
-native american music,World/Traditional
-new orleans bounce,Hip Hop/Rap
-newgrass,Country/Americana
-noise music,Ambient & Experimental Electronic
-norsk rock,Rock
-orchestral,Classical/Orchestral
-Post-Dubstep,Bass Music
-punk rock,Punk/Hardcore
-rage rap,Hip Hop/Rap
-rally house,House & EDM
-raï,World/Traditional
-rock and roll,Rock
-schlagerparty,Pop
-Scrumpy and Western,Novelty/Spoken Word
-sexy drill,Hip Hop/Rap
-soft pop,Pop
-space music,New Age/Meditation
-stutter house,House & EDM
-traditional music,World/Traditional
-Traditional Pop,Pop
-tropical music,Latin
-uk r&b,R&B/Soul
-variété française,Pop
-Electronic Pop,Pop
-UK techno,Techno & Trance
-Live Looping,Ambient & Experimental Electronic
-afro-electronic,House & EDM
-changüí,Latin
-Comedy Hip Hop,Hip Hop/Rap
-country guitar,Country/Americana
-Electro-Rock,Rock
-Electronic Soul,R&B/Soul
-afro-house,House & EDM
-Alt-Country,Country/Americana
-big band jazz,Jazz
-euro-pop,Pop
-Neo-Soul,R&B/Soul
-50s pop,Pop
-60s pop,Pop
-80s Pop,Pop
-90s pop,Pop
-acoustic instrumental,Folk/Acoustic
-Acoustic World Fusion,World/Traditional
-Adult Contemporary,Pop
-African Folk,World/Traditional
-Afro-Brazilian,World/Traditional
-afro-jazz,Jazz
-Algerian classical,Classical/Orchestral
-Alt-R&B,R&B/Soul
-ambient classical,Classical/Orchestral
-Ambient Drone,Ambient & Experimental Electronic
-Ambient Jazz,Jazz
-ambient nature,New Age/Meditation
-ambient piano,Ambient & Experimental Electronic
-american primitive guitar,Folk/Acoustic
-Asian Underground,Ambient & Experimental Electronic
-audio drama,Novelty/Spoken Word
-azerbaijani pop,Pop
-Balkan fusion,World/Traditional
-Baroque Classical,Classical/Orchestral
-beat music,Rock
-brass band music,Classical/Orchestral
-Brasshouse,House & EDM
-brazilian psychedelic,Rock
-British Beat,Rock
-british rhythm and blues,R&B/Soul
-Chill Electronic,Ambient & Experimental Electronic
-chill house,House & EDM
-Chill-out,Ambient & Experimental Electronic
-Choral Classical,Classical/Orchestral
-christian worship,New Age/Meditation
-Christmas Music,Jazz
-Cinematic Ambient,Soundtrack/Instrumental
-Cinematic Instrumental,Soundtrack/Instrumental
-classic vocal jazz,Jazz
-classical brass,Classical/Orchestral
-classical chamber music,Classical/Orchestral
-classical crossover,Classical/Orchestral
-Classical Sacred,Classical/Orchestral
-Classical Violin,Classical/Orchestral
-comedy music,Novelty/Spoken Word
-Compilation,Other
-Congotronics,World/Traditional
-contemporary christian,OthNew Age/Meditationer
-Cosmic Americana,Country/Americana
-Cosmic Jazz,Jazz
-Country folk,Folk/Acoustic
-country soul,R&B/Soul
-country trap,Hip Hop/Rap
-Cowboy Music,Country/Americana
-Dance Band,Jazz
-dark electronic,Ambient & Experimental Electronic
-Disney Soundtrack,Soundtrack/Instrumental
-dutch classical,Classical/Orchestral
-early jazz,Jazz
-easy listening orchestra,Soundtrack/Instrumental
-EDM Pop,Pop
-Educational Classical,Classical/Orchestral
-Electro Pop,Pop
-Electro-Indie,Alternative/Indie
-Electro-pop,Pop
-Electronic Ambient,Ambient & Experimental Electronic
-electronic classical,Classical/Orchestral
-electronic dance music,House & EDM
-Electronic Hip Hop,Hip Hop/Rap
-electronic instrumental,Ambient & Experimental Electronic
-Electronic Music,Ambient & Experimental Electronic
-Electronic Spoken Word,Novelty/Spoken Word
-Emo Pop,Pop
-English Classical,Classical/Orchestral
-Experimental Punk,Punk/Hardcore
-Fantasy Soundtrack,Soundtrack/Instrumental
-Filipino Folk,World/Traditional
-Filipino Indie,Alternative/Indie
-Filipino Pop,Pop
-Flamenco Pop,Latin
-Folk Blues,Blues
-French electronic,Ambient & Experimental Electronic
-future beats,Hip Hop/Rap
-Future R&B,R&B/Soul
-Glam Pop,Pop
-glitch-hop,Bass Music
-global bass,Bass Music
-Gothic Acoustic,Alternative/Indie
-gullah folk,World/Traditional
-Handpan Ambient,New Age/Meditation
-hawaiian folk,World/Traditional
-Horror Game Soundtrack,Soundtrack/Instrumental
-Horror Spoken Word,Novelty/Spoken Word
-house music,House & EDM
-Indian Disco,Funk/Disco
-Indie Funk,Alternative/Indie
-Indigenous Music,World/Traditional
-Industrial Electronic,Ambient & Experimental Electronic
-Instrumental Hip Hop,Hip Hop/Rap
-Instrumental Hip-Hop,Hip Hop/Rap
-instrumental jazz,Jazz
-Instrumental Pop,Pop
-instrumental surf rock,Rock
-Italian Electronic,Ambient & Experimental Electronic
-Italian film score,Soundtrack/Instrumental
-Italian Vocal Jazz,Jazz
-J-Hip Hop,Hip Hop/Rap
-japanese ambient,Ambient & Experimental Electronic
-jazz hop,Hip Hop/Rap
-jazz vocal,Jazz
-K-house,House & EDM
-K-R&B,R&B/Soul
-korean psychedelic rock,Rock
-Latin Electronic,Latin
 latin trap,Hip Hop/Rap
-Latin Urban,Latin
+laïko,World/Traditional
 libyan folk electronic,World/Traditional
 light orchestral,Classical/Orchestral
-Liquid Drum & Bass,Bass Music
 lo-fi ambient,Ambient & Experimental Electronic
 lo-fi electronic,Ambient & Experimental Electronic
+lo-fi hip hop,Hip Hop/Rap
 lo-fi pop,Pop
-Lo-fi R&B,R&B/Soul
-Lo-fi soul,R&B/Soul
 lounge music,Jazz
 lounge pop,Pop
 malian folk,Folk/Acoustic
-Malian Wassoulou,World/Traditional
-Medieval Music,Classical/Orchestral
-Meditation Music,New Age/Meditation
+melodic bass,Bass Music
+melodic house,House & EDM
 minimal house,House & EDM
 minimalist classical,Classical/Orchestral
-Modern jazz,Jazz
-Moog lounge,Ambient & Experimental Electronic
-Musical Comedy,Novelty/Spoken Word
+musicals,Soundtrack/Instrumental
+música mexicana,Latin
+native american music,World/Traditional
 nature ambient,Ambient & Experimental Electronic
-Nature Sounds,New Age/Meditation
 neoclassical ambient,Ambient & Experimental Electronic
-Neoclassical Piano,Classical/Orchestral
-New Orleans R&B,R&B/Soul
-New Wave Revival,Alternative/Indie
+new orleans bounce,Hip Hop/Rap
+newgrass,Country/Americana
+noise music,Ambient & Experimental Electronic
 nordic jazz,Jazz
-Novelty Music,Novelty/Spoken Word
+norsk rock,Rock
+nova musica maranhense,Latin
 novelty pop,Novelty/Spoken Word
-Novelty Rock,Novelty/Spoken Word
 novelty song,Novelty/Spoken Word
 nu-jazz,Jazz
 nu-soul,R&B/Soul
+orchestral,Classical/Orchestral
 orchestral pop,Pop
-Orchestral Video Game Music,Soundtrack/Instrumental
 outsider folk,Folk/Acoustic
-Outsider music,Alternative/Indie
-Piano Pop,Pop
-Post-Punk Revival,Alternative/Indie
-Production Music,Soundtrack/Instrumental
-Progressive Folk,Folk/Acoustic
-Proto-Trance,Techno & Trance
-Psych Funk,Funk/Disco
-Psychedelic Funk,Funk/Disco
-Rain Sounds,New Age/Meditation
+psytrance,Techno & Trance
+punk rock,Punk/Hardcore
+rage rap,Hip Hop/Rap
+rally house,House & EDM
 rap-rave,Hip Hop/Rap
-Reggae Pop,Reggae/Caribbean
+raï,World/Traditional
 relaxation,New Age/Meditation
-Relaxation Music,New Age/Meditation
-Relaxing Music,New Age/Meditation
+rock and roll,Rock
 romantic classical,Classical/Orchestral
 romantic era,Classical/Orchestral
-Sacred Music,World/Traditional
-Sleep Music,New Age/Meditation
-Soul Pop,R&B/Soul
+schlagerparty,Pop
+sexy drill,Hip Hop/Rap
+soft pop,Pop
 soul rock,R&B/Soul
 soul-folk,R&B/Soul
-Soul-pop,R&B/Soul
-Spa Music,New Age/Meditation
-Swing Jazz,Jazz
+southern gothic,Country/Americana
+space music,New Age/Meditation
+stutter house,House & EDM
+swing music,Jazz
 synth-punk,Punk/Hardcore
-Techno brass,Techno & Trance
 trad jazz,Jazz
 traditional Chinese music,World/Traditional
 traditional Italian folk,World/Traditional
-Traditional Jazz,Jazz
-Trailer music,Soundtrack/Instrumental
-Tropical Pop,Pop
-Tunisian folk,World/Traditional
-Tuvan throat singing,World/Traditional
-TV Score,Soundtrack/Instrumental
-UK Hardcore,House & EDM
+traditional music,World/Traditional
+tropical music,Latin
+uk r&b,R&B/Soul
+variété française,Pop
 video game score,Soundtrack/Instrumental
-Video Game Soundtrack,Soundtrack/Instrumental
-Vintage pop,Pop
-Weather Sounds,New Age/Meditation
 wizard rock,Alternative/Indie
-World Music,World/Traditional
 world percussion,World/Traditional
-Zamrock,Rock

@@ -1696,6 +1696,100 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
             st.caption(f"_Please wait while we enrich your data..._")
         else:
             st.caption(f"This dataset has been fully enriched")
+
+def start_missing_genre_detective_task(dataset_label: str) -> None:
+    """
+    Start/ensure a single global background task for missing_genre_detective.
+    Uses task_registry() and a GLOBAL key (since the unlisted table is shared).
+    Detects stale entries and restarts if needed.
+    """
+    import os, threading, time, sys
+
+    reg = task_registry()
+    key = "genre_detective::GLOBAL"   # 🔒 single worker, regardless of dataset
+    entry = reg.get(key)
+
+    # Decide if we should (re)start
+    should_start = False
+    if not entry:
+        should_start = True
+    else:
+        th = entry.get("thread")
+        status = entry.get("status")
+        started_at = entry.get("started_at", 0)
+        alive = bool(th and th.is_alive())
+
+        # stale = no thread, or dead thread, or "starting" way too long without being alive
+        too_long = (time.time() - started_at) > 60 * 30  # 30 min
+        if not alive and status != "running":
+            should_start = True
+        elif status == "starting" and not alive and too_long:
+            print("[genre_detective] detected stale 'starting' entry (>30min) — restarting")
+            should_start = True
+        else:
+            print(f"[genre_detective] already running: {th.name if th else 'unknown'} (status={status}, alive={alive})")
+            return
+
+    try:
+        gem_key = st.secrets.get("gemini", {}).get("api_key")
+        if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
+            os.environ["GEMINI_API_KEY"] = str(gem_key)
+            print("[genre_detective] GEMINI_API_KEY set from st.secrets")
+    except Exception as e:
+        print(f"[genre_detective] WARNING: cannot read st.secrets: {e}", file=sys.stderr)
+
+    # Worker (no st.* calls here)
+    def _worker(label_for_log: str) -> None:
+        try:
+            from missing_genre_detective import enrich_file_in_place
+            reg[key]["status"] = "running"
+            print(f"[genre_detective] ▶ starting (global) for '{label_for_log}'")
+            # R2 mode + debug dump enabled (see patch below)
+            enrich_file_in_place(
+                provider_name="gemini",
+                batch_size=20,
+                sleep_between_batches=0.8,
+                max_retries=4,
+                force=False,
+                limit=None,
+                io_mode="r2",
+                debug_dump_merges_to_r2=False,  # 👈 new: dump merged rows to R2 for inspection
+            )
+            reg[key]["status"] = "done"
+            print(f"[genre_detective] ✅ completed (global) for '{label_for_log}'")
+        except Exception as e:
+            reg[key]["status"] = "error"
+            reg[key]["error"] = str(e)
+            print(f"[genre_detective] ❌ error (global) for '{label_for_log}': {e}", file=sys.stderr)
+
+    t = threading.Thread(
+        target=_worker,
+        args=(dataset_label,),
+        name="genre_detective::GLOBAL",
+        daemon=True,
+    )
+
+    # attach Streamlit run context (best effort)
+    try:
+        from streamlit.runtime.scriptrunner import add_script_run_ctx
+        add_script_run_ctx(t)
+    except Exception:
+        pass
+
+    reg[key] = {
+        "thread": t,
+        "status": "starting",
+        "label": dataset_label,
+        "started_at": time.time(),
+        "error": None,
+    }
+    t.start()
+
+    try:
+        st.toast("Started genre detection in the background.",duration="short")
+    except Exception:
+        st.info("Started genre detection in the background.")
+
 # ------------------ INIT PAGE CONFIG ------------------
 st.set_page_config(page_title="Regifted", page_icon=ICON_BROWSER, layout="wide", initial_sidebar_state="expanded")
 clear_stale_locks(max_age_minutes=10)
@@ -1723,6 +1817,16 @@ else:
 # Only refresh/slide expiry when we actually have a user
 if st.session_state.get("user"):
     refresh_cookie_if_needed()
+
+# 🔒 Boot-once trigger for the global detective (per user session)
+if not st.session_state.get("_genre_detective_boot_started", False):
+    st.session_state["_genre_detective_boot_started"] = True
+    try:
+        # This starts the same single global worker; it will no-op if already alive
+        start_missing_genre_detective_task(dataset_label="__app_boot__")
+    except Exception as e:
+        # Non-fatal: just log in UI without breaking the page
+        st.info(f"Genre detective not started at boot: {e}")
 
 # ------------------------------- LOGIN PAGE --------------------------------- #
 if not st.session_state.user:
@@ -1958,17 +2062,20 @@ with st.sidebar:
                     log_dao,
                     table_name=selected_table,
                 )
+
+                # ✅ Start the genre detective ONLY when a dataset is (re)loaded
+                #    (single global worker; will no-op if already running)
+                try:
+                    start_missing_genre_detective_task(selected_label)
+                except Exception as e:
+                    st.info(f"Genre detective did not start: {e}")
+
             except Exception as e:
                 st.error(f"Failed to load dataset from storage: {e}")
                 st.stop()
 
     else:
         st.info("No datasets uploaded yet. You can add one from the Home page.")
-
-    # --- Ensure genre detective runs once per active dataset (even if no reload happened) ---
-    active_label = st.session_state.get("current_dataset_label") or (selected_label if labels else None)
-    if active_label:
-        start_missing_genre_detective_task(active_label)
 
     # Existing status UI
     if st.session_state.get("current_dataset_label"):
@@ -4547,179 +4654,207 @@ elif page == "Genres":
     with c4:
         scorecard("Favourite Track", fav_track_display)
 
-    # ---------------- Treemap -------------- #
-    st.markdown("### Top Genres for Selected Year (Treemap with Drilldown)")
+    # =========================================
+    # Treemap: Genres → Top 10 Artists → Top 10 Tracks
+    # - Global filter is df_year (your selected year)
+    # - No "Others"; parents equal the sum of shown children (no empty space)
+    # - Same neon colorscale across layers, re-mapped per layer range
+    # - Children visible initially; smooth transitions on zoom
+    # =========================================
+    import plotly.graph_objects as go
+    import pandas as pd
 
-    try:
-        import plotly.graph_objects as go
+    # ---------------------------
+    # 1) Build the three levels
+    # ---------------------------
+    df_work = df_year.copy()
 
-        # --- 1) Aggregate total minutes by genre for the selected year ---
-        genre_totals = (
-            df_year[
-                df_year["supergenre"].notna()
-                & (df_year["supergenre"].str.strip() != "")
-                & (df_year["supergenre"].str.lower() != "unlisted")
-            ]
-            .groupby("supergenre", as_index=False)["minutes_played"]
-            .sum()
+    # Keep only usable supergenres (minimal filter, per your preference)
+    df_work = df_work[
+        df_work["supergenre"].notna()
+        & (df_work["supergenre"].astype(str).str.strip() != "")
+        & (df_work["supergenre"].str.lower() != "unlisted")
+    ].copy()
+
+    # Track totals per (genre, artist, track)
+    g_track = (
+        df_work.groupby(["supergenre", "artist_name", "track_name"], as_index=False)["minutes_played"]
+        .sum()
+    )
+
+    # Top-10 tracks per (genre, artist)
+    g_track = g_track.sort_values(
+        ["supergenre", "artist_name", "minutes_played"],
+        ascending=[True, True, False]
+    )
+    top10_tracks_each_artist = (
+        g_track.groupby(["supergenre", "artist_name"], as_index=False).head(10).copy()
+    )
+
+    # Artist value = sum of their Top-10 tracks; then keep Top-10 artists per genre
+    artist_nodes = (
+        top10_tracks_each_artist
+        .groupby(["supergenre", "artist_name"], as_index=False)["minutes_played"]
+        .sum()
+        .rename(columns={"minutes_played": "artist_value"})
+        .sort_values(["supergenre", "artist_value"], ascending=[True, False])
+    )
+    top10_artists_each_genre = (
+        artist_nodes.groupby("supergenre", as_index=False).head(10).copy()
+    )
+
+    # Genre value = sum of Top-10 artists
+    genre_nodes = (
+        top10_artists_each_genre
+        .groupby("supergenre", as_index=False)["artist_value"]
+        .sum()
+        .rename(columns={"artist_value": "genre_value"})
+        .sort_values("genre_value", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    # Optional subtitle: the top artist per genre
+    top_artist_per_genre = (
+        top10_artists_each_genre
+        .sort_values(["supergenre", "artist_value"], ascending=[True, False])
+        .drop_duplicates("supergenre")[["supergenre", "artist_name"]]
+        .rename(columns={"artist_name": "top_artist"})
+    )
+    genres_with_top = genre_nodes.merge(top_artist_per_genre, on="supergenre", how="left")
+
+    # ---------------------------
+    # 2) Colors by RANK, evenly across scale
+    # ---------------------------
+    def even_positions(n: int):
+        """Return n evenly spaced positions in [0,1]."""
+        if n <= 1:
+            return [0.5]
+        return [i / (n - 1) for i in range(n)]
+
+    # GENRE layer — rank all genres by genre_value (desc) and spread across the scale
+    genres_ordered = genres_with_top.sort_values("genre_value", ascending=False).reset_index(drop=True)
+    g_pos = even_positions(len(genres_ordered))
+    g_colors = sample_colorscale(neon_colorscale, g_pos)[::-1]
+    genre_rank_color = dict(zip(genres_ordered["supergenre"], g_colors))
+
+    # ARTIST layer — for each genre, spread that genre’s Top-10 artists evenly across the scale by rank
+    artist_rank_color = {}
+    for g in genres_ordered["supergenre"]:
+        artists = (
+            top10_artists_each_genre[top10_artists_each_genre["supergenre"] == g]
+            .sort_values("artist_value", ascending=False)
+            .reset_index(drop=True)
         )
+        a_pos = even_positions(len(artists))
+        a_cols = sample_colorscale(neon_colorscale, a_pos)[::-1]
+        for (a, c) in zip(artists["artist_name"], a_cols):
+            artist_rank_color[(g, a)] = c
 
-        if genre_totals.empty:
-            st.info("No genre data found for this year selection.")
-        else:
-            # Keep Top 10 genres by total time
-            top10_genres = (
-                genre_totals.sort_values("minutes_played", ascending=False)
-                .head(10)
-                .copy()
+    # TRACK layer — for each (genre, artist), spread their Top-10 tracks evenly across the scale by rank
+    track_rank_color = {}
+    for g in genres_ordered["supergenre"]:
+        artists = (
+            top10_artists_each_genre[top10_artists_each_genre["supergenre"] == g]
+            .sort_values("artist_value", ascending=False)
+        )
+        for a in artists["artist_name"]:
+            tracks = (
+                top10_tracks_each_artist[
+                    (top10_tracks_each_artist["supergenre"] == g) &
+                    (top10_tracks_each_artist["artist_name"] == a)
+                ]
+                .sort_values("minutes_played", ascending=False)
+                .reset_index(drop=True)
             )
-            top10_genre_names = top10_genres["supergenre"].tolist()
+            t_pos = even_positions(len(tracks))
+            t_cols = sample_colorscale(neon_colorscale, t_pos)[::-1]
+            for (t, c) in zip(tracks["track_name"], t_cols):
+                track_rank_color[(g, a, t)] = c
 
-            # --- 2) Compute per-artist minutes for those genres (selected year) ---
-            df_candidates = df_year[df_year["supergenre"].isin(top10_genre_names)].copy()
-            per_artist = (
-                df_candidates
-                .groupby(["supergenre", "artist_name"], as_index=False)["minutes_played"]
-                .sum()
+    # ---------------------------
+    # 3) Build hierarchy arrays
+    # ---------------------------
+    ids, labels, parents, values, texts, colors, custom = [], [], [], [], [], [], []
+
+    def gid(g): return f"g|{g}"
+    def aid(g, a): return f"a|{g}|{a}"
+    def tid(g, a, t): return f"t|{g}|{a}|{t}"
+
+    root_id = "root"
+    total_all = float(genres_ordered["genre_value"].sum())
+
+    # Root
+    ids.append(root_id); labels.append("All Genres"); parents.append("")
+    values.append(total_all); texts.append(""); colors.append("rgba(0,0,0,0)")
+    custom.append(format_hhmmss(total_all))
+
+    # Genres (value = sum of shown artists)
+    for _, grow in genres_ordered.iterrows():
+        g = grow["supergenre"]; g_val = float(grow["genre_value"])
+        ids.append(gid(g)); labels.append(g); parents.append(root_id)
+        texts.append(f"★ {genres_with_top.loc[genres_with_top['supergenre'] == g, 'top_artist'].iloc[0] or ''}")
+        values.append(g_val); colors.append(genre_rank_color[g]); custom.append(format_hhmmss(g_val))
+
+        # Artists (value = sum of shown tracks)
+        artists = (
+            top10_artists_each_genre[top10_artists_each_genre["supergenre"] == g]
+            .sort_values("artist_value", ascending=False)
+        )
+        for _, arow in artists.iterrows():
+            a = arow["artist_name"]; a_val = float(arow["artist_value"])
+            ids.append(aid(g, a)); labels.append(a); parents.append(gid(g))
+            values.append(a_val); texts.append(format_hhmmss(a_val))
+            colors.append(artist_rank_color[(g, a)]); custom.append(format_hhmmss(a_val))
+
+            # Tracks (Top-10)
+            tracks = (
+                top10_tracks_each_artist[
+                    (top10_tracks_each_artist["supergenre"] == g) &
+                    (top10_tracks_each_artist["artist_name"] == a)
+                ]
+                .sort_values("minutes_played", ascending=False)
             )
+            for _, trow in tracks.iterrows():
+                t = trow["track_name"]; t_val = float(trow["minutes_played"])
+                ids.append(tid(g, a, t)); labels.append(t); parents.append(aid(g, a))
+                values.append(t_val); texts.append(format_hhmmss(t_val))
+                colors.append(track_rank_color[(g, a, t)]); custom.append(format_hhmmss(t_val))
 
-            # Top artist per genre for the parent tile subtitle
-            top_artist_per_genre = (
-                per_artist
-                .sort_values(["supergenre", "minutes_played"], ascending=[True, False])
-                .drop_duplicates(subset=["supergenre"])
-                .rename(columns={"artist_name": "top_artist"})
-            )
+    # ---------------------------
+    # 4) Figure (initially show all layers, with smooth zoom)
+    # ---------------------------
+    fig_treemap = go.Figure(go.Treemap(
+        ids=ids, labels=labels, parents=parents, values=values,
+        text=texts, textinfo="label+text",
+        texttemplate="<b>%{label}</b><br>%{text}",
+        hovertemplate="<b>%{label}</b><br><br>Time: %{customdata}<extra></extra>",
+        customdata=custom,
+        marker=dict(colors=colors),
+        tiling=dict(pad=2, squarifyratio=1),
+        branchvalues="total",      # parents equal the sum of shown children (no empty/black space)
+        pathbar=dict(visible=True),
+        root_color="rgba(0,0,0,0)",
+        maxdepth=2,                # show Genres + Artists + Tracks initially
+    ))
 
-            # Top 10 artists *within each* genre (for drilldown)
-            per_artist_sorted = per_artist.sort_values(
-                ["supergenre", "minutes_played"], ascending=[True, False]
-            )
-            top10_artists_each_genre = (
-                per_artist_sorted.groupby("supergenre", as_index=False).head(10).copy()
-            )
-            
-            # Merge to decorate parent tiles with their top artist
-            genres_with_top = top10_genres.merge(
-                top_artist_per_genre[["supergenre", "top_artist"]],
-                on="supergenre",
-                how="left"
-            ).copy()
+    fig_treemap.update_layout(
+        # uniformtext=dict(minsize=16, mode="show"),
+        height=850,
+        margin=dict(l=0, r=0, t=30, b=0),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e1ece3", size=14),
+        transition=dict(duration=550, easing="cubic-in-out"),
+        uirevision="treemap-zoom",
+    )
+    fig_treemap.update_traces(textfont=dict(color="#000B06", family="Arial"))
 
-            # --- 3) Colors: sample neon palette for genres; reuse for children ---
-            n_genres = len(genres_with_top)
-            positions = [i / max(1, n_genres - 1) for i in range(n_genres)]
-
-            # Resolve colorscale robustly: neon_colorscale -> neon_coloscale (typo) -> spotify_colorscale
-            neon_scale = None
-            try:
-                neon_scale = neon_colorscale
-            except Exception:
-                try:
-                    neon_scale = neon_coloscale  # in case the var was misspelled
-                except Exception:
-                    neon_scale = None
-
-            try:
-                if neon_scale is not None:
-                    genre_colors = sample_colorscale(neon_scale, positions)
-                else:
-                    genre_colors = sample_colorscale(spotify_colorscale, positions)
-            except Exception:
-                genre_colors = sample_colorscale(spotify_colorscale, positions)
-
-            # Reverse for a pleasing ramp, largest often gets the first bold hue
-            genres_with_top = genres_with_top.reset_index(drop=True)
-            genre_colors = genre_colors[::-1]
-            color_by_genre = dict(zip(genres_with_top["supergenre"], genre_colors))
-
-            # --- 4) Build hierarchical arrays with UNIQUE ids ---
-            ids = []        # unique node ids (required to disambiguate duplicates)
-            labels = []     # display labels (genre or artist)
-            parents = []    # parent ids ("" for root level)
-            values = []     # minutes
-            texts = []      # what we print inside each tile
-            colors = []     # per-node color
-            custom = []     # HH:MM:SS for hover
-
-            # Helper: safe unique ids
-            def gid(genre: str) -> str:
-                return f"g|{genre}"
-
-            def aid(genre: str, artist: str) -> str:
-                return f"a|{genre}|{artist}"
-
-            # Parent GENRE nodes
-            for _, row in genres_with_top.iterrows():
-                g = str(row["supergenre"])
-                total_min = float(row["minutes_played"])
-                top_artist = (row.get("top_artist") or "N/A")
-                c = color_by_genre.get(g, "#888888")
-
-                ids.append(gid(g))
-                labels.append(g)                  # big label = Genre
-                parents.append("")                # root
-                values.append(total_min)          # total minutes for the genre
-                texts.append(top_artist)          # show top artist on the genre tile
-                colors.append(c)
-                custom.append(format_hhmmss(total_min))
-
-                # Child ARTIST nodes (Top 10 within this genre)
-                child_rows = top10_artists_each_genre[top10_artists_each_genre["supergenre"] == g]
-                for _, cr in child_rows.iterrows():
-                    artist = str(cr["artist_name"])
-                    mins = float(cr["minutes_played"])
-
-                    ids.append(aid(g, artist))
-                    labels.append(artist)         # child label = Artist
-                    parents.append(gid(g))        # parent is the genre's id
-                    values.append(mins)           # artist minutes within genre
-                    texts.append(format_hhmmss(mins))  # display time on child tile
-                    colors.append(c)              # reuse parent's color for cohesion
-                    custom.append(format_hhmmss(mins))
-
-            # --- 5) Treemap with explicit ids (fixes drilldown) ---
-            fig_treemap = go.Figure(
-                go.Treemap(
-                    ids=ids,
-                    labels=labels,
-                    parents=parents,
-                    values=values,
-                    text=texts,
-                    textinfo="label+text",               # show label (genre/artist) + text
-                    texttemplate="<b>%{label}</b><br>%{text}",
-                    hovertemplate="<b>%{label}</b><br>"
-                                    "Value: %{value} min<br>"
-                                    "Time: %{customdata}<extra></extra>",
-                    customdata=custom,
-                    marker=dict(colors=colors),
-                    tiling=dict(pad=4, squarifyratio=1),
-                    # 'remainder' = parent value is its own total; children occupy part of it
-                    branchvalues="remainder",
-                    pathbar=dict(visible=True),          # breadcrumb for navigation
-                    maxdepth=1,                          # start collapsed at genre level
-                    root_color="rgba(0,0,0,0)",
-                )
-            )
-
-            # --- 6) Styling consistent with your theme ---
-            fig_treemap.update_layout(
-                height=500,
-                margin=dict(l=0, r=0, t=30, b=0),
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#e1ece3", size=14),
-            )
-            fig_treemap.update_traces(textfont=dict(color="#000B06", size=12, family="Arial"))
-
-            st.plotly_chart(
-                fig_treemap,
-                use_container_width=True,
-                config={"displayModeBar": False, "responsive": True},
-            )
-
-    except Exception as e:
-        st.error(f"Failed to build Treemap with drilldown: {e}")
+    st.plotly_chart(
+        fig_treemap,
+        use_container_width=True,
+        width="stretch",
+        config={"displayModeBar": False, "responsive": True},
+    )
 
     # ------------- Top 10 Chart ----------------------- #
     st.markdown("### Top Tracks in Selected Genre")
@@ -4872,135 +5007,135 @@ elif page == "Genres":
             st.info("No album images available for this timeframe.")
 
     # ------------ Top 10 Genres ----------- #
-    with c1:
-        st.markdown("### Top Genres for Selected Year")
-        try:
-            # --- 1) Aggregate total minutes by genre for the selected year ---
-            # We exclude null/blank genres and "unlisted"
-            genre_totals = (
-                df_year[
-                    df_year["supergenre"].notna()
-                    & (df_year["supergenre"].str.strip() != "")
-                    & (df_year["supergenre"].str.lower() != "unlisted")
-                ]
-                .groupby("supergenre", as_index=False)["minutes_played"]
-                .sum()
-            )
+    # with c1:
+    #     st.markdown("### Top Genres for Selected Year")
+    #     try:
+    #         # --- 1) Aggregate total minutes by genre for the selected year ---
+    #         # We exclude null/blank genres and "unlisted"
+    #         genre_totals = (
+    #             df_year[
+    #                 df_year["supergenre"].notna()
+    #                 & (df_year["supergenre"].str.strip() != "")
+    #                 & (df_year["supergenre"].str.lower() != "unlisted")
+    #             ]
+    #             .groupby("supergenre", as_index=False)["minutes_played"]
+    #             .sum()
+    #         )
 
-            # If nothing to show, bail out early
-            if genre_totals.empty:
-                st.info("No genre data found for this year selection.")
-            else:
-                # Keep Top 10 genres by total time
-                top10_genres = (
-                    genre_totals.sort_values("minutes_played", ascending=False)
-                    .head(10)
-                    .copy()
-                )
+    #         # If nothing to show, bail out early
+    #         if genre_totals.empty:
+    #             st.info("No genre data found for this year selection.")
+    #         else:
+    #             # Keep Top 10 genres by total time
+    #             top10_genres = (
+    #                 genre_totals.sort_values("minutes_played", ascending=False)
+    #                 .head(10)
+    #                 .copy()
+    #             )
 
-                # --- 2) Find the top artist per each of those Top 10 genres (this year) ---
-                df_candidates = df_year[df_year["supergenre"].isin(top10_genres["supergenre"])].copy()
+    #             # --- 2) Find the top artist per each of those Top 10 genres (this year) ---
+    #             df_candidates = df_year[df_year["supergenre"].isin(top10_genres["supergenre"])].copy()
 
-                # Sum per (genre, artist), then pick the artist with the highest time for each genre
-                top_artist_per_genre = (
-                    df_candidates
-                    .groupby(["supergenre", "artist_name"], as_index=False)["minutes_played"]
-                    .sum()
-                    .sort_values(["supergenre", "minutes_played"], ascending=[True, False])
-                    .drop_duplicates(subset=["supergenre"])
-                    .rename(columns={"artist_name": "top_artist"})
-                )
+    #             # Sum per (genre, artist), then pick the artist with the highest time for each genre
+    #             top_artist_per_genre = (
+    #                 df_candidates
+    #                 .groupby(["supergenre", "artist_name"], as_index=False)["minutes_played"]
+    #                 .sum()
+    #                 .sort_values(["supergenre", "minutes_played"], ascending=[True, False])
+    #                 .drop_duplicates(subset=["supergenre"])
+    #                 .rename(columns={"artist_name": "top_artist"})
+    #             )
 
-                # Merge back to get a tidy table with totals + the top artist name
-                plot_df = top10_genres.merge(
-                    top_artist_per_genre[["supergenre", "top_artist"]],
-                    on="supergenre",
-                    how="left"
-                )
+    #             # Merge back to get a tidy table with totals + the top artist name
+    #             plot_df = top10_genres.merge(
+    #                 top_artist_per_genre[["supergenre", "top_artist"]],
+    #                 on="supergenre",
+    #                 how="left"
+    #             )
 
-                # --- 3) Prepare colors: sample from neon_colorscale (fallback to spotify_colorscale) ---
-                n = len(plot_df)
-                positions = [i / max(1, n - 1) for i in range(n)]  # 0..1 spaced
+    #             # --- 3) Prepare colors: sample from neon_colorscale (fallback to spotify_colorscale) ---
+    #             n = len(plot_df)
+    #             positions = [i / max(1, n - 1) for i in range(n)]  # 0..1 spaced
 
-                try:
-                    # If neon_colorscale and sample_colorscale are available, use them
-                    sampled = sample_colorscale(neon_colorscale, positions)
-                except Exception:
-                    # Fallback to Spotify colors if neon isn't available
-                    # (also keeps the code resilient if neon_colorscale isn't defined)
-                    sampled = sample_colorscale(spotify_colorscale, positions)
+    #             try:
+    #                 # If neon_colorscale and sample_colorscale are available, use them
+    #                 sampled = sample_colorscale(neon_colorscale, positions)
+    #             except Exception:
+    #                 # Fallback to Spotify colors if neon isn't available
+    #                 # (also keeps the code resilient if neon_colorscale isn't defined)
+    #                 sampled = sample_colorscale(spotify_colorscale, positions)
 
-                # Reverse so the longest bar (which will be at the bottom in h-bar ascending sort) pops
-                plot_df = plot_df.reset_index(drop=True)
-                plot_df["color"] = sampled[::-1]
+    #             # Reverse so the longest bar (which will be at the bottom in h-bar ascending sort) pops
+    #             plot_df = plot_df.reset_index(drop=True)
+    #             plot_df["color"] = sampled[::-1]
 
-                # For pretty x-axis tick labels later
-                plot_df["hhmmss"] = plot_df["minutes_played"].apply(format_hhmmss)
+    #             # For pretty x-axis tick labels later
+    #             plot_df["hhmmss"] = plot_df["minutes_played"].apply(format_hhmmss)
 
-                # --- 4) Build the horizontal bar chart ---
-                # Sort ascending so Plotly places the largest at the bottom (clean ladder look)
-                plot_df_sorted = plot_df.sort_values("minutes_played", ascending=True)
+    #             # --- 4) Build the horizontal bar chart ---
+    #             # Sort ascending so Plotly places the largest at the bottom (clean ladder look)
+    #             plot_df_sorted = plot_df.sort_values("minutes_played", ascending=True)
 
-                fig_top_genres = px.bar(
-                    plot_df_sorted,
-                    x="minutes_played",
-                    y="supergenre",
-                    text="top_artist",            # label inside bar = top artist
-                    orientation="h",
-                    color="color",
-                    color_discrete_map="identity",
-                    labels={
-                        "minutes_played": "Listening Time (HH:MM:SS)",
-                        "supergenre": "",
-                        "top_artist": "Top Artist"
-                    },
-                )
+    #             fig_top_genres = px.bar(
+    #                 plot_df_sorted,
+    #                 x="minutes_played",
+    #                 y="supergenre",
+    #                 text="top_artist",            # label inside bar = top artist
+    #                 orientation="h",
+    #                 color="color",
+    #                 color_discrete_map="identity",
+    #                 labels={
+    #                     "minutes_played": "Listening Time (HH:MM:SS)",
+    #                     "supergenre": "",
+    #                     "top_artist": "Top Artist"
+    #                 },
+    #             )
 
-                # Format x-axis ticks as HH:MM:SS
-                max_minutes = plot_df_sorted["minutes_played"].max()
-                tick_interval = max_minutes / 5 if max_minutes > 0 else 1
-                # Build integer tick positions (defensive cast)
-                tickvals = [int(i) for i in range(0, int(max_minutes) + 1, max(1, int(tick_interval)))]
-                ticktext = [format_hhmmss(x) for x in tickvals]
+    #             # Format x-axis ticks as HH:MM:SS
+    #             max_minutes = plot_df_sorted["minutes_played"].max()
+    #             tick_interval = max_minutes / 5 if max_minutes > 0 else 1
+    #             # Build integer tick positions (defensive cast)
+    #             tickvals = [int(i) for i in range(0, int(max_minutes) + 1, max(1, int(tick_interval)))]
+    #             ticktext = [format_hhmmss(x) for x in tickvals]
 
-                fig_top_genres.update_xaxes(
-                    title="Listening Time (HH:MM:SS)",
-                    tickvals=tickvals,
-                    ticktext=ticktext,
-                    showgrid=False,
-                )
+    #             fig_top_genres.update_xaxes(
+    #                 title="Listening Time (HH:MM:SS)",
+    #                 tickvals=tickvals,
+    #                 ticktext=ticktext,
+    #                 showgrid=False,
+    #             )
 
-                # Style the text to sit nicely inside the bars
-                fig_top_genres.update_traces(
-                    texttemplate="%{text}",
-                    textposition="inside",
-                    insidetextanchor="middle",
-                    insidetextfont=dict(color="#000B06", size=12, family="Arial"),
-                    hovertemplate="<b>%{y}</b><br>Top Artist: %{text}<br>Total: %{x} min<br>Time: %{customdata}",
-                    customdata=plot_df_sorted["hhmmss"],
-                )
+    #             # Style the text to sit nicely inside the bars
+    #             fig_top_genres.update_traces(
+    #                 texttemplate="%{text}",
+    #                 textposition="inside",
+    #                 insidetextanchor="middle",
+    #                 insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+    #                 hovertemplate="<b>%{y}</b><br>Top Artist: %{text}<br>Total: %{x} min<br>Time: %{customdata}",
+    #                 customdata=plot_df_sorted["hhmmss"],
+    #             )
 
-                # Layout styling to match your theme
-                fig_top_genres.update_layout(
-                    height=500,
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#e1ece3", size=14),
-                    xaxis=dict(showgrid=False),
-                    yaxis=dict(showgrid=False),
-                    margin=dict(l=0, r=0, t=30, b=0),
-                    showlegend=False,
-                )
+    #             # Layout styling to match your theme
+    #             fig_top_genres.update_layout(
+    #                 height=500,
+    #                 plot_bgcolor="rgba(0,0,0,0)",
+    #                 paper_bgcolor="rgba(0,0,0,0)",
+    #                 font=dict(color="#e1ece3", size=14),
+    #                 xaxis=dict(showgrid=False),
+    #                 yaxis=dict(showgrid=False),
+    #                 margin=dict(l=0, r=0, t=30, b=0),
+    #                 showlegend=False,
+    #             )
 
-                # Render the chart
-                st.plotly_chart(
-                    fig_top_genres,
-                    use_container_width=True,
-                    config={"displayModeBar": False, "responsive": True},
-                )
+    #             # Render the chart
+    #             st.plotly_chart(
+    #                 fig_top_genres,
+    #                 use_container_width=True,
+    #                 config={"displayModeBar": False, "responsive": True},
+    #             )
 
-        except Exception as e:
-            st.error(f"Failed to build Top Genres chart: {e}")
+    #     except Exception as e:
+    #         st.error(f"Failed to build Top Genres chart: {e}")
 
     # ===============================================================
     # LISTENING TREND (GENRE vs OVERALL)
@@ -5072,8 +5207,9 @@ elif page == "Genres":
     # ===============================================================
     # NORMALIZATION MODES (same options as artist/global chart)
     # ===============================================================
-    NORMALIZATION_MODE = "scale_to_max"
-        # "none", "scale_to_max", "relative_to_mean", "per_genre_average"
+    NORMALIZATION_MODE = "global_mean_joint_max"
+    # "none", "scale_to_max", "relative_to_mean", "per_genre_average",
+    # "global_mean_joint_max", "global_mean_joint_minmax"
 
     def normalize_series(series, mode="none", ref_df=None):
         if series.empty:
@@ -5089,13 +5225,90 @@ elif page == "Genres":
             return series / num_genres if num_genres > 0 else series
         return series
 
-    # Apply normalization
-    timeline_genre["normalized"] = normalize_series(
-        timeline_genre["rolling_avg"], NORMALIZATION_MODE, df_year
-    )
-    timeline_all["normalized"] = normalize_series(
-        timeline_all["rolling_avg"], NORMALIZATION_MODE, df_year
-    )
+    def normalize_genre_vs_global_mean(genre_series, global_series, ref_df, joint="max"):
+        """
+        Returns (genre_norm, global_mean_norm) as a pair.
+
+        Steps:
+        1) global_mean = global_series / nunique(supergenre) in ref_df
+        2) joint scaling:
+            - joint == "max": divide both by the same joint max
+            - joint == "minmax": joint min-max scale both to [0,1]
+        """
+        num_genres = int(ref_df["supergenre"].nunique())
+        num_genres = max(num_genres, 1)
+
+        global_mean = global_series / num_genres
+
+        if joint == "max":
+            joint_max = max(float(global_mean.max() or 0), float(genre_series.max() or 0))
+            if joint_max > 0:
+                return genre_series / joint_max, global_mean / joint_max
+            return genre_series, global_mean
+
+        elif joint == "minmax":
+            joint_min = min(float(global_mean.min() or 0), float(genre_series.min() or 0))
+            joint_max = max(float(global_mean.max() or 0), float(genre_series.max() or 0))
+            denom = joint_max - joint_min
+            if denom > 0:
+                return (genre_series - joint_min) / denom, (global_mean - joint_min) / denom
+            return genre_series, global_mean
+
+        # default fallback: no change
+        return genre_series, global_mean
+
+    if NORMALIZATION_MODE in ("global_mean_joint_max", "global_mean_joint_minmax"):
+        joint = "max" if NORMALIZATION_MODE == "global_mean_joint_max" else "minmax"
+        g_norm, gm_norm = normalize_genre_vs_global_mean(
+            timeline_genre["rolling_avg"],
+            timeline_all["rolling_avg"],
+            ref_df=df_year,
+            joint=joint,
+        )
+        timeline_genre["normalized"] = g_norm
+        timeline_all["normalized"] = gm_norm
+    else:
+        timeline_genre["normalized"] = normalize_series(
+            timeline_genre["rolling_avg"], NORMALIZATION_MODE, df_year
+        )
+        timeline_all["normalized"] = normalize_series(
+            timeline_all["rolling_avg"], NORMALIZATION_MODE, df_year
+        )
+
+    # ===============================================================
+    # ✅ NEW: Genre color mapping (25 genres evenly across neon_colorscale)
+    #     - We build a consistent genre → color map.
+    #     - The main trace uses the color for the currently selected genre.
+    # ===============================================================
+    # If you already have `genre_list` from your selector, you can reuse it for ordering.
+    try:
+        base_genres = list(genre_list)  # preserve your page’s existing order if available
+    except NameError:
+        # Fallback: derive from INFO_SUPERGENRE or the current dataset
+        try:
+            base_genres = (
+                INFO_SUPERGENRE["supergenre"].dropna().astype(str).str.strip().unique().tolist()
+            )
+        except NameError:
+            base_genres = (
+                df_year["supergenre"].dropna().astype(str).str.strip().unique().tolist()
+            )
+        base_genres = sorted(base_genres)
+
+    # Ensure deterministic list (and keep at most 25 if more exist)
+    base_genres = base_genres[:25]
+
+    # Evenly spaced positions across [0,1] for however many genres we have (target: 25)
+    positions = [i / max(1, len(base_genres) - 1) for i in range(len(base_genres))]
+
+    # Sample your neon scale at those positions
+    genre_palette = sample_colorscale(neon_colorscale, positions)
+
+    # Map: supergenre → hex color
+    GENRE_COLOR_MAP = dict(zip(base_genres, genre_palette))
+
+    # Pick the color for the selected genre (fallback to first color if missing)
+    main_color = GENRE_COLOR_MAP.get(genre_selected, genre_palette[0])
 
     # ===============================================================
     # PLOT — Genre vs. Overall Listening Trend
@@ -5108,7 +5321,7 @@ elif page == "Genres":
         y="normalized",
         title=f"{genre_selected} vs Overall Listening Trend ({year_selected})",
         labels={"normalized": "Normalized Minutes Played (7-Day Rolling Avg)", "date": "Date"},
-        color_discrete_sequence=["#23f96e"],  # neon green for genre
+        color_discrete_sequence=[main_color],  # ← use the genre-dependent color
     )
     fig_trend.update_traces(line=dict(width=2))
 
@@ -5116,13 +5329,13 @@ elif page == "Genres":
     fig_trend.data[0].name = f"{genre_selected} (Genre)"
     fig_trend.data[0].showlegend = True
 
-    # Add global listening trend trace
+    # Add global listening trend trace (kept as-is)
     fig_trend.add_scatter(
         x=timeline_all["date"],
         y=timeline_all["normalized"],
         mode="lines",
         name="All Genres (Global)",
-        line=dict(color="#137b37", width=1),  # mint green dashed
+        line=dict(color="#137b37", width=1),
         showlegend=True,
     )
 

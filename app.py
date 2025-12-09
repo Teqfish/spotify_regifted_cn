@@ -39,14 +39,63 @@ import textwrap
 import threading
 import time
 import traceback
+import sys, logging
 from typing import Optional, Literal
 import unicodedata
 import uuid
 import zipfile
 
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
+import enrichment_service as es
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks
 from chart_scorer import parse_label_ts_from_table_name
+
+# -------------------------------- DEBUGGER ---------------------------------- #
+_DEBUG_SEQ = 0
+def _trace(tag: str, **kv):
+    """Lightweight, ordered trace with key facts."""
+    global _DEBUG_SEQ
+    _DEBUG_SEQ += 1
+    bits = [f"{k}={v}" for k, v in kv.items()]
+    print(f"[TRACE #{_DEBUG_SEQ:03d}] {tag} :: " + " | ".join(bits))
+
+def _log_df(df, name: str, max_cols: int = 12):
+    try:
+        cols = list(df.columns)[:max_cols] if df is not None else []
+        print(f"[DF] {name}: none={df is None} empty={getattr(df, 'empty', True)} "
+              f"shape={getattr(df, 'shape', None)} cols={cols}")
+    except Exception:
+        print(f"[DF] {name}: <could not inspect> {traceback.format_exc()}")
+
+# ------------------------------- MEGA-LOGGER -------------------------------- #
+class StreamToLogger:
+    def __init__(self, logger, log_level=logging.INFO):
+        self.logger = logger
+        self.log_level = log_level
+
+    def write(self, message):
+        if message.strip():
+            self.logger.log(self.log_level, message.strip())
+
+    def flush(self):
+        pass
+
+if "logger_initialized" not in st.session_state:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler("debug_enrichment.log"),
+            logging.StreamHandler(sys.__stdout__)
+        ]
+    )
+
+    logger = logging.getLogger()
+    sys.stdout = StreamToLogger(logger, logging.INFO)
+    sys.stderr = StreamToLogger(logger, logging.ERROR)
+
+    st.session_state["logger_initialized"] = True
+    print("[logging] ✅ StreamToLogger attached")
 
 # -------------------------- CONFIG / CLIENTS -------------------------------- #
 SPOTIFY_ID = st.secrets["spotify"]["client_id"]
@@ -252,10 +301,10 @@ def scorecard(
     <div style="
         position: relative;
         background-color: {bg_color};
-        border-radius: 5px;
+        border-radius: 3px;
         width: {width_style};
         height: {height}px;
-        margin: 2px;
+        margin: 0px;
         box-shadow: {'0 0 8px rgba(0,0,0,0.3)' if background else 'none'};
         overflow: hidden;
     ">
@@ -296,7 +345,7 @@ def scorecard(
     </div>
     """
 
-    components.html(html, height=height + 10)
+    components.html(html, height=height +  5)
 
 def normalize_str(s):
     """Normalize string for consistent comparison (case-insensitive, strip accents)."""
@@ -652,18 +701,259 @@ def ensure_daos_initialized_for_thread():
     except Exception as e:
         print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
 
+def _audit_artist_genre_coverage(
+    user_id: str,
+    dataset_label: str,
+    table_name: Optional[str] = None,
+    user_df: Optional[pd.DataFrame] = None,
+):
+    """
+    Compare artists in the user's cleaned dataset vs the metadata artist genres.
+
+    Uses the already-loaded dataset (st.session_state.current_df) if available,
+    otherwise tries last_table_name or a DAO lookup.
+
+    Returns:
+      - not_present, present_but_missing, unenriched_all (DataFrames)
+      - counts: {...}
+      - telemetry: {"user_rows", "user_unique_artists", "metadata_rows", "source"}
+    """
+    import pandas as pd
+    import streamlit as st
+    from dao_selector import DAOS
+
+    # --- Prefer the in-memory dataset (no path guessing) ---
+    src = "session"
+    if user_df is None:
+        user_df = st.session_state.get("current_df")
+
+    # Fallback to DAO using last_table_name or explicit table_name
+    if user_df is None or user_df.empty:
+        src = "dao"
+        user_dao = DAOS.get("user_data")
+        key = table_name or st.session_state.get("last_table_name")
+        if key:
+            # Your DAO already knows how to resolve keys like {user_id}_{label}_{ts}_history
+            user_df = user_dao.load_user_data(key)
+        else:
+            # Last-resort: map label→table via list_datasets
+            try:
+                mapping = dict(user_dao.list_datasets(user_id))
+                tbl = mapping.get(dataset_label)
+                if tbl:
+                    user_df = user_dao.load_user_data(tbl)
+                    src = "dao(list_datasets)"
+            except Exception:
+                pass
+
+    if user_df is None:
+        user_df = pd.DataFrame(columns=["artist_name"])
+
+    # --- Load master artist genre table ---
+    metadata_dao = DAOS.get("r2")
+    df_artist_genre = metadata_dao.safe_download_csv(
+        "enrichment/metadata/info_artist_genre.csv",
+        required_cols=["artist_name", "primary_genre", "supergenre"],
+    )
+
+    # --- Normalized join keys ---
+    u = user_df.copy()
+    g = df_artist_genre.copy()
+
+    # Be resilient to column case/accents already normalized by your DAO
+    u_cols = {c.lower(): c for c in u.columns}
+    artist_col = u_cols.get("artist_name", "artist_name")
+    u["artist_key"] = u[artist_col].astype(str).str.strip().str.lower()
+    g["artist_key"] = g["artist_name"].astype(str).str.strip().str.lower()
+
+    # Normalize empty strings to NA in genre columns
+    for col in ["primary_genre", "supergenre"]:
+        if col in g.columns:
+            g[col] = g[col].astype("string").replace(r"^\s*$", pd.NA, regex=True)
+
+    # Unique user artists
+    user_artists = (
+        u[["artist_key", artist_col]]
+        .dropna(subset=["artist_key"])
+        .drop_duplicates("artist_key")
+        .rename(columns={artist_col: "artist_name"})
+    )
+
+    # Telemetry — helps detect “race” (0 artists)
+    user_rows = len(u)
+    user_unique_artists = user_artists["artist_key"].nunique()
+    metadata_rows = len(g)
+
+    # Prefer non-null genre rows if duplicates exist in metadata
+    def first_nonnull(s: pd.Series):
+        s = s.dropna()
+        return s.iloc[0] if not s.empty else pd.NA
+
+    g_one = (
+        g.groupby("artist_key", as_index=False)
+         .agg({"primary_genre": first_nonnull, "supergenre": first_nonnull})
+    )
+
+    # Merge + split
+    m = user_artists.merge(g_one, on="artist_key", how="left", indicator=True)
+
+    not_present = (
+        m[m["_merge"] == "left_only"][["artist_name", "artist_key"]]
+        .drop_duplicates("artist_key").sort_values("artist_name").reset_index(drop=True)
+    )
+    present_but_missing = (
+        m[(m["_merge"] == "both") & (m["primary_genre"].isna() | m["supergenre"].isna())]
+        [["artist_name", "artist_key"]]
+        .drop_duplicates("artist_key").sort_values("artist_name").reset_index(drop=True)
+    )
+    unenriched_all = (
+        pd.concat([not_present, present_but_missing], ignore_index=True)
+        .drop_duplicates("artist_key").reset_index(drop=True)
+    )
+
+    return {
+        "not_present": not_present,
+        "present_but_missing": present_but_missing,
+        "unenriched_all": unenriched_all,
+        "counts": {
+            "not_present": not_present["artist_key"].nunique(),
+            "present_but_missing": present_but_missing["artist_key"].nunique(),
+            "unenriched_all": unenriched_all["artist_key"].nunique(),
+        },
+        "telemetry": {
+            "source": src,
+            "user_rows": user_rows,
+            "user_unique_artists": user_unique_artists,
+            "metadata_rows": metadata_rows,
+        },
+    }
+
+def _start_targeted_artist_backfill_with_background_enrich(
+    *,
+    user_id: str,
+    dataset_label: str,
+    missing_names: list[str],
+    log_dao,
+) -> str:
+    """
+    Spawns a background_enrich thread that receives a filtered cleaned_df
+    containing only the artists in `missing_names`. This reuses the existing
+    enrichment path and avoids direct dependency on tokens/MetadataEnricher here.
+    """
+    import time, threading
+    import pandas as pd
+    import logging
+    import streamlit as st
+    from dao_selector import DAOS
+    from enrichment_service import (
+        get_user_lock, mark_lock_acquired, terminate_stale_enrichment_threads,
+        update_heartbeat,
+    )
+
+    logger = logging.getLogger("enrichment")
+    logger.info("[targeted] preparing background_enrich for %d artists", len(missing_names))
+
+    # 1) Load the full cleaned dataframe (same source as other flows)
+    user_data_dao = DAOS.get("user_data")
+    cleaned_df = user_data_dao.safe_download_csv(
+        f"userdata/{dataset_label}.csv",
+        required_cols=["artist_name"]  # add more if your pipeline expects them
+    )
+
+    # 2) Filter to just the needed artists
+    #    We dedupe to keep this small; the enrich pipeline typically expands from artist names.
+    filtered_df = (
+        cleaned_df[cleaned_df["artist_name"].astype(str).str.strip().str.lower()
+                   .isin([n.strip().lower() for n in missing_names])]
+        .copy()
+    )
+    filtered_df = filtered_df.drop_duplicates(subset=["artist_name"])
+
+    if filtered_df.empty:
+        logger.info("[targeted] nothing to backfill after filtering; skipping")
+        return "nothing_to_do"
+
+    # 3) Acquire the per-user lock (same pattern as other starts)
+    user_lock = get_user_lock(user_id)
+    for attempt in range(10):
+        if user_lock.acquire(blocking=False):
+            mark_lock_acquired(user_id)
+            break
+        logger.info("[targeted] lock busy for user %s — waiting (%d/10)...", user_id, attempt + 1)
+        time.sleep(1)
+    else:
+        logger.error("[targeted] could not acquire lock; skipping")
+        return "locked"
+
+    # 4) Kill any stale enrichment threads before starting a fresh one
+    terminate_stale_enrichment_threads(user_id)
+
+    cancel_event = threading.Event()
+
+    # 5) Build and start the thread using your existing entrypoint
+    # from enrichment_service import background_enrich  # reuse your canonical path
+
+    def _runner():
+        try:
+            update_heartbeat(user_id, dataset_label)
+            logger.info("[targeted] background_enrich starting for %d artists", len(filtered_df))
+            background_enrich(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                cleaned_df=filtered_df,   # 👈 only the missing artists
+                log_dao=log_dao,
+                cancel_event=cancel_event,
+            )
+            logger.info("[targeted] background_enrich complete")
+        except Exception as e:
+            logger.exception("[targeted] error during targeted backfill: %s", e)
+            try:
+                log_dao.log(user_id, dataset_label, "enrichment",
+                            f"Targeted backfill error: {e}", level="error")
+            except Exception:
+                pass
+        finally:
+            try:
+                if user_lock.locked():
+                    user_lock.release()
+            except Exception as e:
+                logger.error("[targeted] failed to release lock: %s", e)
+            try:
+                st.session_state.pop("_enrichment_registry", None)
+            except Exception:
+                pass
+
+    t = threading.Thread(
+        target=_runner,
+        name=f"targeted_backfill:{user_id}:{dataset_label}",
+        daemon=True,
+    )
+    st.session_state["_enrichment_registry"] = {
+        "thread": t,
+        "cancel_event": cancel_event,
+        "dataset_label": dataset_label,
+        "user_id": user_id,
+    }
+    # small markers some utilities may look for
+    t._cancel_event = cancel_event
+    t._start_time = time.time()
+
+    t.start()
+    logger.info("[targeted] started thread %s", t.name)
+    return "targeted_backfill_started"
+
 def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao, table_name: Optional[str] = None):
     """
-    Checks D1/R2 consistency and heartbeats to detect stale enrichments.
-    Handles staged enrichment:
-      - standard_done → resume breadth-first
-      - breadth_running → monitor
-      - breadth_error → restart breadth-first only
-      - full_done → skip entirely
-      - running + stale → recovery sweep + auto-restart if safe
+    Checks D1/R2 consistency & heartbeats. When both stores report 'full_done',
+    it verifies coverage (are all user artists enriched?) and, if needed,
+    launches a targeted breadth-only backfill using the *same dataset* the UI is showing.
+
+    Debug: uses _trace() and _log_df() checkpoints to show control flow & data shapes.
     """
-    import threading, time, datetime
+    import time, threading, unicodedata
+    import pandas as pd
     import streamlit as st
+    from dao_selector import DAOS
     from enrichment_service import (
         get_user_lock,
         get_last_heartbeat,
@@ -671,9 +961,39 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         terminate_stale_enrichment_threads,
         recovery_sweep,
     )
-    from dao_selector import DAOS
 
     print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
+    _trace("enter_auto_check", user_id=user_id, label=dataset_label, table_name=table_name)
+
+    # ---- Helper: get the cleaned dataset currently in use (prefer session, fallback to DAO) ----
+    def _get_df_source():
+        src = "session"
+        key_used = st.session_state.get("last_table_name")
+        df_source = st.session_state.get("current_df")
+        _trace("get_df_source@session", has_df=(df_source is not None), empty=(getattr(df_source, "empty", True)))
+        _log_df(df_source, "current_df@session")
+
+        if df_source is None or df_source.empty:
+            try:
+                user_dao = DAOS.get("user_data")
+                src = "dao"
+                key = table_name or key_used
+                if not key:
+                    # last-resort mapping label → table
+                    try:
+                        mapping = dict(user_dao.list_datasets(user_id))
+                        key = mapping.get(dataset_label)
+                    except Exception as e:
+                        print(f"[auto_reenrich] ⚠️ list_datasets failed: {e}")
+                        key = None
+                _trace("get_df_source@dao_try", key=key)
+                if key:
+                    df_source = user_dao.load_user_data(key)
+                    key_used = key
+                    _log_df(df_source, f"load_user_data[{key}]")
+            except Exception as e:
+                print(f"[auto_reenrich] ⚠️ DAO load failed: {e}")
+        return df_source, src, key_used
 
     try:
         status_dao = DAOS.get("status")
@@ -687,17 +1007,127 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
 
         d1_state, r2_state = status_label(d1_status), status_label(r2_status)
         print(f"[auto_reenrich] 🧭 D1={d1_state}, R2={r2_state}")
+        _trace("states", d1=d1_state, r2=r2_state)
 
-        # --- If both are full_done, skip entirely ---
+        # =========================
+        # 1) FULL_DONE → audit coverage, then start targeted breadth-only if gaps exist
+        # =========================
         if d1_state == "full_done" and r2_state == "full_done":
-            print(f"[auto_reenrich] ✅ Full enrichment already complete for {dataset_label} — skipping re-enrich.")
-            return "ok"
+            _trace("full_done_branch", label=dataset_label)
+            print(f"[auto_reenrich] ⚖️ full_done→ running coverage audit for {dataset_label}")
+
+            # Use the same dataset the UI is using (avoids flip/flop counts)
+            df_source, src, key_used = _get_df_source()
+
+            try:
+                audit = _audit_artist_genre_coverage(
+                    user_id=user_id,
+                    dataset_label=dataset_label,
+                    table_name=key_used,
+                    user_df=df_source,
+                )
+            except Exception as e:
+                print(f"[auto_reenrich] ❌ audit failed: {e}")
+                _trace("returning", reason="audit_failed")
+                return "error"
+
+            counts = audit["counts"]
+            # Defensive: compute unique user artists from the same df we’ll filter
+            user_unique = 0
+            if df_source is not None and not df_source.empty and "artist_name" in df_source.columns:
+                user_unique = (
+                    df_source["artist_name"]
+                    .astype(str).str.strip().str.lower()
+                    .nunique()
+                )
+
+            print(
+                f"[auto_reenrich] 📊 audit: not_present={counts['not_present']}, "
+                f"present_but_missing={counts['present_but_missing']}, total_unenriched={counts['unenriched_all']} "
+                f"| source={src}, user_rows={0 if df_source is None else len(df_source)}, "
+                f"user_unique={user_unique}, key={key_used}"
+            )
+            _trace("audit_done",
+                   not_present=counts['not_present'],
+                   present_missing=counts['present_but_missing'],
+                   total=counts['unenriched_all'],
+                   source=src, user_unique=user_unique, key=key_used)
+
+            # If UI hasn't loaded a dataset yet, defer
+            if user_unique == 0:
+                print("[auto_reenrich] 💤 user_df has 0 unique artists — deferring audit")
+                _trace("returning", reason="deferred_user_df_empty")
+                return "deferred"
+
+            # No gaps → nothing to do
+            if counts["unenriched_all"] == 0:
+                print(f"[auto_reenrich] ✅ Coverage OK — skipping targeted backfill for {dataset_label}")
+                _trace("returning", reason="coverage_ok")
+                return "ok"
+
+            # Build missing keys (artist_key is deterministic after normalization)
+            try:
+                missing_keys = (
+                    audit["unenriched_all"]["artist_key"]
+                    .dropna().astype(str).str.strip().str.lower().unique().tolist()
+                )
+            except Exception as e:
+                print(f"[auto_reenrich] ❌ failed to build missing_keys: {e}")
+                _trace("returning", reason="missing_keys_build_failed")
+                return "error"
+
+            _trace("build_missing_keys", missing_count=len(missing_keys))
+            print(f"[auto_reenrich] 🧩 targeted backfill (breadth-only) → {len(missing_keys)} artists")
+
+            # Filter the same df the UI is using; KEEP ALL COLUMNS
+            if df_source is None or df_source.empty:
+                print("[auto_reenrich] 💤 cleaned_df is empty — cannot start targeted backfill")
+                _trace("returning", reason="no_df_for_targeted")
+                return "nothing_to_do"
+
+            df_tmp = df_source.copy()
+            # derive artist_key identical to audit
+            df_tmp["artist_key"] = (
+                df_tmp["artist_name"].astype(str).str.strip().str.lower()
+                if "artist_name" in df_tmp.columns else ""
+            )
+            filtered_df = df_tmp[df_tmp["artist_key"].isin(missing_keys)].copy()
+
+            # Optional: keep only category=='music' rows
+            if "category" in filtered_df.columns:
+                mask_music = filtered_df["category"].astype(str).str.lower().eq("music") | filtered_df["category"].isna()
+                filtered_df = filtered_df[mask_music]
+
+            _log_df(filtered_df, "filtered_df@Targeted(breadth_only)")
+            print(f"[auto_reenrich] 🧪 filtered_df rows={len(filtered_df)} (from total {len(df_source)})")
+            if filtered_df.empty:
+                print("[auto_reenrich] 💤 filtered_df empty after filtering — skipping targeted breadth-only")
+                _trace("returning", reason="filtered_empty")
+                return "nothing_to_do"
+
+            # 🔹 Launch targeted breadth-only (threaded) using the subset
+            _log_df(filtered_df, "breadth_only.df_source[filtered_df]")
+            res = start_breadth_first_only(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                log_dao=log_dao,
+                table_name=key_used,         # keeps status/log continuity with current dataset
+                filtered_df=filtered_df,     # 👈 targeted subset
+            )
+            print(f"[auto_reenrich] breadth_only starter returned: {res}")
+            _trace("returning", reason=f"breadth_only:{res}")
+            # Normalize return code a bit for callsites that expect “targeted_*”
+            return "targeted_breadth_started" if res == "breadth_only_started" else res
+
+        # =========================
+        # 2) Existing flow for other states
+        # =========================
 
         reg = st.session_state.get("_enrichment_registry", {})
         active_thread = reg.get("thread")
         cancel_event = reg.get("cancel_event")
 
-        # --- Heartbeat + staleness checks ---
+        # Heartbeat + staleness checks
         stale_d1 = is_stale_status(d1_status, threshold_minutes=5)
         last_hb = get_last_heartbeat(user_id, dataset_label)
         now = time.time()
@@ -706,7 +1136,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
 
         user_lock = get_user_lock(user_id)
 
-        # --- Handle lock cleanup if no active thread ---
+        # Lock cleanup if no active thread
         if (not active_thread or not active_thread.is_alive()) and user_lock.locked():
             print(f"[auto_reenrich] 🧹 Found stale lock for {user_id} — releasing.")
             try:
@@ -714,7 +1144,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             except Exception as e:
                 print(f"[auto_reenrich] ⚠️ Failed to release stale lock: {e}")
 
-        # --- If active thread exists ---
+        # If active thread exists
         if active_thread and active_thread.is_alive():
             extended_threshold = 900 if d1_state == "breadth_running" or r2_state == "breadth_running" else 300
             is_really_stale = (last_hb is None) or ((now - last_hb) > extended_threshold)
@@ -737,26 +1167,29 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 st.session_state["_enrichment_registry"] = {}
             else:
                 print(f"[auto_reenrich] ❤️ Heartbeat OK ({hb_age}s ago). Skipping restart.")
+                _trace("returning", reason="running_active_ok")
                 return "running"
 
-        # --- Explicit handling of intermediate states ---
+        # Explicit intermediate states
         if d1_state in ("breadth_running", "running") or r2_state in ("breadth_running", "running"):
             print(f"[auto_reenrich] 🌀 Enrichment already in progress for {dataset_label}")
 
-            # 👇 Run recovery check in case it's a zombie "running" state
+            # Zombie recovery check
             recovery_sweep(user_id, dataset_label, log_dao)
 
-            # --- Re-check status after recovery sweep ---
+            # Re-check status after sweep
             refreshed = metadata_dao.read_status(user_id, dataset_label) or {}
             new_state = (refreshed.get("status") or "").lower()
 
-            # --- Auto-restart only if recovery flipped it to "error" ---
             if new_state == "error":
                 print(f"[auto_reenrich] 🔄 Recovery flipped {dataset_label} to error — triggering re-enrichment.")
-                time.sleep(1.5)  # allow R2/D1 propagation
+                time.sleep(1.5)
 
-                user_data_dao = DAOS.get("user_data")
-                cleaned_df = user_data_dao.safe_download_csv(f"userdata/{dataset_label}.csv")
+                df_source, _, _ = _get_df_source()
+                if df_source is None or df_source.empty:
+                    print("[auto_reenrich] 💤 No data available to restart.")
+                    _trace("returning", reason="no_df_on_recovery_restart")
+                    return "nothing_to_do"
 
                 cancel_event = threading.Event()
                 user_lock = get_user_lock(user_id)
@@ -769,6 +1202,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                     time.sleep(1)
                 else:
                     print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping restart.")
+                    _trace("returning", reason="lock_unavailable_recovery")
                     return "locked"
 
                 terminate_stale_enrichment_threads(user_id)
@@ -778,7 +1212,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                     kwargs=dict(
                         user_id=user_id,
                         dataset_label=dataset_label,
-                        cleaned_df=cleaned_df,
+                        cleaned_df=df_source,
                         log_dao=log_dao,
                         cancel_event=cancel_event,
                     ),
@@ -794,22 +1228,28 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 }
 
                 print(f"[auto_reenrich] 🚀 Restarted enrichment automatically after zombie recovery for {dataset_label}")
+                _trace("returning", reason="restarted_after_recovery")
                 return "restarted_after_recovery"
 
+            _trace("returning", reason="running_in_progress")
             return "running"
 
-        # --- Resume or retry breadth-first ---
+        # Resume or retry breadth-first
         if d1_state == "standard_done" or r2_state == "standard_done":
             print(f"[auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for {dataset_label}")
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
+            _trace("returning", reason="resumed_breadth_first")
             return "resumed_breadth_first"
 
         if d1_state == "breadth_error" or r2_state == "breadth_error":
             print(f"[auto_reenrich] 🌀 Breadth-first error detected — restarting breadth-only for {dataset_label}")
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
+            _trace("returning", reason="restarted_breadth_error")
             return "restarted_breadth_error"
 
-        # --- Determine if full restart is required ---
+        # Determine if a full restart is required
+        last_hb = get_last_heartbeat(user_id, dataset_label)
+        stale_hb = (last_hb is None) or ((time.time() - last_hb) > 300)
         should_restart = (
             d1_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
             and r2_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
@@ -819,8 +1259,11 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             print(f"[auto_reenrich] ⚠️ Triggering full re-enrichment for {dataset_label} "
                   f"(D1={d1_state}, R2={r2_state}, stale_d1={stale_d1}, stale_hb={stale_hb})")
 
-            user_data_dao = DAOS.get("user_data")
-            cleaned_df = user_data_dao.safe_download_csv(f"userdata/{dataset_label}.csv")
+            df_source, _, _ = _get_df_source()
+            if df_source is None or df_source.empty:
+                print("[auto_reenrich] 💤 No data available to restart.")
+                _trace("returning", reason="no_df_for_full_restart")
+                return "nothing_to_do"
 
             cancel_event = threading.Event()
             user_lock = get_user_lock(user_id)
@@ -833,6 +1276,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 time.sleep(1)
             else:
                 print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping new enrichment.")
+                _trace("returning", reason="lock_unavailable_full_restart")
                 return "locked"
 
             terminate_stale_enrichment_threads(user_id)
@@ -842,7 +1286,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 kwargs=dict(
                     user_id=user_id,
                     dataset_label=dataset_label,
-                    cleaned_df=cleaned_df,
+                    cleaned_df=df_source,
                     log_dao=log_dao,
                     cancel_event=cancel_event,
                 ),
@@ -858,13 +1302,16 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             }
 
             print(f"[auto_reenrich] 🚀 Started enrichment thread for {dataset_label}")
+            _trace("returning", reason="restarted_full")
             return "restarted"
 
         print(f"[auto_reenrich] ✅ Enrichment verified as complete for {dataset_label}")
+        _trace("returning", reason="ok_no_action")
         return "ok"
 
     except Exception as e:
         print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
+        _trace("returning", reason="exception", error=str(e))
         return "error"
 
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
@@ -1084,12 +1531,17 @@ def background_enrich(
     cleaned_df: pd.DataFrame,
     log_dao=None,
     cancel_event: Optional[threading.Event] = None,
+    mode: str = "full",  # NEW: "full" (default) or "breadth_only"
 ):
     """
     Background enrichment runner using DAOs.
     Ensures only one enrichment runs per user_id at a time.
     Cancels older threads and prioritizes the latest dataset selection or upload.
     Includes heartbeat updates for watchdog monitoring.
+
+    mode:
+      - "full": run the complete pipeline (run_all)
+      - "breadth_only": if available, call enricher.run_breadth_only(); otherwise fallback to run_all
     """
 
     import traceback, time, threading, streamlit as st
@@ -1105,7 +1557,7 @@ def background_enrich(
     thread_name = threading.current_thread().name
     print(f"[enrich:{thread_name}] Starting enrichment thread for {dataset_label}")
 
-    # --- Acquire per-user lock with retries ---
+    # --- Acquire per-user lock with retries (lock should already be held by caller in most paths, but safe) ---
     user_lock = get_user_lock(user_id)
     mark_lock_acquired(user_id)
     print(f"[enrich:{thread_name}] Proceeding with enrichment under lock for {user_id}")
@@ -1185,13 +1637,46 @@ def background_enrich(
             log_dao=log_dao,
         )
 
-        # --- begin enrichment ---
-        log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
-        status_dao.set_status(user_id, dataset_label, phase="running", detail="Executing enrichment run")
+        # ✅ Ensure / expose Discogs pool + start watchdog
+        try:
+            if hasattr(enricher, "ensure_worker_pool"):
+                enricher.ensure_worker_pool()  # or .ensure_alive() inside the class
+            # Make the pool visible to the UI (debug expander below)
+            if hasattr(enricher, "pool"):
+                st.session_state["_discogs_pool"] = enricher.pool
+        except Exception as e:
+            print(f"[enrich:{thread_name}] ⚠️ pool init failed (continuing): {e}")
 
-        _check_cancel("before run_all")
+        # 🔎 Start a watchdog for the pool (self-healing nudges + snapshots)
+        def _discogs_watchdog(pool, label, stop_event):
+            # Wake every 5s; nudge if heartbeats/jobs are stale > 90s
+            while not stop_event.is_set():
+                try:
+                    pool.nudge_workers(hb_stale_sec=90, job_stale_sec=90)
+                    # Log a small snapshot if jobs appear stuck
+                    if getattr(es.GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 0) > 0:
+                        pool.snapshot_queue(max_n=5)
+                except Exception as _e:
+                    print(f"[discogs_watchdog:{label}] ⚠️ {_e}")
+                # short sleep so we respond quickly to shutdowns
+                for _ in range(10):
+                    if stop_event.is_set(): break
+                    time.sleep(0.5)
 
-        # heartbeat updater thread
+        watchdog_stop = threading.Event()
+        try:
+            if hasattr(enricher, "pool"):
+                t_watch = threading.Thread(
+                    target=_discogs_watchdog,
+                    args=(enricher.pool, dataset_label, watchdog_stop),
+                    name=f"discogs-watchdog:{dataset_label}",
+                    daemon=True,
+                )
+                t_watch.start()
+        except Exception as e:
+            print(f"[enrich:{thread_name}] ⚠️ watchdog start failed: {e}")
+
+        # --- heartbeat updater thread ---
         def _heartbeat_loop():
             while not (cancel_event and cancel_event.is_set()):
                 update_heartbeat(user_id, dataset_label)
@@ -1200,39 +1685,123 @@ def background_enrich(
         hb_thread = threading.Thread(target=_heartbeat_loop, daemon=True)
         hb_thread.start()
 
-        # --- Execute enrichment ---
-        enricher.run_all(cancel_event=cancel_event)
-        _check_cancel("after run_all")
+        # --- Execute enrichment (mode aware) ---
+        print(f"[enrich:{thread_name}] mode={mode}")
 
-        # --- Determine final phase from enricher ---
-        last_phase = getattr(enricher, "current_phase", None)
-        final_status = getattr(enricher, "status", None)
-        current_status = None
-        try:
-            current_status = status_dao.read_status(user_id, dataset_label)
-        except Exception:
-            pass
-
-        # --- Decide which completion marker to use ---
-        if current_status and current_status.get("status") == "standard_done":
-            status_dao.finish_standard_status(
+        if mode == "breadth_only":
+            # --- Mode: breadth-only (targeted) ---
+            print(f"[enrich:{thread_name}] ▶ breadth-only mode selected")
+            log_dao.log(user_id, dataset_label, "enrichment", "Starting breadth-only pipeline")
+            status_dao.set_status(
                 user_id,
                 dataset_label,
-                detail="✅ Standard enrichment completed successfully."
+                phase="breadth_running",
+                detail="Executing targeted breadth-only",
             )
-        elif current_status and current_status.get("status") == "breadth_running":
-            status_dao.finish_full_status(
-                user_id,
-                dataset_label,
-                detail="✅ Full enrichment completed successfully."
-            )
+
+            _check_cancel("before breadth_only")
+
+            if hasattr(enricher, "run_breadth_only"):
+                # 👇 the wrapper takes care of: sanity, masters, pool, phase, flush, shutdown, final status
+                enricher.run_breadth_only(cancel_event=cancel_event)
+            else:
+                # --- Back-compat fallback (kept minimal on purpose); remove when wrapper is in place ---
+                print(f"[enrich:{thread_name}] ⚠️ run_breadth_only() not found; running inline minimal breadth")
+                # Build inputs (prefer summarizer, fallback to category split)
+                try:
+                    all_art, all_show, all_book = enricher.all_listens()
+                except Exception as e:
+                    print(f"[enrich:{thread_name}] all_listens() failed: {e} — using category split")
+                    try:
+                        get_cat = lambda s: enricher.df.get("category", "").astype(str).str.lower().eq(s)
+                        all_art  = enricher.df[get_cat("music")].copy()
+                        all_show = enricher.df[get_cat("show")].copy()
+                        all_book = enricher.df[get_cat("audiobook")].copy()
+                    except Exception:
+                        # last resort: treat all as music
+                        all_art, all_show, all_book = enricher.df.copy(), enricher.df.iloc[0:0].copy(), enricher.df.iloc[0:0].copy()
+
+                # Masters + pool (best effort)
+                for master in ("artists", "albums", "tracks"):
+                    try:
+                        enricher._load_master(master)
+                    except Exception as e:
+                        print(f"[enrich:{thread_name}] ⚠️ master load failed (non-fatal): {e}")
+
+                try:
+                    if hasattr(enricher, "ensure_worker_pool"):
+                        enricher.ensure_worker_pool()
+                        print(f"[enrich:{thread_name}] ✅ ensured Discogs worker pool")
+                except Exception as e:
+                    print(f"[enrich:{thread_name}] ⚠️ ensure_worker_pool failed (continuing): {e}")
+
+                # Run the breadth phase (no run_all fallback)
+                enricher.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
+                _check_cancel("after breadth_first")
+
+                # Flush & shutdown (best effort)
+                try:
+                    if hasattr(enricher, "flush_all"):
+                        enricher.flush_all()
+                        print(f"[enrich:{thread_name}] ✅ flush_all completed after breadth-first")
+                except Exception as e:
+                    print(f"[enrich:{thread_name}] ⚠️ flush_all failed: {e}")
+
+                try:
+                    if hasattr(enricher, "shutdown_worker_pool"):
+                        enricher.shutdown_worker_pool()
+                        print(f"[enrich:{thread_name}] 💤 Discogs pool shutdown")
+                except Exception as e:
+                    print(f"[enrich:{thread_name}] ⚠️ worker-pool shutdown failed: {e}")
+
+                # Mark complete
+                status_dao.finish_full_status(
+                    user_id,
+                    dataset_label,
+                    detail="✅ Targeted breadth-first enrichment completed successfully.",
+                )
+
+            _check_cancel("after breadth_only_wrapper")
+
         else:
-            # fallback: assume standard_done (phases 1–7)
-            status_dao.finish_standard_status(
-                user_id,
-                dataset_label,
-                detail="✅ Standard enrichment completed successfully (default)."
+            # default: full pipeline
+            log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
+            status_dao.set_status(
+                user_id, dataset_label,
+                phase="running",
+                detail="Executing enrichment run"
             )
+            _check_cancel("before run_all")
+            enricher.run_all(cancel_event=cancel_event)
+            _check_cancel("after run_all")
+
+            # --- Decide which completion marker to use (unchanged) ---
+            last_phase = getattr(enricher, "current_phase", None)
+            final_status = getattr(enricher, "status", None)
+            current_status = None
+            try:
+                current_status = status_dao.read_status(user_id, dataset_label)
+            except Exception:
+                pass
+
+            if current_status and current_status.get("status") == "standard_done":
+                status_dao.finish_standard_status(
+                    user_id,
+                    dataset_label,
+                    detail="✅ Standard enrichment completed successfully."
+                )
+            elif current_status and current_status.get("status") == "breadth_running":
+                status_dao.finish_full_status(
+                    user_id,
+                    dataset_label,
+                    detail="✅ Full enrichment completed successfully."
+                )
+            else:
+                status_dao.finish_standard_status(
+                    user_id,
+                    dataset_label,
+                    detail="✅ Standard enrichment completed successfully (default)."
+                )
 
         log_dao.log(user_id, dataset_label, "enrichment", "✅ Enrichment completed successfully.")
         print(f"[enrich:{thread_name}] ✅ Enrichment completed for {dataset_label}")
@@ -1288,12 +1857,11 @@ def background_enrich(
         if cancel_event:
             cancel_event.set()
 
-        # --- auto-trigger breadth-first if standard_done detected ---
+        # --- auto-trigger breadth-first if standard_done detected (unchanged) ---
         try:
             status_info = status_dao.read_status(user_id, dataset_label) or {}
             if status_info.get("status") == "standard_done":
                 print(f"[enrich:{thread_name}] 🌐 Standard enrichment done — triggering breadth-first auto-check.")
-                # Lazy import to avoid circular reference
                 import threading
                 from dao_selector import get_log_dao
 
@@ -1302,7 +1870,6 @@ def background_enrich(
 
                 time.sleep(1.5)  # allow R2/D1 status propagation
 
-                # Spawn auto-check thread to handle breadth restart
                 threading.Thread(
                     target=_auto_check_and_reenrich_if_needed,
                     args=(user_id, dataset_label, log_dao),
@@ -1312,6 +1879,11 @@ def background_enrich(
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to auto-trigger breadth-first: {e}")
 
+        try:
+            watchdog_stop.set()
+        except Exception:
+            pass
+
         # --- final thread summary logging ---
         log_enrichment_thread_count("enrichment finished or cancelled")
         try:
@@ -1320,156 +1892,115 @@ def background_enrich(
             print(f"[enrich:{thread_name}] ⚠️ log_dao thread log failed: {e}")
         print(f"[enrich:{thread_name}] 💤 Thread finished for {dataset_label}")
 
-def start_breadth_first_only(user_id: str, dataset_label: str, log_dao, table_name: Optional[str] = None):
+def start_breadth_first_only(
+    user_id: str,
+    dataset_label: str,
+    log_dao,
+    table_name: Optional[str] = None,
+    filtered_df: Optional[pd.DataFrame] = None,  # NEW: targeted subset
+):
     """
-    Launches a lightweight enrichment thread that runs only the breadth-first phase.
-    Reconstructs minimal environment (masters, seen sets, and DAOs) and
-    resumes enrichment from the breadth-first stage.
-    Supports explicit table_name (userdata/{user_id}_{dataset_label}_{ts}_history.csv)
-    and pattern-based discovery fallback.
+    Launch a breadth-first-only enrichment thread.
+    If filtered_df is provided, it runs against that targeted subset.
+    Otherwise it loads the dataset by table_name or session state.
+
+    Internally delegates to background_enrich(..., mode="breadth_only") and keeps
+    locking/heartbeat/status behavior consistent.
     """
-    import threading, fnmatch
+    import time, threading, streamlit as st
     from dao_selector import DAOS
-    from enrichment_service import MetadataEnricher, update_heartbeat, get_user_lock, mark_lock_acquired
+    from enrichment_service import (
+        get_user_lock, mark_lock_acquired,
+        terminate_stale_enrichment_threads, update_heartbeat
+    )
 
-    print(f"[breadth_restart] 🚀 Starting breadth-first-only enrichment for {dataset_label}")
+    # --- choose source df ---
+    if filtered_df is not None and not filtered_df.empty:
+        df_source = filtered_df
+        src = "filtered_df"
+    else:
+        src = "session/dao"
+        df_source = st.session_state.get("current_df")
+        key = table_name or st.session_state.get("last_table_name")
+        if (df_source is None or df_source.empty) and key:
+            user_dao = DAOS.get("user_data")
+            df_source = user_dao.load_user_data(key)
 
-    # --- Load DAOs ---
-    user_data_dao = DAOS.get("user_data")
-    metadata_dao = DAOS.get("r2")
-    status_dao = DAOS.get("status")
+    _log_df(df_source, f"breadth_only.df_source[{src}]")
+    if df_source is None or df_source.empty:
+        print("[breadth_only] 💤 No data available to start breadth-only.")
+        return "nothing_to_do"
 
-    # --- Locate cleaned dataset ---
-    cleaned_df = None
-    candidate_key = None
-
-    if table_name:
-        # --- Explicit table_name provided ---
-        candidate_key = (
-            f"userdata/{table_name}.csv"
-            if not table_name.startswith("userdata/")
-            else table_name
-        )
-        try:
-            cleaned_df = user_data_dao.safe_download_csv(candidate_key)
-            if cleaned_df is not None and not cleaned_df.empty:
-                print(f"[breadth_restart] ✅ Loaded cleaned dataset using explicit table_name: {candidate_key}")
-            else:
-                print(f"[breadth_restart] ⚠️ Explicit dataset loaded but empty: {candidate_key}")
-        except Exception as e:
-            print(f"[breadth_restart] ⚠️ Failed to load dataset from explicit path {candidate_key}: {e}")
-            cleaned_df = None
-
-    # --- Fallback: pattern-based lookup ---
-    if cleaned_df is None or cleaned_df.empty:
-        try:
-            datasets = user_data_dao.list_datasets(user_id)
-            print(f"[breadth_restart:debug] Looking for dataset_label={dataset_label}")
-            print(f"[breadth_restart:debug] Got {len(datasets)} datasets, type={type(datasets)}")
-
-            # ✅ Normalize for either list-of-tuples or dict
-            if isinstance(datasets, dict):
-                iterable = datasets.items()
-            elif isinstance(datasets, list):
-                # Already a list of (label, table_name)
-                iterable = datasets
-            else:
-                raise TypeError(f"Unexpected datasets type: {type(datasets)}")
-
-            candidate_key = None
-            for label, table_name in iterable:
-                if str(label).startswith(dataset_label):
-                    candidate_key = f"userdata/{table_name}.csv"
-                    break
-
-            if candidate_key:
-                cleaned_df = user_data_dao.safe_download_csv(candidate_key)
-                if cleaned_df is not None and not cleaned_df.empty:
-                    print(f"[breadth_restart] ✅ Auto-located dataset: {candidate_key} ({len(cleaned_df)} rows)")
-                else:
-                    print(f"[breadth_restart] ⚠️ Located dataset but it appears empty: {candidate_key}")
-            else:
-                print(f"[breadth_restart] ❌ No matching dataset found for label '{dataset_label}'")
-
-        except Exception as e:
-            print(f"[breadth_restart] ⚠️ Error locating dataset for {dataset_label}: {e}")
-            cleaned_df = None
-
-    # --- Final validation ---
-    if cleaned_df is None or cleaned_df.empty:
-        print(f"[breadth_restart] ❌ Could not locate a valid cleaned dataset for {dataset_label}")
-        return
-
-    # --- Thread + lock setup ---
-    cancel_event = threading.Event()
+    # --- acquire lock ---
     user_lock = get_user_lock(user_id)
-    mark_lock_acquired(user_id)
+    acquired = False
+    for attempt in range(10):
+        if user_lock.acquire(blocking=False):
+            mark_lock_acquired(user_id)
+            acquired = True
+            print(f"[breadth_only] 🔒 lock acquired for {user_id} on attempt {attempt+1}")
+            break
+        print(f"[breadth_only] ⏳ lock busy — waiting ({attempt+1}/10)")
+        time.sleep(1)
+    if not acquired:
+        print("[breadth_only] 🚫 could not acquire lock")
+        return "locked"
 
-    def _run_breadth():
+    terminate_stale_enrichment_threads(user_id)
+    cancel_event = threading.Event()
+
+    def _runner():
+        thread_name = threading.current_thread().name
         try:
-            print(f"[breadth_restart] 🔧 Initializing MetadataEnricher for breadth-first phase")
-            enricher = MetadataEnricher(
-                user_id=user_id,
-                label=dataset_label,
-                df=cleaned_df,
-                spotify_token=token,
-                discogs_key=DISCOGS_KEY,
-                discogs_secret=DISCOGS_SECRET,
-                status_dao=status_dao,
-                storage_dao=metadata_dao,
-                log_dao=log_dao,
-            )
-
-            # ✅ attach cancel_event for internal consistency
-            enricher.cancel_event = cancel_event
-
-            # --- Prepare environment ---
-            enricher._load_master("artists")
-            enricher._load_master("albums")
-            enricher._load_master("tracks")
-
-            status_dao.set_breadth_running(user_id, dataset_label)
+            print(f"[{thread_name}] ▶ breadth_only starting; rows={len(df_source)}")
             update_heartbeat(user_id, dataset_label)
 
-            # --- Build per-year summaries ---
-            try:
-                print(f"[breadth_restart] 🧮 Building per-year listening summaries using all_listens()")
-                all_art, all_show, all_book = enricher.all_listens()
-            except Exception as e:
-                print(f"[breadth_restart] ⚠️ all_listens() failed ({e}) — falling back to category filter.")
-                all_art = enricher.df[enricher.df["category"] == "music"].copy()
-                all_show = enricher.df[enricher.df["category"] == "show"].copy()
-                all_book = enricher.df[enricher.df["category"] == "audiobook"].copy()
-
-            # --- Run breadth-first enrichment ---
-            enricher.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
-
-            # --- Finalize ---
-            enricher.flush_all()
-            status_dao.finish_full_status(
-                user_id,
-                dataset_label,
-                detail=f"✅ Full enrichment completed for {dataset_label}"
+            # 👇 run targeted breadth-only (falls back to full if not supported)
+            background_enrich(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                cleaned_df=df_source,
+                log_dao=log_dao,
+                cancel_event=cancel_event,
+                mode="breadth_only",
             )
-            print(f"[breadth_restart] ✅ Breadth-first enrichment completed successfully for {dataset_label}")
-
+            print(f"[{thread_name}] ✅ breadth_only completed")
         except Exception as e:
-            print(f"[breadth_restart] ❌ Error during breadth-first: {e}")
-            status_dao.finish_breadth_error(
-                user_id,
-                dataset_label,
-                detail=f"❌ Breadth-first enrichment failed: {e}"
-            )
+            import traceback
+            print(f"[{thread_name}] ❌ breadth_only error: {e}\n{traceback.format_exc()}")
         finally:
             try:
                 if user_lock.locked():
                     user_lock.release()
-                    print(f"[breadth_restart] 🔓 Released user lock for {user_id}")
+                    print(f"[{thread_name}] 🔓 Released user lock for {user_id}")
             except Exception as e:
-                print(f"[breadth_restart] ⚠️ Failed to release user lock: {e}")
+                print(f"[{thread_name}] ⚠️ Failed to release user lock: {e}")
             cancel_event.set()
+            try:
+                reg = st.session_state.get("_enrichment_registry", {})
+                if reg.get("dataset_label") == dataset_label and reg.get("user_id") == user_id:
+                    st.session_state["_enrichment_registry"] = {}
+                    print(f"[{thread_name}] 🧹 Cleared enrichment registry for {dataset_label}")
+            except Exception:
+                pass
 
-    threading.Thread(target=_run_breadth, daemon=True).start()
+    t = threading.Thread(
+        target=_runner,
+        name=f"breadth_only:{user_id}:{dataset_label}",
+        daemon=True,
+    )
+    st.session_state["_enrichment_registry"] = {
+        "thread": t,
+        "cancel_event": cancel_event,
+        "dataset_label": dataset_label,
+        "user_id": user_id,
+    }
+    t._cancel_event = cancel_event
+    t._start_time = time.time()
+
+    print(f"[breadth_only] 🚀 starting thread: {t.name}")
+    t.start()
+    return "breadth_only_started"
 
 def spawn_enrichment_thread(user_id, label, cleaned_df, log_dao=None, cancel_event=None):
     """Spawn a new background enrichment thread and track its count."""
@@ -1697,6 +2228,33 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
         else:
             st.caption(f"This dataset has been fully enriched")
 
+    with st.sidebar.expander("Discogs Debug", expanded=False):
+
+        from enrichment_service import DiscogsWorkerPool
+
+        pool = st.session_state.get("_discogs_pool")
+
+        if pool is None:
+            st.caption("Pool not initialized yet.")
+        else:
+            col1, col2 = st.columns(2)
+            if col1.button("Snapshot queue", key="dq_snap"):
+                info = pool.snapshot_queue(max_n=10)
+                st.write(info)
+
+            if col2.button("Nudge workers", key="dq_nudge"):
+                pool.nudge_workers(hb_stale_sec=60, job_stale_sec=60)
+                st.success("Nudged.")
+
+            if st.button("Dump worker stacks", key="dq_dump"):
+                st.caption("Dumping stacks to terminal…")
+                DiscogsWorkerPool.dump_worker_stacks()
+
+            # Optional: bounded shutdown from UI (careful in prod!)
+            if st.button("Shutdown pool", key="dq_shutdown"):
+                pool.shutdown(max_wait_sec=90, force_purge=False, persist_backlog=False)
+                st.success("Shutdown requested.")
+
 def start_missing_genre_detective_task(dataset_label: str) -> None:
     """
     Start/ensure a single global background task for missing_genre_detective.
@@ -1790,7 +2348,7 @@ def start_missing_genre_detective_task(dataset_label: str) -> None:
     except Exception:
         st.info("Started genre detection in the background.")
 
-# ------------------ INIT PAGE CONFIG ------------------
+# ----------------------------- INIT PAGE CONFIG ----------------------------- #
 st.set_page_config(page_title="Regifted", page_icon=ICON_BROWSER, layout="wide", initial_sidebar_state="expanded")
 clear_stale_locks(max_age_minutes=10)
 
@@ -1818,7 +2376,7 @@ else:
 if st.session_state.get("user"):
     refresh_cookie_if_needed()
 
-# 🔒 Boot-once trigger for the global detective (per user session)
+# Boot-once trigger for the global detective (per user session)
 if not st.session_state.get("_genre_detective_boot_started", False):
     st.session_state["_genre_detective_boot_started"] = True
     try:
@@ -1906,6 +2464,7 @@ if not st.session_state.user:
 with st.sidebar:
 
     st.image(LOGO_SPOTGREEN, width="stretch")
+    st.space("small")
     st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
     st.divider()
 
@@ -1927,153 +2486,157 @@ with st.sidebar:
     label_to_table = dict(dataset_options)
     labels = list(label_to_table.keys())
 
-    def start_missing_genre_detective_task(dataset_label: str) -> None:
-        """
-        Start/ensure a single global background task for missing_genre_detective.
-        Uses task_registry() and a GLOBAL key (since the unlisted table is shared).
-        Detects stale entries and restarts if needed.
-        """
-        import os, threading, time, sys
+    # def start_missing_genre_detective_task(dataset_label: str) -> None:
+    #     """
+    #     Start/ensure a single global background task for missing_genre_detective.
+    #     Uses task_registry() and a GLOBAL key (since the unlisted table is shared).
+    #     Detects stale entries and restarts if needed.
+    #     """
+    #     import os, threading, time, sys
 
-        reg = task_registry()
-        key = "genre_detective::GLOBAL"   # 🔒 single worker, regardless of dataset
-        entry = reg.get(key)
+    #     reg = task_registry()
+    #     key = "genre_detective::GLOBAL"   # 🔒 single worker, regardless of dataset
+    #     entry = reg.get(key)
 
-        # Decide if we should (re)start
-        should_start = False
-        if not entry:
-            should_start = True
-        else:
-            th = entry.get("thread")
-            status = entry.get("status")
-            started_at = entry.get("started_at", 0)
-            alive = bool(th and th.is_alive())
+    #     # Decide if we should (re)start
+    #     should_start = False
+    #     if not entry:
+    #         should_start = True
+    #     else:
+    #         th = entry.get("thread")
+    #         status = entry.get("status")
+    #         started_at = entry.get("started_at", 0)
+    #         alive = bool(th and th.is_alive())
 
-            # stale = no thread, or dead thread, or "starting" way too long without being alive
-            too_long = (time.time() - started_at) > 60 * 30  # 30 min
-            if not alive and status != "running":
-                should_start = True
-            elif status == "starting" and not alive and too_long:
-                print("[genre_detective] detected stale 'starting' entry (>30min) — restarting")
-                should_start = True
-            else:
-                print(f"[genre_detective] already running: {th.name if th else 'unknown'} (status={status}, alive={alive})")
-                return
+    #         # stale = no thread, or dead thread, or "starting" way too long without being alive
+    #         too_long = (time.time() - started_at) > 60 * 30  # 30 min
+    #         if not alive and status != "running":
+    #             should_start = True
+    #         elif status == "starting" and not alive and too_long:
+    #             print("[genre_detective] detected stale 'starting' entry (>30min) — restarting")
+    #             should_start = True
+    #         else:
+    #             print(f"[genre_detective] already running: {th.name if th else 'unknown'} (status={status}, alive={alive})")
+    #             return
 
-        try:
-            gem_key = st.secrets.get("gemini", {}).get("api_key")
-            if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
-                os.environ["GEMINI_API_KEY"] = str(gem_key)
-                print("[genre_detective] GEMINI_API_KEY set from st.secrets")
-        except Exception as e:
-            print(f"[genre_detective] WARNING: cannot read st.secrets: {e}", file=sys.stderr)
+    #     try:
+    #         gem_key = st.secrets.get("gemini", {}).get("api_key")
+    #         if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
+    #             os.environ["GEMINI_API_KEY"] = str(gem_key)
+    #             print("[genre_detective] GEMINI_API_KEY set from st.secrets")
+    #     except Exception as e:
+    #         print(f"[genre_detective] WARNING: cannot read st.secrets: {e}", file=sys.stderr)
 
-        # Worker (no st.* calls here)
-        def _worker(label_for_log: str) -> None:
-            try:
-                from missing_genre_detective import enrich_file_in_place
-                reg[key]["status"] = "running"
-                print(f"[genre_detective] ▶ starting (global) for '{label_for_log}'")
-                # R2 mode + debug dump enabled (see patch below)
-                enrich_file_in_place(
-                    provider_name="gemini",
-                    batch_size=20,
-                    sleep_between_batches=0.8,
-                    max_retries=4,
-                    force=False,
-                    limit=None,
-                    io_mode="r2",
-                    debug_dump_merges_to_r2=False,  # 👈 new: dump merged rows to R2 for inspection
-                )
-                reg[key]["status"] = "done"
-                print(f"[genre_detective] ✅ completed (global) for '{label_for_log}'")
-            except Exception as e:
-                reg[key]["status"] = "error"
-                reg[key]["error"] = str(e)
-                print(f"[genre_detective] ❌ error (global) for '{label_for_log}': {e}", file=sys.stderr)
+    #     # Worker (no st.* calls here)
+    #     def _worker(label_for_log: str) -> None:
+    #         try:
+    #             from missing_genre_detective import enrich_file_in_place
+    #             reg[key]["status"] = "running"
+    #             print(f"[genre_detective] ▶ starting (global) for '{label_for_log}'")
+    #             # R2 mode + debug dump enabled (see patch below)
+    #             enrich_file_in_place(
+    #                 provider_name="gemini",
+    #                 batch_size=20,
+    #                 sleep_between_batches=0.8,
+    #                 max_retries=4,
+    #                 force=False,
+    #                 limit=None,
+    #                 io_mode="r2",
+    #                 debug_dump_merges_to_r2=False,  # 👈 new: dump merged rows to R2 for inspection
+    #             )
+    #             reg[key]["status"] = "done"
+    #             print(f"[genre_detective] ✅ completed (global) for '{label_for_log}'")
+    #         except Exception as e:
+    #             reg[key]["status"] = "error"
+    #             reg[key]["error"] = str(e)
+    #             print(f"[genre_detective] ❌ error (global) for '{label_for_log}': {e}", file=sys.stderr)
 
-        t = threading.Thread(
-            target=_worker,
-            args=(dataset_label,),
-            name="genre_detective::GLOBAL",
-            daemon=True,
-        )
+    #     t = threading.Thread(
+    #         target=_worker,
+    #         args=(dataset_label,),
+    #         name="genre_detective::GLOBAL",
+    #         daemon=True,
+    #     )
 
-        # attach Streamlit run context (best effort)
-        try:
-            from streamlit.runtime.scriptrunner import add_script_run_ctx
-            add_script_run_ctx(t)
-        except Exception:
-            pass
+    #     # attach Streamlit run context (best effort)
+    #     try:
+    #         from streamlit.runtime.scriptrunner import add_script_run_ctx
+    #         add_script_run_ctx(t)
+    #     except Exception:
+    #         pass
 
-        reg[key] = {
-            "thread": t,
-            "status": "starting",
-            "label": dataset_label,
-            "started_at": time.time(),
-            "error": None,
-        }
-        t.start()
+    #     reg[key] = {
+    #         "thread": t,
+    #         "status": "starting",
+    #         "label": dataset_label,
+    #         "started_at": time.time(),
+    #         "error": None,
+    #     }
+    #     t.start()
 
-        try:
-            st.toast("Started genre detection in the background.",duration="short")
-        except Exception:
-            st.info("Started genre detection in the background.")
+    #     try:
+    #         st.toast("Started genre detection in the background.",duration="short")
+    #     except Exception:
+    #         st.info("Started genre detection in the background.")
 
     # ---------- Dataset Selection ----------
     if labels:
         previous_label = st.session_state.get("current_dataset_label")
-        default_index = labels.index(previous_label) if previous_label in labels else 0
 
         selected_label = st.selectbox(
-            "Choose a dataset you've uploaded",
-            labels,
-            index=default_index,
+            "Selected dataset:",
+            options=labels,
+            index=None,  # start unselected; returns None until user picks
             key="dataset_select_sidebar",
+            placeholder="Choose a dataset",
         )
 
-        # If dataset changed or not yet loaded → load + trigger auto-check
-        if (
-            selected_label != previous_label
-            or st.session_state.get("current_df") is None
-        ):
-            selected_table = label_to_table[selected_label]
-            try:
-                # ---- Load dataset from storage
-                df = user_dao.load_user_data(selected_table)
-                if df.empty:
-                    st.warning("Loaded dataset is empty.")
-                    st.stop()
-                df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-                df = df.dropna(subset=["datetime"])
-                df["date"] = df["datetime"].dt.date
-                df["year"] = df["datetime"].dt.year
+        # Do nothing until the user actually picks something
+        if selected_label is not None:
+            # Only (re)load when the user changed the dataset or nothing is loaded yet
+            if selected_label != previous_label or st.session_state.get("current_df") is None:
+                selected_table = label_to_table.get(selected_label)
+                if selected_table:
+                    try:
+                        # ---- Load dataset from storage
+                        df = user_dao.load_user_data(selected_table)
+                        if not df.empty:
+                            df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+                            df = df.dropna(subset=["datetime"])
+                            df["date"] = df["datetime"].dt.date
+                            df["year"] = df["datetime"].dt.year
 
-                st.session_state.current_df = df
-                st.session_state.current_dataset_label = selected_label
-                st.session_state.last_table_name = selected_table
+                            # Store in session
+                            st.session_state.current_df = df
+                            st.session_state.current_dataset_label = selected_label
+                            st.session_state.last_table_name = selected_table
 
-                # ✅ Only trigger enrichment auto-check on dataset change
-                from dao_selector import get_log_dao
-                log_dao = get_log_dao()
-                _auto_check_and_reenrich_if_needed(
-                    st.session_state.user["user_id"],
-                    selected_label.strip(),
-                    log_dao,
-                    table_name=selected_table,
-                )
+                            # Enrichment auto-check on (re)load
+                            from dao_selector import get_log_dao
+                            log_dao = get_log_dao()
+                            res = _auto_check_and_reenrich_if_needed(
+                                st.session_state.user["user_id"],
+                                selected_label.strip(),
+                                log_dao,
+                                table_name=selected_table,
+                            )
+                            print(f"[CALLSITE select] auto_check result = {res}")
 
-                # ✅ Start the genre detective ONLY when a dataset is (re)loaded
-                #    (single global worker; will no-op if already running)
-                try:
-                    start_missing_genre_detective_task(selected_label)
-                except Exception as e:
-                    st.info(f"Genre detective did not start: {e}")
-
-            except Exception as e:
-                st.error(f"Failed to load dataset from storage: {e}")
-                st.stop()
-
+                            # Optional background worker; silence sidebar messages on failure
+                            try:
+                                start_missing_genre_detective_task(selected_label)
+                            except Exception as e:
+                                print(f"[genre_detective] not started: {e}")
+                        else:
+                            # Silently skip if dataset is empty (no sidebar warnings)
+                            print("[sidebar] Loaded dataset is empty; skipping session update.")
+                    except Exception as e:
+                        # Keep hard failures visible
+                        st.error(f"Failed to load dataset from storage: {e}")
+                        st.stop()
+                else:
+                    # Silently skip if mapping missing (no sidebar warnings)
+                    print(f"[sidebar] Missing mapping for label: {selected_label}")
     else:
         st.info("No datasets uploaded yet. You can add one from the Home page.")
 
@@ -2083,6 +2646,7 @@ with st.sidebar:
             st.session_state.user["user_id"],
             st.session_state["current_dataset_label"]
         )
+
     st.divider()
 
     # ---------- Navigation ----------
@@ -2096,8 +2660,11 @@ with st.sidebar:
             "Genres",
             "Popularity",
             "Normality",
+            "Taste",
+            "Test",
             "On This Day",
             "FAQs",
+            "About"
         ],
     )
 
@@ -2105,37 +2672,6 @@ with st.sidebar:
 
     if st.button("Log out", key="logout_btn"):
         logout()
-
-# ------------------------------- MEGA-LOGGER -------------------------------- #
-import sys, logging
-class StreamToLogger:
-    def __init__(self, logger, log_level=logging.INFO):
-        self.logger = logger
-        self.log_level = log_level
-
-    def write(self, message):
-        if message.strip():
-            self.logger.log(self.log_level, message.strip())
-
-    def flush(self):
-        pass
-
-if "logger_initialized" not in st.session_state:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler("debug_enrichment.log"),
-            logging.StreamHandler(sys.__stdout__)
-        ]
-    )
-
-    logger = logging.getLogger()
-    sys.stdout = StreamToLogger(logger, logging.INFO)
-    sys.stderr = StreamToLogger(logger, logging.ERROR)
-
-    st.session_state["logger_initialized"] = True
-    print("[logging] ✅ StreamToLogger attached")
 
 # ---------------------------------- Home ------------------------------------ #
 if page == "Home":
@@ -2157,34 +2693,25 @@ if page == "Home":
         st.error("UserData DAO is not configured for this server mode.")
         st.stop()
 
-    # ---------- Verify dataset selection ----------
-    if st.session_state.get("current_df") is None or st.session_state.get("current_dataset_label") is None:
-        st.info("No dataset selected yet. Please choose one from the sidebar or upload a new dataset below.")
-        st.stop()
+    # ---------- Detect whether a dataset is loaded ----------
+    has_dataset = (
+        st.session_state.get("current_df") is not None
+        and st.session_state.get("current_dataset_label") is not None
+    )
 
-    # ---------- Retrieve dataset + metadata ----------
-    df = st.session_state["current_df"].copy()
-    selected_label = st.session_state["current_dataset_label"]
-    df_artist_genre = INFO_ARTIST_GENRE.copy()
-    df_album = INFO_ALBUM.copy()
-    df_supergenre_map = INFO_SUPERGENRE.copy()
-
-    # --- Normalize datetime + summary ---
-    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-    df = df.dropna(subset=["datetime"])
-    df["date"] = df["datetime"].dt.date
-    df["year"] = df["datetime"].dt.year
-
-    # ---------- Header UI ----------
-    h1, h2, h3 = st.columns([1,3,1], vertical_alignment="center")
+    # ---------- Header UI (always shown) ----------
+    h1, h2, h3 = st.columns([1, 3, 1], vertical_alignment="center")
     with h2:
-        st.markdown("""
+        st.markdown(
+            """
             <style>
             div.st-emotion-cache-p75nl5 {
                 width: auto;
             }
             </style>
-        """, unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True,
+        )
 
         st.image(ICON_PAGE, width=180)
         scorecard(
@@ -2194,253 +2721,268 @@ if page == "Home":
             score_bold=True,
             score_italic=True,
             height=60,
-            background=False)
-
-        start_date = pd.to_datetime(df["date"].min()).strftime("%d %B %Y")
-        end_date = pd.to_datetime(df["date"].max()).strftime("%d %B %Y")
-
-        scorecard(
-            "",
-            score=f"{start_date} - {end_date}",
-            score_size=36,
             background=False,
-            height=36
         )
 
-    # --- Ensure session variables are synced ---
-    st.session_state.current_df = df
-    st.session_state.current_dataset_label = selected_label
-    st.session_state.last_table_name = st.session_state.get("last_table_name", None)
+        # If we have a dataset, show the real date range; otherwise show a friendly placeholder.
+        if has_dataset:
+            df_header = st.session_state["current_df"].copy()
+            df_header["datetime"] = pd.to_datetime(df_header["datetime"], errors="coerce")
+            df_header = df_header.dropna(subset=["datetime"])
+            start_date = pd.to_datetime(df_header["datetime"].dt.date.min()).strftime("%d %B %Y")
+            end_date = pd.to_datetime(df_header["datetime"].dt.date.max()).strftime("%d %B %Y")
+            date_label = f"{start_date} - {end_date}"
+            scorecard(
+                "",
+                score=date_label,
+                score_size=36,
+                background=False,
+                height=36,
+            )
 
-    # ---------------- Recent scorecards ---------------------
-    def get_top_combined(df, name_col, sub_col):
-        if df.empty:
-            return "N/A"
-        top = (
-            df.groupby([name_col, sub_col])["minutes_played"]
-            .sum()
-            .sort_values(ascending=False)
-            .reset_index()
+    # ---------- Main analytics content (only when a dataset is present) ----------
+    if has_dataset:
+        st.divider()
+        # ---------- Retrieve dataset + metadata ----------
+        df = st.session_state["current_df"].copy()
+        selected_label = st.session_state["current_dataset_label"]
+        df_artist_genre = INFO_ARTIST_GENRE.copy()
+        df_album = INFO_ALBUM.copy()
+        df_supergenre_map = INFO_SUPERGENRE.copy()
+
+        # --- Normalize datetime + summary ---
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+        df = df.dropna(subset=["datetime"])
+        df["date"] = df["datetime"].dt.date
+        df["year"] = df["datetime"].dt.year
+
+        # --- Ensure session variables are synced ---
+        st.session_state.current_df = df
+        st.session_state.current_dataset_label = selected_label
+        st.session_state.last_table_name = st.session_state.get("last_table_name", None)
+
+        # ---------------- Recent scorecards ---------------------
+        def get_top_combined(df_in, name_col, sub_col):
+            if df_in.empty:
+                return "N/A"
+            top = (
+                df_in.groupby([name_col, sub_col])["minutes_played"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()
+            )
+            if top.empty:
+                return "N/A"
+            return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
+
+        # --- Filter dataset ---
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+        selected_category = "music"
+        df_filtered = df[df["category"] == selected_category].copy()
+        df_filtered = df_filtered.merge(
+            df_artist_genre[["artist_name", "supergenre"]],
+            on="artist_name", how="left"
         )
-        if top.empty:
-            return "N/A"
-        return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
 
-    # --- Filter dataset ---
-    # Ensure date column is datetime
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        # --- Use dataset's latest date as reference ---
+        latest_date = df_filtered["date"].max()
+        six_months_ago = latest_date - pd.DateOffset(months=6)
+        one_year_ago = latest_date - pd.DateOffset(years=1)
 
-    # Filter by category first
-    selected_category = "music"
-    df_filtered = df[df["category"] == selected_category].copy()
-    df_filtered = df_filtered.merge(
-        df_artist_genre[["artist_name", "supergenre"]],
-        on="artist_name", how="left"
-    )
+        # --- Define time windows relative to dataset ---
+        last_six_months_df = df_filtered[df_filtered["date"] >= six_months_ago].copy()
+        previous_six_months_df = df_filtered[
+            (df_filtered["date"] < six_months_ago) & (df_filtered["date"] >= one_year_ago)
+        ].copy()
 
-    # --- Use dataset's latest date as reference ---
-    latest_date = df_filtered["date"].max()
-    six_months_ago = latest_date - pd.DateOffset(months=6)
-    one_year_ago = latest_date - pd.DateOffset(years=1)
+        # --- 6 month metrics ---
+        fav_track = get_top_combined(last_six_months_df, "artist_name", "track_name")
+        fav_artist = last_six_months_df["artist_name"].value_counts().idxmax() if not last_six_months_df.empty else "N/A"
 
-    # --- Define time windows relative to dataset ---
-    last_six_months_df = df_filtered[df_filtered["date"] >= six_months_ago].copy()
-    previous_six_months_df = df_filtered[
-        (df_filtered["date"] < six_months_ago) & (df_filtered["date"] >= one_year_ago)
-    ].copy()
-
-    # --- 6 month metrics ---
-    fav_track = get_top_combined(last_six_months_df, "artist_name", "track_name")
-    fav_artist = last_six_months_df["artist_name"].value_counts().idxmax() if not last_six_months_df.empty else "N/A"
-
-    try:
-        if (
-            "supergenre" in last_six_months_df.columns
-            and not last_six_months_df["supergenre"].dropna().empty
-        ):
-            # Exclude "Unlisted" before counting
-            valid_genres = last_six_months_df[
-                last_six_months_df["supergenre"].str.lower() != "unlisted"
-            ]["supergenre"].dropna()
-
-            fav_supergenre = valid_genres.value_counts().idxmax() if not valid_genres.empty else "N/A"
-        else:
+        try:
+            if (
+                "supergenre" in last_six_months_df.columns
+                and not last_six_months_df["supergenre"].dropna().empty
+            ):
+                valid_genres = last_six_months_df[
+                    last_six_months_df["supergenre"].str.lower() != "unlisted"
+                ]["supergenre"].dropna()
+                fav_supergenre = valid_genres.value_counts().idxmax() if not valid_genres.empty else "N/A"
+            else:
+                fav_supergenre = "N/A"
+        except Exception as e:
+            print(f"[supergenre metric] Skipping due to transient data issue: {e}")
             fav_supergenre = "N/A"
-    except Exception as e:
-        print(f"[supergenre metric] Skipping due to transient data issue: {e}")
-        fav_supergenre = "N/A"
 
-    st.divider()
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            scorecard("Recent Favourite Track", fav_track, score_size=30)
+        with c2:
+            scorecard("Recent Favourite Artist", fav_artist, score_size=30)
+        with c3:
+            scorecard("Recent Favourite Genre", fav_supergenre, score_size=30)
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        scorecard("Recent Favourite Track", fav_track, score_size=30)
-    with c2:
-        scorecard("Recent Favourite Artist", fav_artist, score_size=30)
-    with c3:
-        scorecard("Recent Favourite Genre", fav_supergenre, score_size=30)
+        # ----------- SUNBURST -------------- #
+        user_df = df.copy()
 
-    # ----------- SUNBURST -------------- #
+        df = pd.merge(
+            user_df,
+            df_album,
+            on=["album_name", "artist_name"],
+            how="left"
+        )
 
-    user_df = df.copy()
+        # Merge with artist genre info (by artist only)
+        df = pd.merge(
+            df,
+            df_artist_genre,
+            on="artist_name",
+            how="left"
+        )
 
-    df = pd.merge(
-        user_df,
-        df_album,
-        on=["album_name", "artist_name"],
-        how="left"
-    )
+        # --- Datetime handling ---
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+        df = df.dropna(subset=["datetime"]).copy()
+        df["datetime"] = df["datetime"].dt.tz_localize(None)
+        df["date"] = df["datetime"].dt.date
+        df['year'] = df['datetime'].dt.year
 
-    # Merge with artist genre info (by artist only)
-    df = pd.merge(
-        df,
-        df_artist_genre,
-        on="artist_name",
-        how="left"
-    )
+        df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
+        df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
 
-    # --- Datetime handling ---
-    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
-    df = df.dropna(subset=["datetime"]).copy()
-    df["datetime"] = df["datetime"].dt.tz_localize(None)
-    df["date"] = df["datetime"].dt.date
-    df['year'] = df['datetime'].dt.year
+        # --- Add minutes played column ---
+        df_exploded['mins_played'] = df_exploded['ms_played'] / 60000.0
 
-    df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
-    df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
+        # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
+        top_genres = (
+            df_exploded.groupby(['year', 'supergenre'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'mins_played'], ascending=[True, False])
+            .groupby('year')
+            .head(5)
+        )
 
-    # --- Add minutes played column ---
-    df_exploded['mins_played'] = df_exploded['ms_played'] / 60000.0
+        df_filtered = df_exploded.merge(
+            top_genres[['year', 'supergenre']], on=['year', 'supergenre']
+        )
 
-    # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
-    top_genres = (
-        df_exploded.groupby(['year', 'supergenre'], as_index=False)['mins_played']
-        .sum()
-        .sort_values(['year', 'mins_played'], ascending=[True, False])
-        .groupby('year')
-        .head(5)
-    )
+        top_artists = (
+            df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'supergenre', 'mins_played'], ascending=[True, True, False])
+            .groupby(['year', 'supergenre'])
+            .head(5)
+        )
 
-    df_filtered = df_exploded.merge(
-        top_genres[['year', 'supergenre']], on=['year', 'supergenre']
-    )
+        df_filtered_artists = df_filtered.merge(
+            top_artists[['year', 'supergenre', 'artist_name']],
+            on=['year', 'supergenre', 'artist_name']
+        )
 
-    top_artists = (
-        df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['mins_played']
-        .sum()
-        .sort_values(['year', 'supergenre', 'mins_played'], ascending=[True, True, False])
-        .groupby(['year', 'supergenre'])
-        .head(5)
-    )
+        top_tracks = (
+            df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'supergenre', 'artist_name', 'mins_played'], ascending=[True, True, True, False])
+            .groupby(['year', 'supergenre', 'artist_name'])
+            .head(5)
+        )
 
-    df_filtered_artists = df_filtered.merge(
-        top_artists[['year', 'supergenre', 'artist_name']],
-        on=['year', 'supergenre', 'artist_name']
-    )
+        # Create a log-transformed column for color scaling
+        top_tracks["log_mins_played"] = np.log1p(top_tracks["mins_played"])
+        # Apply exponential scaling for color intensity
+        exp_factor = 1.1
+        top_tracks["exp_mins_played"] = np.power(top_tracks["mins_played"], exp_factor)
 
-    top_tracks = (
-        df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['mins_played']
-        .sum()
-        .sort_values(['year', 'supergenre', 'artist_name', 'mins_played'], ascending=[True, True, True, False])
-        .groupby(['year', 'supergenre', 'artist_name'])
-        .head(5)
-    )
+        # --- BUILD SUNBURST ---
+        fig_sunburst = px.sunburst(
+            top_tracks,
+            path=["year", "supergenre", "artist_name", "track_name"],
+            values="mins_played",
+            color="mins_played",
+            color_continuous_scale=[
+                "#062719",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                "#90d7ad",
+            ],
+            title="",
+        )
 
-    # Create a log-transformed column for color scaling
-    top_tracks["log_mins_played"] = np.log1p(top_tracks["mins_played"])  # log(1 + x) avoids log(0)
-    # Apply exponential scaling for color intensity
-    exp_factor = 1.1  # try values between 1.2–2.5 for subtle to strong effects
-    top_tracks["exp_mins_played"] = np.power(top_tracks["mins_played"], exp_factor)
+        fig_sunburst.update_traces(
+            insidetextfont=dict(color="#c8eacd"),
+            hovertemplate="<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>",
+        )
 
-    # --- BUILD SUNBURST ---
-    fig_sunburst = px.sunburst(
-        top_tracks,
-        path=["year", "supergenre", "artist_name", "track_name"],
-        values="mins_played",
-        color="mins_played",
-        # range_color=[1,700],
-        # color_continuous_midpoint=600,
-        color_continuous_scale=[
-            "#062719",
-            "#1ed760",
-            "#1ed760",
-            "#1ed760",
-            "#1ed760",
-            "#1ed760",
-            "#90d7ad",
-        ],
-        title="",
-    )
+        fig_sunburst.update_layout(
+            margin=dict(t=50, l=0, r=0, b=0),
+            height=800,
+            font=dict(color="white"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
 
-    fig_sunburst.update_traces(
-        insidetextfont=dict(color="#c8eacd"),
-        hovertemplate="<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>",
-    )
+        fig_sunburst.update_xaxes(autorange=True)
 
-    fig_sunburst.update_layout(
-        margin=dict(t=50, l=0, r=0, b=0),
-        height=800,
-        font=dict(color="white"),
-        paper_bgcolor="rgba(0,0,0,0)",  # transparent to blend with dark background
-        plot_bgcolor="rgba(0,0,0,0)",
-    )
+        fig_sunburst.update_coloraxes(
+            colorbar=dict(
+                orientation="h",
+                y=-0.15,
+                x=0.5,
+                xanchor="center",
+                title="Minutes Played",
+                tickcolor="white",
+                tickfont=dict(color="white"),
+                titlefont=dict(color="white"),
+            ),
+            showscale=True,
+        )
 
-    fig_sunburst.update_xaxes(autorange=True)
+        st.divider()
+        h1, h2, h3 = st.columns([1, 3, 1])
+        with h2:
+            st.html("<p style='text-align: center;font-size: 30px;'><em><b>Top 5 Tracks | Top 5 Artists | Top 5 Genre | Every Year</b></em></p>")
 
+        st.plotly_chart(
+            fig_sunburst,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+            key="sunburst_moulin",
+        )
 
-    fig_sunburst.update_coloraxes(
-        colorbar=dict(
-            orientation="h",
-            y=-0.15,         # moves it below the chart
-            x=0.5,
-            xanchor="center",
-            title="Minutes Played",
-            tickcolor="white",
-            tickfont=dict(color="white"),
-            titlefont=dict(color="white"),
-        ),
-        showscale=True
-    )
-    st.divider()
-    h1, h2, h3 = st.columns([1,3,1])
-    with h2:
-        st.html("<p style='text-align: center;font-size: 30px;'><em><b>Top 5 Tracks | Top 5 Artists | Top 5 Genre | Every Year</b></em></p>")
+        st.divider()
 
-    st.plotly_chart(
-        fig_sunburst,
-        width="stretch",
-        config={
-            "displayModeBar": False,
-            "responsive": True,
-        },
-        key="sunburst_moulin",
-    )
+        st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
 
-    st.divider()
+        demo_df = df.copy()
+        st.dataframe(
+            demo_df.query('category == "music"')
+            .copy()
+            .drop(
+                columns=[
+                    "spotify_track_uri",
+                    "episode_show_name",
+                    "episode_name",
+                    "spotify_episode_uri",
+                    "audiobook_title",
+                    "audiobook_uri",
+                    "audiobook_chapter_uri",
+                    "audiobook_chapter_title",
+                ],
+                errors="ignore",
+            )
+            .sample(min(20, len(df))),
+            height=300,
+        )
+        st.divider()
+    # ---------- Upload New Dataset (always visible) ----------
 
-    st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
-
-    demo_df = df.copy()
-    st.dataframe(
-        demo_df.query('category == "music"')
-        .copy()
-        .drop(columns=[
-            "spotify_track_uri",
-            "episode_show_name",
-            "episode_name",
-            "spotify_episode_uri",
-            "audiobook_title",
-            "audiobook_uri",
-            "audiobook_chapter_uri",
-            "audiobook_chapter_title"
-        ], errors="ignore")
-        .sample(min(20, len(df))),
-        height=300
-    )
-    st.info("You haven’t uploaded any datasets yet.")
-
-    # ---------- Upload New Dataset ----------
-    st.divider()
     st.markdown("### Upload a new dataset")
 
     with st.form("upload_form", clear_on_submit=False):
@@ -2465,7 +3007,6 @@ if page == "Home":
                 try:
                     with st.spinner("Processing your data (ETL + Enrichment)…"):
                         st.session_state.etl_done = False
-                        # ⚙️ Run ETL (already handles data cleaning + upload)
                         table_name, cleaned_df = _etl_process_zip(
                             uploaded, dataset_label.strip(), user_id
                         )
@@ -2473,7 +3014,6 @@ if page == "Home":
                     if cleaned_df is None or cleaned_df.empty:
                         st.error("ETL produced no rows. Please check your ZIP export.")
                     else:
-                        # Persist session state
                         st.session_state["current_dataset_label"] = dataset_label.strip()
                         st.session_state["current_df"] = cleaned_df
                         st.session_state["last_table_name"] = table_name
@@ -2501,21 +3041,21 @@ if page == "Home":
                         st.success("✅ Dataset uploaded & cleaned. Enrichment will now begin in the background.")
 
                         from dao_selector import get_log_dao
-
                         log_dao = get_log_dao()
-                        _auto_check_and_reenrich_if_needed(
+                        res = _auto_check_and_reenrich_if_needed(
                             user_id,
                             dataset_label.strip(),
                             log_dao,
                             table_name=table_name,
                         )
+                        print(f"[CALLSITE upload] auto_check result = {res}")
 
                 except zipfile.BadZipFile:
                     st.error("That file isn't a valid ZIP.")
                 except Exception as e:
                     st.error(f"ETL failed: {e}")
 
-    # ---------- Refresh Datasets ----------
+    # ---------- Refresh Datasets (always visible) ----------
     if st.button("Refresh list of uploaded datasets", key="btn_refresh_datasets"):
         try:
             dataset_options = user_dao.list_datasets(user_id)
@@ -3975,7 +4515,7 @@ elif page == "Artists":
             rpa_label = "Average Returns per Year"
 
         # --- Display Scorecards ---
-        scorecard("First listen",first_listen, background=False)
+        scorecard("First listen",first_listen, background=False, height=90)
         scorecard(rank_label, rank_val, rank_delta)
         scorecard("Total Listening Time", total_mins_str, time_delta)
         scorecard("Longest Streak", f"{max_streak} Days", streak_delta)
@@ -4632,7 +5172,7 @@ elif page == "Genres":
 
     # --- 3️⃣ Favourite Track (filtered by selected genre) ---
     fav_track = (
-        df_year.groupby(["artist_name", "track_name"])["minutes_played"]
+        df_genre.groupby(["artist_name", "track_name"])["minutes_played"]
         .sum()
         .sort_values(ascending=False)
         .reset_index()
@@ -4646,24 +5186,16 @@ elif page == "Genres":
     # --- DISPLAY SCORECARDS ---
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        scorecard("Favourite Genre", fav_genre)
+        scorecard(f"Favourite Genre of {year_selected}", fav_genre, height=120)
     with c2:
-        scorecard("Favourite Subgenre", fav_subgenre)
+        scorecard(f"Favourite Subgenre of {year_selected}", fav_subgenre.title(), height=120)
     with c3:
-        scorecard("Favourite Artist", fav_artist)
+        scorecard(f"Favourite {genre_selected} Artist of {year_selected}", fav_artist, height=120)
     with c4:
-        scorecard("Favourite Track", fav_track_display)
+        scorecard(f"Favourite {genre_selected} Track of {year_selected}", fav_track_display, height=120)
 
     # =========================================
-    # Treemap: Genres → Top 10 Artists → Top 10 Tracks
-    # - Global filter is df_year (your selected year)
-    # - No "Others"; parents equal the sum of shown children (no empty space)
-    # - Same neon colorscale across layers, re-mapped per layer range
-    # - Children visible initially; smooth transitions on zoom
-    # =========================================
-    import plotly.graph_objects as go
-    import pandas as pd
-
+    # Treemap: All Genres → Top 30 Artists → Top 20 Tracks
     # ---------------------------
     # 1) Build the three levels
     # ---------------------------
@@ -4688,7 +5220,7 @@ elif page == "Genres":
         ascending=[True, True, False]
     )
     top10_tracks_each_artist = (
-        g_track.groupby(["supergenre", "artist_name"], as_index=False).head(10).copy()
+        g_track.groupby(["supergenre", "artist_name"], as_index=False).head(20).copy()
     )
 
     # Artist value = sum of their Top-10 tracks; then keep Top-10 artists per genre
@@ -4700,7 +5232,7 @@ elif page == "Genres":
         .sort_values(["supergenre", "artist_value"], ascending=[True, False])
     )
     top10_artists_each_genre = (
-        artist_nodes.groupby("supergenre", as_index=False).head(10).copy()
+        artist_nodes.groupby("supergenre", as_index=False).head(30).copy()
     )
 
     # Genre value = sum of Top-10 artists
@@ -4792,7 +5324,7 @@ elif page == "Genres":
     for _, grow in genres_ordered.iterrows():
         g = grow["supergenre"]; g_val = float(grow["genre_value"])
         ids.append(gid(g)); labels.append(g); parents.append(root_id)
-        texts.append(f"★ {genres_with_top.loc[genres_with_top['supergenre'] == g, 'top_artist'].iloc[0] or ''}")
+        texts.append(f"Top artist: {genres_with_top.loc[genres_with_top['supergenre'] == g, 'top_artist'].iloc[0] or ''}")
         values.append(g_val); colors.append(genre_rank_color[g]); custom.append(format_hhmmss(g_val))
 
         # Artists (value = sum of shown tracks)
@@ -4827,7 +5359,7 @@ elif page == "Genres":
         ids=ids, labels=labels, parents=parents, values=values,
         text=texts, textinfo="label+text",
         texttemplate="<b>%{label}</b><br>%{text}",
-        hovertemplate="<b>%{label}</b><br><br>Time: %{customdata}<extra></extra>",
+        hovertemplate="<b>%{label}</b><br>Time: %{customdata}<extra></extra>",
         customdata=custom,
         marker=dict(colors=colors),
         tiling=dict(pad=2, squarifyratio=1),
@@ -4851,7 +5383,6 @@ elif page == "Genres":
 
     st.plotly_chart(
         fig_treemap,
-        use_container_width=True,
         width="stretch",
         config={"displayModeBar": False, "responsive": True},
     )
@@ -5130,7 +5661,7 @@ elif page == "Genres":
     #             # Render the chart
     #             st.plotly_chart(
     #                 fig_top_genres,
-    #                 use_container_width=True,
+    #                 width="stretch",
     #                 config={"displayModeBar": False, "responsive": True},
     #             )
 
@@ -6157,7 +6688,7 @@ elif page == "Normality":
     import plotly.express as px
     from skopt import gp_minimize
     from skopt.space import Real
-    from scipy.stats import skew, kurtosis, normaltest
+    from scipy.stats import skew, kurtosis, normaltest, entropy
     from datetime import datetime
 
     # ----------------------------------------------------------------------
@@ -6385,6 +6916,115 @@ elif page == "Normality":
             print(f"[Normality] ⚠️ Failed to save convergence JSON: {e}")
 
         return df_results, convergence
+
+    import pandas as pd, numpy as np
+    from scipy.stats import normaltest, skew, kurtosis, entropy
+    from datetime import timedelta
+    import traceback, os
+
+    # def compute_normality_rolling(df, df_artist_genre, parquet_path, window_days=28):
+    #     """Compute normality metrics over 28-day rolling windows per genre."""
+
+    #     print("[Normality] ▶ Preparing dataset for 28-day rolling normality analysis")
+
+    #     # ============================================================
+    #     # 1️⃣ Filter for musical events only
+    #     # ============================================================
+    #     if "category" not in df.columns:
+    #         raise KeyError("[Normality] ❌ The dataset must include a 'category' column.")
+
+    #     df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
+    #     print(f"[Normality] ✅ Filtered for musical events: {len(df_music):,} rows remain")
+
+    #     # ============================================================
+    #     # 2️⃣ Merge with artist→genre mapping
+    #     # ============================================================
+    #     df_full = df_music.merge(df_artist_genre, on="artist_name", how="left")
+    #     df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
+
+    #     # ============================================================
+    #     # 3️⃣ Convert & prepare dates
+    #     # ============================================================
+    #     df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
+    #     df_full = df_full.dropna(subset=["datetime"])
+    #     df_full["date"] = df_full["datetime"].dt.date
+    #     df_full["minutes_played"] = df_full["minutes_played"].fillna(0)
+
+    #     all_genres = df_full["supergenre"].unique()
+    #     results = []
+
+    #     print(f"[Normality] ▶ Beginning rolling-window analysis for {len(all_genres)} genres")
+
+    #     # ============================================================
+    #     # 4️⃣ Compute rolling metrics per genre
+    #     # ============================================================
+    #     for genre in all_genres:
+    #         gdf = df_full[df_full["supergenre"] == genre].copy()
+    #         if gdf.empty:
+    #             continue
+
+    #         gdf = gdf.groupby(["date", "artist_name"])["minutes_played"].sum().reset_index()
+    #         gdf = gdf.sort_values("date")
+
+    #         all_dates = pd.date_range(gdf["date"].min(), gdf["date"].max(), freq="D")
+
+    #         for current_end in all_dates:
+    #             current_start = current_end - timedelta(days=window_days - 1)
+    #             wdf = gdf[(gdf["date"] >= current_start.date()) & (gdf["date"] <= current_end.date())]
+
+    #             if wdf.empty:
+    #                 continue
+
+    #             artist_counts = wdf.groupby("artist_name")["minutes_played"].sum().values
+    #             if len(artist_counts) < 8:
+    #                 continue
+
+    #             try:
+    #                 # --- Core metrics ---
+    #                 _, p_val = normaltest(artist_counts)
+    #                 sk = skew(artist_counts)
+    #                 ku = kurtosis(artist_counts)
+    #                 sd = np.std(artist_counts)
+    #                 rng = artist_counts.max() - artist_counts.min()
+    #                 probs = artist_counts / artist_counts.sum() if artist_counts.sum() > 0 else np.ones_like(artist_counts)/len(artist_counts)
+    #                 H = entropy(probs, base=2)
+
+    #                 # --- Composite normality index ---
+    #                 p_norm = np.clip(p_val, 0, 1)
+    #                 H_norm = np.clip(H / np.log2(len(artist_counts)), 0, 1)
+    #                 K_adj = np.clip(1 / (1 + abs(ku)), 0, 1)
+    #                 normality_index = np.sqrt(p_norm * (1 - H_norm) * K_adj)
+
+    #                 results.append(dict(
+    #                     genre=genre,
+    #                     date_window=current_end.date(),
+    #                     p_value=p_val,
+    #                     skewness=sk,
+    #                     kurtosis=ku,
+    #                     std_dev=sd,
+    #                     entropy=H,
+    #                     range_width=rng,
+    #                     NormalityIndex=normality_index
+    #                 ))
+
+    #             except Exception as e:
+    #                 print(f"[Normality] ❌ Error for {genre} {current_end.date()}: {e}")
+    #                 traceback.print_exc()
+    #                 continue
+
+    #     # ============================================================
+    #     # 5️⃣ Save results
+    #     # ============================================================
+    #     df_results = pd.DataFrame(results)
+    #     print(f"[Normality] ✅ Computed {len(df_results):,} rolling-window results")
+
+    #     if not df_results.empty:
+    #         df_results.to_parquet(parquet_path, index=False)
+    #         print(f"[Normality] 💾 Saved rolling results to {parquet_path}")
+    #     else:
+    #         print("[Normality] ⚠️ No valid results computed — nothing saved.")
+
+    #     return df_results
 
     # ----------------------------------------------------------------------
     # LOAD OR COMPUTE RESULTS
@@ -6746,7 +7386,7 @@ elif page == "Normality":
         # ----------------------------------------------------------------------
         # TABS FOR PHASES
         # ----------------------------------------------------------------------
-        tab1, tab2, tab3, tab4 = st.tabs(["Grid Search", "Fine-Tuning Search","Bayesian Optimization", "Dimensionality Reduction "])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Grid Search", "Fine-Tuning Search","Bayesian Optimization", "Dimensionality Reduction", "new bit"])
         shared_cmin, shared_cmax = 0, 1
 
         # ----------------------------------------------------------------------
@@ -6948,7 +7588,7 @@ elif page == "Normality":
                             margin=dict(t=40, b=40, l=40, r=40),
                         )
 
-                        st.plotly_chart(fig_conv, use_container_width=True, config={"displayModeBar": False})
+                        st.plotly_chart(fig_conv, width="stretch", config={"displayModeBar": False})
 
                     st.dataframe(df_bayes.round(3).reset_index(drop=True), hide_index=True, width="stretch")
 
@@ -6956,6 +7596,9 @@ elif page == "Normality":
                     print(f"[Normality] ⚠️ No match found for {expected_key}")
                     st.info("⚠️ No convergence data found for the selected genre and quarter.")
 
+        # ----------------------------------------------------------------------
+        # TAB 4 - Dimension collapser
+        # ----------------------------------------------------------------------
         with tab4:
             from sklearn.preprocessing import StandardScaler
             from sklearn.decomposition import PCA
@@ -7002,7 +7645,801 @@ elif page == "Normality":
             fig.update_traces(textposition="top center")
             fig.update_layout(height=600, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, width="stretch")
-    # ------------------------------ On This Day --------------------------------- #
+
+        # ----------------------------------------------------------------------
+        # New bitt
+        # ----------------------------------------------------------------------
+        with tab5:
+            st.write()
+
+# -------------------------------- Taste ------------------------------------- #
+elif page == "Taste":
+    # ----------------------------------------------------------------------
+    # DATASET VALIDATION
+    # ----------------------------------------------------------------------
+    st.session_state["last_page"] = "Taste"
+    user_id = st.session_state.user["user_id"]
+
+    # Get current user dataset
+    df, current_label = require_current_df()
+    user_df = df[df["category"] == "music"].copy()
+    df_music = df[df["category"] == "music"].copy()
+    df_album = INFO_ALBUM.copy()
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
+
+    # --- Normalize datetime column safely ---
+    df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
+    df_music = df_music.dropna(subset=["datetime"]).copy()
+    df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
+    df_music["date"] = df_music["datetime"].dt.date
+
+    # ----------------------------------------------------------------------
+    # NORMALITY ROLLING & TASTE STABILITY ANALYSIS
+    # ----------------------------------------------------------------------
+    import pandas as pd, numpy as np, plotly.express as px, plotly.graph_objects as go
+    from scipy.stats import normaltest, skew, kurtosis, entropy
+    from datetime import timedelta
+    import os, traceback
+
+    def compute_normality_rolling(df, df_artist_genre, parquet_path, window_days=28):
+        """
+        Compute 28-day rolling normality metrics (p-value, entropy, kurtosis, etc.)
+        per genre, and derive a composite NormalityIndex.
+        """
+
+        print("[Normality] ▶ Starting 28-day rolling normality analysis")
+
+        # 1️⃣ Filter for music events
+        df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
+        print(f"[Normality] ✅ Filtered for musical events: {len(df_music):,} rows remain")
+
+        # 2️⃣ Merge with artist→genre mapping
+        df_full = df_music.merge(df_artist_genre, on="artist_name", how="left")
+        df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
+
+        # 3️⃣ Prep time columns
+        df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
+        df_full = df_full.dropna(subset=["datetime"])
+        df_full["date"] = df_full["datetime"].dt.date
+        df_full["minutes_played"] = df_full["minutes_played"].fillna(0)
+
+        # 4️⃣ Loop through genres
+        all_genres = df_full["supergenre"].unique()
+        results = []
+        print(f"[Normality] ▶ Found {len(all_genres)} genres to analyze")
+
+        for genre in all_genres:
+            gdf = df_full[df_full["supergenre"] == genre].copy()
+            if gdf.empty:
+                continue
+
+            gdf = gdf.groupby(["date", "artist_name"])["minutes_played"].sum().reset_index()
+            gdf = gdf.sort_values("date")
+
+            all_dates = pd.date_range(gdf["date"].min(), gdf["date"].max(), freq="D")
+
+            for current_end in all_dates:
+                current_start = current_end - timedelta(days=window_days - 1)
+                wdf = gdf[(gdf["date"] >= current_start.date()) & (gdf["date"] <= current_end.date())]
+
+                if wdf.empty:
+                    continue
+
+                artist_counts = wdf.groupby("artist_name")["minutes_played"].sum().values
+                if len(artist_counts) < 8:
+                    continue
+
+                try:
+                    # --- Core metrics ---
+                    total_minutes = wdf["minutes_played"].sum()
+                    _, p_val = normaltest(artist_counts)
+                    sk = skew(artist_counts)
+                    ku = kurtosis(artist_counts)
+                    sd = np.std(artist_counts)
+                    rng = artist_counts.max() - artist_counts.min()
+                    probs = artist_counts / artist_counts.sum() if artist_counts.sum() > 0 else np.ones_like(artist_counts)/len(artist_counts)
+                    H = entropy(probs, base=2)
+
+                    # --- Composite normality index ---
+                    p_norm = np.clip(p_val, 0, 1)
+                    H_norm = np.clip(H / np.log2(len(artist_counts)), 0, 1)
+                    K_adj = np.clip(1 / (1 + abs(ku)), 0, 1)
+                    normality_index = np.sqrt(p_norm * (1 - H_norm) * K_adj)
+
+                    results.append(dict(
+                        genre=genre,
+                        date_window=current_end.date(),
+                        total_minutes=total_minutes,        # ✅ NEW — total engagement
+                        p_value=p_val,
+                        skewness=sk,
+                        kurtosis=ku,
+                        std_dev=sd,
+                        entropy=H,
+                        range_width=rng,
+                        NormalityIndex=normality_index
+                    ))
+
+                except Exception as e:
+                    print(f"[Normality] ❌ Error for {genre} {current_end.date()}: {e}")
+                    traceback.print_exc()
+                    continue
+
+        df_results = pd.DataFrame(results)
+        print(f"[Normality] ✅ Computed {len(df_results):,} rows of rolling-window results")
+
+        if not df_results.empty:
+            df_results.to_parquet(parquet_path, index=False)
+            print(f"[Normality] 💾 Saved to {parquet_path}")
+        else:
+            print("[Normality] ⚠️ No valid results computed — nothing saved.")
+
+        return df_results
+
+
+    # ----------------------------------------------------------------------
+    # RUN ANALYSIS OR LOAD EXISTING RESULTS
+    # ----------------------------------------------------------------------
+    parquet_rolling = f"enrichment/normality/{st.session_state.user['user_id']}_{current_label}_rolling.parquet"
+
+    run_stability = st.button("▶ Run 28-Day Rolling Normality Analysis")
+
+    if run_stability:
+        df_rolling = compute_normality_rolling(df, df_artist_genre, parquet_rolling)
+    elif os.path.exists(parquet_rolling):
+        df_rolling = pd.read_parquet(parquet_rolling)
+        st.success("✅ Loaded cached rolling analysis.")
+    else:
+        st.info("Click the button to compute the 28-day rolling normality analysis.")
+        st.stop()
+
+
+    # ----------------------------------------------------------------------
+    # 🎧 TASTE STABILITY ANALYSIS DASHBOARD
+    # ----------------------------------------------------------------------
+
+    if not df_rolling.empty:
+        st.markdown("## 🎚️ Taste Stability Analysis")
+
+        # ===============================================================
+        # YEAR FILTER
+        # ===============================================================
+        # Extract available years
+        df_rolling["year"] = pd.to_datetime(df_rolling["date_window"]).dt.year
+        years = sorted(df_rolling["year"].dropna().unique())
+        year_options = ["All Years"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year",
+            year_options,
+            selection_mode="single",
+            default="All Years",
+            width="content",
+        )
+
+        if not year_selected:
+            year_selected = "All Years"
+
+        # Filter results by year (if not All)
+        if year_selected != "All Years":
+            df_filtered = df_rolling[df_rolling["year"] == int(year_selected)].copy()
+        else:
+            df_filtered = df_rolling.copy()
+
+        # ===============================================================
+        # HEATMAP — Taste Stability by Genre and Date
+        # ===============================================================
+        st.markdown("### 🎨 Taste Stability Heatmap — *Normality Index by Genre Over Time*")
+
+        df_heatmap = df_filtered.pivot_table(
+            index="genre", columns="date_window", values="NormalityIndex", aggfunc="mean"
+        )
+
+        # Order genres by average stability
+        df_heatmap = df_heatmap.loc[df_heatmap.mean(axis=1).sort_values(ascending=False).index]
+
+        fig_heatmap = go.Figure(data=go.Heatmap(
+            z=df_heatmap.values,
+            x=df_heatmap.columns,
+            y=df_heatmap.index,
+            colorscale=[
+                [0.0, "#150d20"],
+                [0.25, "#3b1148"],
+                [0.5, "#71207d"],
+                [0.75, "#b74d8f"],
+                [1.0, "#ff7ee3"],
+            ],
+            colorbar=dict(
+                title="Normality Index",
+                tickcolor="white",
+                tickfont=dict(color="white"),
+                titlefont=dict(color="white"),
+            ),
+            hovertemplate=(
+                "<b>Genre:</b> %{y}<br>"
+                "<b>Date:</b> %{x|%Y-%m-%d}<br>"
+                "<b>Normality:</b> %{z:.3f}<extra></extra>"
+            ),
+        ))
+
+        fig_heatmap.update_layout(
+            title=f"Taste Stability Heatmap (28-Day Rolling) — {year_selected}",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            xaxis=dict(title="Date Window", tickfont=dict(size=10, color="white")),
+            yaxis=dict(title="Genre", tickfont=dict(size=12, color="white")),
+            margin=dict(l=120, r=20, t=60, b=40),
+            height=650,
+        )
+
+        st.plotly_chart(fig_heatmap, width="stretch", config={"displayModeBar": False})
+
+        # ===============================================================
+        # TREND — Average NormalityIndex Across All Genres
+        # ===============================================================
+        st.markdown("### 📈 Taste Focus Over Time — *Average Normality Index*")
+
+        df_trend = (
+            df_filtered.groupby("date_window")["NormalityIndex"]
+            .mean()
+            .reset_index()
+            .sort_values("date_window")
+        )
+
+        # Smooth the curve (14-day rolling average)
+        df_trend["rolling_avg"] = df_trend["NormalityIndex"].rolling(window=14, min_periods=1).mean()
+
+        # Dynamic Y-axis max (10% above peak value)
+        y_max = df_trend["NormalityIndex"].max() * 1.1 if not df_trend.empty else 1
+
+        fig_trend = go.Figure()
+
+        fig_trend.add_trace(go.Scatter(
+            x=df_trend["date_window"],
+            y=df_trend["NormalityIndex"],
+            mode="lines+markers",
+            name="Daily Avg",
+            line=dict(color="#90d7ad", width=1),
+            marker=dict(size=4, color="#1ed760"),
+            opacity=0.6,
+        ))
+
+        fig_trend.add_trace(go.Scatter(
+            x=df_trend["date_window"],
+            y=df_trend["rolling_avg"],
+            mode="lines",
+            name="14-Day Smoothed",
+            line=dict(color="#1ed760", width=3),
+        ))
+
+        fig_trend.update_layout(
+            height=400,
+            title=f"Average Normality Index (Listening Focus) — {year_selected}",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            xaxis=dict(title="Date Window", tickfont=dict(size=10)),
+            yaxis=dict(title="Average Normality Index", range=[0, y_max]),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.25,
+                xanchor="center",
+                x=0.5,
+            ),
+            margin=dict(t=60, b=40, l=60, r=40),
+        )
+
+        st.plotly_chart(fig_trend, width="stretch", config={"displayModeBar": False})
+
+        # ===============================================================
+        # 🔗 GENRE CORRELATION MATRIX — "Taste Interdependence"
+        # ===============================================================
+        st.markdown("### 🔗 Genre Correlation Matrix — *How Genre Stability Co-varies Over Time*")
+
+        # Compute pairwise correlations between genres based on rolling normality
+        corr_matrix = df_heatmap.transpose().corr(method="spearman")
+
+        fig_corr = go.Figure(data=go.Heatmap(
+            z=corr_matrix.values,
+            x=corr_matrix.columns,
+            y=corr_matrix.index,
+            zmin=-1,
+            zmax=1,
+            colorscale=[
+                [0.0, "#5b0d0d"],
+                [0.5, "#1a1a1a"],
+                [1.0, "#0fa958"],
+            ],
+            colorbar=dict(
+                title="Correlation",
+                tickcolor="white",
+                tickfont=dict(color="white"),
+                titlefont=dict(color="white"),
+            ),
+            hovertemplate="<b>%{y}</b> ↔ <b>%{x}</b><br>Correlation: %{z:.2f}<extra></extra>",
+        ))
+
+        fig_corr.update_layout(
+            title=f"Genre Interdependence Matrix — {year_selected}",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            margin=dict(l=120, r=20, t=60, b=40),
+            height=700,
+        )
+
+        st.plotly_chart(fig_corr, width="stretch", config={"displayModeBar": False})
+
+    else:
+        st.warning("⚠️ No valid data available for taste stability analysis.")
+
+    # ===============================================================
+    # 🧭 GENRE EMBEDDING MAP — *t-SNE/UMAP Projection of Genre Stability*
+    # ===============================================================
+    st.markdown("### 🧭 Genre Embedding Map — *Taste Landscape in Two Dimensions*")
+
+    if df_filtered["genre"].nunique() >= 3:
+        from sklearn.manifold import TSNE
+        from sklearn.preprocessing import StandardScaler
+        from umap import UMAP
+
+        # --- Prepare matrix: rows = genres, columns = date windows ---
+        df_embed = df_filtered.pivot_table(
+            index="genre", columns="date_window", values="NormalityIndex", aggfunc="mean"
+        ).fillna(method="ffill", axis=1).fillna(method="bfill", axis=1).fillna(0)
+
+        # --- Compute descriptive stats for hover info ---
+        genre_stats = (
+            df_filtered.groupby("genre")["NormalityIndex"]
+            .agg(["mean", "std", "count"])
+            .reset_index()
+        )
+
+        # --- Normalise before embedding ---
+        X_scaled = StandardScaler().fit_transform(df_embed)
+
+        # --- Dimensionality reduction selector ---
+        method = st.radio(
+            "Select dimensionality reduction method",
+            ["t-SNE", "UMAP"],
+            horizontal=True,
+            index=0,
+        )
+
+        if method == "UMAP":
+            reducer = UMAP(
+                n_neighbors=5,
+                min_dist=0.2,
+                n_components=2,
+                random_state=42,
+                metric="euclidean",
+            )
+        else:
+            reducer = TSNE(
+                n_components=2,
+                perplexity=min(5, len(df_embed) - 1),
+                learning_rate="auto",
+                random_state=42,
+                init="pca",
+            )
+
+        embedding = reducer.fit_transform(X_scaled)
+        df_embedding = pd.DataFrame(embedding, columns=["x", "y"])
+        df_embedding["genre"] = df_embed.index
+        df_embedding = df_embedding.merge(genre_stats, on="genre", how="left")
+
+        # --- Visualisation ---
+        fig_embed = px.scatter(
+            df_embedding,
+            x="x",
+            y="y",
+            color="mean",
+            color_continuous_scale=[
+                [0.0, "#150d20"],
+                [0.25, "#3b1148"],
+                [0.5, "#71207d"],
+                [0.75, "#b74d8f"],
+                [1.0, "#ff7ee3"],
+            ],
+            size="count",
+            hover_data={
+                "genre": True,
+                "mean": ":.3f",
+                "std": ":.3f",
+                "count": True,
+                "x": False,
+                "y": False,
+            },
+            title=f"Genre Embedding Map ({method}) — {year_selected}",
+        )
+
+        fig_embed.update_traces(
+            marker=dict(opacity=0.9, line=dict(width=0.5, color="white")),
+            selector=dict(mode="markers"),
+        )
+
+        fig_embed.update_layout(
+            height=650,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            coloraxis_colorbar=dict(
+                title="Mean Stability",
+                tickcolor="white",
+                tickfont=dict(color="white"),
+                titlefont=dict(color="white"),
+            ),
+            xaxis=dict(showgrid=False, visible=False),
+            yaxis=dict(showgrid=False, visible=False),
+            margin=dict(l=40, r=40, t=60, b=40),
+        )
+
+        st.plotly_chart(fig_embed, width="stretch", config={"displayModeBar": False})
+
+        st.caption(
+            """
+            *Each point represents a genre.*
+            Genres close together show similar stability patterns over time.
+            Bubble size = number of rolling windows observed.
+            Color = average NormalityIndex (listening focus).
+            """
+        )
+    else:
+        st.info("Not enough genres to compute an embedding map.")
+
+    import plotly.express as px
+
+    # ===============================================================
+    # Genre Taste Stability — Distribution & Median Focus"
+    # ===============================================================
+
+    st.markdown("### Genre Taste Stability — Distribution & Median Focus")
+
+    if "df_rolling" not in locals() or df_rolling.empty:
+        st.info("No rolling normality data available yet. Run the analysis first.")
+    else:
+        df_vio = df_rolling.copy()
+        if year_selected not in ["All Years", "All Time", None, ""]:
+            try:
+                df_vio = df_vio[df_vio["year"] == int(year_selected)]
+            except Exception:
+                pass
+
+        df_vio = df_vio.dropna(subset=["genre", "NormalityIndex"])
+
+        if df_vio.empty:
+            st.info("No valid data for this year selection.")
+        else:
+            fig_violin = px.violin(
+                df_vio,
+                x="genre",
+                y="NormalityIndex",
+                color="genre",
+                box=True,
+                points=False,
+                color_discrete_sequence=[
+                    "#1ed760","#80f2af","#62d089","#2aa355",
+                    "#106441","#013C24","#062719"
+                ],
+            )
+
+            fig_violin.update_traces(meanline_visible=True, width=0.7)
+            fig_violin.update_layout(
+                height=700,
+                xaxis_title="Genre",
+                yaxis_title="Normality Index (0–1)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis=dict(showgrid=False, tickangle=-45),
+                yaxis=dict(showgrid=False),
+                showlegend=False,
+                title=f"Taste Stability Distribution ({year_selected})"
+            )
+
+            st.plotly_chart(fig_violin, width="stretch", config={"displayModeBar": False})
+
+    # ===============================================================
+    # Taste Focus Distribution by Genre (Ridgeline)
+    # ===============================================================
+
+    # ===============================================================
+    # 🌋 3D DUAL-LAYER TASTE TERRAIN — Focus vs Entropy
+    # ===============================================================
+    import numpy as np
+    import pandas as pd
+    import plotly.graph_objects as go
+
+    st.markdown("### 🌋 Dynamic 3D Taste Terrain — *Focus vs Volatility Landscape*")
+
+    if "df_rolling" not in locals() or df_rolling.empty:
+        st.info("No rolling normality data available yet. Run the rolling analysis first.")
+    else:
+        df_focus = df_rolling.copy()
+
+        # If minutes_played is missing or zeroed, try to recover it
+        if ("minutes_played" not in df_focus.columns) or (df_focus["minutes_played"].sum() == 0):
+            try:
+                # Rebuild approximate minutes_played per (genre, date_window)
+                df_minutes = (
+                    df.groupby(["genre", "date_window"])["minutes_played"]
+                    .sum()
+                    .reset_index()
+                )
+
+                # Merge back into df_focus
+                df_focus = df_focus.merge(df_minutes, on=["genre", "date_window"], how="left")
+
+                print(f"[TasteTerrain] ✅ Reconstructed minutes_played from base data ({len(df_minutes)} groups).")
+            except Exception as e:
+                print(f"[TasteTerrain] ⚠️ Could not recover minutes_played: {e}")
+                df_focus["minutes_played"] = 0
+
+        # --- Ensure date_window exists ---
+        if "date_window" not in df_focus.columns:
+            if "datetime" in df_focus.columns:
+                df_focus["date_window"] = df_focus["datetime"].dt.to_period("28D").astype(str)
+            else:
+                st.warning("Missing both 'date_window' and 'datetime'; cannot build terrain.")
+                st.stop()
+
+        # --- Year filter ---
+        if year_selected not in ["All Years", "All Time", None, ""]:
+            try:
+                df_focus = df_focus[df_focus["year"] == int(year_selected)]
+            except Exception:
+                pass
+
+        # --- Entropy (volatility proxy) ---
+        entropy_series = (
+            df_focus.groupby("genre")["NormalityIndex"]
+            .rolling(window=3, min_periods=1)
+            .std()
+            .reset_index()
+            .rename(columns={"NormalityIndex": "Entropy"})
+        )
+        if "level_1" in entropy_series.columns:
+            entropy_series.rename(columns={"level_1": "row_index"}, inplace=True)
+        elif "index" in entropy_series.columns:
+            entropy_series.rename(columns={"index": "row_index"}, inplace=True)
+
+        df_focus = df_focus.reset_index().rename(columns={"index": "row_index"})
+        df_focus = pd.merge(
+            df_focus, entropy_series[["genre", "row_index", "Entropy"]],
+            on=["genre", "row_index"], how="left"
+        ).drop(columns=["row_index"], errors="ignore")
+
+        # --- Fill + Normalize ---
+        df_focus = df_focus.fillna(0)
+        for col in ["NormalityIndex", "Entropy", "kurtosis", "minutes_played"]:
+            if col not in df_focus.columns:
+                df_focus[col] = 0
+
+        print(df_focus["minutes_played"].dtype, df_focus["minutes_played"].describe())
+        print(df_focus["minutes_played"].head(10))
+
+        for col in ["NormalityIndex", "Entropy", "kurtosis", "minutes_played"]:
+            col_min, col_max = df_focus[col].min(), df_focus[col].max()
+            df_focus[f"{col}_norm"] = (
+                (df_focus[col] - col_min) / (col_max - col_min)
+                if col_max > col_min else 0.5
+            )
+
+        # --- Taste Focus Index ---
+        df_focus["TasteFocusIndex"] = (
+            df_focus["NormalityIndex_norm"]
+            * (1 - df_focus["Entropy_norm"])
+            * (1 - df_focus["kurtosis_norm"])
+            * df_focus["minutes_played_norm"]
+        )
+
+        # --- Pivot for both metrics ---
+        df_surface_focus = df_focus.pivot_table(
+            index="genre", columns="date_window", values="TasteFocusIndex", aggfunc="mean"
+        ).fillna(0)
+        df_surface_entropy = df_focus.pivot_table(
+            index="genre", columns="date_window", values="Entropy_norm", aggfunc="mean"
+        ).fillna(0)
+
+        # --- Chronological order ---
+        sorted_cols = sorted(df_surface_focus.columns, key=lambda x: pd.to_datetime(x, errors="coerce"))
+        df_surface_focus = df_surface_focus.reindex(sorted_cols, axis=1)
+        df_surface_entropy = df_surface_entropy.reindex(sorted_cols, axis=1)
+
+        # --- Smoothing slider ---
+        smooth_window = st.slider(
+            "Smoothing window (time-based, in 28-day steps)",
+            min_value=1, max_value=10, value=2, step=1,
+            help="Applies a temporal rolling mean per genre. Set to 1 for no smoothing."
+        )
+
+        if smooth_window > 1:
+            df_surface_focus = df_surface_focus.T.rolling(window=smooth_window, min_periods=1, center=True).mean().T
+            df_surface_entropy = df_surface_entropy.T.rolling(window=smooth_window, min_periods=1, center=True).mean().T
+
+        # --- Prepare arrays ---
+        X = np.arange(len(df_surface_focus.columns))
+        Y = np.arange(len(df_surface_focus.index))
+        Z_focus = df_surface_focus.values
+        Z_entropy = df_surface_entropy.values * np.nanmax(Z_focus) * 0.9  # scale entropy beneath focus
+
+        # --- Build combined 3D figure ---
+        fig = go.Figure()
+
+        # Top layer — Taste Focus
+        fig.add_trace(go.Surface(
+            z=Z_focus,
+            x=X,
+            y=Y,
+            colorscale=[
+                [0.0, "#062719"],
+                [0.2, "#106441"],
+                [0.5, "#1ed760"],
+                [0.75, "#62d089"],
+                [1.0, "#e1ece3"],
+            ],
+            name="Taste Focus",
+            cmin=0,
+            cmax=np.nanmax(Z_focus) if np.nanmax(Z_focus) > 0 else 1,
+            opacity=0.9,
+            showscale=True,
+            colorbar=dict(
+                title="Taste Focus Index",
+                tickcolor="white",
+                tickfont=dict(color="white"),
+                titlefont=dict(color="white"),
+            ),
+            lighting=dict(ambient=0.5, diffuse=0.7, roughness=0.8, specular=0.3),
+            lightposition=dict(x=100, y=200, z=1000),
+        ))
+
+        # Lower layer — Entropy (Volatility)
+        fig.add_trace(go.Surface(
+            z=Z_entropy,
+            x=X,
+            y=Y,
+            colorscale="Reds",
+            cmin=0,
+            cmax=np.nanmax(Z_entropy) if np.nanmax(Z_entropy) > 0 else 1,
+            opacity=0.4,
+            name="Volatility (Entropy)",
+            showscale=False,
+            lighting=dict(ambient=0.3, diffuse=0.5, roughness=1, specular=0),
+            lightposition=dict(x=-200, y=-200, z=300),
+        ))
+
+        # --- Layout ---
+        fig.update_layout(
+            title=f"3D Taste Terrain — Focus vs Volatility Landscape ({year_selected})",
+            scene=dict(
+                xaxis=dict(
+                    title="Rolling Window",
+                    tickvals=list(range(0, len(df_surface_focus.columns), max(1, len(df_surface_focus.columns)//10))),
+                    ticktext=[str(c) for c in df_surface_focus.columns[::max(1, len(df_surface_focus.columns)//10)]],
+                    backgroundcolor="rgba(0,0,0,0)",
+                    gridcolor="rgba(255,255,255,0.05)",
+                ),
+                yaxis=dict(
+                    title="Genre",
+                    tickvals=list(range(len(df_surface_focus.index))),
+                    ticktext=list(df_surface_focus.index),
+                    backgroundcolor="rgba(0,0,0,0)",
+                    gridcolor="rgba(255,255,255,0.05)",
+                ),
+                zaxis=dict(
+                    title="Index (scaled)",
+                    range=[0, np.nanmax(Z_focus) * 1.2],
+                    backgroundcolor="rgba(0,0,0,0)",
+                    gridcolor="rgba(255,255,255,0.05)",
+                ),
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            height=700,
+            margin=dict(l=0, r=0, t=60, b=0),
+            showlegend=False,
+        )
+
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+# --------------------------------- Test ------------------------------------- #
+elif page == "Test":
+
+    # ✅ Make sure dataset is loaded
+    if "current_df" not in st.session_state:
+        st.error("No dataset selected. Please go to the Home page and select a dataset.")
+        st.stop()
+
+    df, current_label = require_current_df()
+
+    user_df = df.copy()
+    user_df = df[df["category"] == "music"].copy()
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
+
+    # --- config: update these if your column names differ ---
+    user_key = 'artist_name'
+    genre_key = 'artist_name'
+
+    # -------- 1) Normalize keys and clean blanks --------
+    u = user_df.copy()
+    g = df_artist_genre.copy()
+
+    u['artist_key'] = u[user_key].astype(str).str.strip().str.lower()
+    g['artist_key'] = g[genre_key].astype(str).str.strip().str.lower()
+
+    # treat empty strings as missing for genre columns
+    for col in ['primary_genre', 'supergenre']:
+        if col in g.columns:
+            g[col] = g[col].astype('string').replace(r'^\s*$', pd.NA, regex=True)
+
+    # -------- 2) Reduce to unique user artists --------
+    user_artists = (
+        u[['artist_key', user_key]]
+        .dropna(subset=['artist_key'])
+        .drop_duplicates('artist_key')
+    )
+
+    # -------- 3) Collapse df_artist_genre to one row per artist_key, favoring non-null genres --------
+    def first_nonnull(s: pd.Series):
+        s = s.dropna()
+        return s.iloc[0] if not s.empty else pd.NA
+
+    g_one = (
+        g.groupby('artist_key', as_index=False)
+        .agg({
+            'primary_genre': first_nonnull,
+            'supergenre': first_nonnull
+        })
+    )
+
+    # -------- 4) Merge with indicator to split exact cases --------
+    m = user_artists.merge(
+        g_one, on='artist_key', how='left', indicator=True
+    )
+
+    # A) NOT PRESENT at all in df_artist_genre (true anti-join)
+    not_present = (
+        m[m['_merge'] == 'left_only']
+        [[user_key, 'artist_key']]
+        .drop_duplicates('artist_key')
+        .sort_values(user_key)
+        .reset_index(drop=True)
+    )
+    not_present_count = not_present['artist_key'].nunique()
+
+    # B) PRESENT but missing either primary_genre or supergenre
+    present_but_missing = (
+        m[(m['_merge'] == 'both') & (m['primary_genre'].isna() | m['supergenre'].isna())]
+        [[user_key, 'artist_key']]
+        .drop_duplicates('artist_key')
+        .sort_values(user_key)
+        .reset_index(drop=True)
+    )
+    present_but_missing_count = present_but_missing['artist_key'].nunique()
+
+    # (Optional) Union of unenriched = not present OR present but missing
+    unenriched_all = pd.concat([not_present, present_but_missing], ignore_index=True)\
+                    .drop_duplicates('artist_key')
+    unenriched_all_count = unenriched_all['artist_key'].nunique()
+
+    print(f"Not present: {not_present_count}")
+    print(f"Present but missing genre: {present_but_missing_count}")
+    print(f"Total unenriched (union): {unenriched_all_count}")
+
+    st.dataframe(unenriched_all)
+
+    st.metric("Artists not in df_artist_genre", not_present_count)
+    st.metric("Artists present but missing genres", present_but_missing_count)
+    st.metric("Total not enriched (union)", unenriched_all_count)
+
+    with st.expander("View artists not present"):
+        st.dataframe(not_present[[user_key]].sort_values(user_key))
+
+    with st.expander("View artists present but missing genres"):
+        st.dataframe(present_but_missing[[user_key]].sort_values(user_key))
+
+# ------------------------------ On This Day --------------------------------- #
 elif page == "On This Day":
 
     # ✅ Make sure dataset is loaded
@@ -7199,28 +8636,34 @@ elif page == "FAQs":
 
     col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment="center")
 
-    st.title("About Us")
-    st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
-    st.write("Feel free to reach out for any questions or collaborations.")
+    # st.markdown("<h1 style='text-align: center;'>How to request your Spotify data</h1>", unsafe_allow_html=True)
+    # st.markdown("<h3>In order to request the extended streaming history files, simply press the correct buttons on the Spotify website.</h3>", unsafe_allow_html=True)
+    # st.markdown('1. To get started, open the <a href="https://www.spotify.com/account/privacy/" target="_blank">Spotify Privacy Page</a> on the Spotify website.', unsafe_allow_html=True)
+    # st.markdown('2. Scroll down to the "Download your data" section and Configure the page so it looks like the screenshot below (Unticked the "Account data" and ticked the "Extended streaming history" boxes).', unsafe_allow_html=True)
+    # col1,col2,col3 = st.columns([1, 3, 1], vertical_alignment='center')
+    # with col2:
+    #     st.image('media/faqs/download_settings.png', width=600)
 
-    st.markdown("<h1 style='text-align: center;'>How to request your Spotify data</h1>", unsafe_allow_html=True)
-    st.markdown("<h3>In order to request the extended streaming history files, simply press the correct buttons on the Spotify website.</h3>", unsafe_allow_html=True)
-    st.markdown('1. To get started, open the <a href="https://www.spotify.com/account/privacy/" target="_blank">Spotify Privacy Page</a> on the Spotify website.', unsafe_allow_html=True)
-    st.markdown('2. Scroll down to the "Download your data" section and Configure the page so it looks like the screenshot below (Unticked the "Account data" and ticked the "Extended streaming history" boxes).', unsafe_allow_html=True)
-    col1,col2,col3 = st.columns([1, 3, 1], vertical_alignment='center')
-    with col2:
-        st.image('media/faqs/download_settings.png', width=600)
+    # st.markdown('3. Press the "Request data" button.')
+    # st.markdown('')
+    # st.markdown('4. You will receive an email from Spotify with a link to download your data. Click on the link in the email to access your data.')
+    # st.image('media/faqs/confirm_request.png', width=1200)
+    # st.markdown('')
+    # st.markdown("<h3>5. Wait until you receive your data. (This may take up to 30 days)</h3>", unsafe_allow_html=True)
+    # st.markdown('6. Once you receive the email, download the ZIP file containing your data.')
+    # st.markdown('This file will contain personal information, so please be careful with it.')
+    # st.image('media/faqs/Download_json.png', width=1200)
+    # st.markdown('')
+    # st.markdown('')
 
-    st.markdown('3. Press the "Request data" button.')
-    st.markdown('')
-    st.markdown('4. You will receive an email from Spotify with a link to download your data. Click on the link in the email to access your data.')
-    st.image('media/faqs/confirm_request.png', width=1200)
-    st.markdown('')
-    st.markdown("<h3>5. Wait until you receive your data. (This may take up to 30 days)</h3>", unsafe_allow_html=True)
-    st.markdown('6. Once you receive the email, download the ZIP file containing your data.')
-    st.markdown('This file will contain personal information, so please be careful with it.')
-    st.image('media/faqs/Download_json.png', width=1200)
-    st.markdown('')
-    st.markdown('')
+    # st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
 
-    st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
+    st.image("media/faqs/image1.svg")
+    st.image("media/faqs/image2.svg")
+    st.image("media/faqs/image3.svg")
+    st.image("media/faqs/image4.svg")
+    st.image("media/faqs/image5.svg")
+
+# -------------------------------- About ------------------------------------- #
+elif page == "About":
+    st.markdown("This project began as a small, locally run dashboard built by a four-person team for a data analytics course. The first version handled a simple upload/ETL flow and a handful of visualizations—top artists, albums, genres, a yearly timeline—and some light enrichment to pull artwork and Spotify popularity via APIs. We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control, conflict resolution, and shipping something that worked—even if only for a demo. Since then I’ve rebuilt the app from the ground up. It now includes authentication and cookies; automated ETL and enrichment using Spotify and Discogs; a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts); and expanded popularity scoring with richer visuals. A new “normality” section explores taste and mood clustering with early-stage ML. Behind the scenes, robust logging lets long jobs pause and resume, while scheduled scrapers keep UK Singles Chart data and Guardian headlines fresh for features like “On this day.” After testing BigQuery, Supabase, and a Google VM, the app now runs on Streamlit Cloud with storage on Cloudflare, with DAO layers abstracting the back ends. User and enrichment data live in CSVs for now (parquet is next), and auth/logs sit in a database. Next up: optional, recurring Spotify ingestion so users don’t have to request exports each time. It’s not trying to be a flashy product—just a careful, end-to-end build that turns raw listening history into something insightful and fun. If you’re hiring, this is the kind of scrappy-to-scalable work I love.")

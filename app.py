@@ -40,10 +40,11 @@ import threading
 import time
 import traceback
 import sys, logging
-from typing import Optional, Literal
+from typing import Optional, Literal, Iterable, Dict, List, Tuple
 import unicodedata
 import uuid
 import zipfile
+
 
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
 import enrichment_service as es
@@ -352,6 +353,23 @@ def normalize_str(s):
     if not isinstance(s, str):
         return ""
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("utf-8").strip().lower()
+
+def _normalize_name(s: str) -> str:
+    """
+    Normalize strings for matching:
+    - lower-case
+    - strip accents (Miloš -> Milos)
+    - drop bracketed suffixes like (Remastered 2009) or [Deluxe]
+    - collapse non-alphanumerics to single spaces
+    """
+    if s is None:
+        return ""
+    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode("ascii")
+    s = s.lower()
+    s = re.sub(r"\([^)]*\)", "", s)   # remove (...) parts
+    s = re.sub(r"\[[^\]]*\]", "", s)  # remove [...] parts
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    return s.strip()
 
 def format_hhmmss(minutes):
     total_seconds = int(minutes * 60)
@@ -2114,16 +2132,224 @@ def info_tables_update(user_id, table_name):
     except Exception as e:
         print(f"[Background task error] {e}")
 
-def log_enrichment_thread_count(context: str = ""):
-    threads = threading.enumerate()
+# ------------------------------- MONITOR WIDGET ----------------------------- #
+def log_enrichment_thread_count(
+    context: str = "",
+    *,
+    tags: Iterable[str] = ("enrich", "resume", "force", "rerun", "background_enrich", "genre_detective"),
+    logger: logging.Logger | None = None,
+) -> Tuple[int, List[str]]:
+    """
+    Logs and returns the number of threads whose names contain any of the given tags.
+    - context: optional text appended to the log (e.g., 'before start', 'after stop').
+    - tags: thread-name substrings used to match enrichment-like threads.
+    - logger: optional custom logger; defaults to root logger.
+
+    Returns (count, names).
+    """
+    logger = logger or logging.getLogger()
+    all_threads = threading.enumerate()
+    # normalize once; make matching robust if name is None
     enrich_threads = [
-        t for t in threads
-        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
+        t for t in all_threads
+        if any(tag in (t.name or "").lower() for tag in tags)
     ]
+    names = sorted([t.name or "unnamed" for t in enrich_threads])
     count = len(enrich_threads)
-    print(f"[thread_monitor] {count} enrichment thread(s) active "
-          f"{'after ' + context if context else ''}.")
-    return count
+
+    logger.info(
+        "[thread_monitor] %d enrichment thread(s) active%s. names=%s",
+        count,
+        f" after {context}" if context else "",
+        ", ".join(names) if names else "—",
+    )
+    return count, names
+
+def log_thread_overview(context: str = "") -> Dict[str, Dict[str, object]]:
+    """
+    Quick overview by coarse category. Uses simple name heuristics, so it
+    works even if you don't store pools in session_state.
+    Returns a dict: {category: {'count': int, 'names': [...]}} and logs one line.
+    """
+    def _cat(name: str) -> str:
+        n = (name or "").lower()
+        if "genre_detective" in n or "genre-detective" in n:
+            return "genre_detective"
+        if "discogs" in n:
+            return "discogs"
+        if "enrich" in n or "background_enrich" in n or "resume" in n or "rerun" in n:
+            return "enrichment"
+        if "streamlit" in n or ("script" in n and "runner" in n):
+            return "streamlit"
+        return "other"
+
+    cats: Dict[str, Dict[str, object]] = {}
+    for th in threading.enumerate():
+        cat = _cat(th.name or "")
+        entry = cats.setdefault(cat, {"count": 0, "names": []})
+        entry["count"] += 1
+        entry["names"].append(th.name or "unnamed")
+
+    for v in cats.values():
+        v["names"].sort()
+
+    total = sum(v["count"] for v in cats.values())
+    logging.info(
+        "[thread_monitor]%s total=%d | %s",
+        f" after {context}" if context else "",
+        total,
+        " | ".join(f"{k}:{v['count']}" for k, v in cats.items())
+    )
+    return cats
+
+def _cat_for_thread_name(name: str) -> str:
+    """Heuristic categories for visible thread names."""
+    n = (name or "").lower()
+    if "genre_detective" in n or "genre-detective" in n:
+        return "genre_detective"
+    if "discogs" in n or "discogs-worker" in n:
+        return "discogs"
+    if "enrich" in n or "background_enrich" in n:
+        return "enrichment"
+    if "script" in n and "runner" in n:
+        return "streamlit"
+    if "streamlit" in n:
+        return "streamlit"
+    return "other"
+
+def snapshot_threads() -> dict:
+    """Return {category: {'count': int, 'names': [...]}} for all alive threads."""
+    cats = {}
+    for th in threading.enumerate():
+        name = th.name or f"Thread-{id(th)}"
+        cat = _cat_for_thread_name(name)
+        cats.setdefault(cat, {"count": 0, "names": []})
+        cats[cat]["count"] += 1
+        cats[cat]["names"].append(name)
+    # sort names for stable display
+    for v in cats.values():
+        v["names"].sort()
+    return cats
+
+def registry_snapshot_df() -> pd.DataFrame:
+    """Show what your task_registry() knows about user-started tasks."""
+    try:
+        reg = task_registry()
+    except Exception:
+        return pd.DataFrame(columns=["key", "status", "alive", "started_at", "thread_name", "error"])
+    rows = []
+    for key, entry in reg.items():
+        th = entry.get("thread")
+        rows.append({
+            "key": key,
+            "status": entry.get("status"),
+            "alive": bool(th and th.is_alive()),
+            "started_at": time.strftime("%H:%M:%S", time.localtime(entry.get("started_at", 0))),
+            "thread_name": getattr(th, "name", ""),
+            "error": entry.get("error"),
+        })
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.sort_values(["alive", "key"], ascending=[False, True])
+    return df
+
+def reap_task_registry(*, verbose: bool = True) -> list[str]:
+    """
+    Remove dead/stale entries from the cached task_registry.
+    Only cleans the registry dict; it **cannot** kill live Python threads
+    (that requires the worker to cooperate via a stop_event).
+    Returns the list of task keys removed.
+    """
+    import time
+    reg = task_registry()
+    removed = []
+    for key, entry in list(reg.items()):
+        th = entry.get("thread")
+        alive = bool(th and th.is_alive())
+        status = entry.get("status", "")
+        # Reap if no thread object, or not alive, or explicitly 'done'/'error'/'stopped'
+        if (not th) or (not alive) or status in {"done", "error", "stopped"}:
+            removed.append(key)
+            reg.pop(key, None)
+    if verbose and removed:
+        print(f"[task_reaper] removed {len(removed)} stale entries: {removed}")
+    return removed
+
+def stop_genre_detective_workers() -> int:
+    """
+    Signal stop to all genre_detective workers via their stop_event.
+    Returns number of workers signalled.
+    """
+    reg = task_registry()
+    signalled = 0
+    for key, entry in reg.items():
+        if key.startswith("genre_detective::"):
+            ev = entry.get("stop_event")
+            th = entry.get("thread")
+            if ev and not ev.is_set():
+                ev.set()
+                signalled += 1
+                print(f"[task_stop] signalled {key} (alive={bool(th and th.is_alive())})")
+    return signalled
+
+def _summarize_threads_for_sidebar():
+    """
+    Group current Python threads into categories we care about for the app UI.
+    Returns a dict like:
+      {
+        "total": 12,
+        "core": {"count": 3, "names": [...]},
+        "enrichment": {"count": 2, "names": [...]},
+        "genre_detective": {"count": 1, "names": [...]},
+        "discogs": {"count": 4, "names": [...]},
+        "other": {"count": 2, "names": [...]},
+      }
+    """
+    import threading
+
+    threads = threading.enumerate()
+
+    def _lname(t):
+        try:
+            return (t.name or "").lower()
+        except Exception:
+            return ""
+
+    # Buckets by name substrings
+    core_keys = ("mainthread", "scriptrunner", "script runner", "watchdog", "asyncio", "tornado", "streamlit")
+    enrich_keys = ("enrich", "resume", "force", "rerun", "background_enrich", "chart_scorer", "breadth_only")
+    genre_keys = ("genre-detective", "genre_detective")
+    discogs_keys = ("discogs",)
+
+    core, enrichment, genre, discogs = [], [], [], []
+    used = set()
+
+    for t in threads:
+        n = _lname(t)
+        bucketed = False
+
+        if any(k in n for k in core_keys):
+            core.append(t); used.add(t); bucketed = True
+        if any(k in n for k in enrich_keys):
+            enrichment.append(t); used.add(t); bucketed = True
+        if any(k in n for k in genre_keys):
+            genre.append(t); used.add(t); bucketed = True
+        if any(k in n for k in discogs_keys):
+            discogs.append(t); used.add(t); bucketed = True
+
+    other = [t for t in threads if t not in used]
+
+    def _pack(lst):
+        return {"count": len(lst), "names": [getattr(t, "name", repr(t)) for t in lst]}
+
+    return {
+        "total": len(threads),
+        "core": _pack(core),
+        "enrichment": _pack(enrichment),
+        "genre_detective": _pack(genre),
+        "discogs": _pack(discogs),
+        "other": _pack(other),
+    }
 
 def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     """
@@ -2219,134 +2445,286 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
     # --- Render ---
     with st.sidebar:
         if int(percent) != 100:
-            st.caption(f"Threads: {active_count}")
-            st.caption(msg)
-            if detail:
-                st.caption(f"{detail}")
-            st.progress(int(percent) / 100.0 if percent else 0)
+            # st.caption(f"Threads: {active_count}")
+            # st.caption(msg)
+            # if detail:
+            #     st.caption(f"{detail}")
+            # st.progress(int(percent) / 100.0 if percent else 0)
             st.caption(f"_Please wait while we enrich your data..._")
         else:
             st.caption(f"This dataset has been fully enriched")
 
-    with st.sidebar.expander("Discogs Debug", expanded=False):
+    # with st.sidebar.expander("Background Threads", expanded=False):
+    #     info = _summarize_threads_for_sidebar()
 
-        from enrichment_service import DiscogsWorkerPool
+    #     # Top-line totals
+    #     st.caption(f"Total threads: {info['total']}")
 
-        pool = st.session_state.get("_discogs_pool")
+    #     # Show grouped metrics
+    #     c1, c2, c3 = st.columns(3)
+    #     c1.metric("Enrichment", info["enrichment"]["count"])
+    #     c2.metric("Genre Detective", info["genre_detective"]["count"])
+    #     c3.metric("Discogs", info["discogs"]["count"])
 
-        if pool is None:
-            st.caption("Pool not initialized yet.")
-        else:
-            col1, col2 = st.columns(2)
-            if col1.button("Snapshot queue", key="dq_snap"):
-                info = pool.snapshot_queue(max_n=10)
-                st.write(info)
+    #     c4, c5, _ = st.columns(3)
+    #     c4.metric("Core", info["core"]["count"])
+    #     c5.metric("Other", info["other"]["count"])
 
-            if col2.button("Nudge workers", key="dq_nudge"):
-                pool.nudge_workers(hb_stale_sec=60, job_stale_sec=60)
-                st.success("Nudged.")
+    #     st.divider()
+    #     colA, colB = st.columns(2)
 
-            if st.button("Dump worker stacks", key="dq_dump"):
-                st.caption("Dumping stacks to terminal…")
-                DiscogsWorkerPool.dump_worker_stacks()
+    #     if colA.button("🧹 Reap registry", key="btn_reap_registry"):
+    #         cleared = reap_task_registry(verbose=True)
+    #         if cleared:
+    #             st.success(f"Reaped {len(cleared)} stale entr{'y' if len(cleared)==1 else 'ies'}.")
+    #         else:
+    #             st.info("No stale entries to reap.")
 
-            # Optional: bounded shutdown from UI (careful in prod!)
-            if st.button("Shutdown pool", key="dq_shutdown"):
-                pool.shutdown(max_wait_sec=90, force_purge=False, persist_backlog=False)
-                st.success("Shutdown requested.")
+    #     if colB.button("⛔ Stop genre detective", key="btn_stop_gd"):
+    #         n = stop_genre_detective_workers()
+    #         if n:
+    #             st.warning(f"Signalled stop to {n} genre detective worker(s).")
+    #         else:
+    #             st.info("No active genre detective workers to stop.")
 
-def start_missing_genre_detective_task(dataset_label: str) -> None:
+    #     # Optional: reveal names
+    #     if st.checkbox("Show thread names", key="bg_threads_show_names"):
+    #         def _list(names):
+    #             if not names:
+    #                 st.caption("—")
+    #             else:
+    #                 st.code("\n".join(names), language="text")
+
+    #         with st.expander("Enrichment", expanded=False):
+    #             _list(info["enrichment"]["names"])
+
+    #         with st.expander("Genre Detective", expanded=False):
+    #             _list(info["genre_detective"]["names"])
+
+    #         with st.expander("Discogs", expanded=False):
+    #             _list(info["discogs"]["names"])
+
+    #         with st.expander("Core", expanded=False):
+    #             _list(info["core"]["names"])
+
+    #         with st.expander("Other", expanded=False):
+    #             _list(info["other"]["names"])
+
+# ------------------------------ GENRE DETECTIVE ----------------------------- #
+def start_missing_genre_detective_task(
+    dataset_label: str,
+    *,
+    provider_name: str = "gemini",
+    batch_size: int = 20,
+    sleep_between_batches: float = 0.8,
+    max_retries: int = 4,
+    force: bool = False,
+    limit: int | None = None,
+    io_mode: str = "r2",
+    debug_dump_merges_to_r2: bool = False,
+    run_other_fix_when_unlisted_empty: bool = True,
+    debug_dump_other_fix_to_r2: bool = False,
+) -> None:
     """
-    Start/ensure a single global background task for missing_genre_detective.
-    Uses task_registry() and a GLOBAL key (since the unlisted table is shared).
-    Detects stale entries and restarts if needed.
+    Public launcher. Decides whether to start the genre-detective worker.
+    - Logs thread counts before/after decisions.
+    - Loads GEMINI_API_KEY on the main thread from st.secrets (no st.* in worker).
+    - Delegates to _start_genre_detective_thread(...) to actually spawn.
     """
-    import os, threading, time, sys
+    import os, time, logging
 
     reg = task_registry()
-    key = "genre_detective::GLOBAL"   # 🔒 single worker, regardless of dataset
-    entry = reg.get(key)
+    task_key = f"genre_detective::{dataset_label}"
 
-    # Decide if we should (re)start
-    should_start = False
-    if not entry:
-        should_start = True
-    else:
-        th = entry.get("thread")
-        status = entry.get("status")
-        started_at = entry.get("started_at", 0)
-        alive = bool(th and th.is_alive())
+    # Snapshot BEFORE we decide to start anything
+    try:
+        log_enrichment_thread_count("genre_detective pre-check")
+    except Exception:
+        logging.debug("[thread_monitor] (log_enrichment_thread_count unavailable)")
 
-        # stale = no thread, or dead thread, or "starting" way too long without being alive
-        too_long = (time.time() - started_at) > 60 * 30  # 30 min
-        if not alive and status != "running":
-            should_start = True
-        elif status == "starting" and not alive and too_long:
-            print("[genre_detective] detected stale 'starting' entry (>30min) — restarting")
-            should_start = True
-        else:
-            print(f"[genre_detective] already running: {th.name if th else 'unknown'} (status={status}, alive={alive})")
-            return
+    # If a live worker exists, do nothing
+    entry = reg.get(task_key)
+    alive = bool(entry and entry.get("thread") and entry["thread"].is_alive())
+    if alive:
+        logging.info("[genre_detective] already running: %s", entry["thread"].name)
+        # Log again on early return to show 'no change'
+        try:
+            log_enrichment_thread_count("genre_detective already running (no start)")
+        except Exception:
+            pass
+        return
 
+    # MAIN THREAD ONLY: set GEMINI_API_KEY from st.secrets (worker must not call st.*)
     try:
         gem_key = st.secrets.get("gemini", {}).get("api_key")
         if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
             os.environ["GEMINI_API_KEY"] = str(gem_key)
-            print("[genre_detective] GEMINI_API_KEY set from st.secrets")
+            logging.info("[genre_detective] GEMINI_API_KEY set from st.secrets (main)")
     except Exception as e:
-        print(f"[genre_detective] WARNING: cannot read st.secrets: {e}", file=sys.stderr)
+        logging.warning("[genre_detective] cannot read st.secrets: %s", e)
 
-    # Worker (no st.* calls here)
-    def _worker(label_for_log: str) -> None:
+    # Spawn the worker
+    _start_genre_detective_thread(
+        task_key=task_key,
+        dataset_label=dataset_label,
+        provider_name=provider_name,
+        batch_size=batch_size,
+        sleep_between_batches=sleep_between_batches,
+        max_retries=max_retries,
+        force=force,
+        limit=limit,
+        io_mode=io_mode,
+        debug_dump_merges_to_r2=debug_dump_merges_to_r2,
+        run_other_fix_when_unlisted_empty=run_other_fix_when_unlisted_empty,
+        debug_dump_other_fix_to_r2=debug_dump_other_fix_to_r2,
+    )
+
+def _start_genre_detective_thread(
+    *,
+    task_key: str,
+    dataset_label: str,
+    provider_name: str = "gemini",
+    batch_size: int = 20,
+    sleep_between_batches: float = 0.8,
+    max_retries: int = 4,
+    force: bool = False,
+    limit: int | None = None,
+    io_mode: str = "r2",
+    debug_dump_merges_to_r2: bool = False,
+    run_other_fix_when_unlisted_empty: bool = True,
+    debug_dump_other_fix_to_r2: bool = False,
+) -> bool:
+    """
+    Idempotently start the genre_detective worker in its own thread.
+    - Cleans stale registry entries.
+    - Logs thread counts before/after .start().
+    - Stores a stop_event for graceful cancellation (interruptible sleeps inside the worker).
+    Returns True if started, False if an active worker already exists.
+    """
+    import threading, time, logging
+
+    reg = task_registry()
+
+    # Remove stale entry (thread died but registry left behind)
+    stale = task_key in reg and not reg[task_key].get("thread") or (
+        task_key in reg and reg[task_key].get("thread") and not reg[task_key]["thread"].is_alive()
+    )
+    if stale:
         try:
-            from missing_genre_detective import enrich_file_in_place
-            reg[key]["status"] = "running"
-            print(f"[genre_detective] ▶ starting (global) for '{label_for_log}'")
-            # R2 mode + debug dump enabled (see patch below)
-            enrich_file_in_place(
-                provider_name="gemini",
-                batch_size=20,
-                sleep_between_batches=0.8,
-                max_retries=4,
-                force=False,
-                limit=None,
-                io_mode="r2",
-                debug_dump_merges_to_r2=False,  # 👈 new: dump merged rows to R2 for inspection
+            reg.pop(task_key, None)
+            logging.info("[genre_detective] removed stale registry entry for %s", task_key)
+        except Exception:
+            pass
+
+    # If a live worker exists now, bail
+    if task_key in reg and reg[task_key].get("thread") and reg[task_key]["thread"].is_alive():
+        logging.info("[genre_detective] already running: %s", task_key)
+        return False
+
+    stop_event = threading.Event()
+
+    def _worker():
+        # DO NOT call st.* here
+        try:
+            from missing_genre_detective import enrich_file_in_place, ShutdownRequested
+            logging.info("[genre_detective] ▶ starting worker for %s", task_key)
+
+            n_primary = enrich_file_in_place(
+                provider_name=provider_name,
+                batch_size=batch_size,
+                sleep_between_batches=sleep_between_batches,
+                max_retries=max_retries,
+                force=force,
+                limit=limit,
+                io_mode=io_mode,
+                debug_dump_merges_to_r2=debug_dump_merges_to_r2,
+                run_other_fix_when_unlisted_empty=run_other_fix_when_unlisted_empty,
+                debug_dump_other_fix_to_r2=debug_dump_other_fix_to_r2,
+                stop_event=stop_event,  # ← interruptible waits & cooldowns
             )
-            reg[key]["status"] = "done"
-            print(f"[genre_detective] ✅ completed (global) for '{label_for_log}'")
+            logging.info("[genre_detective] ✅ completed for %s (primary updated=%s)", task_key, n_primary)
+            reg[task_key]["status"] = "done"
+
+        except ShutdownRequested as e:
+            logging.warning("[genre_detective] ⏸ stopped for %s: %s", task_key, e)
+            reg[task_key]["status"] = "stopped"
+            reg[task_key]["error"] = str(e)
+
         except Exception as e:
-            reg[key]["status"] = "error"
-            reg[key]["error"] = str(e)
-            print(f"[genre_detective] ❌ error (global) for '{label_for_log}': {e}", file=sys.stderr)
+            logging.exception("[genre_detective] ❌ worker failed for %s: %s", task_key, e)
+            reg[task_key]["status"] = "error"
+            reg[task_key]["error"] = str(e)
+
+        finally:
+            # Snapshot AFTER the worker ends
+            try:
+                log_enrichment_thread_count("genre_detective worker exit")
+            except Exception:
+                pass
+            # Clean registry to allow future restarts
+            try:
+                reg.pop(task_key, None)
+            except Exception:
+                pass
 
     t = threading.Thread(
         target=_worker,
-        args=(dataset_label,),
-        name="genre_detective::GLOBAL",
+        name=f"genre-detective-{task_key}",
         daemon=True,
     )
 
-    # attach Streamlit run context (best effort)
+    # Attach Streamlit run context (avoids harmless ScriptRunContext warnings if libs touch st.*)
     try:
-        from streamlit.runtime.scriptrunner import add_script_run_ctx
-        add_script_run_ctx(t)
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        if get_script_run_ctx() is not None:
+            add_script_run_ctx(t)
     except Exception:
         pass
 
-    reg[key] = {
+    # Take a BEFORE snapshot
+    try:
+        pre_count, pre_names = log_enrichment_thread_count("genre_detective before start")
+    except Exception:
+        pre_count, pre_names = (None, None)
+
+    reg[task_key] = {
         "thread": t,
         "status": "starting",
         "label": dataset_label,
         "started_at": time.time(),
         "error": None,
+        "stop_event": stop_event,
     }
     t.start()
 
+    # AFTER snapshot and delta
     try:
-        st.toast("Started genre detection in the background.",duration="short")
+        post_count, post_names = log_enrichment_thread_count("genre_detective after start")
+        if pre_count is not None and post_count is not None:
+            logging.info(
+                "[thread_monitor] Δthreads=%s (names: %s → %s)",
+                post_count - pre_count,
+                ", ".join(pre_names) if pre_names else "—",
+                ", ".join(post_names) if post_names else "—",
+            )
     except Exception:
-        st.info("Started genre detection in the background.")
+        pass
+
+    # Optional UI toast (main thread only)
+    try:
+        st.toast("Started genre detection in the background.", duration="short")
+    except Exception:
+        logging.info("Started genre detection in the background.")
+
+    return True
+
+def stop_genre_detective(task_key: str):
+    """Signal a running genre_detective to stop (best-effort)."""
+    reg = task_registry()
+    info = reg.get(task_key)
+    if not info:
+        return
+    info["stop_event"].set()  # worker exits on next wait
 
 # ----------------------------- INIT PAGE CONFIG ----------------------------- #
 st.set_page_config(page_title="Regifted", page_icon=ICON_BROWSER, layout="wide", initial_sidebar_state="expanded")
@@ -2462,7 +2840,6 @@ if not st.session_state.user:
 
 # ----------------------------- PAGE NAVIGATION ------------------------------ #
 with st.sidebar:
-
     st.image(LOGO_SPOTGREEN, width="stretch")
     st.space("small")
     st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
@@ -2471,10 +2848,16 @@ with st.sidebar:
     # ---------- Load DAOs ----------
     daos = get_daos()
     user_dao = daos.get("user_data")
-
     if user_dao is None:
         st.error("UserData DAO is not configured for this server mode.")
         st.stop()
+    # ---------- Clean threads ----------
+    try:
+        cleared = reap_task_registry(verbose=False)
+        if cleared:
+            print(f"[startup] reaped {len(cleared)} stale task(s) at boot: {cleared}")
+    except Exception as e:
+        print(f"[startup] reaper failed: {e}")
 
     # ---------- Existing Datasets ----------
     try:
@@ -2485,99 +2868,6 @@ with st.sidebar:
 
     label_to_table = dict(dataset_options)
     labels = list(label_to_table.keys())
-
-    # def start_missing_genre_detective_task(dataset_label: str) -> None:
-    #     """
-    #     Start/ensure a single global background task for missing_genre_detective.
-    #     Uses task_registry() and a GLOBAL key (since the unlisted table is shared).
-    #     Detects stale entries and restarts if needed.
-    #     """
-    #     import os, threading, time, sys
-
-    #     reg = task_registry()
-    #     key = "genre_detective::GLOBAL"   # 🔒 single worker, regardless of dataset
-    #     entry = reg.get(key)
-
-    #     # Decide if we should (re)start
-    #     should_start = False
-    #     if not entry:
-    #         should_start = True
-    #     else:
-    #         th = entry.get("thread")
-    #         status = entry.get("status")
-    #         started_at = entry.get("started_at", 0)
-    #         alive = bool(th and th.is_alive())
-
-    #         # stale = no thread, or dead thread, or "starting" way too long without being alive
-    #         too_long = (time.time() - started_at) > 60 * 30  # 30 min
-    #         if not alive and status != "running":
-    #             should_start = True
-    #         elif status == "starting" and not alive and too_long:
-    #             print("[genre_detective] detected stale 'starting' entry (>30min) — restarting")
-    #             should_start = True
-    #         else:
-    #             print(f"[genre_detective] already running: {th.name if th else 'unknown'} (status={status}, alive={alive})")
-    #             return
-
-    #     try:
-    #         gem_key = st.secrets.get("gemini", {}).get("api_key")
-    #         if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
-    #             os.environ["GEMINI_API_KEY"] = str(gem_key)
-    #             print("[genre_detective] GEMINI_API_KEY set from st.secrets")
-    #     except Exception as e:
-    #         print(f"[genre_detective] WARNING: cannot read st.secrets: {e}", file=sys.stderr)
-
-    #     # Worker (no st.* calls here)
-    #     def _worker(label_for_log: str) -> None:
-    #         try:
-    #             from missing_genre_detective import enrich_file_in_place
-    #             reg[key]["status"] = "running"
-    #             print(f"[genre_detective] ▶ starting (global) for '{label_for_log}'")
-    #             # R2 mode + debug dump enabled (see patch below)
-    #             enrich_file_in_place(
-    #                 provider_name="gemini",
-    #                 batch_size=20,
-    #                 sleep_between_batches=0.8,
-    #                 max_retries=4,
-    #                 force=False,
-    #                 limit=None,
-    #                 io_mode="r2",
-    #                 debug_dump_merges_to_r2=False,  # 👈 new: dump merged rows to R2 for inspection
-    #             )
-    #             reg[key]["status"] = "done"
-    #             print(f"[genre_detective] ✅ completed (global) for '{label_for_log}'")
-    #         except Exception as e:
-    #             reg[key]["status"] = "error"
-    #             reg[key]["error"] = str(e)
-    #             print(f"[genre_detective] ❌ error (global) for '{label_for_log}': {e}", file=sys.stderr)
-
-    #     t = threading.Thread(
-    #         target=_worker,
-    #         args=(dataset_label,),
-    #         name="genre_detective::GLOBAL",
-    #         daemon=True,
-    #     )
-
-    #     # attach Streamlit run context (best effort)
-    #     try:
-    #         from streamlit.runtime.scriptrunner import add_script_run_ctx
-    #         add_script_run_ctx(t)
-    #     except Exception:
-    #         pass
-
-    #     reg[key] = {
-    #         "thread": t,
-    #         "status": "starting",
-    #         "label": dataset_label,
-    #         "started_at": time.time(),
-    #         "error": None,
-    #     }
-    #     t.start()
-
-    #     try:
-    #         st.toast("Started genre detection in the background.",duration="short")
-    #     except Exception:
-    #         st.info("Started genre detection in the background.")
 
     # ---------- Dataset Selection ----------
     if labels:
@@ -2591,16 +2881,19 @@ with st.sidebar:
             placeholder="Choose a dataset",
         )
 
-        # Do nothing until the user actually picks something
+        # Do nothing until a dataset is actually chosen
         if selected_label is not None:
-            # Only (re)load when the user changed the dataset or nothing is loaded yet
+            # Only (re)load when the dataset changed or nothing is loaded yet
             if selected_label != previous_label or st.session_state.get("current_df") is None:
                 selected_table = label_to_table.get(selected_label)
                 if selected_table:
                     try:
                         # ---- Load dataset from storage
                         df = user_dao.load_user_data(selected_table)
-                        if not df.empty:
+                        if df.empty:
+                            # Keep sidebar quiet if empty
+                            print("[sidebar] Loaded dataset is empty; skipping session update.")
+                        else:
                             df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
                             df = df.dropna(subset=["datetime"])
                             df["date"] = df["datetime"].dt.date
@@ -2622,20 +2915,30 @@ with st.sidebar:
                             )
                             print(f"[CALLSITE select] auto_check result = {res}")
 
-                            # Optional background worker; silence sidebar messages on failure
+                            # ---------- Start/ensure ONE genre-detective worker (background) ----------
                             try:
-                                start_missing_genre_detective_task(selected_label)
+                                task_key = f"genre_detective::{selected_label}"
+                                just_started = _start_genre_detective_thread(
+                                    task_key=task_key,
+                                    provider_name="gemini",
+                                    batch_size=20,
+                                    sleep_between_batches=0.5,
+                                    max_retries=2,
+                                    force=False,
+                                    limit=None,          # or small int for testing
+                                    io_mode="r2",
+                                    debug_dump_merges_to_r2=False,
+                                    run_other_fix_when_unlisted_empty=True,
+                                    debug_dump_other_fix_to_r2=False,
+                                )
+                                if just_started:
+                                    st.toast("Started genre detection in the background.", duration="short")
                             except Exception as e:
                                 print(f"[genre_detective] not started: {e}")
-                        else:
-                            # Silently skip if dataset is empty (no sidebar warnings)
-                            print("[sidebar] Loaded dataset is empty; skipping session update.")
                     except Exception as e:
-                        # Keep hard failures visible
                         st.error(f"Failed to load dataset from storage: {e}")
                         st.stop()
                 else:
-                    # Silently skip if mapping missing (no sidebar warnings)
                     print(f"[sidebar] Missing mapping for label: {selected_label}")
     else:
         st.info("No datasets uploaded yet. You can add one from the Home page.")
@@ -2661,7 +2964,7 @@ with st.sidebar:
             "Popularity",
             "Normality",
             "Taste",
-            "Test",
+            # "Test",
             "On This Day",
             "FAQs",
             "About"
@@ -4524,6 +4827,7 @@ elif page == "Artists":
 
     with col2:
         if album_selected == "All Albums":
+            # Keep the artist image logic but be explicit and safe
             try:
                 sub = INFO_ARTIST_GENRE.loc[
                     INFO_ARTIST_GENRE["artist_name"] == artist_selected
@@ -4533,34 +4837,40 @@ elif page == "Artists":
                     if not sub.empty and isinstance(sub["artist_image"].iloc[0], str)
                     else None
                 )
-                st.image(img or IMAGE_PLACEHOLDER, width='stretch')
+                st.image(img or IMAGE_PLACEHOLDER, width="stretch")
             except Exception:
-                st.image(IMAGE_PLACEHOLDER, width='stretch')
+                st.image(IMAGE_PLACEHOLDER, width="stretch")
 
         else:
-            info_album = INFO_ALBUM
-            top_albums = (
-                df_music[df_music.album_name == album_selected]
-                .groupby("album_name")
-                .minutes_played.sum()
-                .sort_values(ascending=False)
-                .reset_index()
-            )
-            try:
-                album_image_url = info_album[
-                    info_album.album_name == top_albums.album_name[0]
-                ]["album_artwork"].values[0]
-                st.image(album_image_url, output_format="auto", width='stretch')
-            except:
-                try:
-                    album_image_url = info_album[
-                        info_album.album_name.str.contains(
-                            f"{top_albums.album_name[0]}", case=False, na=False
-                        )
-                    ]["album_artwork"].values[0]
-                    st.image(album_image_url, output_format="auto", width='stretch')
-                except:
-                    st.image(IMAGE_PLACEHOLDER, output_format="auto", width='stretch')
+            # Work on a copy; add normalized helper columns once
+            info_album = INFO_ALBUM.copy()
+            if "_n_artist" not in info_album.columns:
+                info_album["_n_artist"] = info_album["artist_name"].fillna("").apply(_normalize_name)
+                info_album["_n_album"]  = info_album["album_name"].fillna("").apply(_normalize_name)
+
+            n_artist = _normalize_name(artist_selected)
+            n_album  = _normalize_name(album_selected)
+
+            # STEP 1: Exact normalized match on artist + album
+            m = info_album[(info_album["_n_artist"] == n_artist) & (info_album["_n_album"] == n_album)]
+
+            # STEP 2: If not found, allow looser album contains but STILL within same artist
+            if m.empty:
+                m = info_album[
+                    (info_album["_n_artist"] == n_artist) &
+                    (info_album["_n_album"].str.contains(n_album, na=False))
+                ]
+
+            # STEP 3: As a last resort, global exact normalized album match (no artist filter)
+            if m.empty:
+                m = info_album[info_album["_n_album"] == n_album]
+
+            # Display the result or fallback to placeholder
+            if not m.empty and isinstance(m["album_artwork"].iloc[0], str) and m["album_artwork"].iloc[0].strip():
+                album_image_url = m["album_artwork"].iloc[0].strip()
+                st.image(album_image_url, output_format="auto", width="stretch")
+            else:
+                st.image(IMAGE_PLACEHOLDER, output_format="auto", width="stretch")
 
     # --- Top songs (filtered by year and album/artist selection) ---
     if year_selected == "All Time":
@@ -5188,7 +5498,7 @@ elif page == "Genres":
     with c1:
         scorecard(f"Favourite Genre of {year_selected}", fav_genre, height=120)
     with c2:
-        scorecard(f"Favourite Subgenre of {year_selected}", fav_subgenre.title(), height=120)
+        scorecard(f"Favourite Subgenre of {year_selected}", fav_subgenre, height=120)
     with c3:
         scorecard(f"Favourite {genre_selected} Artist of {year_selected}", fav_artist, height=120)
     with c4:
@@ -8353,91 +8663,7 @@ elif page == "Test":
 
     df, current_label = require_current_df()
 
-    user_df = df.copy()
-    user_df = df[df["category"] == "music"].copy()
-    df_artist_genre = INFO_ARTIST_GENRE.copy()
-
-    # --- config: update these if your column names differ ---
-    user_key = 'artist_name'
-    genre_key = 'artist_name'
-
-    # -------- 1) Normalize keys and clean blanks --------
-    u = user_df.copy()
-    g = df_artist_genre.copy()
-
-    u['artist_key'] = u[user_key].astype(str).str.strip().str.lower()
-    g['artist_key'] = g[genre_key].astype(str).str.strip().str.lower()
-
-    # treat empty strings as missing for genre columns
-    for col in ['primary_genre', 'supergenre']:
-        if col in g.columns:
-            g[col] = g[col].astype('string').replace(r'^\s*$', pd.NA, regex=True)
-
-    # -------- 2) Reduce to unique user artists --------
-    user_artists = (
-        u[['artist_key', user_key]]
-        .dropna(subset=['artist_key'])
-        .drop_duplicates('artist_key')
-    )
-
-    # -------- 3) Collapse df_artist_genre to one row per artist_key, favoring non-null genres --------
-    def first_nonnull(s: pd.Series):
-        s = s.dropna()
-        return s.iloc[0] if not s.empty else pd.NA
-
-    g_one = (
-        g.groupby('artist_key', as_index=False)
-        .agg({
-            'primary_genre': first_nonnull,
-            'supergenre': first_nonnull
-        })
-    )
-
-    # -------- 4) Merge with indicator to split exact cases --------
-    m = user_artists.merge(
-        g_one, on='artist_key', how='left', indicator=True
-    )
-
-    # A) NOT PRESENT at all in df_artist_genre (true anti-join)
-    not_present = (
-        m[m['_merge'] == 'left_only']
-        [[user_key, 'artist_key']]
-        .drop_duplicates('artist_key')
-        .sort_values(user_key)
-        .reset_index(drop=True)
-    )
-    not_present_count = not_present['artist_key'].nunique()
-
-    # B) PRESENT but missing either primary_genre or supergenre
-    present_but_missing = (
-        m[(m['_merge'] == 'both') & (m['primary_genre'].isna() | m['supergenre'].isna())]
-        [[user_key, 'artist_key']]
-        .drop_duplicates('artist_key')
-        .sort_values(user_key)
-        .reset_index(drop=True)
-    )
-    present_but_missing_count = present_but_missing['artist_key'].nunique()
-
-    # (Optional) Union of unenriched = not present OR present but missing
-    unenriched_all = pd.concat([not_present, present_but_missing], ignore_index=True)\
-                    .drop_duplicates('artist_key')
-    unenriched_all_count = unenriched_all['artist_key'].nunique()
-
-    print(f"Not present: {not_present_count}")
-    print(f"Present but missing genre: {present_but_missing_count}")
-    print(f"Total unenriched (union): {unenriched_all_count}")
-
-    st.dataframe(unenriched_all)
-
-    st.metric("Artists not in df_artist_genre", not_present_count)
-    st.metric("Artists present but missing genres", present_but_missing_count)
-    st.metric("Total not enriched (union)", unenriched_all_count)
-
-    with st.expander("View artists not present"):
-        st.dataframe(not_present[[user_key]].sort_values(user_key))
-
-    with st.expander("View artists present but missing genres"):
-        st.dataframe(present_but_missing[[user_key]].sort_values(user_key))
+    user_df = df
 
 # ------------------------------ On This Day --------------------------------- #
 elif page == "On This Day":

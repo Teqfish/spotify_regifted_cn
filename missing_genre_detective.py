@@ -1471,15 +1471,7 @@ def enrich_file_in_place(
     prev_super = df["supergenre"].copy() if "supergenre" in df.columns else pd.Series(index=df.index, dtype="object")
 
     # --- Provider selection
-    pname = (provider_name or "").lower().strip()
-    if pname == "openai":
-        provider = OpenAIProvider()
-    elif pname == "gemini":
-        provider = GeminiProvider()
-    elif pname in {"mock", "self", "heuristic"}:
-        provider = MockProvider()
-    else:
-        raise ValueError(f"Unknown provider: {provider_name}")
+    provider = GeminiProvider()
 
     # ----------------------------- PHASE 1 ------------------------------
     # 1–3: primary_genre enrichment with adaptive control + rate guarding

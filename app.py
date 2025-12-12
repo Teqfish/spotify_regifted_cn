@@ -2964,7 +2964,7 @@ with st.sidebar:
             "Popularity",
             "Normality",
             "Taste",
-            # "Test",
+            "Test",
             "On This Day",
             "FAQs",
             "About"
@@ -7999,24 +7999,97 @@ elif page == "Taste":
 
         print("[Normality] ▶ Starting 28-day rolling normality analysis")
 
+        # ===============================================================
         # 1️⃣ Filter for music events
+        # ===============================================================
         df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
         print(f"[Normality] ✅ Filtered for musical events: {len(df_music):,} rows remain")
 
-        # 2️⃣ Merge with artist→genre mapping
-        df_full = df_music.merge(df_artist_genre, on="artist_name", how="left")
+        # ===============================================================
+        # 2️⃣ NORMALIZE ARTIST NAME KEYS ON BOTH DATAFRAMES (robust join)
+        # ===============================================================
+        user_key = "artist_name"
+        genre_key = "artist_name"
+
+        df_music = df_music.copy()
+        df_artist_genre = df_artist_genre.copy()
+
+        # Normalize artist keys
+        df_music["artist_key"] = df_music[user_key].astype(str).str.strip().str.lower()
+        df_artist_genre["artist_key"] = df_artist_genre[genre_key].astype(str).str.strip().str.lower()
+
+        # Treat empty genre strings as missing
+        for col in ["primary_genre", "supergenre"]:
+            if col in df_artist_genre.columns:
+                df_artist_genre[col] = (
+                    df_artist_genre[col]
+                    .astype("string")
+                    .replace(r"^\s*$", pd.NA, regex=True)
+                )
+
+        # Collapse df_artist_genre to unique rows per artist_key
+        def first_nonnull(s: pd.Series):
+            s = s.dropna()
+            return s.iloc[0] if not s.empty else pd.NA
+
+        df_artist_genre_unique = (
+            df_artist_genre.groupby("artist_key", as_index=False)
+            .agg({
+                "primary_genre": first_nonnull,
+                "supergenre": first_nonnull
+            })
+        )
+
+        # ===============================================================
+        # 3️⃣ Merge with normalized keys
+        # ===============================================================
+        df_full = df_music.merge(df_artist_genre_unique, on="artist_key", how="left")
+
+        # If the artist was not matched, mark as "Unlisted"
         df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
 
-        # 3️⃣ Prep time columns
+        # ===============================================================
+        # 4️⃣ Debug info — check how many unlisted remain
+        # ===============================================================
+        # --- Count total Unlisted listening events ---
+        n_unlisted = df_full["supergenre"].eq("Unlisted").sum()
+
+        # --- Count unique artists that are Unlisted ---
+        artists_unlisted = (
+            df_full.loc[df_full["supergenre"] == "Unlisted", "artist_name"]
+            .nunique()
+        )
+
+        print(f"[Normality] ⚠️ Found {n_unlisted:,} 'Unlisted' listening events after normalization.")
+        print(f"[Normality] ⚠️ Found {artists_unlisted:,} unique 'Unlisted' artists after normalization.")
+
+        # --- Show top offenders by minutes played ---
+        if n_unlisted > 0:
+            top_unlisted = (
+                df_full.loc[df_full["supergenre"] == "Unlisted", "artist_name"]
+                .value_counts()
+                .head(15)
+            )
+            print(top_unlisted)
+
+        # ===============================================================
+        # 5️⃣ Prep time columns
+        # ===============================================================
         df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
         df_full = df_full.dropna(subset=["datetime"])
         df_full["date"] = df_full["datetime"].dt.date
         df_full["minutes_played"] = df_full["minutes_played"].fillna(0)
 
-        # 4️⃣ Loop through genres
+        # ===============================================================
+        # 6️⃣ Loop through genres
+        # ===============================================================
         all_genres = df_full["supergenre"].unique()
         results = []
         print(f"[Normality] ▶ Found {len(all_genres)} genres to analyze")
+
+        from scipy.stats import normaltest, skew, kurtosis, entropy
+        from datetime import timedelta
+        import traceback
 
         for genre in all_genres:
             gdf = df_full[df_full["supergenre"] == genre].copy()
@@ -8047,7 +8120,11 @@ elif page == "Taste":
                     ku = kurtosis(artist_counts)
                     sd = np.std(artist_counts)
                     rng = artist_counts.max() - artist_counts.min()
-                    probs = artist_counts / artist_counts.sum() if artist_counts.sum() > 0 else np.ones_like(artist_counts)/len(artist_counts)
+                    probs = (
+                        artist_counts / artist_counts.sum()
+                        if artist_counts.sum() > 0
+                        else np.ones_like(artist_counts) / len(artist_counts)
+                    )
                     H = entropy(probs, base=2)
 
                     # --- Composite normality index ---
@@ -8059,7 +8136,7 @@ elif page == "Taste":
                     results.append(dict(
                         genre=genre,
                         date_window=current_end.date(),
-                        total_minutes=total_minutes,        # ✅ NEW — total engagement
+                        total_minutes=total_minutes,
                         p_value=p_val,
                         skewness=sk,
                         kurtosis=ku,
@@ -8084,7 +8161,6 @@ elif page == "Taste":
             print("[Normality] ⚠️ No valid results computed — nothing saved.")
 
         return df_results
-
 
     # ----------------------------------------------------------------------
     # RUN ANALYSIS OR LOAD EXISTING RESULTS
@@ -8450,387 +8526,225 @@ elif page == "Taste":
             st.plotly_chart(fig_violin, width="stretch", config={"displayModeBar": False})
 
     # ===============================================================
-    # Taste Focus Distribution by Genre (Ridgeline)
+    # 🌋 3D TASTE FOCUS RIDGELINES — Dual-Sided Neon Ribbons (Sorted by Volume)
     # ===============================================================
+    import numpy as np
+    import pandas as pd
+    import plotly.graph_objects as go
+    from plotly.colors import sample_colorscale
+    from scipy.ndimage import gaussian_filter1d
+    import streamlit as st
 
-    # # ===============================================================
-    # # 🌋 3D DUAL-LAYER TASTE TERRAIN — Focus vs Entropy
-    # # ===============================================================
-    # import numpy as np
-    # import pandas as pd
-    # import plotly.graph_objects as go
+    st.markdown("### 🌋 3D Taste Focus Ridgelines — *Solid Entropy-Driven Neon Forms (Sorted by Volume)*")
 
-    # st.markdown("### 🌋 Dynamic 3D Taste Terrain — *Focus vs Volatility Landscape*")
+    # --- Safety check ---
+    if "df_rolling" not in locals() or df_rolling.empty:
+        st.info("No rolling normality data available yet. Run the analysis first.")
+        st.stop()
 
-    # if "df_rolling" not in locals() or df_rolling.empty:
-    #     st.info("No rolling normality data available yet. Run the rolling analysis first.")
-    # else:
-    #     df_focus = df_rolling.copy()
+    df_focus = df_rolling.copy()
 
-    #     # If minutes_played is missing or zeroed, try to recover it
-    #     if ("minutes_played" not in df_focus.columns) or (df_focus["minutes_played"].sum() == 0):
-    #         try:
-    #             # Rebuild approximate minutes_played per (genre, date_window)
-    #             df_minutes = (
-    #                 df.groupby(["genre", "date_window"])["minutes_played"]
-    #                 .sum()
-    #                 .reset_index()
-    #             )
+    # --- Year filter ---
+    if year_selected not in ["All Years", "All Time", None, ""]:
+        try:
+            df_focus = df_focus[df_focus["year"] == int(year_selected)]
+        except Exception:
+            pass
 
-    #             # Merge back into df_focus
-    #             df_focus = df_focus.merge(df_minutes, on=["genre", "date_window"], how="left")
-
-    #             print(f"[TasteTerrain] ✅ Reconstructed minutes_played from base data ({len(df_minutes)} groups).")
-    #         except Exception as e:
-    #             print(f"[TasteTerrain] ⚠️ Could not recover minutes_played: {e}")
-    #             df_focus["minutes_played"] = 0
-
-    #     # --- Ensure date_window exists ---
-    #     if "date_window" not in df_focus.columns:
-    #         if "datetime" in df_focus.columns:
-    #             df_focus["date_window"] = df_focus["datetime"].dt.to_period("28D").astype(str)
-    #         else:
-    #             st.warning("Missing both 'date_window' and 'datetime'; cannot build terrain.")
-    #             st.stop()
-
-    #     # --- Year filter ---
-    #     if year_selected not in ["All Years", "All Time", None, ""]:
-    #         try:
-    #             df_focus = df_focus[df_focus["year"] == int(year_selected)]
-    #         except Exception:
-    #             pass
-
-    #     # --- Entropy (volatility proxy) ---
-    #     entropy_series = (
-    #         df_focus.groupby("genre")["NormalityIndex"]
-    #         .rolling(window=3, min_periods=1)
-    #         .std()
-    #         .reset_index()
-    #         .rename(columns={"NormalityIndex": "Entropy"})
-    #     )
-    #     if "level_1" in entropy_series.columns:
-    #         entropy_series.rename(columns={"level_1": "row_index"}, inplace=True)
-    #     elif "index" in entropy_series.columns:
-    #         entropy_series.rename(columns={"index": "row_index"}, inplace=True)
-
-    #     df_focus = df_focus.reset_index().rename(columns={"index": "row_index"})
-    #     df_focus = pd.merge(
-    #         df_focus, entropy_series[["genre", "row_index", "Entropy"]],
-    #         on=["genre", "row_index"], how="left"
-    #     ).drop(columns=["row_index"], errors="ignore")
-
-    #     # --- Fill + Normalize ---
-    #     df_focus = df_focus.fillna(0)
-    #     for col in ["NormalityIndex", "Entropy", "kurtosis", "total_minutes"]:
-    #         if col not in df_focus.columns:
-    #             df_focus[col] = 0
-
-    #     print(df_focus["minutes_played"].dtype, df_focus["minutes_played"].describe())
-    #     print(df_focus["minutes_played"].head(10))
-
-    #     for col in ["NormalityIndex", "Entropy", "kurtosis", "total_minutes"]:
-    #         col_min, col_max = df_focus[col].min(), df_focus[col].max()
-    #         df_focus[f"{col}_norm"] = (
-    #             (df_focus[col] - col_min) / (col_max - col_min)
-    #             if col_max > col_min else 0.5
-    #         )
-
-    #     # --- Taste Focus Index ---
-    #     df_focus["TasteFocusIndex"] = (
-    #         df_focus["NormalityIndex_norm"]
-    #         * (1 - df_focus["Entropy_norm"])
-    #         * (1 - df_focus["kurtosis_norm"])
-    #         * df_focus["total_minutes_norm"]
-    #     )
-
-    #     # --- Pivot for both metrics ---
-    #     df_surface_focus = df_focus.pivot_table(
-    #         index="genre", columns="date_window", values="TasteFocusIndex", aggfunc="mean"
-    #     ).fillna(0)
-    #     df_surface_entropy = df_focus.pivot_table(
-    #         index="genre", columns="date_window", values="Entropy_norm", aggfunc="mean"
-    #     ).fillna(0)
-
-    #     # --- Chronological order ---
-    #     sorted_cols = sorted(df_surface_focus.columns, key=lambda x: pd.to_datetime(x, errors="coerce"))
-    #     df_surface_focus = df_surface_focus.reindex(sorted_cols, axis=1)
-    #     df_surface_entropy = df_surface_entropy.reindex(sorted_cols, axis=1)
-
-    #     # --- Smoothing slider ---
-    #     smooth_window = st.slider(
-    #         "Smoothing window (time-based, in 28-day steps)",
-    #         min_value=1, max_value=10, value=2, step=1,
-    #         help="Applies a temporal rolling mean per genre. Set to 1 for no smoothing."
-    #     )
-
-    #     if smooth_window > 1:
-    #         df_surface_focus = df_surface_focus.T.rolling(window=smooth_window, min_periods=1, center=True).mean().T
-    #         df_surface_entropy = df_surface_entropy.T.rolling(window=smooth_window, min_periods=1, center=True).mean().T
-
-    #     # --- Prepare arrays ---
-    #     X = np.arange(len(df_surface_focus.columns))
-    #     Y = np.arange(len(df_surface_focus.index))
-    #     Z_focus = df_surface_focus.values
-    #     Z_entropy = df_surface_entropy.values * np.nanmax(Z_focus) * 0.9  # scale entropy beneath focus
-
-    #     # --- Build combined 3D figure ---
-    #     fig = go.Figure()
-
-    #     # Top layer — Taste Focus
-    #     fig.add_trace(go.Surface(
-    #         z=Z_focus,
-    #         x=X,
-    #         y=Y,
-    #         colorscale=[
-    #             [0.0, "#062719"],
-    #             [0.2, "#106441"],
-    #             [0.5, "#1ed760"],
-    #             [0.75, "#62d089"],
-    #             [1.0, "#e1ece3"],
-    #         ],
-    #         name="Taste Focus",
-    #         cmin=0,
-    #         cmax=np.nanmax(Z_focus) if np.nanmax(Z_focus) > 0 else 1,
-    #         opacity=1,
-    #         showscale=True,
-    #         colorbar=dict(
-    #             title="Taste Focus Index",
-    #             tickcolor="white",
-    #             tickfont=dict(color="white"),
-    #             titlefont=dict(color="white"),
-    #         ),
-    #         lighting=dict(ambient=0.5, diffuse=0.7, roughness=0.8, specular=0.3),
-    #         lightposition=dict(x=100, y=200, z=1000),
-    #     ))
-
-    #     # Lower layer — Entropy (Volatility)
-    #     fig.add_trace(go.Surface(
-    #         z=Z_entropy,
-    #         x=X,
-    #         y=Y,
-    #         colorscale="Reds",
-    #         cmin=0,
-    #         cmax=np.nanmax(Z_entropy) if np.nanmax(Z_entropy) > 0 else 1,
-    #         opacity=0.4,
-    #         name="Volatility (Entropy)",
-    #         showscale=False,
-    #         lighting=dict(ambient=0.3, diffuse=0.5, roughness=1, specular=0),
-    #         lightposition=dict(x=-200, y=-200, z=300),
-    #     ))
-
-    #     # --- Layout ---
-    #     fig.update_layout(
-    #         title=f"3D Taste Terrain — Focus vs Volatility Landscape ({year_selected})",
-    #         scene=dict(
-    #             xaxis=dict(
-    #                 title="Rolling Window",
-    #                 tickvals=list(range(0, len(df_surface_focus.columns), max(1, len(df_surface_focus.columns)//10))),
-    #                 ticktext=[str(c) for c in df_surface_focus.columns[::max(1, len(df_surface_focus.columns)//10)]],
-    #                 backgroundcolor="rgba(0,0,0,0)",
-    #                 gridcolor="rgba(255,255,255,0.05)",
-    #             ),
-    #             yaxis=dict(
-    #                 title="Genre",
-    #                 tickvals=list(range(len(df_surface_focus.index))),
-    #                 ticktext=list(df_surface_focus.index),
-    #                 backgroundcolor="rgba(0,0,0,0)",
-    #                 gridcolor="rgba(255,255,255,0.05)",
-    #             ),
-    #             zaxis=dict(
-    #                 title="Index (scaled)",
-    #                 range=[0, np.nanmax(Z_focus) * 1.2],
-    #                 backgroundcolor="rgba(0,0,0,0)",
-    #                 gridcolor="rgba(255,255,255,0.05)",
-    #             ),
-    #         ),
-    #         paper_bgcolor="rgba(0,0,0,0)",
-    #         plot_bgcolor="rgba(0,0,0,0)",
-    #         font=dict(color="white"),
-    #         height=700,
-    #         margin=dict(l=0, r=0, t=60, b=0),
-    #         showlegend=False,
-    #     )
-
-    #     st.plotly_chart(fig, width="stretch", config={"displayModeBar": True})
-
-        # ===============================================================
-        # 🌋 3D TASTE FOCUS RIDGELINES — Dynamic Evolution by Genre
-        # ===============================================================
-        import numpy as np
-        import pandas as pd
-        import plotly.graph_objects as go
-        from plotly.colors import sample_colorscale
-        import streamlit as st
-
-        st.markdown("### 🌋 3D Taste Focus Ridgelines — *Genre Dynamics Over Time*")
-
-        # --- Sanity check ---
-        if "df_rolling" not in locals() or df_rolling.empty:
-            st.info("No rolling normality data available yet. Run the analysis first.")
+    # --- Ensure date_window exists ---
+    if "date_window" not in df_focus.columns:
+        if "datetime" in df_focus.columns:
+            df_focus["date_window"] = df_focus["datetime"].dt.to_period("28D").astype(str)
+        else:
+            st.warning("Missing both 'date_window' and 'datetime'; cannot build ridgelines.")
             st.stop()
 
-        df_focus = df_rolling.copy()
+    # --- Fill missing metrics ---
+    for col in ["NormalityIndex", "entropy", "kurtosis", "minutes_played"]:
+        if col not in df_focus.columns:
+            df_focus[col] = 0
+    df_focus = df_focus.fillna(0)
 
-        # --- Year filter ---
-        if year_selected not in ["All Years", "All Time", None, ""]:
-            try:
-                df_focus = df_focus[df_focus["year"] == int(year_selected)]
-            except Exception:
-                pass
-
-        # --- Ensure date_window exists ---
-        if "date_window" not in df_focus.columns:
-            if "datetime" in df_focus.columns:
-                df_focus["date_window"] = df_focus["datetime"].dt.to_period("28D").astype(str)
-            else:
-                st.warning("Missing both 'date_window' and 'datetime'; cannot build ridgelines.")
-                st.stop()
-
-        # --- Sort genres by total listening time ---
-        if "minutes_played" in df_focus.columns:
-            genre_order = (
-                df_focus.groupby("genre")["minutes_played"].sum().sort_values(ascending=False).index
+    # --- Compute TasteFocusIndex if missing ---
+    if "TasteFocusIndex" not in df_focus.columns:
+        for col in ["NormalityIndex", "entropy", "kurtosis", "minutes_played"]:
+            col_min, col_max = df_focus[col].min(), df_focus[col].max()
+            df_focus[f"{col}_norm"] = (
+                (df_focus[col] - col_min) / (col_max - col_min)
+                if col_max > col_min
+                else 0.5
             )
-        else:
-            genre_order = df_focus["genre"].value_counts().index
-
-        # --- Pivot to matrix form ---
-        df_surface = (
-            df_focus.pivot_table(
-                index="genre",
-                columns="date_window",
-                values="TasteFocusIndex",
-                aggfunc="mean",
-            )
-            .reindex(genre_order)
-            .fillna(0)
+        df_focus["TasteFocusIndex"] = (
+            df_focus["NormalityIndex_norm"]
+            * (1 - df_focus["entropy_norm"])
+            * (1 - df_focus["kurtosis_norm"])
+            * df_focus["minutes_played_norm"]
         )
 
-        # --- Align entropy values to same shape ---
-        df_entropy = (
-            df_focus.pivot_table(
-                index="genre",
-                columns="date_window",
-                values="Entropy",
-                aggfunc="mean",
+    # --- Pivot TasteFocusIndex + Entropy ---
+    df_surface = (
+        df_focus.pivot_table(
+            index="genre", columns="date_window", values="TasteFocusIndex", aggfunc="mean"
+        )
+        .fillna(0)
+    )
+    df_entropy = (
+        df_focus.pivot_table(
+            index="genre", columns="date_window", values="entropy", aggfunc="mean"
+        )
+        .reindex(df_surface.index)
+        .fillna(0)
+    )
+
+    # ===============================================================
+    # 🎯 SORT GENRES BY TOTAL "VOLUME" BELOW TRACE
+    # ===============================================================
+    # Compute approximate "volume" under each genre’s Taste Focus curve
+    genre_volume = df_surface.sum(axis=1).sort_values(ascending=False)
+
+    # Sort both DataFrames by this metric
+    df_surface = df_surface.reindex(genre_volume.index)
+    df_entropy = df_entropy.reindex(genre_volume.index)
+
+    # --- Smoothing values (hard-coded) ---
+    smoothing_window = 10
+    smoothing_sigma = 5
+    entropy_gamma = 1
+    ridge_thickness = 0.9
+
+    # --- Apply smoothing ---
+    df_surface = df_surface.rolling(window=smoothing_window, axis=1, min_periods=1).mean()
+    df_entropy = df_entropy.rolling(window=smoothing_window, axis=1, min_periods=1).mean()
+
+    # --- Per-genre entropy normalization ---
+    entropy_norm_per_genre = df_entropy.apply(
+        lambda row: (row - np.nanmin(row)) / (np.nanmax(row) - np.nanmin(row) + 1e-9),
+        axis=1
+    )
+
+    # --- Axes prep ---
+    time_vals = df_surface.columns
+    X = np.arange(len(time_vals))
+    Z = df_surface.values
+
+    # --- Neon palette sampling ---
+    genre_colors = sample_colorscale(
+        neon_colorscale,
+        [i / max(1, len(df_surface.index) - 1) for i in range(len(df_surface.index))],
+    )
+
+    # --- Figure setup ---
+    fig = go.Figure()
+
+    # ===============================================================
+    # 🧱 BUILD TRUE 3D RIBBONS
+    # ===============================================================
+    for i, genre in enumerate(df_surface.index):
+        z_vals = df_surface.iloc[i].values
+        e_vals = entropy_norm_per_genre.iloc[i].values
+
+        if smoothing_sigma > 0:
+            z_vals = gaussian_filter1d(z_vals, sigma=smoothing_sigma)
+            e_vals = gaussian_filter1d(e_vals, sigma=smoothing_sigma / 2)
+
+        e_vals_scaled = np.clip(e_vals ** entropy_gamma, 0, 1)
+
+        base_color = genre_colors[i][1] if isinstance(genre_colors[i], (list, tuple)) else genre_colors[i]
+        genre_entropy_colorscale = [[0, "#0b110b"], [1, base_color]]
+
+        # Define ridge geometry
+        y_center = i
+        y_left = y_center - ridge_thickness / 2
+        y_right = y_center + ridge_thickness / 2
+
+        # --- Side surfaces ---
+        color_surface = [e_vals_scaled, e_vals_scaled]
+
+        # Left wall
+        fig.add_trace(
+            go.Surface(
+                x=[X, X],
+                y=[[y_left] * len(X), [y_left] * len(X)],
+                z=[z_vals, np.zeros(len(X))],
+                surfacecolor=color_surface,
+                colorscale=genre_entropy_colorscale,
+                showscale=(i == 0),
+                opacity=1,
+                hoverinfo="skip",
+                lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
             )
-            .reindex(df_surface.index)
-            .fillna(0)
         )
 
-        # --- Smooth via slider ---
-        smoothing_window = st.slider("🎚 Smoothing (rolling windows)", 1, 7, 3)
-        df_surface = df_surface.rolling(window=smoothing_window, axis=1, min_periods=1).mean()
-        df_entropy = df_entropy.rolling(window=smoothing_window, axis=1, min_periods=1).mean()
-
-        # --- Normalize entropy for visual mapping (0.3–1.0 opacity, 1–6 width) ---
-        entropy_norm = (df_entropy - df_entropy.min().min()) / (df_entropy.max().max() - df_entropy.min().min() + 1e-6)
-        entropy_opacity = 1 - (entropy_norm * 0.7)  # 0.3–1.0
-        entropy_width = 1 + (entropy_norm * 5)      # 1–6
-
-        # --- Prepare X/Y/Z arrays ---
-        time_vals = df_surface.columns
-        X = np.arange(len(time_vals))
-        Y = np.arange(len(df_surface.index))
-        Z = df_surface.values
-
-        # --- Sample colors from your spotify palette ---
-        spotify_colorscale = [
-            [0.0, "#062719"],
-            [0.2, "#106441"],
-            [0.5, "#1ed760"],
-            [0.75, "#62d089"],
-            [1.0, "#e1ece3"],
-        ]
-        genre_colors = sample_colorscale(spotify_colorscale, [i / max(1, len(df_surface.index)-1) for i in range(len(df_surface.index))])
-
-        # --- Create the figure ---
-        fig = go.Figure()
-
-        for i, genre in enumerate(df_surface.index):
-            z_vals = df_surface.iloc[i].values
-            e_vals = entropy_norm.iloc[i].values
-
-            # map opacity + width to entropy
-            opacities = 1 - (e_vals * 0.7)
-            widths = 1 + (e_vals * 5)
-
-            # line (main ridge)
-            fig.add_trace(
-                go.Scatter3d(
-                    x=X,
-                    y=np.full_like(X, i),
-                    z=z_vals,
-                    mode="lines",
-                    line=dict(color=genre_colors[i][1], width=float(np.nanmean(widths))),
-                    opacity=float(np.nanmean(opacities)),
-                    name=genre,
-                    hovertemplate=f"<b>{genre}</b><br>Date: %{x}<br>TFI: %{z:.3f}<extra></extra>",
-                )
+        # Right wall
+        fig.add_trace(
+            go.Surface(
+                x=[X, X],
+                y=[[y_right] * len(X), [y_right] * len(X)],
+                z=[z_vals, np.zeros(len(X))],
+                surfacecolor=color_surface,
+                colorscale=genre_entropy_colorscale,
+                showscale=False,
+                opacity=1,
+                hoverinfo="skip",
+                lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
             )
+        )
 
-            # ribbon fill (to z=0)
-            fig.add_trace(
-                go.Scatter3d(
-                    x=np.concatenate([X, X[::-1]]),
-                    y=np.concatenate([np.full_like(X, i), np.full_like(X, i)]),
-                    z=np.concatenate([z_vals, np.zeros_like(z_vals)]),
-                    mode="lines",
-                    surfaceaxis=2,
-                    line=dict(color=genre_colors[i][1], width=0),
-                    fill='toself',
-                    opacity=0.2,
-                    showlegend=False,
-                    hoverinfo='skip'
-                )
+        # --- Top ribbon surface ---
+        x_grid, y_grid = np.meshgrid(X, [y_left, y_right])
+        z_grid = np.tile(z_vals, (2, 1))
+
+        fig.add_trace(
+            go.Surface(
+                x=x_grid,
+                y=y_grid,
+                z=z_grid,
+                surfacecolor=np.tile(e_vals_scaled, (2, 1)),
+                colorscale=genre_entropy_colorscale,
+                showscale=False,
+                opacity=1,
+                hoverinfo="x+y+z",
+                lighting=dict(ambient=0.7, diffuse=0.5, specular=0.1),
+                name=f"{genre} ribbon",
             )
+        )
 
-        # --- Optional reference plane (typical TFI baseline ≈ 0.05) ---
-        baseline = 0.05
-        fig.add_trace(go.Surface(
-            z=np.ones((len(Y), len(X))) * baseline,
-            x=X,
-            y=Y,
-            showscale=False,
-            opacity=0.15,
-            colorscale=[[0, "rgba(255,255,255,0.05)"], [1, "rgba(255,255,255,0.05)"]],
-            hoverinfo="skip",
-        ))
-
-        # --- Layout ---
-        fig.update_layout(
-            title=f"3D Taste Focus Ridgelines — Composite Stability Landscape ({year_selected})",
-            scene=dict(
-                xaxis=dict(
-                    title="Rolling Window",
-                    tickvals=list(range(0, len(time_vals), max(1, len(time_vals)//10))),
-                    ticktext=[str(c) for c in time_vals[::max(1, len(time_vals)//10)]],
-                    backgroundcolor="rgba(0,0,0,0)",
-                    gridcolor="rgba(255,255,255,0.05)",
-                ),
-                yaxis=dict(
-                    title="Genre",
-                    tickvals=list(range(len(df_surface.index))),
-                    ticktext=list(df_surface.index),
-                    backgroundcolor="rgba(0,0,0,0)",
-                    gridcolor="rgba(255,255,255,0.05)",
-                ),
-                zaxis=dict(
-                    title="Taste Focus Index",
-                    range=[0, np.nanmax(Z)*1.1],
-                    backgroundcolor="rgba(0,0,0,0)",
-                    gridcolor="rgba(255,255,255,0.05)",
-                ),
+    # ===============================================================
+    # 🎨 LAYOUT
+    # ===============================================================
+    fig.update_layout(
+        title=f"3D Taste Focus Ridgelines — Sorted by Total Taste Focus Volume ({year_selected})",
+        scene=dict(
+            xaxis=dict(
+                title="Rolling Window",
+                tickvals=list(range(0, len(time_vals), max(1, len(time_vals)//10))),
+                ticktext=[str(c) for c in time_vals[::max(1, len(time_vals)//10)]],
+                gridcolor="rgba(255,255,255,0.05)",
+                backgroundcolor="rgba(0,0,0,0)",
             ),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            height=800,
-            margin=dict(l=0, r=0, t=60, b=0),
-            showlegend=False,
-        )
+            yaxis=dict(
+                title="Genre",
+                tickvals=list(range(len(df_surface.index))),
+                ticktext=list(df_surface.index),
+                gridcolor="rgba(255,255,255,0.05)",
+                backgroundcolor="rgba(0,0,0,0)",
+            ),
+            zaxis=dict(
+                title="Taste Focus Index",
+                range=[0, np.nanmax(Z) * 1.1],
+                gridcolor="rgba(255,255,255,0.05)",
+                backgroundcolor="rgba(0,0,0,0)",
+            ),
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white"),
+        height=750,
+        margin=dict(l=0, r=0, t=60, b=0),
+        showlegend=False,
+    )
 
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 # --------------------------------- Test ------------------------------------- #
 elif page == "Test":
@@ -8843,6 +8757,93 @@ elif page == "Test":
     df, current_label = require_current_df()
 
     user_df = df
+
+    import pandas as pd
+
+    # --- 1) Build join keys (normalized artist name) on both DataFrames ---
+    # Adjust column names here if your artist column is called something else
+    user_key = 'artist_name'
+    genre_key = 'artist_name'
+
+    # Make safe copies with a normalized join key
+    user_df = user_df.copy()
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
+
+    # -------- 1) Normalize keys and clean blanks --------
+    u = user_df.copy()
+    g = df_artist_genre.copy()
+
+    u['artist_key'] = u[user_key].astype(str).str.strip().str.lower()
+    g['artist_key'] = g[genre_key].astype(str).str.strip().str.lower()
+
+    # treat empty strings as missing for genre columns
+    for col in ['primary_genre', 'supergenre']:
+        if col in g.columns:
+            g[col] = g[col].astype('string').replace(r'^\s*$', pd.NA, regex=True)
+
+    # -------- 2) Reduce to unique user artists --------
+    user_artists = (
+        u[['artist_key', user_key]]
+        .dropna(subset=['artist_key'])
+        .drop_duplicates('artist_key')
+    )
+
+    # -------- 3) Collapse df_artist_genre to one row per artist_key, favoring non-null genres --------
+    def first_nonnull(s: pd.Series):
+        s = s.dropna()
+        return s.iloc[0] if not s.empty else pd.NA
+
+    g_one = (
+        g.groupby('artist_key', as_index=False)
+        .agg({
+            'primary_genre': first_nonnull,
+            'supergenre': first_nonnull
+        })
+    )
+
+    # -------- 4) Merge with indicator to split exact cases --------
+    m = user_artists.merge(
+        g_one, on='artist_key', how='left', indicator=True
+    )
+
+    # A) NOT PRESENT at all in df_artist_genre (true anti-join)
+    not_present = (
+        m[m['_merge'] == 'left_only']
+        [[user_key, 'artist_key']]
+        .drop_duplicates('artist_key')
+        .sort_values(user_key)
+        .reset_index(drop=True)
+    )
+    not_present_count = not_present['artist_key'].nunique()
+
+    # B) PRESENT but missing either primary_genre or supergenre
+    present_but_missing = (
+        m[(m['_merge'] == 'both') & (m['primary_genre'].isna() | m['supergenre'].isna())]
+        [[user_key, 'artist_key']]
+        .drop_duplicates('artist_key')
+        .sort_values(user_key)
+        .reset_index(drop=True)
+    )
+    present_but_missing_count = present_but_missing['artist_key'].nunique()
+
+    # (Optional) Union of unenriched = not present OR present but missing
+    unenriched_all = pd.concat([not_present, present_but_missing], ignore_index=True)\
+                    .drop_duplicates('artist_key')
+    unenriched_all_count = unenriched_all['artist_key'].nunique()
+
+    print(f"Not present: {not_present_count}")
+    print(f"Present but missing genre: {present_but_missing_count}")
+    print(f"Total unenriched (union): {unenriched_all_count}")
+
+    st.metric("Artists not in df_artist_genre", not_present_count)
+    st.metric("Artists present but missing genres", present_but_missing_count)
+    st.metric("Total not enriched (union)", unenriched_all_count)
+
+    with st.expander("View artists not present"):
+        st.dataframe(not_present[[user_key]].sort_values(user_key))
+
+    with st.expander("View artists present but missing genres"):
+        st.dataframe(present_but_missing[[user_key]].sort_values(user_key))
 
 # ------------------------------ On This Day --------------------------------- #
 elif page == "On This Day":

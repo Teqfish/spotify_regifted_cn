@@ -1,4 +1,4 @@
-import base64, json, math, os, queue, random, requests, time, threading
+import base64, json, math, os, queue, random, requests, time, threading, unicodedata, re
 import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -68,6 +68,26 @@ def unique_keep_order(seq: Iterable) -> List:
 
 def spin_sleep(s: float = 0.1):
     time.sleep(s)
+
+def _normalize_artist_key(name: str) -> str:
+    """Normalize artist names for consistent joins and comparisons."""
+    if not isinstance(name, str) or not name.strip():
+        return ""
+    name = unicodedata.normalize("NFKD", name)
+    name = name.lower().strip()
+    name = re.sub(r"[^\w\s]", " ", name)
+    name = re.sub(r"\s+", " ", name)
+    return name.strip()
+
+def _normalize_genre_key(genre: str) -> str:
+    """Normalize genre/subgenre labels to match supergenre map keys."""
+    if not isinstance(genre, str) or not genre.strip():
+        return ""
+    genre = unicodedata.normalize("NFKD", genre)
+    genre = genre.lower().strip()
+    genre = re.sub(r"[^\w\s]", " ", genre)
+    genre = re.sub(r"\s+", " ", genre)
+    return genre.strip()
 
 # ---- Spotify token the way you had it (unchanged) ----
 class SpotifyToken:
@@ -1412,8 +1432,9 @@ class MetadataEnricher:
                 self.log("[_flush_discogs_results] ✅ All pending Discogs jobs resolved.")
 
     # ---------- Fire batch calls on-the-fly ----------
-    def fetch_and_save_artists(self, names: List[str], cancel_event: Optional[threading.Event] = None):
-        import threading, pandas as pd
+    def fetch_and_save_artists(self, names: list[str], cancel_event: Optional[threading.Event] = None):
+        import pandas as pd, threading
+        from enrichment_service import _normalize_artist_key, _normalize_genre_key
 
         self.log(f"[fetch_and_save_artists:debug] Thread={threading.current_thread().name} batch={len(names)} sample={names[:3]}")
 
@@ -1425,7 +1446,6 @@ class MetadataEnricher:
         self._check_cancel(ce)
         self.log(f"[fetch_and_save_artists] Starting batch with {len(names)} names")
 
-        # --- Resolve artist IDs first (Spotify) ---
         self.resolve_artist_ids(names)
         self.log(f"[fetch_and_save_artists] Resolved IDs for {len(self.artist_ids_by_name)} / {len(names)}")
 
@@ -1435,96 +1455,70 @@ class MetadataEnricher:
             return
 
         self._check_cancel(ce)
-        self.log(f"[fetch_and_save_artists] Calling get_artists for {len(ids)} IDs")
         info = get_artists(
             ids,
             token=self.token,
             cancel_event=ce,
             user_id=self.user_id,
             dataset_label=self.label,
-            log_dao=self.log_dao
+            log_dao=self.log_dao,
         )
         self.log(f"[fetch_and_save_artists] Got {len(info) if info else 0} artist records back")
 
-        df_art = pd.json_normalize(info)
-
-        # --- Identify artists missing genres ---
+        df_art = pd.json_normalize(info or [])
         df_art["genres"] = df_art.get("genres", pd.Series([[]] * len(df_art))).apply(lambda x: x or [])
         missing = df_art[df_art["genres"].apply(len) == 0]["name"].tolist()
 
-        # --- Ensure pool exists & is alive (for Discogs) ---
         if missing:
             self._check_cancel(ce)
-            # lazily create/ensure a pool
             if not hasattr(self, "discogs_pool") or self.discogs_pool is None:
                 try:
-                    # Prefer a factory if you have one; else construct directly
-                    self.ensure_worker_pool()  # if your class exposes it
+                    self.ensure_worker_pool()
                 except Exception:
-                    # fallback: construct one
                     from enrichment_service import DiscogsWorkerPool
                     self.discogs_pool = DiscogsWorkerPool(num_workers=5)
-
             try:
-                # Keep it healthy
                 self.discogs_pool.ensure_alive()
             except Exception:
                 pass
-
-            self.log(f"[fetch_and_save_artists] {len(missing)} artists missing genres → submitting async Discogs jobs")
-            # fire-and-forget
+            self.log(f"[fetch_and_save_artists] {len(missing)} artists missing genres → submitting Discogs jobs")
             self.discogs_pool.submit(missing, meta={"user_id": self.user_id, "label": self.label})
-
-            # Track pending names for any later reconciliation step
             if not hasattr(self, "_pending_discogs_artists"):
                 self._pending_discogs_artists = set()
             self._pending_discogs_artists.update(missing)
 
-            # Optional tiny debug snapshot
-            try:
-                if getattr(self, "debug_discogs", False):
-                    self.discogs_pool.snapshot_queue(max_n=5)
-            except Exception:
-                pass
-
-            self.log(f"[fetch_and_save_artists] Submitted {len(missing)} Discogs jobs (non-blocking)")
-
-        # --- Build output rows for artists (Spotify-first, Discogs will backfill later) ---
         out = pd.DataFrame({
             "artist_id": df_art["id"],
             "artist_name": df_art["name"],
+            "artist_key": df_art["name"].apply(_normalize_artist_key),
             "artist_popularity": df_art.get("popularity"),
             "artist_image": df_art.get("images").apply(
                 lambda imgs: (imgs[0]["url"] if isinstance(imgs, list) and imgs else None)
             ),
             "primary_genre": df_art.get("genres").apply(
-                lambda g: (g[0] if isinstance(g, list) and len(g) > 0 else None)
+                lambda g: _normalize_genre_key(g[0]) if isinstance(g, list) and g else None
             ),
         })
 
-        # --- Supergenre mapping (from storage) ---
         if not hasattr(self, "supergenre_map_dict"):
             try:
                 supergenre_map = self.storage.safe_download_csv("reference/info_supergenre_map.csv")
                 if not supergenre_map.empty and {"subgenre", "supergenre"}.issubset(supergenre_map.columns):
                     self.supergenre_map_dict = {
-                        str(k).strip().lower(): str(v).strip()
+                        _normalize_genre_key(k): str(v).strip()
                         for k, v in zip(supergenre_map["subgenre"], supergenre_map["supergenre"])
                     }
-                    self.log(f"[init] Loaded {len(self.supergenre_map_dict)} supergenre mappings from storage.")
+                    self.log(f"[init] Loaded {len(self.supergenre_map_dict)} supergenre mappings.")
                 else:
                     self.supergenre_map_dict = {}
-                    self.log("[init] Warning: Supergenre map CSV missing expected columns.")
             except Exception as e:
                 self.supergenre_map_dict = {}
-                self.log(f"[init] Failed to load info_supergenre_map.csv from storage: {e}")
+                self.log(f"[init] Failed to load supergenre map: {e}")
 
-        out["primary_genre"] = out["primary_genre"].astype(str).str.strip().str.lower()
-        out["supergenre"] = out["primary_genre"].map(self.supergenre_map_dict).astype("object")
-        unlisted_mask = out["supergenre"].isna()
-        out.loc[unlisted_mask, "supergenre"] = "Unlisted"
+        out["supergenre"] = out["primary_genre"].map(self.supergenre_map_dict)
+        out.loc[out["supergenre"].isna(), "supergenre"] = "Unlisted"
 
-        # Save unlisted separately for later remediation
+        unlisted_mask = out["supergenre"].eq("Unlisted")
         if not hasattr(self, "buf_artists_unlisted"):
             self.buf_artists_unlisted = []
         if unlisted_mask.any():
@@ -1532,10 +1526,8 @@ class MetadataEnricher:
             self.buf_artists_unlisted.extend(unlisted_df.replace({pd.NA: None}).to_dict(orient="records"))
             self.log(f"[fetch_and_save_artists] {len(unlisted_df)} artists marked as Unlisted")
 
-        # Final save
-        self.log(f"[fetch_and_save_artists:debug] Saving {len(out)} artists to buffer")
         self.buf_artists.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
-        self.seen_artists.update(names)
+        self.seen_artists.update({_normalize_artist_key(n) for n in names})
         update_heartbeat(self.user_id, self.label)
 
     def fetch_and_save_albums_by_pairs(
@@ -3330,36 +3322,35 @@ class MetadataEnricher:
 
     def _filter_known_artists(self, names: list[str]) -> list[str]:
         """Skip artists already present in master or already seen in this run."""
+        from enrichment_service import _normalize_artist_key
+
         self.log(f"[filter:debug] incoming prefilter len={len(names)}")
         if not names:
             self.log("[filter_known_artists] ⚠️ No input names provided.")
             return []
 
         before = len(names)
-        normalized_names = {str(n).strip().lower() for n in names if isinstance(n, str) and n.strip()}
+        normalized_names = {_normalize_artist_key(n) for n in names if isinstance(n, str) and n.strip()}
 
-        # 🔄 Failsafe refresh if master missing or invalid
         if not hasattr(self, "master_artists") or self.master_artists.empty or "artist_name" not in self.master_artists.columns:
-            self.log("[filter_known_artists] ⚠️ Master artist table empty or invalid — reloading tables…")
+            self.log("[filter_known_artists] ⚠️ Master table invalid — reloading tables…")
             self._load_master_tables()
 
         if self.master_artists.empty or "artist_name" not in self.master_artists.columns:
-            self.log("[filter_known_artists] ⚠️ Reload failed or master still empty — skipping filter.")
+            self.log("[filter_known_artists] ⚠️ Reload failed — skipping filter.")
             return list(normalized_names)
 
-        # Build known set using only complete (fully enriched) master entries
-        known = set(self.seen_artists)
+        known = {_normalize_artist_key(a) for a in getattr(self, "seen_artists", set())}
         if "artist_id" in self.master_artists.columns and "primary_genre" in self.master_artists.columns:
             complete = self.master_artists[
                 self.master_artists["artist_id"].notna()
                 & self.master_artists["primary_genre"].notna()
-            ]["artist_name"].dropna().astype(str).str.strip().str.lower()
-            known |= set(complete)
+            ]["artist_name"].dropna()
+            known |= {_normalize_artist_key(a) for a in complete}
         else:
-            known |= set(self.master_artists["artist_name"].dropna().astype(str).str.strip().str.lower())
+            known |= {_normalize_artist_key(a) for a in self.master_artists["artist_name"].dropna()}
 
-        out = [n for n in names if str(n).strip().lower() not in known]
-
+        out = [n for n in names if _normalize_artist_key(n) not in known]
         filtered = before - len(out)
         self.log(f"[filter] Artists filtered out: {filtered}/{before} (remaining={len(out)})")
         return out

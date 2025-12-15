@@ -48,7 +48,7 @@ import zipfile
 
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
 import enrichment_service as es
-from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks
+from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key
 from chart_scorer import parse_label_ts_from_table_name
 
 # -------------------------------- DEBUGGER ---------------------------------- #
@@ -728,8 +728,9 @@ def _audit_artist_genre_coverage(
     """
     Compare artists in the user's cleaned dataset vs the metadata artist genres.
 
-    Uses the already-loaded dataset (st.session_state.current_df) if available,
-    otherwise tries last_table_name or a DAO lookup.
+    Normalization is now consistent with enrichment_service and compute_normality:
+      - uses _normalize_artist_key() for artist name joins
+      - uses _normalize_genre_key() for genre string consistency
 
     Returns:
       - not_present, present_but_missing, unenriched_all (DataFrames)
@@ -739,22 +740,20 @@ def _audit_artist_genre_coverage(
     import pandas as pd
     import streamlit as st
     from dao_selector import DAOS
+    from enrichment_service import _normalize_artist_key, _normalize_genre_key
 
-    # --- Prefer the in-memory dataset (no path guessing) ---
+    # --- Prefer in-memory dataset (UI session) ---
     src = "session"
     if user_df is None:
         user_df = st.session_state.get("current_df")
 
-    # Fallback to DAO using last_table_name or explicit table_name
     if user_df is None or user_df.empty:
         src = "dao"
         user_dao = DAOS.get("user_data")
         key = table_name or st.session_state.get("last_table_name")
         if key:
-            # Your DAO already knows how to resolve keys like {user_id}_{label}_{ts}_history
             user_df = user_dao.load_user_data(key)
         else:
-            # Last-resort: map label→table via list_datasets
             try:
                 mapping = dict(user_dao.list_datasets(user_id))
                 tbl = mapping.get(dataset_label)
@@ -778,18 +777,21 @@ def _audit_artist_genre_coverage(
     u = user_df.copy()
     g = df_artist_genre.copy()
 
-    # Be resilient to column case/accents already normalized by your DAO
+    # Resilient to column case
     u_cols = {c.lower(): c for c in u.columns}
     artist_col = u_cols.get("artist_name", "artist_name")
-    u["artist_key"] = u[artist_col].astype(str).str.strip().str.lower()
-    g["artist_key"] = g["artist_name"].astype(str).str.strip().str.lower()
 
-    # Normalize empty strings to NA in genre columns
+    # ✅ Use full normalization for both sides
+    u["artist_key"] = u[artist_col].astype(str).map(_normalize_artist_key)
+    g["artist_key"] = g["artist_name"].astype(str).map(_normalize_artist_key)
+
+    # Normalize genres too (for consistent missing detection)
     for col in ["primary_genre", "supergenre"]:
         if col in g.columns:
             g[col] = g[col].astype("string").replace(r"^\s*$", pd.NA, regex=True)
+            g[col] = g[col].map(lambda x: _normalize_genre_key(x) if pd.notna(x) else pd.NA)
 
-    # Unique user artists
+    # --- Unique user artists ---
     user_artists = (
         u[["artist_key", artist_col]]
         .dropna(subset=["artist_key"])
@@ -797,12 +799,11 @@ def _audit_artist_genre_coverage(
         .rename(columns={artist_col: "artist_name"})
     )
 
-    # Telemetry — helps detect “race” (0 artists)
     user_rows = len(u)
     user_unique_artists = user_artists["artist_key"].nunique()
     metadata_rows = len(g)
 
-    # Prefer non-null genre rows if duplicates exist in metadata
+    # --- Group metadata by normalized key ---
     def first_nonnull(s: pd.Series):
         s = s.dropna()
         return s.iloc[0] if not s.empty else pd.NA
@@ -812,21 +813,31 @@ def _audit_artist_genre_coverage(
          .agg({"primary_genre": first_nonnull, "supergenre": first_nonnull})
     )
 
-    # Merge + split
+    # --- Merge + detect unenriched ---
     m = user_artists.merge(g_one, on="artist_key", how="left", indicator=True)
 
+    # Artists not in metadata table
     not_present = (
         m[m["_merge"] == "left_only"][["artist_name", "artist_key"]]
-        .drop_duplicates("artist_key").sort_values("artist_name").reset_index(drop=True)
+        .drop_duplicates("artist_key")
+        .sort_values("artist_name")
+        .reset_index(drop=True)
     )
+
+    # Artists present but missing genres
     present_but_missing = (
-        m[(m["_merge"] == "both") & (m["primary_genre"].isna() | m["supergenre"].isna())]
+        m[(m["_merge"] == "both") & (m["supergenre"].isna() | m["supergenre"].eq("unlisted"))]
         [["artist_name", "artist_key"]]
-        .drop_duplicates("artist_key").sort_values("artist_name").reset_index(drop=True)
+        .drop_duplicates("artist_key")
+        .sort_values("artist_name")
+        .reset_index(drop=True)
     )
+
+    # Combine
     unenriched_all = (
         pd.concat([not_present, present_but_missing], ignore_index=True)
-        .drop_duplicates("artist_key").reset_index(drop=True)
+        .drop_duplicates("artist_key")
+        .reset_index(drop=True)
     )
 
     return {
@@ -2253,45 +2264,6 @@ def registry_snapshot_df() -> pd.DataFrame:
         df = df.sort_values(["alive", "key"], ascending=[False, True])
     return df
 
-def reap_task_registry(*, verbose: bool = True) -> list[str]:
-    """
-    Remove dead/stale entries from the cached task_registry.
-    Only cleans the registry dict; it **cannot** kill live Python threads
-    (that requires the worker to cooperate via a stop_event).
-    Returns the list of task keys removed.
-    """
-    import time
-    reg = task_registry()
-    removed = []
-    for key, entry in list(reg.items()):
-        th = entry.get("thread")
-        alive = bool(th and th.is_alive())
-        status = entry.get("status", "")
-        # Reap if no thread object, or not alive, or explicitly 'done'/'error'/'stopped'
-        if (not th) or (not alive) or status in {"done", "error", "stopped"}:
-            removed.append(key)
-            reg.pop(key, None)
-    if verbose and removed:
-        print(f"[task_reaper] removed {len(removed)} stale entries: {removed}")
-    return removed
-
-def stop_genre_detective_workers() -> int:
-    """
-    Signal stop to all genre_detective workers via their stop_event.
-    Returns number of workers signalled.
-    """
-    reg = task_registry()
-    signalled = 0
-    for key, entry in reg.items():
-        if key.startswith("genre_detective::"):
-            ev = entry.get("stop_event")
-            th = entry.get("thread")
-            if ev and not ev.is_set():
-                ev.set()
-                signalled += 1
-                print(f"[task_stop] signalled {key} (alive={bool(th and th.is_alive())})")
-    return signalled
-
 def _summarize_threads_for_sidebar():
     """
     Group current Python threads into categories we care about for the app UI.
@@ -2515,7 +2487,7 @@ def start_missing_genre_detective_task(
     dataset_label: str,
     *,
     provider_name: str = "gemini",
-    batch_size: int = 20,
+    batch_size: int = 120,
     sleep_between_batches: float = 0.8,
     max_retries: int = 4,
     force: bool = False,
@@ -2725,6 +2697,45 @@ def stop_genre_detective(task_key: str):
     if not info:
         return
     info["stop_event"].set()  # worker exits on next wait
+
+def reap_task_registry(*, verbose: bool = True) -> list[str]:
+    """
+    Remove dead/stale entries from the cached task_registry.
+    Only cleans the registry dict; it **cannot** kill live Python threads
+    (that requires the worker to cooperate via a stop_event).
+    Returns the list of task keys removed.
+    """
+    import time
+    reg = task_registry()
+    removed = []
+    for key, entry in list(reg.items()):
+        th = entry.get("thread")
+        alive = bool(th and th.is_alive())
+        status = entry.get("status", "")
+        # Reap if no thread object, or not alive, or explicitly 'done'/'error'/'stopped'
+        if (not th) or (not alive) or status in {"done", "error", "stopped"}:
+            removed.append(key)
+            reg.pop(key, None)
+    if verbose and removed:
+        print(f"[task_reaper] removed {len(removed)} stale entries: {removed}")
+    return removed
+
+def stop_genre_detective_workers() -> int:
+    """
+    Signal stop to all genre_detective workers via their stop_event.
+    Returns number of workers signalled.
+    """
+    reg = task_registry()
+    signalled = 0
+    for key, entry in reg.items():
+        if key.startswith("genre_detective::"):
+            ev = entry.get("stop_event")
+            th = entry.get("thread")
+            if ev and not ev.is_set():
+                ev.set()
+                signalled += 1
+                print(f"[task_stop] signalled {key} (alive={bool(th and th.is_alive())})")
+    return signalled
 
 # ----------------------------- INIT PAGE CONFIG ----------------------------- #
 st.set_page_config(page_title="Regifted", page_icon=ICON_BROWSER, layout="wide", initial_sidebar_state="expanded")
@@ -8760,7 +8771,7 @@ elif page == "Taste":
         showlegend=False,
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 # --------------------------------- Test ------------------------------------- #
 elif page == "Test":

@@ -38,6 +38,7 @@ import random
 import re
 import pandas as pd
 import threading
+from enrichment_service import _normalize_artist_key, _normalize_genre_key
 
 # ------------------------------------------------------------------------------
 # Hard-coded path (adjust if you used a different testing file like "... copy.csv")
@@ -187,14 +188,6 @@ def _is_placeholder_pg(s: object) -> bool:
     return str(s).strip().lower() in BAD_PRIMARY_GENRE_KEYS
 
 # ---------------- Supergenre taxonomy (fixed 25) ----------------
-def _norm(s: str) -> str:
-    """Normalize genre strings for matching (lowercase, trim, collapse spaces)."""
-    if s is None:
-        return ""
-    s = str(s).strip().lower()
-    s = " ".join(s.split())
-    return s
-
 def _ensure_cols(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     for c in cols:
         if c not in df.columns:
@@ -268,7 +261,7 @@ def _load_genre_map() -> pd.DataFrame:
     gmap = gmap[gmap["supergenre"] != ""]
 
     # 7) Create normalized key for joins and dedupe
-    gmap["__key"] = gmap["primary_genre"].map(_norm)
+    gmap["__key"] = gmap["primary_genre"].map(_normalize_genre_key)
     gmap = gmap.drop_duplicates(subset="__key", keep="first")
 
     return gmap
@@ -293,7 +286,7 @@ def _save_genre_map(gmap: pd.DataFrame) -> None:
     out["subgenre"] = out["subgenre"].astype(str).str.strip()
     out["supergenre"] = out["supergenre"].astype(str).str.strip()
     out = out[(out["subgenre"] != "") & (out["supergenre"] != "")]
-    out["__key"] = out["subgenre"].map(_norm)
+    out["__key"] = out["subgenre"].map(_normalize_genre_key)
     out = out.drop_duplicates(subset="__key", keep="first").drop(columns="__key", errors="ignore")
 
     # 3) Try R2 first
@@ -335,7 +328,7 @@ class AdaptiveController:
         self,
         init_batch: int,
         min_batch: int = 5,
-        max_batch: int = 50,
+        max_batch: int = 120,
         base_sleep: float = 0.5,
         max_sleep: float = 8.0,
         grow_every: int = 3,     # grow after N consecutive successes
@@ -617,13 +610,15 @@ class GeminiProvider(GenreProvider):
         )
 
     def enrich_batch(self, batch: List[Dict]) -> Dict[str, str]:
+        from enrichment_service import _normalize_artist_key
         payload = [
             {
                 "artist_id": str(r.get("artist_id", "")).strip(),
-                "artist_name": str(r.get("artist_name", "") or "").strip(),
+                "artist_name": _normalize_artist_key(str(r.get("artist_name", "") or "")),
             }
             for r in batch
         ]
+
         user_msg = (
             "Infer primary genres for these artists and respond ONLY with the JSON object described.\n\n"
             + json.dumps(payload, ensure_ascii=False)
@@ -631,7 +626,6 @@ class GeminiProvider(GenreProvider):
 
         try:
             resp = self.model.generate_content(user_msg)
-            # capture usage metadata if available (for adaptive heuristics)
             self.last_usage = getattr(resp, "usage_metadata", None)
             content = getattr(resp, "text", None)
             if not content:
@@ -647,22 +641,14 @@ class GeminiProvider(GenreProvider):
                 content = "".join(parts) if parts else "{}"
         except Exception as e:
             msg = str(e).lower()
-            # Treat timeouts/gateway as transient
             if any(t in msg for t in ["deadline exceeded", "504", "gateway timeout", "timed out", "timeout"]):
                 raise TransientProviderError(str(e))
-            # Payload / token too large → caller should shrink
             if any(t in msg for t in ["payload too large", "request too large", "413"]):
                 raise TransientProviderError(str(e))
-            # Rate/quota exhaustion (not retryable in short loop)
             if "quota" in msg or "resource exhausted" in msg or "429" in msg or "rate limit" in msg:
                 raise InsufficientQuotaError(str(e))
-            # Model not found
             if "404" in msg and "not found" in msg:
-                raise RuntimeError(
-                    f"Gemini model '{self.model_name}' not found by this SDK. "
-                    "Try: pip install -U google-generativeai and/or set GEMINI_MODEL "
-                    "to one of: gemini-1.5-flash-8b, gemini-1.5-flash-002, gemini-1.5-pro, gemini-1.5-pro-002."
-                )
+                raise RuntimeError("Gemini model not found by this SDK.")
             raise
 
         try:
@@ -677,15 +663,12 @@ class GeminiProvider(GenreProvider):
             aid = str(item.get("artist_id", "")).strip()
             genre = str(item.get("primary_genre", "")).strip()
             if aid and genre:
-                out[aid] = genre
+                out[aid] = _normalize_genre_key(genre)
         return out
 
     def map_subgenres_to_super(self, subgenres: List[str], allowed_supergenres: List[str]) -> Dict[str, str]:
-        """
-        Map a list of subgenre strings to one of the allowed_supergenres.
-        Returns: {subgenre: supergenre}
-        """
-        uniq = [s for s in dict.fromkeys([str(x).strip() for x in subgenres]) if s]
+        from enrichment_service import _normalize_genre_key
+        uniq = [s for s in dict.fromkeys([_normalize_genre_key(x) for x in subgenres]) if s]
         if not uniq:
             return {}
 
@@ -696,10 +679,7 @@ class GeminiProvider(GenreProvider):
             "Return ONLY valid JSON with key 'results' as an array: "
             "{\"results\": [{\"primary_genre\":\"...\",\"supergenre\":\"...\"}, ...]}"
         )
-        payload = {
-            "allowed_supergenres": allowed_supergenres,
-            "items": [{"primary_genre": s} for s in uniq],
-        }
+        payload = {"allowed_supergenres": allowed_supergenres, "items": [{"primary_genre": s} for s in uniq]}
         user_msg = instruction + "\n\n" + json.dumps(payload, ensure_ascii=False)
 
         try:
@@ -725,7 +705,7 @@ class GeminiProvider(GenreProvider):
 
         out: Dict[str, str] = {}
         for item in results:
-            pg = str(item.get("primary_genre", "")).strip()
+            pg = _normalize_genre_key(item.get("primary_genre", ""))
             sg = str(item.get("supergenre", "")).strip()
             if pg and sg:
                 out[pg] = sg
@@ -811,7 +791,7 @@ def _reassign_other_supergenres_from_map(
 
     # Normalize convenience columns
     dfm = _ensure_cols(dfm, ["artist_id", "primary_genre", "supergenre"])
-    dfm["__key"] = dfm["primary_genre"].map(_norm)
+    dfm["__key"] = dfm["primary_genre"].map(_normalize_genre_key)
 
     # Build mapping dict
     map_dict = dict(zip(gmap["__key"], gmap["supergenre"]))
@@ -887,7 +867,7 @@ def enrich_dataframe_with_primary_genre(
     df: pd.DataFrame,
     provider: "GenreProvider",
     *,
-    batch_size: int = 100,
+    batch_size: int = 120,
     sleep_between_batches: float = 0.0,
     max_retries: int = 2,
     force: bool = False,
@@ -896,17 +876,15 @@ def enrich_dataframe_with_primary_genre(
     stop_event=None,  # ✅ optional cancel/stop signal
 ) -> Tuple[pd.DataFrame, int]:
     """
-    Find artists needing primary_genre, batch them, call provider, and update df.
-    Adaptive + 429-aware:
-      - honors provider retry-after (sleep exactly that; rounding handled in RateGuard)
-      - stops after 3 consecutive 429s (12h cooldown handled by RateGuard)
-      - logs detailed guard state on every 429
-      - all long waits are cancel-aware via stop_event
+    Enrich artists missing a primary_genre using the provider (e.g. Gemini).
+    Normalizes genre labels for consistency with supergenre mappings.
     """
     import math, time
+    from enrichment_service import _normalize_genre_key
 
     df = df.copy()
 
+    # ✅ Identify artists missing or invalid primary_genre
     need_mask = (
         df["primary_genre"].isna()
         | df["primary_genre"].astype(str).str.strip().str.lower().isin(["", "none", "null", "nan"])
@@ -934,17 +912,14 @@ def enrich_dataframe_with_primary_genre(
     batch_num = 0
 
     while idx < total:
-        # ✅ Gate on any outstanding retry-after/cooldown BEFORE this batch
         rate_guard.sleep_until_allowed(stop_event=stop_event)
         if stop_event and stop_event.is_set():
-            raise ShutdownRequested("Stop requested before starting next batch")
+            raise ShutdownRequested("Stop requested before next batch")
 
         bsize = min(ctrl.batch, total - idx)
         batch = rows[idx: idx + bsize]
         batch_num += 1
-        logging.info(
-            f"Batch {batch_num}/{(total + ctrl.batch - 1) // ctrl.batch} (size={len(batch)}, sleep={ctrl.sleep:.2f}s)"
-        )
+        logging.info(f"Batch {batch_num}/{math.ceil(total / ctrl.batch)} (size={len(batch)})")
 
         payload_chars = _estimate_payload_chars(
             [{"artist_id": r["artist_id"], "artist_name": r.get("artist_name", "")} for r in batch]
@@ -952,10 +927,9 @@ def enrich_dataframe_with_primary_genre(
 
         result = None
         for attempt in range(1, max_retries + 1):
-            # ✅ Gate each attempt
             rate_guard.sleep_until_allowed(stop_event=stop_event)
             if stop_event and stop_event.is_set():
-                raise ShutdownRequested("Stop requested during provider retry gate")
+                raise ShutdownRequested("Stop requested during retry gate")
 
             try:
                 result = provider.enrich_batch(batch)
@@ -966,43 +940,28 @@ def enrich_dataframe_with_primary_genre(
 
             except InsufficientQuotaError as e:
                 msg = str(e)
-                raw = _parse_retry_after_seconds(msg) or 0.0  # raw seconds (no rounding here)
+                raw = _parse_retry_after_seconds(msg) or 0.0
                 logging.warning("Provider quota/rate error: %s", msg.strip())
 
-                # 🔑 record the 429 (RateGuard does rounding & scheduling)
                 should_stop = rate_guard.add_429(retry_after_seconds=raw)
-
-                # nice, human logs for what we'll do next
                 mode = "cooldown" if rate_guard.in_cooldown() else ("retry-after" if raw > 0 else "backoff")
                 hold_for = _fmt_hhmmss(rate_guard.next_allowed_in())
                 cool_left = _fmt_hhmmss(rate_guard.cooldown_remaining()) if rate_guard.in_cooldown() else None
                 logging.warning(
-                    "[RateGuard] 429: parsed_retry_after=%.2fs | hold_for=%s (%s) | "
-                    "consecutive=%d/%d | recent_429s(win=%ds)=%d%s",
-                    raw,
-                    hold_for,
-                    mode,
-                    rate_guard.consecutive_429(),
-                    rate_guard.threshold,
-                    rate_guard.window,
-                    rate_guard.recent_429_count(),
+                    "[RateGuard] 429: parsed_retry_after=%.2fs | hold_for=%s (%s) | consecutive=%d/%d%s",
+                    raw, hold_for, mode,
+                    rate_guard.consecutive_429(), rate_guard.threshold,
                     f" | cooldown_remaining={cool_left}" if cool_left else "",
                 )
-                remaining = total - idx
-                approx_batches_left = math.ceil(remaining / max(1, ctrl.batch))
-                logging.info("[Progress] items_remaining=%d, approx_batches_left=%d", remaining, approx_batches_left)
-
-                # ✅ Sleep exactly as instructed (retry-after/cooldown), cancel-aware
                 rate_guard.sleep_until_allowed(stop_event=stop_event)
                 if stop_event and stop_event.is_set():
-                    raise ShutdownRequested("Stop requested during retry-after/cooldown")
+                    raise ShutdownRequested("Stop requested during cooldown")
 
                 ctrl.on_rate_limit()
                 if should_stop:
-                    logging.error("RateGuard: 3×429 in a row → entering 12h cooldown. Stopping run.")
+                    logging.error("RateGuard: 3×429 in a row → cooldown triggered. Stopping run.")
                     raise ShutdownRequested("Rate limit threshold reached (3×429)")
 
-                # If no explicit retry-after given, add a small polite wait
                 if raw <= 0:
                     _sleep_with_jitter(ctrl.sleep, attempt)
 
@@ -1018,84 +977,10 @@ def enrich_dataframe_with_primary_genre(
                 rate_guard.on_non429_failure()
                 _sleep_with_jitter(ctrl.sleep, attempt)
 
-        # If still no result, try auto-splitting into halves
-        if result is None and len(batch) > 1:
-            mid = len(batch) // 2
-            halves = [batch[:mid], batch[mid:]]
-            merged = {}
-            for h in halves:
-                for attempt in range(1, max_retries + 1):
-                    rate_guard.sleep_until_allowed(stop_event=stop_event)
-                    if stop_event and stop_event.is_set():
-                        raise ShutdownRequested("Stop requested during split retry gate")
-                    try:
-                        rsub = provider.enrich_batch(h)
-                        usage = getattr(provider, "last_usage", None)
-                        ctrl.on_success(
-                            usage=usage,
-                            payload_chars=_estimate_payload_chars(
-                                [{"artist_id": x["artist_id"], "artist_name": x.get("artist_name", "")} for x in h]
-                            ),
-                        )
-                        rate_guard.on_success()
-                        merged.update(rsub)
-                        break
+        # ✅ Normalize genre strings before mapping back to df
+        id_to_genre = {str(k): _normalize_genre_key(v) for k, v in (result or {}).items()}
 
-                    except InsufficientQuotaError as e:
-                        msg = str(e)
-                        raw = _parse_retry_after_seconds(msg) or 0.0
-                        logging.warning("Provider quota/rate error (split): %s", msg.strip())
-
-                        should_stop = rate_guard.add_429(retry_after_seconds=raw)
-                        mode = "cooldown" if rate_guard.in_cooldown() else ("retry-after" if raw > 0 else "backoff")
-                        hold_for = _fmt_hhmmss(rate_guard.next_allowed_in())
-                        cool_left = _fmt_hhmmss(rate_guard.cooldown_remaining()) if rate_guard.in_cooldown() else None
-                        logging.warning(
-                            "[RateGuard] 429(split): parsed_retry_after=%.2fs | hold_for=%s (%s) | "
-                            "consecutive=%d/%d | recent_429s(win=%ds)=%d%s",
-                            raw,
-                            hold_for,
-                            mode,
-                            rate_guard.consecutive_429(),
-                            rate_guard.threshold,
-                            rate_guard.window,
-                            rate_guard.recent_429_count(),
-                            f" | cooldown_remaining={cool_left}" if cool_left else "",
-                        )
-                        remaining = total - idx
-                        approx_batches_left = math.ceil(remaining / max(1, ctrl.batch))
-                        logging.info("[Progress] items_remaining=%d, approx_batches_left=%d", remaining, approx_batches_left)
-
-                        rate_guard.sleep_until_allowed(stop_event=stop_event)
-                        if stop_event and stop_event.is_set():
-                            raise ShutdownRequested("Stop requested during split retry-after/cooldown")
-
-                        ctrl.on_rate_limit()
-                        if should_stop:
-                            logging.error("RateGuard: 3×429 in a row → entering 12h cooldown. Stopping run.")
-                            raise ShutdownRequested("Rate limit threshold reached (split 3×429)")
-                        if raw <= 0:
-                            _sleep_with_jitter(ctrl.sleep, attempt)
-
-                    except TransientProviderError as e:
-                        logging.warning("Transient provider error (split) attempt %d: %s", attempt, e)
-                        ctrl.on_timeout()
-                        rate_guard.on_non429_failure()
-                        _sleep_with_jitter(ctrl.sleep, attempt)
-
-                    except Exception as e:
-                        logging.warning("Provider error (split) attempt %d: %s", attempt, e)
-                        ctrl.on_timeout()
-                        rate_guard.on_non429_failure()
-                        _sleep_with_jitter(ctrl.sleep, attempt)
-
-            result = merged
-
-        if not result:
-            logging.error("Max retries reached; continuing with empty results for this batch.")
-            ctrl.on_timeout()
-        else:
-            id_to_genre = {str(k): v for k, v in result.items()}
+        if id_to_genre:
             mask_apply = df["artist_id"].astype(str).isin(id_to_genre.keys())
             if not force:
                 mask_apply = mask_apply & (
@@ -1107,7 +992,6 @@ def enrich_dataframe_with_primary_genre(
 
         idx += bsize
 
-        # Small inter-batch pause; the *real* throttle is RateGuard’s retry-after/cooldown
         if ctrl.sleep > 0:
             if stop_event:
                 stop_event.wait(ctrl.sleep)
@@ -1135,21 +1019,24 @@ def _map_supergenres_and_update(
     debug_prev_super: pd.Series | None = None,
     max_retries: int = 3,
     rate_guard: "RateGuard" | None = None,
-    stop_event=None,  # ✅ optional cancel/stop signal
+    stop_event=None,
 ) -> Tuple[pd.DataFrame, int, int]:
     """
-    Extend genre map (exclude placeholders) → fill supergenres → merge valid artists → prune unlisted.
-    Adaptive + 429-aware classification of *new* primary_genres into ALLOWED_SUPERGENRES.
-    All waits are cancel-aware via stop_event.
+    Extend genre map → fill supergenres → merge valid artists → prune unlisted.
+    Uses consistent normalization for genre keys to ensure accurate joins.
     """
     import math, time
+    from enrichment_service import _normalize_genre_key
 
     rate_guard = rate_guard or RateGuard(window_seconds=30, threshold=3, cooldown_hours_on_trip=12)
 
-    # Load + prep map
+    # --- Load + prepare map
     gmap = _load_genre_map()
     df_unlisted = _ensure_cols(df_unlisted, ["artist_id", "primary_genre", "supergenre"])
-    df_unlisted["__key"] = df_unlisted["primary_genre"].map(_norm)
+
+    # ✅ Normalized genre keys
+    df_unlisted["__key"] = df_unlisted["primary_genre"].map(_normalize_genre_key)
+    gmap["__key"] = gmap["primary_genre"].map(_normalize_genre_key)
 
     real_mask = ~df_unlisted["primary_genre"].apply(_is_placeholder_pg)
     real_keys = set(df_unlisted.loc[real_mask, "__key"].dropna())
@@ -1163,21 +1050,19 @@ def _map_supergenres_and_update(
         .to_dict()
     )
     new_labels = [key_to_label[k] for k in new_keys]
-
     new_pairs = pd.DataFrame(columns=["primary_genre", "supergenre"])
 
-    # Classify new subgenres → supergenres
+    # --- Classify new subgenres → supergenres
     if new_labels:
         if not hasattr(provider, "map_subgenres_to_super"):
             raise RuntimeError("Selected provider does not support subgenre→supergenre mapping.")
 
-        ctrl_map = AdaptiveController(init_batch=50, min_batch=5, max_batch=50, base_sleep=0.5)
+        ctrl_map = AdaptiveController(init_batch=50, min_batch=5, max_batch=120, base_sleep=0.5)
         mapped: Dict[str, str] = {}
 
         i = 0
         total = len(new_labels)
         while i < total:
-            # ✅ Gate before each chunk
             rate_guard.sleep_until_allowed(stop_event=stop_event)
             if stop_event and stop_event.is_set():
                 raise ShutdownRequested("Stop requested before next mapping chunk")
@@ -1196,140 +1081,49 @@ def _map_supergenres_and_update(
                     usage = getattr(provider, "last_usage", None)
                     ctrl_map.on_success(usage=usage, payload_chars=payload_chars)
                     rate_guard.on_success()
-                    mapped.update(out or {})
+                    mapped.update({
+                        _normalize_genre_key(pg): str(sg).strip()
+                        for pg, sg in (out or {}).items()
+                    })
                     ok = True
                     break
-
                 except InsufficientQuotaError as e:
                     msg = str(e)
                     raw = _parse_retry_after_seconds(msg) or 0.0
                     logging.warning("Supergenre mapping quota/rate error: %s", msg.strip())
-
                     should_stop = rate_guard.add_429(retry_after_seconds=raw)
-                    mode = "cooldown" if rate_guard.in_cooldown() else ("retry-after" if raw > 0 else "backoff")
-                    hold_for = _fmt_hhmmss(rate_guard.next_allowed_in())
-                    cool_left = _fmt_hhmmss(rate_guard.cooldown_remaining()) if rate_guard.in_cooldown() else None
-                    logging.warning(
-                        "[RateGuard] 429(mapping): parsed_retry_after=%.2fs | hold_for=%s (%s) | "
-                        "consecutive=%d/%d | recent_429s(win=%ds)=%d%s",
-                        raw,
-                        hold_for,
-                        mode,
-                        rate_guard.consecutive_429(),
-                        rate_guard.threshold,
-                        rate_guard.window,
-                        rate_guard.recent_429_count(),
-                        f" | cooldown_remaining={cool_left}" if cool_left else "",
-                    )
-                    remaining = total - i
-                    approx_chunks_left = math.ceil(remaining / max(1, ctrl_map.batch))
-                    logging.info("[Progress(mapping)] new_labels_remaining=%d, approx_chunks_left=%d", remaining, approx_chunks_left)
-
-                    # ✅ Wait exactly to next-allowed (retry-after/cooldown), cancel-aware
                     rate_guard.sleep_until_allowed(stop_event=stop_event)
                     if stop_event and stop_event.is_set():
-                        raise ShutdownRequested("Stop requested during mapping retry-after/cooldown")
-
+                        raise ShutdownRequested("Stop requested during cooldown")
                     ctrl_map.on_rate_limit()
                     if should_stop:
-                        logging.error("RateGuard: 3×429 in a row → entering 12h cooldown (mapping). Stopping run.")
                         raise ShutdownRequested("Rate limit threshold reached (mapping 3×429)")
                     if raw <= 0:
                         _sleep_with_jitter(ctrl_map.sleep, attempt)
-
                 except TransientProviderError as e:
-                    logging.warning("Supergenre mapping transient error (attempt %d): %s", attempt, e)
+                    logging.warning("Transient error (mapping attempt %d): %s", attempt, e)
                     ctrl_map.on_timeout()
                     rate_guard.on_non429_failure()
                     _sleep_with_jitter(ctrl_map.sleep, attempt)
-
                 except Exception as e:
-                    logging.warning("Supergenre mapping provider error (attempt %d): %s", attempt, e)
+                    logging.warning("Mapping provider error (attempt %d): %s", attempt, e)
                     ctrl_map.on_timeout()
                     rate_guard.on_non429_failure()
                     _sleep_with_jitter(ctrl_map.sleep, attempt)
-
-            # Auto-split if needed
-            if not ok and bsize > 1:
-                mid = len(chunk) // 2
-                halves = [chunk[:mid], chunk[mid:]]
-                for h in halves:
-                    for attempt in range(1, max_retries + 1):
-                        rate_guard.sleep_until_allowed(stop_event=stop_event)
-                        if stop_event and stop_event.is_set():
-                            raise ShutdownRequested("Stop requested during mapping split retry gate")
-                        try:
-                            out = provider.map_subgenres_to_super(h, ALLOWED_SUPERGENRES)
-                            usage = getattr(provider, "last_usage", None)
-                            ctrl_map.on_success(
-                                usage=usage,
-                                payload_chars=_estimate_payload_chars([{"primary_genre": s} for s in h]),
-                            )
-                            rate_guard.on_success()
-                            mapped.update(out or {})
-                            break
-
-                        except InsufficientQuotaError as e:
-                            msg = str(e)
-                            raw = _parse_retry_after_seconds(msg) or 0.0
-                            logging.warning("Supergenre mapping quota/rate error (split): %s", msg.strip())
-
-                            should_stop = rate_guard.add_429(retry_after_seconds=raw)
-                            mode = "cooldown" if rate_guard.in_cooldown() else ("retry-after" if raw > 0 else "backoff")
-                            hold_for = _fmt_hhmmss(rate_guard.next_allowed_in())
-                            cool_left = _fmt_hhmmss(rate_guard.cooldown_remaining()) if rate_guard.in_cooldown() else None
-                            logging.warning(
-                                "[RateGuard] 429(mapping-split): parsed_retry_after=%.2fs | hold_for=%s (%s) | "
-                                "consecutive=%d/%d | recent_429s(win=%ds)=%d%s",
-                                raw,
-                                hold_for,
-                                mode,
-                                rate_guard.consecutive_429(),
-                                rate_guard.threshold,
-                                rate_guard.window,
-                                rate_guard.recent_429_count(),
-                                f" | cooldown_remaining={cool_left}" if cool_left else "",
-                            )
-                            remaining = total - i
-                            approx_chunks_left = math.ceil(remaining / max(1, ctrl_map.batch))
-                            logging.info("[Progress(mapping)] new_labels_remaining=%d, approx_chunks_left=%d", remaining, approx_chunks_left)
-
-                            rate_guard.sleep_until_allowed(stop_event=stop_event)
-                            if stop_event and stop_event.is_set():
-                                raise ShutdownRequested("Stop requested during mapping split retry-after/cooldown")
-
-                            ctrl_map.on_rate_limit()
-                            if should_stop:
-                                logging.error("RateGuard: 3×429 in a row → entering 12h cooldown (mapping split). Stopping run.")
-                                raise ShutdownRequested("Rate limit threshold reached (mapping split 3×429)")
-                            if raw <= 0:
-                                _sleep_with_jitter(ctrl_map.sleep, attempt)
-
-                        except TransientProviderError as e:
-                            logging.warning("Supergenre mapping transient error (split, attempt %d): %s", attempt, e)
-                            ctrl_map.on_timeout()
-                            rate_guard.on_non429_failure()
-                            _sleep_with_jitter(ctrl_map.sleep, attempt)
-
-                        except Exception as e:
-                            logging.warning("Supergenre mapping provider error (split, attempt %d): %s", attempt, e)
-                            ctrl_map.on_timeout()
-                            rate_guard.on_non429_failure()
-                            _sleep_with_jitter(ctrl_map.sleep, attempt)
 
             i += bsize
             if ctrl_map.sleep > 0:
                 if stop_event:
                     stop_event.wait(ctrl_map.sleep)
                     if stop_event.is_set():
-                        raise ShutdownRequested("Stop requested during mapping inter-chunk wait")
+                        raise ShutdownRequested("Stop requested during inter-chunk wait")
                 else:
                     time.sleep(ctrl_map.sleep)
 
-        # Append new pairs to the map (no overwrite of known keys)
-        rows = [{"primary_genre": pg, "supergenre": mapped.get(pg, "Other")} for pg in new_labels]
+        # ✅ Append new pairs (normalized)
+        rows = [{"primary_genre": pg, "supergenre": mapped.get(_normalize_genre_key(pg), "Other")} for pg in new_labels]
         new_pairs = pd.DataFrame(rows)
-        new_pairs["__key"] = new_pairs["primary_genre"].map(_norm)
+        new_pairs["__key"] = new_pairs["primary_genre"].map(_normalize_genre_key)
         new_pairs["supergenre"] = new_pairs["supergenre"].astype(str).str.strip()
         new_pairs = new_pairs[new_pairs["supergenre"] != ""]
         gmap = pd.concat([gmap, new_pairs[~new_pairs["__key"].isin(known_keys)]], ignore_index=True)
@@ -1337,17 +1131,18 @@ def _map_supergenres_and_update(
         _save_genre_map(gmap)
         logging.info(f"Supergenre map: added {len(new_pairs)} new pair(s).")
 
-    # Fill supergenres for rows with real primary_genre
+    # --- Fill supergenres using normalized keys
     map_dict = dict(zip(gmap["__key"], gmap["supergenre"]))
     assigned = df_unlisted["__key"].map(map_dict)
     df_unlisted.loc[real_mask, "supergenre"] = assigned[real_mask].where(
         assigned[real_mask].notna(), df_unlisted.loc[real_mask, "supergenre"]
     )
+
     df_unlisted["supergenre"] = df_unlisted["supergenre"].apply(
         lambda x: x if not _is_missing_super(x) else "Unlisted"
     )
 
-    # Fresh eligible merge set
+    # --- Merge eligible artists back into master
     sg_clean = df_unlisted["supergenre"].astype(str).str.strip()
     eligible_now = (~sg_clean.eq("")) & (~sg_clean.str.lower().eq("unlisted"))
     merge_mask = eligible_now if merge_scope == "all_assigned" else (
@@ -1363,35 +1158,6 @@ def _map_supergenres_and_update(
         .dropna(subset=["artist_id"])
     )
 
-    # Optional debug dumps
-    if debug_dump_merges_to_r2 and not df_merge.empty:
-        try:
-            from dao_selector import get_daos
-            daos = get_daos()
-            metadata = daos.get("metadata") or daos.get("r2")
-            ts = time.strftime(DEBUG_TAG_FMT)
-            path_all = f"{DEBUG_DIR}/merged_all_assigned_{ts}.csv"
-            metadata.upload_csv(df_merge, path=path_all, overwrite=True)
-            logging.info(f"[debug] Uploaded merged set (all_assigned) → {path_all}")
-
-            if debug_prev_super is not None:
-                prev = debug_prev_super.reindex(df_unlisted.index)
-                prev_missing = prev.apply(_is_missing_super)
-                new_mask = eligible_now & prev_missing
-                df_new = (
-                    df_unlisted.loc[
-                        new_mask, ["artist_id", "artist_name", "primary_genre", "supergenre", "artist_image"]
-                    ]
-                    .copy()
-                    .dropna(subset=["artist_id"])
-                )
-                path_new = f"{DEBUG_DIR}/merged_newly_assigned_{ts}.csv"
-                metadata.upload_csv(df_new, path=path_new, overwrite=True)
-                logging.info(f"[debug] Uploaded merged set (newly_assigned) → {path_new}")
-        except Exception as e:
-            logging.warning(f"[debug] Failed to upload debug CSV(s): {e}")
-
-    # Merge into master & prune from unlisted
     artists_merged = 0
     try:
         from dao_selector import get_daos
@@ -1422,7 +1188,7 @@ def _map_supergenres_and_update(
 # ------------------------------------------------------------------------------
 def enrich_file_in_place(
     provider_name: str = "gemini",
-    batch_size: int = 100,
+    batch_size: int = 120,
     sleep_between_batches: float = 0.0,
     max_retries: int = 2,
     force: bool = False,
@@ -1471,7 +1237,15 @@ def enrich_file_in_place(
     prev_super = df["supergenre"].copy() if "supergenre" in df.columns else pd.Series(index=df.index, dtype="object")
 
     # --- Provider selection
-    provider = GeminiProvider()
+    pname = (provider_name or "").lower().strip()
+    if pname == "openai":
+        provider = OpenAIProvider()
+    elif pname == "gemini":
+        provider = GeminiProvider()
+    elif pname in {"mock", "self", "heuristic"}:
+        provider = MockProvider()
+    else:
+        raise ValueError(f"Unknown provider: {provider_name}")
 
     # ----------------------------- PHASE 1 ------------------------------
     # 1–3: primary_genre enrichment with adaptive control + rate guarding

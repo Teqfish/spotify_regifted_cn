@@ -35,7 +35,7 @@ import time
 from typing import Dict, List, Tuple
 from collections import deque
 import random
-import re               # ← needed by _parse_retry_after_seconds
+import re
 import pandas as pd
 import threading
 

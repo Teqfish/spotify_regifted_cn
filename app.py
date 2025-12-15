@@ -7995,7 +7995,13 @@ elif page == "Taste":
         """
         Compute 28-day rolling normality metrics (p-value, entropy, kurtosis, etc.)
         per genre, and derive a composite NormalityIndex.
+        Includes robust artist name normalization for accurate joins.
         """
+
+        import pandas as pd, numpy as np
+        from scipy.stats import normaltest, skew, kurtosis, entropy
+        from datetime import timedelta
+        import traceback, re, os, logging
 
         print("[Normality] ▶ Starting 28-day rolling normality analysis")
 
@@ -8006,17 +8012,32 @@ elif page == "Taste":
         print(f"[Normality] ✅ Filtered for musical events: {len(df_music):,} rows remain")
 
         # ===============================================================
-        # 2️⃣ NORMALIZE ARTIST NAME KEYS ON BOTH DATAFRAMES (robust join)
+        # 2️⃣ Normalize artist names on both DataFrames (robust join)
         # ===============================================================
+        def normalize_artist_name(name: str) -> str:
+            """Robust artist name normalization for consistent matching."""
+            name = str(name).lower().strip()
+
+            # Remove common junk
+            name = re.sub(r'\(.*?\)', '', name)                        # remove text in parentheses
+            name = re.sub(r'\b(feat\.?|ft\.?|with|and|&)\b', '', name) # remove collab markers
+            name = re.sub(r'\boriginal motion picture soundtrack\b', '', name)
+            name = re.sub(r'\bsoundtrack\b', '', name)
+            name = re.sub(r'\bremaster(ed)?\b', '', name)
+            name = re.sub(r'[^a-z0-9\s]', '', name)                    # strip non-alphanumeric
+            name = re.sub(r'\s+', ' ', name).strip()                   # collapse multiple spaces
+
+            return name
+
         user_key = "artist_name"
         genre_key = "artist_name"
 
         df_music = df_music.copy()
         df_artist_genre = df_artist_genre.copy()
 
-        # Normalize artist keys
-        df_music["artist_key"] = df_music[user_key].astype(str).str.strip().str.lower()
-        df_artist_genre["artist_key"] = df_artist_genre[genre_key].astype(str).str.strip().str.lower()
+        # Apply normalization to both datasets
+        df_music["artist_key"] = df_music[user_key].apply(normalize_artist_name)
+        df_artist_genre["artist_key"] = df_artist_genre[genre_key].apply(normalize_artist_name)
 
         # Treat empty genre strings as missing
         for col in ["primary_genre", "supergenre"]:
@@ -8027,7 +8048,7 @@ elif page == "Taste":
                     .replace(r"^\s*$", pd.NA, regex=True)
                 )
 
-        # Collapse df_artist_genre to unique rows per artist_key
+        # Collapse df_artist_genre to unique artist_key rows
         def first_nonnull(s: pd.Series):
             s = s.dropna()
             return s.iloc[0] if not s.empty else pd.NA
@@ -8041,36 +8062,33 @@ elif page == "Taste":
         )
 
         # ===============================================================
-        # 3️⃣ Merge with normalized keys
+        # 3️⃣ Merge normalized artist datasets
         # ===============================================================
         df_full = df_music.merge(df_artist_genre_unique, on="artist_key", how="left")
-
-        # If the artist was not matched, mark as "Unlisted"
         df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
 
         # ===============================================================
-        # 4️⃣ Debug info — check how many unlisted remain
+        # 4️⃣ Debug info — validate unlisted counts
         # ===============================================================
-        # --- Count total Unlisted listening events ---
         n_unlisted = df_full["supergenre"].eq("Unlisted").sum()
-
-        # --- Count unique artists that are Unlisted ---
-        artists_unlisted = (
-            df_full.loc[df_full["supergenre"] == "Unlisted", "artist_name"]
-            .nunique()
-        )
+        artists_unlisted = df_full.loc[df_full["supergenre"] == "Unlisted", "artist_key"].nunique()
 
         print(f"[Normality] ⚠️ Found {n_unlisted:,} 'Unlisted' listening events after normalization.")
         print(f"[Normality] ⚠️ Found {artists_unlisted:,} unique 'Unlisted' artists after normalization.")
 
-        # --- Show top offenders by minutes played ---
         if n_unlisted > 0:
             top_unlisted = (
                 df_full.loc[df_full["supergenre"] == "Unlisted", "artist_name"]
                 .value_counts()
                 .head(15)
             )
+            print("[Normality] 🔍 Top 'Unlisted' artists by frequency:")
             print(top_unlisted)
+
+        # Optional extra diagnostics
+        print(f"[Debug] Artists in df_music before merge: {df_music['artist_key'].nunique():,}")
+        print(f"[Debug] Artists in df_artist_genre_unique: {df_artist_genre_unique['artist_key'].nunique():,}")
+        print(f"[Debug] Unique unmatched artist_keys: {artists_unlisted:,}")
 
         # ===============================================================
         # 5️⃣ Prep time columns
@@ -8081,15 +8099,11 @@ elif page == "Taste":
         df_full["minutes_played"] = df_full["minutes_played"].fillna(0)
 
         # ===============================================================
-        # 6️⃣ Loop through genres
+        # 6️⃣ Compute metrics per genre
         # ===============================================================
         all_genres = df_full["supergenre"].unique()
         results = []
         print(f"[Normality] ▶ Found {len(all_genres)} genres to analyze")
-
-        from scipy.stats import normaltest, skew, kurtosis, entropy
-        from datetime import timedelta
-        import traceback
 
         for genre in all_genres:
             gdf = df_full[df_full["supergenre"] == genre].copy()
@@ -8113,7 +8127,6 @@ elif page == "Taste":
                     continue
 
                 try:
-                    # --- Core metrics ---
                     total_minutes = wdf["minutes_played"].sum()
                     _, p_val = normaltest(artist_counts)
                     sk = skew(artist_counts)
@@ -8154,6 +8167,9 @@ elif page == "Taste":
         df_results = pd.DataFrame(results)
         print(f"[Normality] ✅ Computed {len(df_results):,} rows of rolling-window results")
 
+        # ===============================================================
+        # 7️⃣ Save or return results
+        # ===============================================================
         if not df_results.empty:
             df_results.to_parquet(parquet_path, index=False)
             print(f"[Normality] 💾 Saved to {parquet_path}")
@@ -8830,6 +8846,7 @@ elif page == "Test":
     unenriched_all = pd.concat([not_present, present_but_missing], ignore_index=True)\
                     .drop_duplicates('artist_key')
     unenriched_all_count = unenriched_all['artist_key'].nunique()
+    st.session_state["unenriched_all"] = unenriched_all
 
     print(f"Not present: {not_present_count}")
     print(f"Present but missing genre: {present_but_missing_count}")

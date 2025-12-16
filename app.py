@@ -8224,7 +8224,7 @@ elif page == "Taste":
             "Select Year",
             year_options,
             selection_mode="single",
-            default="All Years",
+            default=year_options[-1],
             width="content",
         )
 
@@ -8291,6 +8291,7 @@ elif page == "Taste":
         # ===============================================================
         st.markdown("### 📈 Taste Focus Over Time — *Average Normality Index*")
 
+        # --- Compute daily/rolling averages ---
         df_trend = (
             df_filtered.groupby("date_window")["NormalityIndex"]
             .mean()
@@ -8298,40 +8299,59 @@ elif page == "Taste":
             .sort_values("date_window")
         )
 
-        # Smooth the curve (14-day rolling average)
-        df_trend["rolling_avg"] = df_trend["NormalityIndex"].rolling(window=14, min_periods=1).mean()
+        # ✅ Smooth the curve with 28-day rolling average
+        df_trend["rolling_avg"] = (
+            df_trend["NormalityIndex"].rolling(window=28, min_periods=1).mean()
+        )
 
-        # Dynamic Y-axis max (10% above peak value)
+        # Dynamic Y-axis max (10% above peak)
         y_max = df_trend["NormalityIndex"].max() * 1.1 if not df_trend.empty else 1
 
+        # --- Build figure ---
         fig_trend = go.Figure()
 
-        fig_trend.add_trace(go.Scatter(
-            x=df_trend["date_window"],
-            y=df_trend["NormalityIndex"],
-            mode="lines+markers",
-            name="Daily Avg",
-            line=dict(color="#90d7ad", width=1),
-            marker=dict(size=4, color="#1ed760"),
-            opacity=0.6,
-        ))
+        # Daily averages (raw)
+        fig_trend.add_trace(
+            go.Scatter(
+                x=df_trend["date_window"],
+                y=df_trend["NormalityIndex"],
+                mode="lines+markers",
+                name="Daily Avg",
+                line=dict(color="#90d7ad", width=1),
+                marker=dict(size=4, color="#1ed760"),
+                opacity=0.6,
+            )
+        )
 
-        fig_trend.add_trace(go.Scatter(
-            x=df_trend["date_window"],
-            y=df_trend["rolling_avg"],
-            mode="lines",
-            name="14-Day Smoothed",
-            line=dict(color="#1ed760", width=3),
-        ))
+        # 28-day smoothed trend
+        fig_trend.add_trace(
+            go.Scatter(
+                x=df_trend["date_window"],
+                y=df_trend["rolling_avg"],
+                mode="lines",
+                name="28-Day Smoothed",
+                line=dict(color="#1ed760", width=3),
+            )
+        )
 
+        # --- Layout ---
         fig_trend.update_layout(
             height=400,
             title=f"Average Normality Index (Listening Focus) — {year_selected}",
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
             font=dict(color="white"),
-            xaxis=dict(title="Date Window", tickfont=dict(size=10)),
-            yaxis=dict(title="Average Normality Index", range=[0, y_max]),
+            xaxis=dict(
+                title="Date Window",
+                tickfont=dict(size=10),
+                showgrid=False
+            ),
+            yaxis=dict(
+                title="Average Normality Index",
+                range=[0, y_max],
+                showgrid=True,
+                gridcolor="rgba(255,255,255,0.1)",
+            ),
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
@@ -8347,15 +8367,53 @@ elif page == "Taste":
         # ===============================================================
         # 🔗 GENRE CORRELATION MATRIX — "Taste Interdependence"
         # ===============================================================
-        st.markdown("### 🔗 Genre Correlation Matrix — *How Genre Stability Co-varies Over Time*")
+    import plotly.graph_objects as go
+    import plotly.figure_factory as ff
+    import numpy as np
+    import pandas as pd
+    from scipy.spatial.distance import pdist, squareform
 
-        # Compute pairwise correlations between genres based on rolling normality
+    st.markdown("### 🔗 Genre Correlation Matrix — *How Genre Stability Co-varies Over Time*")
+
+    if not df_heatmap.empty and df_heatmap.shape[0] > 1:
+        # --- Compute pairwise Spearman correlation ---
         corr_matrix = df_heatmap.transpose().corr(method="spearman")
+        corr_matrix = corr_matrix.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        np.fill_diagonal(corr_matrix.values, 1.0)
 
-        fig_corr = go.Figure(data=go.Heatmap(
-            z=corr_matrix.values,
-            x=corr_matrix.columns,
-            y=corr_matrix.index,
+        # --- Convert correlation to distance ---
+        distance_matrix = 1 - corr_matrix
+        np.fill_diagonal(distance_matrix.values, 0.0)
+
+        labels = corr_matrix.index.tolist()
+        data_array = distance_matrix.values
+
+        # --- Create side dendrogram ---
+        dendro_side = ff.create_dendrogram(
+            data_array,
+            orientation="right",
+            labels=labels,
+            color_threshold=0,
+        )
+
+        # --- Style dendrogram lines + hover info ---
+        for trace in dendro_side["data"]:
+            trace.update(
+                line=dict(color="white", width=1),
+                hoverinfo="text",
+                text=[f"Link distance: {x:.2f}" for x in trace["x"]],
+                hovertemplate="<b>%{text}</b><extra></extra>",
+            )
+
+        # --- Extract leaf order ---
+        dendro_leaves = dendro_side["layout"]["yaxis"]["ticktext"]
+        corr_reordered = corr_matrix.loc[dendro_leaves, dendro_leaves]
+
+        # --- Create heatmap ---
+        heatmap = go.Heatmap(
+            z=corr_reordered.values,
+            x=dendro_leaves,
+            y=dendro_leaves,
             zmin=-1,
             zmax=1,
             colorscale=[
@@ -8369,19 +8427,90 @@ elif page == "Taste":
                 tickfont=dict(color="white"),
                 titlefont=dict(color="white"),
             ),
-            hovertemplate="<b>%{y}</b> ↔ <b>%{x}</b><br>Correlation: %{z:.2f}<extra></extra>",
-        ))
+            hovertemplate="<b>%{y}</b> ↔ <b>%{x}</b><br>ρ (Spearman): %{z:.2f}<extra></extra>",
+        )
 
-        fig_corr.update_layout(
-            title=f"Genre Interdependence Matrix — {year_selected}",
+        # --- Combine both ---
+        fig = go.Figure()
+
+        # Add dendrogram traces
+        for trace in dendro_side["data"]:
+            fig.add_trace(trace)
+
+        # Add heatmap
+        fig.add_trace(heatmap)
+
+        # --- Layout and axis domains ---
+        fig.update_layout(
+            width=900,
+            height=900,
+            showlegend=False,
+            hovermode="closest",
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
             font=dict(color="white"),
-            margin=dict(l=120, r=20, t=60, b=40),
-            height=700,
+            title=f"Genre Interdependence Matrix — {year_selected}",
+            margin=dict(l=0, r=0, t=80, b=80),
         )
 
-        st.plotly_chart(fig_corr, width="stretch", config={"displayModeBar": False})
+        # Dendrogram domain = left side
+        fig.update_layout(
+            xaxis=dict(
+                domain=[0.0, 0.20],   # keep within 0–1 range
+                showticklabels=False,
+                showgrid=False,
+                zeroline=False,
+            ),
+            yaxis=dict(
+                domain=[0, 1],
+                showticklabels=False,
+                showgrid=False,
+                zeroline=False,
+            ),
+            # Heatmap shifted right
+            xaxis2=dict(
+                domain=[0.30, 1.0],
+                showgrid=False,
+                zeroline=False,
+                ticks="",
+                title=None,
+            ),
+            yaxis2=dict(
+                anchor="x2",
+                domain=[0.03, 0.97],          # must match to align exactly
+                showgrid=False,
+                zeroline=False,
+                ticks="",
+                title=None,
+                tickmode="array",
+                tickvals=list(range(len(dendro_leaves))),
+                ticktext=dendro_leaves,
+                automargin=True,
+            ),
+            dragmode=False,  # disables zoom and pan
+            xaxis_fixedrange=True,
+            yaxis_fixedrange=True,
+            xaxis2_fixedrange=True,
+            yaxis2_fixedrange=True,
+        )
+
+        # Assign axes correctly
+        for i in range(len(dendro_side["data"])):
+            fig["data"][i]["xaxis"] = "x"
+            fig["data"][i]["yaxis"] = "y"
+        fig["data"][-1]["xaxis"] = "x2"
+        fig["data"][-1]["yaxis"] = "y2"
+
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False,"staticPlot": False})
+
+        st.caption(
+            """
+            *Left: hierarchical clustering of genres (white dendrogram).*
+            *Right: Spearman ρ heatmap (green = positive, red = negative).*
+            Shorter branches indicate more similar listening behaviour.
+            Hover over branches to see linkage distances between clusters.
+            """
+        )
 
     else:
         st.warning("⚠️ No valid data available for taste stability analysis.")
@@ -8389,63 +8518,93 @@ elif page == "Taste":
     # ===============================================================
     # 🧭 GENRE EMBEDDING MAP — *t-SNE/UMAP Projection of Genre Stability*
     # ===============================================================
-    st.markdown("### 🧭 Genre Embedding Map — *Taste Landscape in Two Dimensions*")
+    import plotly.express as px
+    import streamlit as st
+    import pandas as pd
+    import numpy as np
+    from sklearn.manifold import TSNE
+    from sklearn.preprocessing import StandardScaler
+    from umap import UMAP
+    from scipy.cluster.hierarchy import linkage, leaves_list
+
+    st.markdown("### 🌌 Combined 3D Genre Embedding — *t-SNE × UMAP Taste Landscape*")
 
     if df_filtered["genre"].nunique() >= 3:
-        from sklearn.manifold import TSNE
-        from sklearn.preprocessing import StandardScaler
-        from umap import UMAP
+        # --- Prepare pivot: rows = genres, columns = date windows ---
+        df_embed = (
+            df_filtered.pivot_table(
+                index="genre",
+                columns="date_window",
+                values="NormalityIndex",
+                aggfunc="mean",
+            )
+            .fillna(method="ffill", axis=1)
+            .fillna(method="bfill", axis=1)
+            .fillna(0)
+        )
 
-        # --- Prepare matrix: rows = genres, columns = date windows ---
-        df_embed = df_filtered.pivot_table(
-            index="genre", columns="date_window", values="NormalityIndex", aggfunc="mean"
-        ).fillna(method="ffill", axis=1).fillna(method="bfill", axis=1).fillna(0)
-
-        # --- Compute descriptive stats for hover info ---
+        # --- Genre stats for hover info ---
         genre_stats = (
             df_filtered.groupby("genre")["NormalityIndex"]
             .agg(["mean", "std", "count"])
             .reset_index()
         )
 
-        # --- Normalise before embedding ---
+        # --- Standardize features ---
         X_scaled = StandardScaler().fit_transform(df_embed)
 
-        # --- Dimensionality reduction selector ---
-        method = st.radio(
-            "Select dimensionality reduction method",
-            ["t-SNE", "UMAP"],
+        # --- Compute embeddings ---
+        tsne = TSNE(
+            n_components=2,
+            perplexity=min(5, len(df_embed) - 1),
+            learning_rate="auto",
+            random_state=42,
+            init="pca",
+        ).fit_transform(X_scaled)
+
+        umap_embed = UMAP(
+            n_neighbors=5,
+            min_dist=0.2,
+            n_components=2,
+            random_state=42,
+            metric="euclidean",
+        ).fit_transform(X_scaled)
+
+        df_embedding = pd.DataFrame({
+            "genre": df_embed.index,
+            "tsne_x": tsne[:, 0],
+            "tsne_y": tsne[:, 1],
+            "umap_1": umap_embed[:, 0],
+            "umap_2": umap_embed[:, 1],
+        }).merge(genre_stats, on="genre", how="left")
+
+        # --- Choose which UMAP axis to use for 3D depth ---
+        z_axis_choice = st.radio(
+            "Select UMAP axis for 3D depth (Z-axis)",
+            ["umap_1", "umap_2"],
             horizontal=True,
             index=0,
         )
 
-        if method == "UMAP":
-            reducer = UMAP(
-                n_neighbors=5,
-                min_dist=0.2,
-                n_components=2,
-                random_state=42,
-                metric="euclidean",
+        # --- Dendrogram ordering (based on t-SNE positions for temporal stability) ---
+        try:
+            Z = linkage(df_embedding[["tsne_x", "tsne_y"]].values, method="ward")
+            order_idx = leaves_list(Z)
+            ordered_genres = df_embedding.iloc[order_idx]["genre"].tolist()
+            st.session_state["ordered_genres_from_embedding"] = ordered_genres
+            st.caption(
+                "*Dendrogram ordering derived — used to cluster the correlation heatmap below.*"
             )
-        else:
-            reducer = TSNE(
-                n_components=2,
-                perplexity=min(5, len(df_embed) - 1),
-                learning_rate="auto",
-                random_state=42,
-                init="pca",
-            )
+        except Exception as e:
+            st.warning(f"Could not compute dendrogram ordering: {e}")
+            ordered_genres = list(df_embedding["genre"])
 
-        embedding = reducer.fit_transform(X_scaled)
-        df_embedding = pd.DataFrame(embedding, columns=["x", "y"])
-        df_embedding["genre"] = df_embed.index
-        df_embedding = df_embedding.merge(genre_stats, on="genre", how="left")
-
-        # --- Visualisation ---
-        fig_embed = px.scatter(
+        # --- Visualisation: 3D t-SNE × UMAP hybrid ---
+        fig_3d = px.scatter_3d(
             df_embedding,
-            x="x",
-            y="y",
+            x="tsne_x",
+            y="tsne_y",
+            z=z_axis_choice,
             color="mean",
             color_continuous_scale=[
                 [0.0, "#150d20"],
@@ -8455,58 +8614,60 @@ elif page == "Taste":
                 [1.0, "#ff7ee3"],
             ],
             size="count",
+            hover_name="genre",
             hover_data={
-                "genre": True,
                 "mean": ":.3f",
                 "std": ":.3f",
                 "count": True,
-                "x": False,
-                "y": False,
+                "tsne_x": False,
+                "tsne_y": False,
+                z_axis_choice: False,
             },
-            title=f"Genre Embedding Map ({method}) — {year_selected}",
+            title=f"Combined t-SNE + UMAP 3D Embedding — {year_selected}",
         )
 
-        fig_embed.update_traces(
-            marker=dict(opacity=0.9, line=dict(width=0.5, color="white")),
-            selector=dict(mode="markers"),
-        )
-
-        fig_embed.update_layout(
-            height=650,
-            plot_bgcolor="rgba(0,0,0,0)",
+        fig_3d.update_traces(marker=dict(opacity=0.9, line=dict(width=0.5, color="white")))
+        fig_3d.update_layout(
+            height=750,
+            scene=dict(
+                xaxis=dict(title="t-SNE X", backgroundcolor="rgba(0,0,0,0)"),
+                yaxis=dict(title="t-SNE Y", backgroundcolor="rgba(0,0,0,0)"),
+                zaxis=dict(title=z_axis_choice.upper(), backgroundcolor="rgba(0,0,0,0)"),
+            ),
             paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="white"),
+            margin=dict(l=0, r=0, t=60, b=0),
             coloraxis_colorbar=dict(
                 title="Mean Stability",
                 tickcolor="white",
                 tickfont=dict(color="white"),
                 titlefont=dict(color="white"),
             ),
-            xaxis=dict(showgrid=False, visible=False),
-            yaxis=dict(showgrid=False, visible=False),
-            margin=dict(l=40, r=40, t=60, b=40),
         )
 
-        st.plotly_chart(fig_embed, width="stretch", config={"displayModeBar": False})
+        st.plotly_chart(fig_3d, use_container_width=True, config={"displayModeBar": False})
 
         st.caption(
-            """
-            *Each point represents a genre.*
-            Genres close together show similar stability patterns over time.
-            Bubble size = number of rolling windows observed.
+            f"""
+            *Each point = a genre.*
+            X–Y from **t-SNE** (local relationships),
+            Z from **{z_axis_choice.upper()}** (UMAP global topology).
+            Bubble size = number of rolling windows.
             Color = average NormalityIndex (listening focus).
+            The dendrogram order is stored in `st.session_state['ordered_genres_from_embedding']`
+            for use by the correlation heatmap below.
             """
         )
+
     else:
         st.info("Not enough genres to compute an embedding map.")
-
-    import plotly.express as px
 
     # ===============================================================
     # Genre Taste Stability — Distribution & Median Focus"
     # ===============================================================
 
-    st.markdown("### Genre Taste Stability — Distribution & Median Focus")
+    st.markdown("### 🎻 Genre Taste Stability — *Distribution & Median Focus*")
 
     if "df_rolling" not in locals() or df_rolling.empty:
         st.info("No rolling normality data available yet. Run the analysis first.")
@@ -8523,34 +8684,117 @@ elif page == "Taste":
         if df_vio.empty:
             st.info("No valid data for this year selection.")
         else:
-            fig_violin = px.violin(
-                df_vio,
-                x="genre",
-                y="NormalityIndex",
-                color="genre",
-                box=True,
-                points=False,
-                color_discrete_sequence=[
-                    "#1ed760","#80f2af","#62d089","#2aa355",
-                    "#106441","#013C24","#062719"
-                ],
+            import numpy as np
+            from matplotlib.colors import to_rgba
+
+            # --- Compute genre stats ---
+            genre_stats = (
+                df_vio.groupby("genre")["NormalityIndex"]
+                .agg(["mean", "std", lambda x: np.percentile(x, 75) - np.percentile(x, 25), "median"])
+                .rename(columns={"<lambda_0>": "iqr"})
+                .reset_index()
+                .sort_values("iqr", ascending=False)  # widest distributions first
+            )
+            genre_order = genre_stats["genre"].tolist()
+
+            # --- Colour blending (original green palette) ---
+            bright_rgb = np.array(to_rgba("#15dc5b"))  # mint green
+            dark_rgb = np.array(to_rgba("#003215"))    # deep green
+
+            normed_means = (
+                (genre_stats["mean"] - genre_stats["mean"].min()) /
+                (genre_stats["mean"].max() - genre_stats["mean"].min() + 1e-9)
             )
 
-            fig_violin.update_traces(meanline_visible=True, width=0.7)
+            fig_violin = go.Figure()
+
+            # --- Add violin traces ---
+            for i, row in genre_stats.iterrows():
+                genre = row["genre"]
+                mean_val = row["mean"]
+
+                # Interpolate colour between dark and bright
+                color_rgba = bright_rgb * normed_means[i] + dark_rgb * (1 - normed_means[i])
+                r, g, b, _ = (color_rgba * 255).astype(int)
+                fill_color = f"rgba({r},{g},{b},0.9)"
+
+                fig_violin.add_trace(
+                    go.Violin(
+                        y=df_vio.loc[df_vio["genre"] == genre, "NormalityIndex"],
+                        name=genre,
+                        box_visible=True,
+                        meanline_visible=True,
+                        line_color=fill_color,
+                        fillcolor=fill_color,
+                        opacity=1.0,
+                        width=0.75,
+                        points=False,  # remove cluttering raw data dots
+                        meanline_color="white",
+                    )
+                )
+
+            # --- Add soft "firefly" dots at medians ---
+            fig_violin.add_trace(
+                go.Scatter(
+                    x=genre_stats["genre"],
+                    y=genre_stats["median"],
+                    mode="markers",
+                    marker=dict(
+                        size=10,
+                        color="rgba(128,242,175,0.6)",  # mint glow
+                        line=dict(width=0),
+                        symbol="circle",
+                    ),
+                    hovertemplate="<b>%{x}</b><br>Median: %{y:.3f}<extra></extra>",
+                    name="Median Glow",
+                )
+            )
+
+            # --- Add colorbar legend ---
+            colorbar_trace = go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                marker=dict(
+                    colorscale=[
+                        [0, "rgba(1,60,36,0.9)"],
+                        [1, "rgba(128,242,175,0.9)"]
+                    ],
+                    cmin=genre_stats["mean"].min(),
+                    cmax=genre_stats["mean"].max(),
+                    colorbar=dict(
+                        title="Mean Normality Index",
+                        tickcolor="white",
+                        tickfont=dict(color="white"),
+                        titlefont=dict(color="white"),
+                    ),
+                ),
+                hoverinfo="none",
+                showlegend=False,
+            )
+            fig_violin.add_trace(colorbar_trace)
+
+            # --- Layout ---
             fig_violin.update_layout(
                 height=700,
-                xaxis_title="Genre",
+                title=f"Taste Stability Distribution ({year_selected})",
+                xaxis_title="Genre (sorted by stability range width)",
                 yaxis_title="Normality Index (0–1)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="white"),
-                xaxis=dict(showgrid=False, tickangle=-45),
+                xaxis=dict(
+                    categoryorder="array",
+                    categoryarray=genre_order,
+                    tickangle=-45,
+                    showgrid=False,
+                ),
                 yaxis=dict(showgrid=False),
                 showlegend=False,
-                title=f"Taste Stability Distribution ({year_selected})"
+                margin=dict(t=60, b=60, l=60, r=60),
             )
 
-            st.plotly_chart(fig_violin, width="stretch", config={"displayModeBar": False})
+            st.plotly_chart(fig_violin, use_container_width=True, config={"displayModeBar": False})
 
     # ===============================================================
     # 🌋 3D TASTE FOCUS RIDGELINES — Dual-Sided Neon Ribbons (Sorted by Volume)
@@ -8695,7 +8939,7 @@ elif page == "Taste":
                 z=[z_vals, np.zeros(len(X))],
                 surfacecolor=color_surface,
                 colorscale=genre_entropy_colorscale,
-                showscale=(i == 0),
+                showscale=False,
                 opacity=1,
                 hoverinfo="skip",
                 lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
@@ -8733,6 +8977,30 @@ elif page == "Taste":
                 hoverinfo="x+y+z",
                 lighting=dict(ambient=0.7, diffuse=0.5, specular=0.1),
                 name=f"{genre} ribbon",
+            )
+        )
+
+        fig.add_trace(
+            go.Surface(
+                x=[[0, 0], [0, 0]],  # invisible tiny surface
+                y=[[0, 0], [0, 0]],
+                z=[[0, 0], [0, 0]],
+                surfacecolor=[[0, 1], [0, 1]],  # triggers the colorbar
+                colorscale=[[0, "#0b0b0b"], [1, "#bbbbbb"]],  # neutral dark → grey
+                showscale=True,
+                opacity=0,  # invisible
+                hoverinfo="none",
+                colorbar=dict(
+                    title="Entropy (dark = low, light = high)",
+                    tickcolor="white",
+                    tickfont=dict(color="white"),
+                    titlefont=dict(color="white"),
+                    titleside="right",
+                    bgcolor="rgba(0,0,0,0)",
+                    outlinewidth=0,
+                    thickness=18,
+                    len=0.75,
+                ),
             )
         )
 

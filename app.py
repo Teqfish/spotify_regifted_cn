@@ -46,6 +46,7 @@ import uuid
 import zipfile
 
 
+from dao import CloudflareDAOs
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
 import enrichment_service as es
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key
@@ -1042,8 +1043,8 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         # 1) FULL_DONE → audit coverage, then start targeted breadth-only if gaps exist
         # =========================
         if d1_state == "full_done" and r2_state == "full_done":
+            print(f"[auto_reenrich] full_done→ running coverage audit for {dataset_label}")
             _trace("full_done_branch", label=dataset_label)
-            print(f"[auto_reenrich] ⚖️ full_done→ running coverage audit for {dataset_label}")
 
             # Use the same dataset the UI is using (avoids flip/flop counts)
             df_source, src, key_used = _get_df_source()
@@ -1270,6 +1271,14 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
             _trace("returning", reason="resumed_breadth_first")
             return "resumed_breadth_first"
 
+        # --- Handle taste_index integration ---
+        # If breadth finished but taste_index hasn't completed, restart from breadth_only.
+        if (d1_state == "breadth_done" or r2_state == "breadth_done"):
+            print(f"[auto_reenrich] 🎚️ Breadth-first complete but Taste Index missing — restarting breadth_only for {dataset_label}")
+            start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
+            _trace("returning", reason="restarted_taste_index_pending")
+            return "restarted_taste_index_pending"
+
         if d1_state == "breadth_error" or r2_state == "breadth_error":
             print(f"[auto_reenrich] 🌀 Breadth-first error detected — restarting breadth-only for {dataset_label}")
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
@@ -1280,8 +1289,8 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         last_hb = get_last_heartbeat(user_id, dataset_label)
         stale_hb = (last_hb is None) or ((time.time() - last_hb) > 300)
         should_restart = (
-            d1_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
-            and r2_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error")
+            d1_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error", "breadth_done")
+            and r2_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error", "breadth_done")
         ) or stale_d1 or stale_hb
 
         if should_restart:
@@ -2426,61 +2435,61 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
         else:
             st.caption(f"This dataset has been fully enriched")
 
-    # with st.sidebar.expander("Background Threads", expanded=False):
-    #     info = _summarize_threads_for_sidebar()
+    with st.sidebar.expander("Background Threads", expanded=False):
+        info = _summarize_threads_for_sidebar()
 
-    #     # Top-line totals
-    #     st.caption(f"Total threads: {info['total']}")
+        # Top-line totals
+        st.caption(f"Total threads: {info['total']}")
 
-    #     # Show grouped metrics
-    #     c1, c2, c3 = st.columns(3)
-    #     c1.metric("Enrichment", info["enrichment"]["count"])
-    #     c2.metric("Genre Detective", info["genre_detective"]["count"])
-    #     c3.metric("Discogs", info["discogs"]["count"])
+        # Show grouped metrics
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Enrichment", info["enrichment"]["count"])
+        c2.metric("Genre Detective", info["genre_detective"]["count"])
+        c3.metric("Discogs", info["discogs"]["count"])
 
-    #     c4, c5, _ = st.columns(3)
-    #     c4.metric("Core", info["core"]["count"])
-    #     c5.metric("Other", info["other"]["count"])
+        c4, c5, _ = st.columns(3)
+        c4.metric("Core", info["core"]["count"])
+        c5.metric("Other", info["other"]["count"])
 
-    #     st.divider()
-    #     colA, colB = st.columns(2)
+        st.divider()
+        colA, colB = st.columns(2)
 
-    #     if colA.button("🧹 Reap registry", key="btn_reap_registry"):
-    #         cleared = reap_task_registry(verbose=True)
-    #         if cleared:
-    #             st.success(f"Reaped {len(cleared)} stale entr{'y' if len(cleared)==1 else 'ies'}.")
-    #         else:
-    #             st.info("No stale entries to reap.")
+        if colA.button("🧹 Reap registry", key="btn_reap_registry"):
+            cleared = reap_task_registry(verbose=True)
+            if cleared:
+                st.success(f"Reaped {len(cleared)} stale entr{'y' if len(cleared)==1 else 'ies'}.")
+            else:
+                st.info("No stale entries to reap.")
 
-    #     if colB.button("⛔ Stop genre detective", key="btn_stop_gd"):
-    #         n = stop_genre_detective_workers()
-    #         if n:
-    #             st.warning(f"Signalled stop to {n} genre detective worker(s).")
-    #         else:
-    #             st.info("No active genre detective workers to stop.")
+        if colB.button("⛔ Stop genre detective", key="btn_stop_gd"):
+            n = stop_genre_detective_workers()
+            if n:
+                st.warning(f"Signalled stop to {n} genre detective worker(s).")
+            else:
+                st.info("No active genre detective workers to stop.")
 
-    #     # Optional: reveal names
-    #     if st.checkbox("Show thread names", key="bg_threads_show_names"):
-    #         def _list(names):
-    #             if not names:
-    #                 st.caption("—")
-    #             else:
-    #                 st.code("\n".join(names), language="text")
+        # Optional: reveal names
+        if st.checkbox("Show thread names", key="bg_threads_show_names"):
+            def _list(names):
+                if not names:
+                    st.caption("—")
+                else:
+                    st.code("\n".join(names), language="text")
 
-    #         with st.expander("Enrichment", expanded=False):
-    #             _list(info["enrichment"]["names"])
+            with st.expander("Enrichment", expanded=False):
+                _list(info["enrichment"]["names"])
 
-    #         with st.expander("Genre Detective", expanded=False):
-    #             _list(info["genre_detective"]["names"])
+            with st.expander("Genre Detective", expanded=False):
+                _list(info["genre_detective"]["names"])
 
-    #         with st.expander("Discogs", expanded=False):
-    #             _list(info["discogs"]["names"])
+            with st.expander("Discogs", expanded=False):
+                _list(info["discogs"]["names"])
 
-    #         with st.expander("Core", expanded=False):
-    #             _list(info["core"]["names"])
+            with st.expander("Core", expanded=False):
+                _list(info["core"]["names"])
 
-    #         with st.expander("Other", expanded=False):
-    #             _list(info["other"]["names"])
+            with st.expander("Other", expanded=False):
+                _list(info["other"]["names"])
 
 # ------------------------------ GENRE DETECTIVE ----------------------------- #
 def start_missing_genre_detective_task(
@@ -2973,9 +2982,7 @@ with st.sidebar:
             "Artists",
             "Genres",
             "Popularity",
-            "Normality",
             "Taste",
-            "Test",
             "On This Day",
             "FAQs",
             "About"
@@ -6709,7 +6716,6 @@ elif page == "Popularity":
             return None
 
     # -------------------- Data Prep -------------------- #
-
     # ✅ Ensure dataset loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
@@ -6997,996 +7003,17 @@ elif page == "Popularity":
         else:
             st.info("No chart hits scored in the selected period yet.")
 
-# -------------------------------- Normality --------------------------------- #
-elif page == "Normality":
-    import os
-    import sys
-    import logging
-    import numpy as np
-    import pandas as pd
-    import traceback
-    import streamlit as st
-    import plotly.express as px
-    from skopt import gp_minimize
-    from skopt.space import Real
-    from scipy.stats import skew, kurtosis, normaltest, entropy
-    from datetime import datetime
-
-    # ----------------------------------------------------------------------
-    # LOGGER SETUP (StreamToLogger)
-    # ----------------------------------------------------------------------
-    if "logger_initialized" not in st.session_state:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            handlers=[
-                logging.FileHandler("debug_enrichment.log"),
-                logging.StreamHandler(sys.__stdout__)
-            ]
-        )
-        logger = logging.getLogger()
-        sys.stdout = StreamToLogger(logger, logging.INFO)
-        sys.stderr = StreamToLogger(logger, logging.ERROR)
-        st.session_state["logger_initialized"] = True
-        print("[logging] ✅ StreamToLogger attached")
-
-    # ----------------------------------------------------------------------
-    # DATASET VALIDATION
-    # ----------------------------------------------------------------------
-    if "current_df" not in st.session_state:
-        st.error("No dataset selected. Please go to the Home page and select a dataset.")
-        st.stop()
-
-    df, current_label = require_current_df()
-    df_artist_genre = INFO_ARTIST_GENRE.copy()
-
-    # ----------------------------------------------------------------------
-    # HEADER
-    # ----------------------------------------------------------------------
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.html("<p style='text-align:center;font-size:48px;'><em><b>Normality</b></em></p>")
-        st.html("<p style='text-align:center;font-size:26px;'>How normally do you listen?</p>")
-
-    # ----------------------------------------------------------------------
-    # USER + PARQUET CONTEXT
-    # ----------------------------------------------------------------------
-    user_id = st.session_state.get("user_id", "anon")
-    base_path = os.path.join("enrichment", "normality")
-    os.makedirs(base_path, exist_ok=True)
-
-    parquet_path = os.path.join(base_path, f"{user_id}_{current_label}_normality.parquet")
-    conv_path = parquet_path.replace(".parquet", "_convergence.json")
-
-    # ----------------------------------------------------------------------
-    # ACTION BUTTON
-    # ----------------------------------------------------------------------
-    run_calcs = st.button("Run Normality Calculations")
-
-    # ----------------------------------------------------------------------
-    # MAIN COMPUTE FUNCTION (GRID + FINE GRID SEARCH)
-    # ----------------------------------------------------------------------
-    def compute_all(df, df_artist_genre, parquet_path):
-        """Perform grid, fine, and Bayesian search and save combined results once."""
-
-        print("[Normality] ▶ Preparing dataset for normality analysis")
-
-        # 1️⃣ Filter for musical events only
-        df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
-        print(f"[Normality] ✅ Filtered for musical events: {len(df_music):,} rows remain")
-
-        # 2️⃣ Merge with artist→genre mapping
-        df_full = df_music.merge(df_artist_genre, on="artist_name", how="left")
-
-        # 3️⃣ Handle missing genre labels
-        df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
-
-        # 4️⃣ Convert to datetime and assign quarters
-        df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
-        df_full = df_full.dropna(subset=["datetime"])
-        df_full["quarter"] = pd.PeriodIndex(df_full["datetime"], freq="Q")
-        df_full["year"] = df_full["quarter"].dt.year
-
-        # 5️⃣ Confirm grouping scope
-        total_pairs = df_full.groupby(["supergenre", "quarter"]).ngroups
-        print(f"[Normality] ▶ Detected {total_pairs:,} (genre, quarter) pairs for testing")
-
-        results = []
-        convergence = {}
-
-        # ------------------------------------------------------------------
-        # PHASED NORMALITY COMPUTATION
-        # ------------------------------------------------------------------
-        pair_count = 0
-        for (genre, q), gdf in df_full.groupby(["supergenre", "quarter"]):
-            pair_count += 1
-            prefix = f"[{pair_count}/{total_pairs}]"
-
-            if not isinstance(genre, str) or genre.strip() == "":
-                continue
-
-            data = gdf.groupby("artist_name")["track_name"].count().values
-            if len(data) < 8:
-                print(f"{prefix} ⚠️ Skipping {genre} {q} — insufficient data ({len(data)} artists)")
-                continue
-
-            # ==============================================================
-            # PHASE 1 — COARSE GRID
-            # ==============================================================
-            best_p, best_min, best_max = 0, 0, 0
-            for i in np.linspace(data.min(), np.percentile(data, 80), 15):
-                for j in np.linspace(np.percentile(data, 20), data.max(), 15):
-                    if j <= i:
-                        continue
-                    subset = data[(data >= i) & (data <= j)]
-                    if len(subset) < 8:
-                        continue
-                    _, p = normaltest(subset)
-                    if p > best_p:
-                        best_p, best_min, best_max = p, i, j
-                        best_skew, best_kurt, best_std = skew(subset), kurtosis(subset), np.std(subset)
-
-            results.append(dict(
-                phase="grid", genre=genre, quarter=str(q),
-                min=int(best_min), max=int(best_max), p_value=best_p,
-                skew=best_skew, kurtosis=best_kurt, std_dev=best_std
-            ))
-            print(f"{prefix} ✅ Grid {genre} {q} — p={best_p:.3f}, range=({best_min:.0f}-{best_max:.0f})")
-
-            # ==============================================================
-            # PHASE 2 — FINE GRID
-            # ==============================================================
-            fine_best_p, fine_best_min, fine_best_max = 0, 0, 0
-            fine_min = np.linspace(best_min * 0.8, best_min * 1.2, 20)
-            fine_max = np.linspace(best_max * 0.8, best_max * 1.2, 20)
-            for i in fine_min:
-                for j in fine_max:
-                    if j <= i:
-                        continue
-                    subset = data[(data >= i) & (data <= j)]
-                    if len(subset) < 8:
-                        continue
-                    _, p = normaltest(subset)
-                    if p > fine_best_p:
-                        fine_best_p, fine_best_min, fine_best_max = p, i, j
-                        fine_skew, fine_kurt, fine_std = skew(subset), kurtosis(subset), np.std(subset)
-
-            results.append(dict(
-                phase="fine", genre=genre, quarter=str(q),
-                min=int(fine_best_min), max=int(fine_best_max), p_value=fine_best_p,
-                skew=fine_skew, kurtosis=fine_kurt, std_dev=fine_std
-            ))
-            print(f"{prefix} ✅ Fine {genre} {q} — p={fine_best_p:.3f}")
-
-            # ==============================================================
-            # PHASE 3 — BAYESIAN OPTIMIZATION
-            # ==============================================================
-            if fine_best_max <= fine_best_min or fine_best_min == 0 or fine_best_max == 0:
-                print(f"{prefix} ⚠️ Skipping Bayes {genre} {q} — invalid range ({fine_best_min}-{fine_best_max})")
-                continue
-
-            valid_data = data[np.isfinite(data)]
-            if len(valid_data) < 8:
-                continue
-
-            def objective(params):
-                min_c, max_c = params
-                if max_c <= min_c:
-                    return 1.0
-                subset = valid_data[(valid_data >= min_c) & (valid_data <= max_c)]
-                if len(subset) < 8:
-                    return 1.0
-                try:
-                    _, p = normaltest(subset)
-                    return 1 - p if np.isfinite(p) else 1.0
-                except Exception:
-                    return 1.0
-
-            try:
-                result = gp_minimize(
-                    objective,
-                    [Real(fine_best_min * 0.8, fine_best_min * 1.2),
-                     Real(fine_best_max * 0.8, fine_best_max * 1.2)],
-                    n_calls=25, random_state=42
-                )
-
-                func_vals = [v for v in result.func_vals if np.isfinite(v)]
-                if not func_vals:
-                    continue
-
-                best_min3, best_max3 = result.x
-                subset = valid_data[(valid_data >= best_min3) & (valid_data <= best_max3)]
-                if len(subset) < 8:
-                    continue
-
-                _, p_val = normaltest(subset)
-                if not np.isfinite(p_val):
-                    continue
-
-                sigma = np.std(subset)
-
-                results.append(dict(
-                    phase="bayes", genre=genre, quarter=str(q),
-                    min=int(best_min3), max=int(best_max3), p_value=p_val,
-                    skew=skew(subset), kurtosis=kurtosis(subset), std_dev=sigma
-                ))
-
-                convergence[f"{genre}_{q}"] = [1 - v for v in func_vals]
-                print(f"{prefix} ✅ Bayes {genre} {q} — p={p_val:.3f}, σ={sigma:.3f}")
-
-            except Exception as e:
-                print(f"{prefix} ❌ Bayes error {genre} {q}: {e}")
-                traceback.print_exc()
-
-        # ------------------------------------------------------------------
-        # SAVE RESULTS
-        # ------------------------------------------------------------------
-        df_results = pd.DataFrame(results)
-        df_results.columns = [c.lower() for c in df_results.columns]
-
-        df_results.to_parquet(parquet_path, index=False)
-        print(f"[Normality] 💾 Saved to {parquet_path}")
-
-        # Save convergence JSON
-        import json
-        try:
-            with open(conv_path, "w") as f:
-                json.dump(convergence, f, indent=2)
-            print(f"[Normality] 💾 Convergence data saved to {conv_path} ({len(convergence)} keys)")
-        except Exception as e:
-            print(f"[Normality] ⚠️ Failed to save convergence JSON: {e}")
-
-        return df_results, convergence
-
-    import pandas as pd, numpy as np
-    from scipy.stats import normaltest, skew, kurtosis, entropy
-    from datetime import timedelta
-    import traceback, os
-
-    # def compute_normality_rolling(df, df_artist_genre, parquet_path, window_days=28):
-    #     """Compute normality metrics over 28-day rolling windows per genre."""
-
-    #     print("[Normality] ▶ Preparing dataset for 28-day rolling normality analysis")
-
-    #     # ============================================================
-    #     # 1️⃣ Filter for musical events only
-    #     # ============================================================
-    #     if "category" not in df.columns:
-    #         raise KeyError("[Normality] ❌ The dataset must include a 'category' column.")
-
-    #     df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
-    #     print(f"[Normality] ✅ Filtered for musical events: {len(df_music):,} rows remain")
-
-    #     # ============================================================
-    #     # 2️⃣ Merge with artist→genre mapping
-    #     # ============================================================
-    #     df_full = df_music.merge(df_artist_genre, on="artist_name", how="left")
-    #     df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
-
-    #     # ============================================================
-    #     # 3️⃣ Convert & prepare dates
-    #     # ============================================================
-    #     df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
-    #     df_full = df_full.dropna(subset=["datetime"])
-    #     df_full["date"] = df_full["datetime"].dt.date
-    #     df_full["minutes_played"] = df_full["minutes_played"].fillna(0)
-
-    #     all_genres = df_full["supergenre"].unique()
-    #     results = []
-
-    #     print(f"[Normality] ▶ Beginning rolling-window analysis for {len(all_genres)} genres")
-
-    #     # ============================================================
-    #     # 4️⃣ Compute rolling metrics per genre
-    #     # ============================================================
-    #     for genre in all_genres:
-    #         gdf = df_full[df_full["supergenre"] == genre].copy()
-    #         if gdf.empty:
-    #             continue
-
-    #         gdf = gdf.groupby(["date", "artist_name"])["minutes_played"].sum().reset_index()
-    #         gdf = gdf.sort_values("date")
-
-    #         all_dates = pd.date_range(gdf["date"].min(), gdf["date"].max(), freq="D")
-
-    #         for current_end in all_dates:
-    #             current_start = current_end - timedelta(days=window_days - 1)
-    #             wdf = gdf[(gdf["date"] >= current_start.date()) & (gdf["date"] <= current_end.date())]
-
-    #             if wdf.empty:
-    #                 continue
-
-    #             artist_counts = wdf.groupby("artist_name")["minutes_played"].sum().values
-    #             if len(artist_counts) < 8:
-    #                 continue
-
-    #             try:
-    #                 # --- Core metrics ---
-    #                 _, p_val = normaltest(artist_counts)
-    #                 sk = skew(artist_counts)
-    #                 ku = kurtosis(artist_counts)
-    #                 sd = np.std(artist_counts)
-    #                 rng = artist_counts.max() - artist_counts.min()
-    #                 probs = artist_counts / artist_counts.sum() if artist_counts.sum() > 0 else np.ones_like(artist_counts)/len(artist_counts)
-    #                 H = entropy(probs, base=2)
-
-    #                 # --- Composite normality index ---
-    #                 p_norm = np.clip(p_val, 0, 1)
-    #                 H_norm = np.clip(H / np.log2(len(artist_counts)), 0, 1)
-    #                 K_adj = np.clip(1 / (1 + abs(ku)), 0, 1)
-    #                 normality_index = np.sqrt(p_norm * (1 - H_norm) * K_adj)
-
-    #                 results.append(dict(
-    #                     genre=genre,
-    #                     date_window=current_end.date(),
-    #                     p_value=p_val,
-    #                     skewness=sk,
-    #                     kurtosis=ku,
-    #                     std_dev=sd,
-    #                     entropy=H,
-    #                     range_width=rng,
-    #                     NormalityIndex=normality_index
-    #                 ))
-
-    #             except Exception as e:
-    #                 print(f"[Normality] ❌ Error for {genre} {current_end.date()}: {e}")
-    #                 traceback.print_exc()
-    #                 continue
-
-    #     # ============================================================
-    #     # 5️⃣ Save results
-    #     # ============================================================
-    #     df_results = pd.DataFrame(results)
-    #     print(f"[Normality] ✅ Computed {len(df_results):,} rolling-window results")
-
-    #     if not df_results.empty:
-    #         df_results.to_parquet(parquet_path, index=False)
-    #         print(f"[Normality] 💾 Saved rolling results to {parquet_path}")
-    #     else:
-    #         print("[Normality] ⚠️ No valid results computed — nothing saved.")
-
-    #     return df_results
-
-    # ----------------------------------------------------------------------
-    # LOAD OR COMPUTE RESULTS
-    # ----------------------------------------------------------------------
-    if run_calcs:
-        df_all, convergence = compute_all(df, df_artist_genre, parquet_path)
-        st.session_state["convergence"] = convergence
-
-    elif os.path.exists(parquet_path):
-        print(f"[Normality] 💾 Loading cached results from {parquet_path}")
-        df_all = pd.read_parquet(parquet_path)
-
-        import json
-        if os.path.exists(conv_path):
-            with open(conv_path, "r") as f:
-                convergence = json.load(f)
-            print(f"[Normality] 🔁 Loaded convergence data from {conv_path} ({len(convergence)} keys)")
-        else:
-            convergence = st.session_state.get("convergence", {})
-            print("[Normality] ⚠️ No convergence JSON found; using session data if available.")
-
-        # Always push to session for downstream tabs
-        st.session_state["convergence"] = convergence
-
-    else:
-        st.warning("⚠️ No existing results found. Click the button above to generate calculations.")
-        st.stop()
-
-    # ----------------------------------------------------------------------
-    # POSTPROCESSING — NaN toggle + legacy quarter/genre prep
-    # ----------------------------------------------------------------------
-    st.markdown("### P-Value Ridgeline")
-
-    # 1️⃣ Optional NaN replacement toggle
-    fill_nans = True
-
-    # 2️⃣ Filter to Bayesian phase
-    df_bayes_all = df_all[df_all["phase"] == "bayes"].copy()
-
-    # Apply NaN/inf replacement directly to working DataFrame
-    if fill_nans:
-        df_bayes_all = df_bayes_all.replace([np.nan, np.inf, -np.inf], 0)
-        print("[Normality] NaN/inf replaced with 0 for visualization")
-    else:
-        print("[Normality] NaN/inf retained (missing values will appear as gaps)")
-
-    if not df_bayes_all.empty:
-        # --- Prepare quarter info (legacy method) ---
-        df_bayes_all["quarter_str"] = df_bayes_all["quarter"].astype(str)
-        df_bayes_all["year_num"] = df_bayes_all["quarter_str"].str.extract(r"(\d{4})").astype(int)
-        df_bayes_all["qtr_num"] = df_bayes_all["quarter_str"].str.extract(r"Q(\d)").astype(int)
-        df_bayes_all["quarter_num"] = df_bayes_all["year_num"] + (df_bayes_all["qtr_num"] - 1) / 4
-
-        quarter_order = sorted(df_bayes_all["quarter_str"].unique(), key=lambda x: (int(x[:4]), int(x[-1])))
-
-        # --- Compute genre order by average p-value (ascending = more normal first) ---
-        genre_order = (
-            df_bayes_all.groupby("genre")["p_value"]
-            .mean()
-            .sort_values(ascending=True)
-            .index.tolist()
-        )
-        df_bayes_all["genre"] = pd.Categorical(df_bayes_all["genre"], categories=genre_order, ordered=True)
-
-        print(f"[Normality] ✅ Prepared {len(df_bayes_all)} Bayesian records for visualization")
-
-    else:
-        st.info("Bayesian results not available for visualization yet.")
-        st.stop()
-
-    # ----------------------------------------------------------------------
-    # BAYESIAN P-VALUE "UNKNOWN PLEASURES" RIDGELINE + TABLE
-    # ----------------------------------------------------------------------
-    if not df_bayes_all.empty:
-        tab_viz, tab_table = st.tabs(["3D Ridgeline", "Underlying Data"])
-
-        # ===============================================================
-        # TAB 1 — 3D RIDGELINE VISUALIZATION
-        # ===============================================================
-        with tab_viz:
-            import plotly.graph_objects as go
-
-            if not df_bayes_all.empty:
-                import plotly.graph_objects as go
-
-                fig = go.Figure()
-                z_label = "Normality (p-value)"
-
-                def make_colorscale(palette):
-                    return [[i / (len(palette) - 1), c] for i, c in enumerate(palette)]
-
-                neon_colorscale = make_colorscale(neon_palette)
-
-                # Map genres evenly across the palette
-                n_genres = len(genre_order)
-                color_map = {
-                    genre: neon_palette[int(i / max(1, n_genres - 1) * (len(neon_palette) - 1))]
-                    for i, genre in enumerate(genre_order)
-                }
-
-                # ------------------------------------------------------------------
-                # USER-CONTROLLED Z-AXIS COMPRESSION
-                # ------------------------------------------------------------------
-                col1, col2 = st.columns(2)
-                with col1:
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        exp = st.slider("Curvature exponent (nonlinear compression)", 0.01, 5.0, 0.5, 0.01)
-                    with col2:
-                        st.markdown(
-                            f"**Exponent:** `{exp:.2f}` — "
-                            + ("Flatter curves" if exp < 1 else "Steeper peaks")
-                        )
-
-                        # years = sorted(df_all["quarter"].apply(lambda x: int(str(x)[:4])).unique())
-                        # quarters = ["Q1", "Q2", "Q3", "Q4"]
-
-                        # st.markdown("### Filter Results")
-
-                        # selected_year = st.segmented_control(
-                        #     "Select Year",
-                        #     options=[str(y) for y in years],
-                        #     default=str(years[-1]),
-                        #     key="year_selector",
-                        #     width="content"
-                        # )
-
-                        # selected_quarter = st.segmented_control(
-                        #     "Select Quarter",
-                        #     options=quarters,
-                        #     default="Q1",
-                        #     key="quarter_selector",
-                        #     width="content"
-                        # )
-                # ------------------------------------------------------------------
-                # ADD ONE TRACE PER GENRE
-                # ------------------------------------------------------------------
-                for i, genre in enumerate(genre_order):
-                    gdf = df_bayes_all[df_bayes_all["genre"] == genre].sort_values("quarter_num")
-                    if gdf.empty:
-                        continue
-
-                    color = color_map.get(genre, "white")
-                    hover_tmpl = (
-                        f"<b>{genre}</b><br>"
-                        "Quarter: %{x}<br>"
-                        f"{z_label}: %{{z:.3f}}<extra></extra>"
-                    )
-
-                    # --- Compute z-values with compression ---
-                    # Apply nonlinear curvature transform
-                    z_vals = np.power(gdf["p_value"], exp)
-
-                    # Main waveform line
-                    fig.add_trace(go.Scatter3d(
-                        x=gdf["quarter_num"],
-                        y=[i] * len(gdf),
-                        z=z_vals,
-                        mode="lines",
-                        line=dict(color=color, width=2.0),
-                        name=genre,
-                        hovertemplate=hover_tmpl,
-                        showlegend=True
-                    ))
-
-                    # Fill under curve to base
-                    fig.add_trace(go.Surface(
-                        x=[gdf["quarter_num"], gdf["quarter_num"]],
-                        y=[[i] * len(gdf), [i] * len(gdf)],
-                        z=[z_vals, np.zeros(len(gdf))],
-                        surfacecolor=[gdf["p_value"], gdf["p_value"]],
-                        colorscale=[[0, color], [1, color]],
-                        showscale=False,
-                        opacity=1
-                    ))
-
-                # ------------------------------------------------------------------
-                # ADD HORIZONTAL p=0.5 REFERENCE PLANE
-                # ------------------------------------------------------------------
-                p_ref = 0.5  # reference p-value threshold
-                x_range = np.linspace(df_bayes_all["quarter_num"].min(), df_bayes_all["quarter_num"].max(), 20)
-                y_range = np.arange(len(genre_order))
-
-                # Create meshgrid to span entire chart area
-                X, Y = np.meshgrid(x_range, y_range)
-                Z = np.full_like(X, p_ref)
-
-                fig.add_trace(go.Surface(
-                    x=X,
-                    y=Y,
-                    z=Z,
-                    showscale=False,
-                    opacity=0.3,
-                    colorscale=[[0, "#ffcdcd"], [1, "#ff7171"]],
-                    name="p=0.5 reference",
-                    hoverinfo="skip"
-                ))
-
-                # ------------------------------------------------------------------
-                # AXIS & CAMERA CONFIGURATION
-                # ------------------------------------------------------------------
-                tickvals = []
-                ticktext = []
-                for q in quarter_order:
-                    year = int(q[:4])
-                    quarter = q[-2:]
-                    qnum = df_bayes_all.loc[df_bayes_all["quarter_str"] == q, "quarter_num"].iloc[0]
-                    if quarter == "Q1":
-                        tickvals.append(qnum)
-                        ticktext.append(str(year))
-
-                fig.update_layout(
-                    scene=dict(
-                        xaxis_title="Year",
-                        yaxis_title="Genre",
-                        zaxis_title=z_label,
-                        xaxis=dict(
-                            tickvals=tickvals,
-                            ticktext=ticktext,
-                            showbackground=False,
-                            gridcolor="rgba(255,255,255,0.05)",
-                        ),
-                        yaxis=dict(
-                            showbackground=False,
-                            tickvals=[],
-                            gridcolor="rgba(255,255,255,0.05)",
-                            title=""
-                        ),
-                        zaxis=dict(
-                            showbackground=False,
-                            gridcolor="rgba(255,255,255,0.05)",
-                            type="linear",
-                        ),
-                        camera=dict(
-                            center=dict(x=0, y=-0.5, z=0),
-                            eye=dict(x=-0.6932, y=-1.806, z=0.927),
-                            up=dict(x=-0.01, y=0.006, z=2.0),
-                        ),
-                    ),
-                    paper_bgcolor="#0b110b",
-                    font=dict(color="white"),
-                    showlegend=True,
-                    height=800,
-                    margin=dict(l=200, r=80, b=80, t=40),
-                    legend=dict(
-                        bgcolor="#0b110b",
-                        font=dict(color="white"),
-                        orientation="v",
-                        yanchor="middle",
-                        y=0.5,
-                        xanchor="right",
-                        x=1.1,
-                        traceorder="reversed"  # 👈 reversed legend order
-                    ),
-                    scene_zaxis=dict(range=[0, 1])
-                )
-
-                # ------------------------------------------------------------------
-                # CLEAN GENRE LABELS BESIDE TRACES
-                # ------------------------------------------------------------------
-                annotations = []
-                for i, genre in enumerate(genre_order):
-                    annotations.append(dict(
-                        showarrow=False,
-                        text=f"<b>{genre}</b>",
-                        x=tickvals[0] - 0.3,
-                        y=i,
-                        z=0,
-                        xanchor="right",
-                        font=dict(color="white", size=11),
-                        bgcolor="rgba(0,0,0,0)",
-                        opacity=0.9
-                    ))
-
-                fig.update_layout(scene_annotations=annotations)
-
-                # ------------------------------------------------------------------
-                # DISPLAY RIDGELINE PLOT
-                # ------------------------------------------------------------------
-                st.plotly_chart(fig, width="stretch", config={"scrollZoom": True})
-
-        # ===============================================================
-        # TAB 2 — UNDERLYING DATA (Pivot Table with Color Gradient)
-        # ===============================================================
-        with tab_table:
-            import seaborn as sns
-            st.markdown("#### Underlying Bayesian p-Values per Genre × Quarter")
-
-            # --- Build pivot table ---
-            pivot_df = df_bayes_all.pivot(index="genre", columns="quarter_str", values="p_value")
-
-            # Compute average p-value and sort by it (descending = less normal)
-            pivot_df["Average p-value"] = pivot_df.mean(axis=1)
-            pivot_df = pivot_df.sort_values("Average p-value", ascending=False)
-
-            # Move "Average p-value" to the first column
-            first_col = pivot_df["Average p-value"]
-            pivot_df = pivot_df.drop(columns=["Average p-value"])
-            pivot_df.insert(0, "Average p-value", first_col)
-
-            # --- Apply neon/Spotify-inspired gradient ---
-            def style_pivot(df):
-                """Return a styled DataFrame with a neon green gradient."""
-                cm = sns.light_palette("#1ed760", as_cmap=True, reverse=False)
-                styled = (
-                    df.style
-                    .background_gradient(cmap=cm, axis=None, vmin=0, vmax=1)
-                    .set_properties(**{
-                        "background-color": "#0b110b",
-                        "color": "white",
-                        "border-color": "#222",
-                        "font-family": "monospace",
-                    })
-                    .format("{:.3f}")
-                )
-                return styled
-
-            styled_df = style_pivot(pivot_df.round(3))
-
-            # --- Show styled pivot table ---
-            st.dataframe(styled_df, width="stretch")
-
-    # ----------------------------------------------------------------------
-    # FILTER CONTROLS (shared across tabs)
-    # ----------------------------------------------------------------------
-    back_calcs = st.checkbox(label="Checkout the ML results", value= False, label_visibility="visible")
-    if back_calcs == True:
-
-        years = sorted(df_all["quarter"].apply(lambda x: int(str(x)[:4])).unique())
-        quarters = ["Q1", "Q2", "Q3", "Q4"]
-
-        st.markdown("### Filter Results")
-        c1, c2 = st.columns(2)
-
-        with c1:
-            selected_year = st.segmented_control(
-                "Select Year",
-                options=[str(y) for y in years],
-                default=str(years[-1]),
-                key="year_selector",
-                width="content"
-            )
-        with c2:
-            selected_quarter = st.segmented_control(
-                "Select Quarter",
-                options=quarters,
-                default="Q1",
-                key="quarter_selector",
-                width="content"
-            )
-        with c1:
-            genres = sorted(df_all["genre"].unique())
-            selected_genre = st.selectbox("Select Genre", options=genres, key="genre_selector_heatmap")
-
-        target_period = f"{selected_year}Q{selected_quarter[-1]}"
-        df_filtered = df_all[df_all["quarter"].astype(str) == target_period]
-        print(f"[DEBUG] Showing results for {target_period}: {len(df_filtered)} rows")
-
-        # ----------------------------------------------------------------------
-        # TABS FOR PHASES
-        # ----------------------------------------------------------------------
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Grid Search", "Fine-Tuning Search","Bayesian Optimization", "Dimensionality Reduction", "new bit"])
-        shared_cmin, shared_cmax = 0, 1
-
-        # ----------------------------------------------------------------------
-        # TAB 1 — COARSE GRID SEARCH
-        # ----------------------------------------------------------------------
-        with tab1:
-            st.markdown(f"### Coarse Grid Search Results — {selected_year} {selected_quarter}")
-            df_grid = df_filtered[df_filtered["phase"] == "grid"].drop(columns=["phase", "quarter"], errors="ignore")
-            st.dataframe(df_grid.round(3).reset_index(drop=True), hide_index=True, width="stretch")
-
-            # --- Heatmap ---
-            df_joined = df.merge(df_artist_genre, on="artist_name", how="left")
-            df_joined["datetime"] = pd.to_datetime(df_joined["datetime"], errors="coerce")
-            if isinstance(df_joined["datetime"].dtype, DatetimeTZDtype):
-                df_joined["datetime"] = df_joined["datetime"].dt.tz_convert(None)
-            df_joined["quarter"] = df_joined["datetime"].dt.to_period("Q")
-
-            genre_df = df_joined[
-                (df_joined["supergenre"] == selected_genre)
-                & (df_joined["quarter"].astype(str) == target_period)
-            ]
-            data = genre_df.groupby("artist_name")["track_name"].count().values
-            if len(data) >= 8:
-                grid_x = np.linspace(1, 10, 15)
-                grid_y = np.linspace(5, 50, 15)
-                z = np.full((len(grid_x), len(grid_y)), np.nan)
-                for i, xmin in enumerate(grid_x):
-                    for j, xmax in enumerate(grid_y):
-                        if xmax <= xmin:
-                            continue
-                        subset = data[(data >= xmin) & (data <= xmax)]
-                        if len(subset) < 8:
-                            continue
-                        _, p = normaltest(subset)
-                        z[i, j] = p
-
-                fig_hm = px.imshow(
-                    z,
-                    x=[f"{xmax:.0f}" for xmax in grid_y],
-                    y=[f"{xmin:.0f}" for xmin in grid_x],
-                    color_continuous_scale="Viridis",
-                    zmin=shared_cmin, zmax=shared_cmax,
-                    labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
-                    title=f"Grid Search Heatmap — {selected_genre} ({target_period})",
-                    aspect="auto"
-                )
-                fig_hm.update_layout(width=700, height=500)
-
-                c1,c2,c3 = st.columns([1,3,1])
-                with c2:
-                    st.plotly_chart(fig_hm, width="stretch")
-
-        # ----------------------------------------------------------------------
-        # TAB 2 — FINE GRID SEARCH
-        # ----------------------------------------------------------------------
-        with tab2:
-            st.markdown(f"### Fine Grid Search Results — {selected_year} {selected_quarter}")
-            df_fine = df_filtered[df_filtered["phase"] == "fine"].drop(columns=["phase", "quarter"], errors="ignore")
-            st.dataframe(df_fine.round(3).reset_index(drop=True), hide_index=True, width="stretch")
-
-            # --- Heatmap (fine scan) ---
-            if len(data) >= 8:
-                fine_x = np.linspace(1, 10, 20)
-                fine_y = np.linspace(5, 50, 20)
-                z_fine = np.full((len(fine_x), len(fine_y)), np.nan)
-                for i, xmin in enumerate(fine_x):
-                    for j, xmax in enumerate(fine_y):
-                        if xmax <= xmin:
-                            continue
-                        subset = data[(data >= xmin) & (data <= xmax)]
-                        if len(subset) < 8:
-                            continue
-                        _, p = normaltest(subset)
-                        z_fine[i, j] = p
-
-                fig_hm2 = px.imshow(
-                    z_fine,
-                    x=[f"{xmax:.0f}" for xmax in fine_y],
-                    y=[f"{xmin:.0f}" for xmin in fine_x],
-                    color_continuous_scale="Viridis",
-                    zmin=shared_cmin, zmax=shared_cmax,
-                    labels=dict(x="Max cutoff", y="Min cutoff", color="p-value"),
-                    title=f"Fine Search Heatmap — {selected_genre} ({target_period})",
-                    aspect="auto"
-                )
-                fig_hm2.update_layout(width=700, height=500)
-                c1,c2,c3 = st.columns([1,3,1])
-                with c2:
-                    st.plotly_chart(fig_hm2, width="stretch")
-
-        # ----------------------------------------------------------------------
-        # TAB 3 — BAYESIAN OPTIMIZATION
-        # ----------------------------------------------------------------------
-        with tab3:
-            st.markdown(f"### Bayesian Optimization Results — {selected_year} {selected_quarter}")
-
-            convergence = st.session_state.get("convergence", {})
-            df_bayes = df_filtered[df_filtered["phase"] == "bayes"].drop(columns=["phase", "quarter"], errors="ignore")
-
-            if df_bayes.empty:
-                st.info("No Bayesian optimization results available yet.")
-            else:
-                # --- Debug info ---
-                print(f"[Normality] 🎯 Checking convergence keys for: {selected_genre} / {selected_quarter}")
-                print(f"[Normality] Available convergence keys (first 10): {list(convergence.keys())[:10]}")
-
-                # --- Normalize genre name ---
-                selected_genre_norm = re.sub(r"\W+", "", selected_genre.lower())
-
-                # --- Determine quarter string safely ---
-                if isinstance(selected_quarter, str) and selected_quarter.startswith(str(selected_year)):
-                    quarter_str = selected_quarter
-                else:
-                    quarter_str = f"{selected_year}Q{str(selected_quarter)[-1]}"
-
-                # --- Build expected convergence key ---
-                expected_key = f"{selected_genre}_{quarter_str}"
-
-                # --- Try to match the exact key ---
-                matching_key = None
-                for k in convergence.keys():
-                    k_norm = re.sub(r"\W+", "", k.lower())
-                    if selected_genre_norm in k_norm and quarter_str.lower() in k.lower():
-                        matching_key = k
-                        break
-
-                # --- Plot if found ---
-                if matching_key:
-                    y_vals = convergence[matching_key]
-                    if not y_vals:
-                        st.info("No convergence data available for this key.")
-                    else:
-                        x_vals = np.arange(1, len(y_vals) + 1)
-                        p_vals = np.array(y_vals)
-                        mean_p = np.array([np.mean(p_vals[:i]) for i in range(1, len(p_vals)+1)])
-                        std_p = np.array([np.std(p_vals[:i]) for i in range(1, len(p_vals)+1)])
-                        best_p = np.maximum.accumulate(p_vals)
-
-                        fig_conv = go.Figure()
-
-                        # --- Base line (original p-values by iteration) ---
-                        fig_conv.add_trace(go.Scatter(
-                            x=x_vals, y=p_vals,
-                            mode="lines+markers",
-                            name="Iteration p-values",
-                            line=dict(color="#71207d", width=1.5),
-                            marker=dict(size=6, color="#c46adb"),
-                            hovertemplate="Iter %{x}<br>p=%{y:.4f}<extra></extra>",
-                        ))
-
-                        # --- Scatter: all samples ---
-                        fig_conv.add_trace(go.Scatter(
-                            x=x_vals, y=p_vals,
-                            mode="markers",
-                            name="Samples",
-                            marker=dict(size=5, color="rgba(255,255,255,0.3)"),
-                            hoverinfo="skip"
-                        ))
-
-                        # --- Line: best-so-far ---
-                        fig_conv.add_trace(go.Scatter(
-                            x=x_vals, y=best_p,
-                            mode="lines+markers",
-                            name="Best-so-far p",
-                            line=dict(color="#1ed760", width=3)
-                        ))
-
-                        # --- Line: mean p ---
-                        fig_conv.add_trace(go.Scatter(
-                            x=x_vals, y=mean_p,
-                            mode="lines",
-                            name="Mean p",
-                            line=dict(color="#90d7ad", width=2, dash="dot")
-                        ))
-
-                        # --- Band: ±1 std ---
-                        fig_conv.add_trace(go.Scatter(
-                            x=np.concatenate([x_vals, x_vals[::-1]]),
-                            y=np.concatenate([mean_p + std_p, (mean_p - std_p)[::-1]]),
-                            fill="toself",
-                            fillcolor="rgba(30,215,96,0.1)",
-                            line=dict(color="rgba(255,255,255,0)"),
-                            name="±1 Std"
-                        ))
-
-                        fig_conv.update_layout(
-                            height=350,
-                            plot_bgcolor="rgba(0,0,0,0)",
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            font=dict(color="white"),
-                            yaxis_title="Best p-value",
-                            xaxis_title="Iteration",
-                            legend=dict(
-                                orientation="h",
-                                x=0.5, xanchor="center",
-                                y=-0.25, yanchor="top",
-                                bgcolor="rgba(0,0,0,0)"
-                            ),
-                            margin=dict(t=40, b=40, l=40, r=40),
-                        )
-
-                        st.plotly_chart(fig_conv, width="stretch", config={"displayModeBar": False})
-
-                    st.dataframe(df_bayes.round(3).reset_index(drop=True), hide_index=True, width="stretch")
-
-                else:
-                    print(f"[Normality] ⚠️ No match found for {expected_key}")
-                    st.info("⚠️ No convergence data found for the selected genre and quarter.")
-
-        # ----------------------------------------------------------------------
-        # TAB 4 - Dimension collapser
-        # ----------------------------------------------------------------------
-        with tab4:
-            from sklearn.preprocessing import StandardScaler
-            from sklearn.decomposition import PCA
-            from sklearn.manifold import TSNE
-            import plotly.express as px
-            import umap
-
-            # Example subset
-            df = df_all.copy()
-            df = df.groupby("genre")[["p_value", "kurtosis", "skew", "std_dev"]].mean().dropna()
-
-            X = df.values
-            scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X)
-
-            algo_list = ["PCA","TSNE","UMAP"]
-
-            algo_choice = st.segmented_control("Choose algorithm",algo_list, default="PCA")
-
-            if algo_choice == "PCA":
-                pca = PCA(n_components=2)
-                X_pca = pca.fit_transform(X_scaled)
-                df["x"], df["y"] = X_pca[:,0], X_pca[:,1]
-
-            elif algo_choice == "TSNE":
-                tsne = TSNE(n_components=2, perplexity=5, learning_rate='auto', random_state=42)
-                X_tsne = tsne.fit_transform(X_scaled)
-                df["x"], df["y"] = X_tsne[:,0], X_tsne[:,1]
-
-            else:
-                umap_model = umap.UMAP(n_neighbors=5, min_dist=0.3, metric="euclidean", random_state=42)
-                X_umap = umap_model.fit_transform(X_scaled)
-                df["x"], df["y"] = X_umap[:,0], X_umap[:,1]
-
-            fig = px.scatter(
-                df,
-                x="x", y="y",
-                color="p_value",
-                size="std_dev",
-                text=df.index,
-                color_continuous_scale="Viridis",
-                title="Genre Embedding Map (PCA/t-SNE/UMAP)"
-            )
-            fig.update_traces(textposition="top center")
-            fig.update_layout(height=600, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, width="stretch")
-
-        # ----------------------------------------------------------------------
-        # New bitt
-        # ----------------------------------------------------------------------
-        with tab5:
-            st.write()
-
 # -------------------------------- Taste ------------------------------------- #
 elif page == "Taste":
     # ----------------------------------------------------------------------
-    # DATASET VALIDATION
+    # 🎧 DATASET VALIDATION
     # ----------------------------------------------------------------------
     st.session_state["last_page"] = "Taste"
     user_id = st.session_state.user["user_id"]
 
-    # Get current user dataset
+    # --- Load current dataset ---
     df, current_label = require_current_df()
-    user_df = df[df["category"] == "music"].copy()
     df_music = df[df["category"] == "music"].copy()
-    df_album = INFO_ALBUM.copy()
-    df_artist_genre = INFO_ARTIST_GENRE.copy()
 
     # --- Normalize datetime column safely ---
     df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
@@ -7994,224 +7021,70 @@ elif page == "Taste":
     df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
     df_music["date"] = df_music["datetime"].dt.date
 
+    # --- DAOs and session handles ---
+    status_dao = st.session_state.get("status_dao")
+    storage_dao = st.session_state.get("storage_dao")
+
+    # --- Expected R2 path for taste index parquet ---
+    parquet_key = f"enrichment/taste_index/{user_id}_{current_label}_rolling.parquet"
+
+    # --- Session-persistent cache for taste data ---
+    if "df_rolling" not in st.session_state:
+        st.session_state["df_rolling"] = None
+    df_rolling = st.session_state["df_rolling"]
+
     # ----------------------------------------------------------------------
-    # NORMALITY ROLLING & TASTE STABILITY ANALYSIS
+    # 🧮 LOAD EXISTING TASTE INDEX OR FORCE RECOMPUTE
     # ----------------------------------------------------------------------
-    import pandas as pd, numpy as np, plotly.express as px, plotly.graph_objects as go
-    from scipy.stats import normaltest, skew, kurtosis, entropy
-    from datetime import timedelta
-    import os, traceback
+    st.markdown("### 🧮 28-Day Rolling Taste Index")
 
-    def compute_normality_rolling(df, df_artist_genre, parquet_path, window_days=28):
-        """
-        Compute 28-day rolling normality metrics (p-value, entropy, kurtosis, etc.)
-        per genre, and derive a composite NormalityIndex.
-        Includes robust artist name normalization for accurate joins.
-        """
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.caption("Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.")
+    with col2:
+        force_run = st.button("🚀 Force Run Breadth + Taste Enrichment", key="force_breadth_taste")
 
-        import pandas as pd, numpy as np
-        from scipy.stats import normaltest, skew, kurtosis, entropy
-        from datetime import timedelta
-        import traceback, re, os, logging
+    # --- Force full recompute using breadth_only pipeline ---
+    if force_run:
+        try:
+            # from enrichment_service import start_breadth_first_only
+            from dao_selector import DAOS
+            log_dao = st.session_state.get("log_dao")
 
-        print("[Normality] ▶ Starting 28-day rolling normality analysis")
-
-        # ===============================================================
-        # 1️⃣ Filter for music events
-        # ===============================================================
-        df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
-        print(f"[Normality] ✅ Filtered for musical events: {len(df_music):,} rows remain")
-
-        # ===============================================================
-        # 2️⃣ Normalize artist names on both DataFrames (robust join)
-        # ===============================================================
-        def normalize_artist_name(name: str) -> str:
-            """Robust artist name normalization for consistent matching."""
-            name = str(name).lower().strip()
-
-            # Remove common junk
-            name = re.sub(r'\(.*?\)', '', name)                        # remove text in parentheses
-            name = re.sub(r'\b(feat\.?|ft\.?|with|and|&)\b', '', name) # remove collab markers
-            name = re.sub(r'\boriginal motion picture soundtrack\b', '', name)
-            name = re.sub(r'\bsoundtrack\b', '', name)
-            name = re.sub(r'\bremaster(ed)?\b', '', name)
-            name = re.sub(r'[^a-z0-9\s]', '', name)                    # strip non-alphanumeric
-            name = re.sub(r'\s+', ' ', name).strip()                   # collapse multiple spaces
-
-            return name
-
-        user_key = "artist_name"
-        genre_key = "artist_name"
-
-        df_music = df_music.copy()
-        df_artist_genre = df_artist_genre.copy()
-
-        # Apply normalization to both datasets
-        df_music["artist_key"] = df_music[user_key].apply(normalize_artist_name)
-        df_artist_genre["artist_key"] = df_artist_genre[genre_key].apply(normalize_artist_name)
-
-        # Treat empty genre strings as missing
-        for col in ["primary_genre", "supergenre"]:
-            if col in df_artist_genre.columns:
-                df_artist_genre[col] = (
-                    df_artist_genre[col]
-                    .astype("string")
-                    .replace(r"^\s*$", pd.NA, regex=True)
-                )
-
-        # Collapse df_artist_genre to unique artist_key rows
-        def first_nonnull(s: pd.Series):
-            s = s.dropna()
-            return s.iloc[0] if not s.empty else pd.NA
-
-        df_artist_genre_unique = (
-            df_artist_genre.groupby("artist_key", as_index=False)
-            .agg({
-                "primary_genre": first_nonnull,
-                "supergenre": first_nonnull
-            })
-        )
-
-        # ===============================================================
-        # 3️⃣ Merge normalized artist datasets
-        # ===============================================================
-        df_full = df_music.merge(df_artist_genre_unique, on="artist_key", how="left")
-        df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
-
-        # ===============================================================
-        # 4️⃣ Debug info — validate unlisted counts
-        # ===============================================================
-        n_unlisted = df_full["supergenre"].eq("Unlisted").sum()
-        artists_unlisted = df_full.loc[df_full["supergenre"] == "Unlisted", "artist_key"].nunique()
-
-        print(f"[Normality] ⚠️ Found {n_unlisted:,} 'Unlisted' listening events after normalization.")
-        print(f"[Normality] ⚠️ Found {artists_unlisted:,} unique 'Unlisted' artists after normalization.")
-
-        if n_unlisted > 0:
-            top_unlisted = (
-                df_full.loc[df_full["supergenre"] == "Unlisted", "artist_name"]
-                .value_counts()
-                .head(15)
+            st.info("🚀 Starting full Breadth + Taste Index pipeline in the background…")
+            start_breadth_first_only(
+                user_id=user_id,
+                dataset_label=current_label,
+                log_dao=log_dao,
+                table_name=st.session_state.get("last_table_name"),
             )
-            print("[Normality] 🔍 Top 'Unlisted' artists by frequency:")
-            print(top_unlisted)
+            st.success("✅ Pipeline triggered successfully — refresh later to see results.")
+            st.stop()
+        except Exception as e:
+            st.error(f"⚠️ Failed to trigger enrichment: {e}")
+            st.stop()
 
-        # Optional extra diagnostics
-        print(f"[Debug] Artists in df_music before merge: {df_music['artist_key'].nunique():,}")
-        print(f"[Debug] Artists in df_artist_genre_unique: {df_artist_genre_unique['artist_key'].nunique():,}")
-        print(f"[Debug] Unique unmatched artist_keys: {artists_unlisted:,}")
-
-        # ===============================================================
-        # 5️⃣ Prep time columns
-        # ===============================================================
-        df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
-        df_full = df_full.dropna(subset=["datetime"])
-        df_full["date"] = df_full["datetime"].dt.date
-        df_full["minutes_played"] = df_full["minutes_played"].fillna(0)
-
-        # ===============================================================
-        # 6️⃣ Compute metrics per genre
-        # ===============================================================
-        all_genres = df_full["supergenre"].unique()
-        results = []
-        print(f"[Normality] ▶ Found {len(all_genres)} genres to analyze")
-
-        for genre in all_genres:
-            gdf = df_full[df_full["supergenre"] == genre].copy()
-            if gdf.empty:
-                continue
-
-            gdf = gdf.groupby(["date", "artist_name"])["minutes_played"].sum().reset_index()
-            gdf = gdf.sort_values("date")
-
-            all_dates = pd.date_range(gdf["date"].min(), gdf["date"].max(), freq="D")
-
-            for current_end in all_dates:
-                current_start = current_end - timedelta(days=window_days - 1)
-                wdf = gdf[(gdf["date"] >= current_start.date()) & (gdf["date"] <= current_end.date())]
-
-                if wdf.empty:
-                    continue
-
-                artist_counts = wdf.groupby("artist_name")["minutes_played"].sum().values
-                if len(artist_counts) < 8:
-                    continue
-
-                try:
-                    total_minutes = wdf["minutes_played"].sum()
-                    _, p_val = normaltest(artist_counts)
-                    sk = skew(artist_counts)
-                    ku = kurtosis(artist_counts)
-                    sd = np.std(artist_counts)
-                    rng = artist_counts.max() - artist_counts.min()
-                    probs = (
-                        artist_counts / artist_counts.sum()
-                        if artist_counts.sum() > 0
-                        else np.ones_like(artist_counts) / len(artist_counts)
-                    )
-                    H = entropy(probs, base=2)
-
-                    # --- Composite normality index ---
-                    p_norm = np.clip(p_val, 0, 1)
-                    H_norm = np.clip(H / np.log2(len(artist_counts)), 0, 1)
-                    K_adj = np.clip(1 / (1 + abs(ku)), 0, 1)
-                    normality_index = np.sqrt(p_norm * (1 - H_norm) * K_adj)
-
-                    results.append(dict(
-                        genre=genre,
-                        date_window=current_end.date(),
-                        total_minutes=total_minutes,
-                        p_value=p_val,
-                        skewness=sk,
-                        kurtosis=ku,
-                        std_dev=sd,
-                        entropy=H,
-                        range_width=rng,
-                        NormalityIndex=normality_index
-                    ))
-
-                except Exception as e:
-                    print(f"[Normality] ❌ Error for {genre} {current_end.date()}: {e}")
-                    traceback.print_exc()
-                    continue
-
-        df_results = pd.DataFrame(results)
-        print(f"[Normality] ✅ Computed {len(df_results):,} rows of rolling-window results")
-
-        # ===============================================================
-        # 7️⃣ Save or return results
-        # ===============================================================
-        if not df_results.empty:
-            df_results.to_parquet(parquet_path, index=False)
-            print(f"[Normality] 💾 Saved to {parquet_path}")
-        else:
-            print("[Normality] ⚠️ No valid results computed — nothing saved.")
-
-        return df_results
+    # --- Try to load cached parquet from R2 if not in session ---
+    if df_rolling is None and storage_dao is not None:
+        try:
+            st.info("☁️ Loading cached Taste Index results from R2…")
+            df_rolling = storage_dao.safe_download_parquet(parquet_key)
+            if df_rolling is not None and not df_rolling.empty:
+                st.session_state["df_rolling"] = df_rolling
+                st.success("✅ Loaded cached Taste Index results from R2.")
+            else:
+                st.warning("No cached Taste Index results found. Run the enrichment to generate them.")
+        except Exception as e:
+            st.warning(f"⚠️ Could not load cached Taste Index results: {e}")
 
     # ----------------------------------------------------------------------
-    # RUN ANALYSIS OR LOAD EXISTING RESULTS
+    # 🎚️ TASTE STABILITY ANALYSIS DASHBOARD
     # ----------------------------------------------------------------------
-    parquet_rolling = f"enrichment/normality/{st.session_state.user['user_id']}_{current_label}_rolling.parquet"
-
-    run_stability = st.button("▶ Run 28-Day Rolling Normality Analysis")
-
-    if run_stability:
-        df_rolling = compute_normality_rolling(df, df_artist_genre, parquet_rolling)
-    elif os.path.exists(parquet_rolling):
-        df_rolling = pd.read_parquet(parquet_rolling)
-        st.success("✅ Loaded cached rolling analysis.")
-    else:
-        st.info("Click the button to compute the 28-day rolling normality analysis.")
-        st.stop()
-
-
-    # ----------------------------------------------------------------------
-    # 🎧 TASTE STABILITY ANALYSIS DASHBOARD
-    # ----------------------------------------------------------------------
-
-    if not df_rolling.empty:
+    if df_rolling is not None and not df_rolling.empty:
         st.markdown("## 🎚️ Taste Stability Analysis")
+        # (your chart + filters go here)
+    # else:
+    #     st.info("No Taste Index data available yet — run Breadth + Taste enrichment to generate it.")
 
         # ===============================================================
         # YEAR FILTER
@@ -8367,311 +7240,308 @@ elif page == "Taste":
         # ===============================================================
         # 🔗 GENRE CORRELATION MATRIX — "Taste Interdependence"
         # ===============================================================
-    import plotly.graph_objects as go
-    import plotly.figure_factory as ff
-    import numpy as np
-    import pandas as pd
-    from scipy.spatial.distance import pdist, squareform
+        import plotly.graph_objects as go
+        import plotly.figure_factory as ff
+        import numpy as np
+        import pandas as pd
+        from scipy.spatial.distance import pdist, squareform
 
-    st.markdown("### 🔗 Genre Correlation Matrix — *How Genre Stability Co-varies Over Time*")
+        st.markdown("### 🔗 Genre Correlation Matrix — *How Genre Stability Co-varies Over Time*")
 
-    if not df_heatmap.empty and df_heatmap.shape[0] > 1:
-        # --- Compute pairwise Spearman correlation ---
-        corr_matrix = df_heatmap.transpose().corr(method="spearman")
-        corr_matrix = corr_matrix.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-        np.fill_diagonal(corr_matrix.values, 1.0)
+        if not df_heatmap.empty and df_heatmap.shape[0] > 1:
+            # --- Compute pairwise Spearman correlation ---
+            corr_matrix = df_heatmap.transpose().corr(method="spearman")
+            corr_matrix = corr_matrix.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            np.fill_diagonal(corr_matrix.values, 1.0)
 
-        # --- Convert correlation to distance ---
-        distance_matrix = 1 - corr_matrix
-        np.fill_diagonal(distance_matrix.values, 0.0)
+            # --- Convert correlation to distance ---
+            distance_matrix = 1 - corr_matrix
+            np.fill_diagonal(distance_matrix.values, 0.0)
 
-        labels = corr_matrix.index.tolist()
-        data_array = distance_matrix.values
+            labels = corr_matrix.index.tolist()
+            data_array = distance_matrix.values
 
-        # --- Create side dendrogram ---
-        dendro_side = ff.create_dendrogram(
-            data_array,
-            orientation="right",
-            labels=labels,
-            color_threshold=0,
-        )
-
-        # --- Style dendrogram lines + hover info ---
-        for trace in dendro_side["data"]:
-            trace.update(
-                line=dict(color="white", width=1),
-                hoverinfo="text",
-                text=[f"Link distance: {x:.2f}" for x in trace["x"]],
-                hovertemplate="<b>%{text}</b><extra></extra>",
+            # --- Create side dendrogram ---
+            dendro_side = ff.create_dendrogram(
+                data_array,
+                orientation="right",
+                labels=labels,
+                color_threshold=0,
             )
 
-        # --- Extract leaf order ---
-        dendro_leaves = dendro_side["layout"]["yaxis"]["ticktext"]
-        corr_reordered = corr_matrix.loc[dendro_leaves, dendro_leaves]
+            # --- Style dendrogram lines + hover info ---
+            for trace in dendro_side["data"]:
+                trace.update(
+                    line=dict(color="white", width=1),
+                    hoverinfo="text",
+                    text=[f"Link distance: {x:.2f}" for x in trace["x"]],
+                    hovertemplate="<b>%{text}</b><extra></extra>",
+                )
 
-        # --- Create heatmap ---
-        heatmap = go.Heatmap(
-            z=corr_reordered.values,
-            x=dendro_leaves,
-            y=dendro_leaves,
-            zmin=-1,
-            zmax=1,
-            colorscale=[
-                [0.0, "#5b0d0d"],
-                [0.5, "#1a1a1a"],
-                [1.0, "#0fa958"],
-            ],
-            colorbar=dict(
-                title="Correlation",
-                tickcolor="white",
-                tickfont=dict(color="white"),
-                titlefont=dict(color="white"),
-            ),
-            hovertemplate="<b>%{y}</b> ↔ <b>%{x}</b><br>ρ (Spearman): %{z:.2f}<extra></extra>",
-        )
+            # --- Extract leaf order ---
+            dendro_leaves = dendro_side["layout"]["yaxis"]["ticktext"]
+            corr_reordered = corr_matrix.loc[dendro_leaves, dendro_leaves]
 
-        # --- Combine both ---
-        fig = go.Figure()
-
-        # Add dendrogram traces
-        for trace in dendro_side["data"]:
-            fig.add_trace(trace)
-
-        # Add heatmap
-        fig.add_trace(heatmap)
-
-        # --- Layout and axis domains ---
-        fig.update_layout(
-            width=900,
-            height=900,
-            showlegend=False,
-            hovermode="closest",
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            title=f"Genre Interdependence Matrix — {year_selected}",
-            margin=dict(l=0, r=0, t=80, b=80),
-        )
-
-        # Dendrogram domain = left side
-        fig.update_layout(
-            xaxis=dict(
-                domain=[0.0, 0.20],   # keep within 0–1 range
-                showticklabels=False,
-                showgrid=False,
-                zeroline=False,
-            ),
-            yaxis=dict(
-                domain=[0, 1],
-                showticklabels=False,
-                showgrid=False,
-                zeroline=False,
-            ),
-            # Heatmap shifted right
-            xaxis2=dict(
-                domain=[0.30, 1.0],
-                showgrid=False,
-                zeroline=False,
-                ticks="",
-                title=None,
-            ),
-            yaxis2=dict(
-                anchor="x2",
-                domain=[0.03, 0.97],          # must match to align exactly
-                showgrid=False,
-                zeroline=False,
-                ticks="",
-                title=None,
-                tickmode="array",
-                tickvals=list(range(len(dendro_leaves))),
-                ticktext=dendro_leaves,
-                automargin=True,
-            ),
-            dragmode=False,  # disables zoom and pan
-            xaxis_fixedrange=True,
-            yaxis_fixedrange=True,
-            xaxis2_fixedrange=True,
-            yaxis2_fixedrange=True,
-        )
-
-        # Assign axes correctly
-        for i in range(len(dendro_side["data"])):
-            fig["data"][i]["xaxis"] = "x"
-            fig["data"][i]["yaxis"] = "y"
-        fig["data"][-1]["xaxis"] = "x2"
-        fig["data"][-1]["yaxis"] = "y2"
-
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False,"staticPlot": False})
-
-        st.caption(
-            """
-            *Left: hierarchical clustering of genres (white dendrogram).*
-            *Right: Spearman ρ heatmap (green = positive, red = negative).*
-            Shorter branches indicate more similar listening behaviour.
-            Hover over branches to see linkage distances between clusters.
-            """
-        )
-
-    else:
-        st.warning("⚠️ No valid data available for taste stability analysis.")
-
-    # ===============================================================
-    # 🧭 GENRE EMBEDDING MAP — *t-SNE/UMAP Projection of Genre Stability*
-    # ===============================================================
-    import plotly.express as px
-    import streamlit as st
-    import pandas as pd
-    import numpy as np
-    from sklearn.manifold import TSNE
-    from sklearn.preprocessing import StandardScaler
-    from umap import UMAP
-    from scipy.cluster.hierarchy import linkage, leaves_list
-
-    st.markdown("### 🌌 Combined 3D Genre Embedding — *t-SNE × UMAP Taste Landscape*")
-
-    if df_filtered["genre"].nunique() >= 3:
-        # --- Prepare pivot: rows = genres, columns = date windows ---
-        df_embed = (
-            df_filtered.pivot_table(
-                index="genre",
-                columns="date_window",
-                values="NormalityIndex",
-                aggfunc="mean",
+            # --- Create heatmap ---
+            heatmap = go.Heatmap(
+                z=corr_reordered.values,
+                x=dendro_leaves,
+                y=dendro_leaves,
+                zmin=-1,
+                zmax=1,
+                colorscale=[
+                    [0.0, "#5b0d0d"],
+                    [0.5, "#1a1a1a"],
+                    [1.0, "#0fa958"],
+                ],
+                colorbar=dict(
+                    title="Correlation",
+                    tickcolor="white",
+                    tickfont=dict(color="white"),
+                    titlefont=dict(color="white"),
+                ),
+                hovertemplate="<b>%{y}</b> ↔ <b>%{x}</b><br>ρ (Spearman): %{z:.2f}<extra></extra>",
             )
-            .fillna(method="ffill", axis=1)
-            .fillna(method="bfill", axis=1)
-            .fillna(0)
-        )
 
-        # --- Genre stats for hover info ---
-        genre_stats = (
-            df_filtered.groupby("genre")["NormalityIndex"]
-            .agg(["mean", "std", "count"])
-            .reset_index()
-        )
+            # --- Combine both ---
+            fig = go.Figure()
 
-        # --- Standardize features ---
-        X_scaled = StandardScaler().fit_transform(df_embed)
+            # Add dendrogram traces
+            for trace in dendro_side["data"]:
+                fig.add_trace(trace)
 
-        # --- Compute embeddings ---
-        tsne = TSNE(
-            n_components=2,
-            perplexity=min(5, len(df_embed) - 1),
-            learning_rate="auto",
-            random_state=42,
-            init="pca",
-        ).fit_transform(X_scaled)
+            # Add heatmap
+            fig.add_trace(heatmap)
 
-        umap_embed = UMAP(
-            n_neighbors=5,
-            min_dist=0.2,
-            n_components=2,
-            random_state=42,
-            metric="euclidean",
-        ).fit_transform(X_scaled)
+            # --- Layout and axis domains ---
+            fig.update_layout(
+                width=900,
+                height=900,
+                showlegend=False,
+                hovermode="closest",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                title=f"Genre Interdependence Matrix — {year_selected}",
+                margin=dict(l=0, r=0, t=80, b=80),
+            )
 
-        df_embedding = pd.DataFrame({
-            "genre": df_embed.index,
-            "tsne_x": tsne[:, 0],
-            "tsne_y": tsne[:, 1],
-            "umap_1": umap_embed[:, 0],
-            "umap_2": umap_embed[:, 1],
-        }).merge(genre_stats, on="genre", how="left")
+            # Dendrogram domain = left side
+            fig.update_layout(
+                xaxis=dict(
+                    domain=[0.0, 0.20],   # keep within 0–1 range
+                    showticklabels=False,
+                    showgrid=False,
+                    zeroline=False,
+                ),
+                yaxis=dict(
+                    domain=[0, 1],
+                    showticklabels=False,
+                    showgrid=False,
+                    zeroline=False,
+                ),
+                # Heatmap shifted right
+                xaxis2=dict(
+                    domain=[0.30, 1.0],
+                    showgrid=False,
+                    zeroline=False,
+                    ticks="",
+                    title=None,
+                ),
+                yaxis2=dict(
+                    anchor="x2",
+                    domain=[0.03, 0.97],          # must match to align exactly
+                    showgrid=False,
+                    zeroline=False,
+                    ticks="",
+                    title=None,
+                    tickmode="array",
+                    tickvals=list(range(len(dendro_leaves))),
+                    ticktext=dendro_leaves,
+                    automargin=True,
+                ),
+                dragmode=False,  # disables zoom and pan
+                xaxis_fixedrange=True,
+                yaxis_fixedrange=True,
+                xaxis2_fixedrange=True,
+                yaxis2_fixedrange=True,
+            )
 
-        # --- Choose which UMAP axis to use for 3D depth ---
-        z_axis_choice = st.radio(
-            "Select UMAP axis for 3D depth (Z-axis)",
-            ["umap_1", "umap_2"],
-            horizontal=True,
-            index=0,
-        )
+            # Assign axes correctly
+            for i in range(len(dendro_side["data"])):
+                fig["data"][i]["xaxis"] = "x"
+                fig["data"][i]["yaxis"] = "y"
+            fig["data"][-1]["xaxis"] = "x2"
+            fig["data"][-1]["yaxis"] = "y2"
 
-        # --- Dendrogram ordering (based on t-SNE positions for temporal stability) ---
-        try:
-            Z = linkage(df_embedding[["tsne_x", "tsne_y"]].values, method="ward")
-            order_idx = leaves_list(Z)
-            ordered_genres = df_embedding.iloc[order_idx]["genre"].tolist()
-            st.session_state["ordered_genres_from_embedding"] = ordered_genres
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False,"staticPlot": False})
+
             st.caption(
-                "*Dendrogram ordering derived — used to cluster the correlation heatmap below.*"
+                """
+                *Left: hierarchical clustering of genres (white dendrogram).*
+                *Right: Spearman ρ heatmap (green = positive, red = negative).*
+                Shorter branches indicate more similar listening behaviour.
+                Hover over branches to see linkage distances between clusters.
+                """
             )
-        except Exception as e:
-            st.warning(f"Could not compute dendrogram ordering: {e}")
-            ordered_genres = list(df_embedding["genre"])
 
-        # --- Visualisation: 3D t-SNE × UMAP hybrid ---
-        fig_3d = px.scatter_3d(
-            df_embedding,
-            x="tsne_x",
-            y="tsne_y",
-            z=z_axis_choice,
-            color="mean",
-            color_continuous_scale=[
-                [0.0, "#150d20"],
-                [0.25, "#3b1148"],
-                [0.5, "#71207d"],
-                [0.75, "#b74d8f"],
-                [1.0, "#ff7ee3"],
-            ],
-            size="count",
-            hover_name="genre",
-            hover_data={
-                "mean": ":.3f",
-                "std": ":.3f",
-                "count": True,
-                "tsne_x": False,
-                "tsne_y": False,
-                z_axis_choice: False,
-            },
-            title=f"Combined t-SNE + UMAP 3D Embedding — {year_selected}",
-        )
+        else:
+            st.warning("⚠️ No valid data available for taste stability analysis.")
 
-        fig_3d.update_traces(marker=dict(opacity=0.9, line=dict(width=0.5, color="white")))
-        fig_3d.update_layout(
-            height=750,
-            scene=dict(
-                xaxis=dict(title="t-SNE X", backgroundcolor="rgba(0,0,0,0)"),
-                yaxis=dict(title="t-SNE Y", backgroundcolor="rgba(0,0,0,0)"),
-                zaxis=dict(title=z_axis_choice.upper(), backgroundcolor="rgba(0,0,0,0)"),
-            ),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            margin=dict(l=0, r=0, t=60, b=0),
-            coloraxis_colorbar=dict(
-                title="Mean Stability",
-                tickcolor="white",
-                tickfont=dict(color="white"),
-                titlefont=dict(color="white"),
-            ),
-        )
+        # ===============================================================
+        # 🧭 GENRE EMBEDDING MAP — *t-SNE/UMAP Projection of Genre Stability*
+        # ===============================================================
+        import plotly.express as px
+        import streamlit as st
+        import pandas as pd
+        import numpy as np
+        from sklearn.manifold import TSNE
+        from sklearn.preprocessing import StandardScaler
+        from umap import UMAP
+        from scipy.cluster.hierarchy import linkage, leaves_list
 
-        st.plotly_chart(fig_3d, use_container_width=True, config={"displayModeBar": False})
+        st.markdown("### 🌌 Combined 3D Genre Embedding — *t-SNE × UMAP Taste Landscape*")
 
-        st.caption(
-            f"""
-            *Each point = a genre.*
-            X–Y from **t-SNE** (local relationships),
-            Z from **{z_axis_choice.upper()}** (UMAP global topology).
-            Bubble size = number of rolling windows.
-            Color = average NormalityIndex (listening focus).
-            The dendrogram order is stored in `st.session_state['ordered_genres_from_embedding']`
-            for use by the correlation heatmap below.
-            """
-        )
+        if df_filtered["genre"].nunique() >= 3:
+            # --- Prepare pivot: rows = genres, columns = date windows ---
+            df_embed = (
+                df_filtered.pivot_table(
+                    index="genre",
+                    columns="date_window",
+                    values="NormalityIndex",
+                    aggfunc="mean",
+                )
+                .ffill(axis=1)
+                .bfill(axis=1)
+                .fillna(0)
+            )
 
-    else:
-        st.info("Not enough genres to compute an embedding map.")
+            # --- Genre stats for hover info ---
+            genre_stats = (
+                df_filtered.groupby("genre")["NormalityIndex"]
+                .agg(["mean", "std", "count"])
+                .reset_index()
+            )
+
+            # --- Standardize features ---
+            X_scaled = StandardScaler().fit_transform(df_embed)
+
+            # --- Compute embeddings ---
+            tsne = TSNE(
+                n_components=2,
+                perplexity=min(5, len(df_embed) - 1),
+                learning_rate="auto",
+                random_state=42,
+                init="pca",
+            ).fit_transform(X_scaled)
+
+            umap_embed = UMAP(
+                n_neighbors=5,
+                min_dist=0.2,
+                n_components=2,
+                random_state=42,
+                metric="euclidean",
+            ).fit_transform(X_scaled)
+
+            df_embedding = pd.DataFrame({
+                "genre": df_embed.index,
+                "tsne_x": tsne[:, 0],
+                "tsne_y": tsne[:, 1],
+                "umap_1": umap_embed[:, 0],
+                "umap_2": umap_embed[:, 1],
+            }).merge(genre_stats, on="genre", how="left")
+
+            # --- Choose which UMAP axis to use for 3D depth ---
+            z_axis_choice = st.radio(
+                "Select UMAP axis for 3D depth (Z-axis)",
+                ["umap_1", "umap_2"],
+                horizontal=True,
+                index=0,
+            )
+
+            # --- Dendrogram ordering (based on t-SNE positions for temporal stability) ---
+            try:
+                Z = linkage(df_embedding[["tsne_x", "tsne_y"]].values, method="ward")
+                order_idx = leaves_list(Z)
+                ordered_genres = df_embedding.iloc[order_idx]["genre"].tolist()
+                st.session_state["ordered_genres_from_embedding"] = ordered_genres
+                st.caption(
+                    "*Dendrogram ordering derived — used to cluster the correlation heatmap below.*"
+                )
+            except Exception as e:
+                st.warning(f"Could not compute dendrogram ordering: {e}")
+                ordered_genres = list(df_embedding["genre"])
+
+            # --- Visualisation: 3D t-SNE × UMAP hybrid ---
+            fig_3d = px.scatter_3d(
+                df_embedding,
+                x="tsne_x",
+                y="tsne_y",
+                z=z_axis_choice,
+                color="mean",
+                color_continuous_scale=[
+                    [0.0, "#150d20"],
+                    [0.25, "#3b1148"],
+                    [0.5, "#71207d"],
+                    [0.75, "#b74d8f"],
+                    [1.0, "#ff7ee3"],
+                ],
+                size="count",
+                hover_name="genre",
+                hover_data={
+                    "mean": ":.3f",
+                    "std": ":.3f",
+                    "count": True,
+                    "tsne_x": False,
+                    "tsne_y": False,
+                    z_axis_choice: False,
+                },
+                title=f"Combined t-SNE + UMAP 3D Embedding — {year_selected}",
+            )
+
+            fig_3d.update_traces(marker=dict(opacity=0.9, line=dict(width=0.5, color="white")))
+            fig_3d.update_layout(
+                height=750,
+                scene=dict(
+                    xaxis=dict(title="t-SNE X", backgroundcolor="rgba(0,0,0,0)"),
+                    yaxis=dict(title="t-SNE Y", backgroundcolor="rgba(0,0,0,0)"),
+                    zaxis=dict(title=z_axis_choice.upper(), backgroundcolor="rgba(0,0,0,0)"),
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                margin=dict(l=0, r=0, t=60, b=0),
+                coloraxis_colorbar=dict(
+                    title="Mean Stability",
+                    tickcolor="white",
+                    tickfont=dict(color="white"),
+                    titlefont=dict(color="white"),
+                ),
+            )
+
+            st.plotly_chart(fig_3d, width="stretch", config={"displayModeBar": False})
+
+            st.caption(
+                f"""
+                *Each point = a genre.*
+                X–Y from **t-SNE** (local relationships),
+                Z from **{z_axis_choice.upper()}** (UMAP global topology).
+                Bubble size = number of rolling windows.
+                Color = average NormalityIndex (listening focus).
+                The dendrogram order is stored in `st.session_state['ordered_genres_from_embedding']`
+                for use by the correlation heatmap below.
+                """
+            )
+
+        else:
+            st.info("Not enough genres to compute an embedding map.")
 
     # ===============================================================
     # Genre Taste Stability — Distribution & Median Focus"
     # ===============================================================
 
-    st.markdown("### 🎻 Genre Taste Stability — *Distribution & Median Focus*")
+        st.markdown("### 🎻 Genre Taste Stability — *Distribution & Median Focus*")
 
-    if "df_rolling" not in locals() or df_rolling.empty:
-        st.info("No rolling normality data available yet. Run the analysis first.")
-    else:
         df_vio = df_rolling.copy()
         if year_selected not in ["All Years", "All Time", None, ""]:
             try:
@@ -8794,352 +7664,255 @@ elif page == "Taste":
                 margin=dict(t=60, b=60, l=60, r=60),
             )
 
-            st.plotly_chart(fig_violin, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(fig_violin, width="stretch", config={"displayModeBar": False})
 
-    # ===============================================================
-    # 🌋 3D TASTE FOCUS RIDGELINES — Dual-Sided Neon Ribbons (Sorted by Volume)
-    # ===============================================================
-    import numpy as np
-    import pandas as pd
-    import plotly.graph_objects as go
-    from plotly.colors import sample_colorscale
-    from scipy.ndimage import gaussian_filter1d
-    import streamlit as st
+        # ===============================================================
+        # 🌋 3D TASTE FOCUS RIDGELINES — Dual-Sided Neon Ribbons (Sorted by Volume)
+        # ===============================================================
+        import numpy as np
+        import pandas as pd
+        import plotly.graph_objects as go
+        from plotly.colors import sample_colorscale
+        from scipy.ndimage import gaussian_filter1d
+        import streamlit as st
 
-    st.markdown("### 🌋 3D Taste Focus Ridgelines — *Solid Entropy-Driven Neon Forms (Sorted by Volume)*")
+        st.markdown("### 🌋 3D Taste Focus Ridgelines — *Solid Entropy-Driven Neon Forms (Sorted by Volume)*")
 
-    # --- Safety check ---
-    if "df_rolling" not in locals() or df_rolling.empty:
-        st.info("No rolling normality data available yet. Run the analysis first.")
-        st.stop()
-
-    df_focus = df_rolling.copy()
-
-    # --- Year filter ---
-    if year_selected not in ["All Years", "All Time", None, ""]:
-        try:
-            df_focus = df_focus[df_focus["year"] == int(year_selected)]
-        except Exception:
-            pass
-
-    # --- Ensure date_window exists ---
-    if "date_window" not in df_focus.columns:
-        if "datetime" in df_focus.columns:
-            df_focus["date_window"] = df_focus["datetime"].dt.to_period("28D").astype(str)
-        else:
-            st.warning("Missing both 'date_window' and 'datetime'; cannot build ridgelines.")
+        # --- Safety check ---
+        if "df_rolling" not in locals() or df_rolling.empty:
+            st.info("No rolling normality data available yet. Run the analysis first.")
             st.stop()
 
-    # --- Fill missing metrics ---
-    for col in ["NormalityIndex", "entropy", "kurtosis", "minutes_played"]:
-        if col not in df_focus.columns:
-            df_focus[col] = 0
-    df_focus = df_focus.fillna(0)
+        df_focus = df_rolling.copy()
 
-    # --- Compute TasteFocusIndex if missing ---
-    if "TasteFocusIndex" not in df_focus.columns:
+        # --- Year filter ---
+        if year_selected not in ["All Years", "All Time", None, ""]:
+            try:
+                df_focus = df_focus[df_focus["year"] == int(year_selected)]
+            except Exception:
+                pass
+
+        # --- Ensure date_window exists ---
+        if "date_window" not in df_focus.columns:
+            if "datetime" in df_focus.columns:
+                df_focus["date_window"] = df_focus["datetime"].dt.to_period("28D").astype(str)
+            else:
+                st.warning("Missing both 'date_window' and 'datetime'; cannot build ridgelines.")
+                st.stop()
+
+        # --- Fill missing metrics ---
         for col in ["NormalityIndex", "entropy", "kurtosis", "minutes_played"]:
-            col_min, col_max = df_focus[col].min(), df_focus[col].max()
-            df_focus[f"{col}_norm"] = (
-                (df_focus[col] - col_min) / (col_max - col_min)
-                if col_max > col_min
-                else 0.5
+            if col not in df_focus.columns:
+                df_focus[col] = 0
+        df_focus = df_focus.fillna(0)
+
+        # --- Compute TasteFocusIndex if missing ---
+        if "TasteFocusIndex" not in df_focus.columns:
+            for col in ["NormalityIndex", "entropy", "kurtosis", "minutes_played"]:
+                col_min, col_max = df_focus[col].min(), df_focus[col].max()
+                df_focus[f"{col}_norm"] = (
+                    (df_focus[col] - col_min) / (col_max - col_min)
+                    if col_max > col_min
+                    else 0.5
+                )
+            df_focus["TasteFocusIndex"] = (
+                df_focus["NormalityIndex_norm"]
+                * (1 - df_focus["entropy_norm"])
+                * (1 - df_focus["kurtosis_norm"])
+                * df_focus["minutes_played_norm"]
             )
-        df_focus["TasteFocusIndex"] = (
-            df_focus["NormalityIndex_norm"]
-            * (1 - df_focus["entropy_norm"])
-            * (1 - df_focus["kurtosis_norm"])
-            * df_focus["minutes_played_norm"]
-        )
 
-    # --- Pivot TasteFocusIndex + Entropy ---
-    df_surface = (
-        df_focus.pivot_table(
-            index="genre", columns="date_window", values="TasteFocusIndex", aggfunc="mean"
-        )
-        .fillna(0)
-    )
-    df_entropy = (
-        df_focus.pivot_table(
-            index="genre", columns="date_window", values="entropy", aggfunc="mean"
-        )
-        .reindex(df_surface.index)
-        .fillna(0)
-    )
-
-    # ===============================================================
-    # 🎯 SORT GENRES BY TOTAL "VOLUME" BELOW TRACE
-    # ===============================================================
-    # Compute approximate "volume" under each genre’s Taste Focus curve
-    genre_volume = df_surface.sum(axis=1).sort_values(ascending=False)
-
-    # Sort both DataFrames by this metric
-    df_surface = df_surface.reindex(genre_volume.index)
-    df_entropy = df_entropy.reindex(genre_volume.index)
-
-    # --- Smoothing values (hard-coded) ---
-    smoothing_window = 10
-    smoothing_sigma = 5
-    entropy_gamma = 1
-    ridge_thickness = 0.9
-
-    # --- Apply smoothing ---
-    df_surface = df_surface.rolling(window=smoothing_window, axis=1, min_periods=1).mean()
-    df_entropy = df_entropy.rolling(window=smoothing_window, axis=1, min_periods=1).mean()
-
-    # --- Per-genre entropy normalization ---
-    entropy_norm_per_genre = df_entropy.apply(
-        lambda row: (row - np.nanmin(row)) / (np.nanmax(row) - np.nanmin(row) + 1e-9),
-        axis=1
-    )
-
-    # --- Axes prep ---
-    time_vals = df_surface.columns
-    X = np.arange(len(time_vals))
-    Z = df_surface.values
-
-    # --- Neon palette sampling ---
-    genre_colors = sample_colorscale(
-        neon_colorscale,
-        [i / max(1, len(df_surface.index) - 1) for i in range(len(df_surface.index))],
-    )
-
-    # --- Figure setup ---
-    fig = go.Figure()
-
-    # ===============================================================
-    # 🧱 BUILD TRUE 3D RIBBONS
-    # ===============================================================
-    for i, genre in enumerate(df_surface.index):
-        z_vals = df_surface.iloc[i].values
-        e_vals = entropy_norm_per_genre.iloc[i].values
-
-        if smoothing_sigma > 0:
-            z_vals = gaussian_filter1d(z_vals, sigma=smoothing_sigma)
-            e_vals = gaussian_filter1d(e_vals, sigma=smoothing_sigma / 2)
-
-        e_vals_scaled = np.clip(e_vals ** entropy_gamma, 0, 1)
-
-        base_color = genre_colors[i][1] if isinstance(genre_colors[i], (list, tuple)) else genre_colors[i]
-        genre_entropy_colorscale = [[0, "#0b110b"], [1, base_color]]
-
-        # Define ridge geometry
-        y_center = i
-        y_left = y_center - ridge_thickness / 2
-        y_right = y_center + ridge_thickness / 2
-
-        # --- Side surfaces ---
-        color_surface = [e_vals_scaled, e_vals_scaled]
-
-        # Left wall
-        fig.add_trace(
-            go.Surface(
-                x=[X, X],
-                y=[[y_left] * len(X), [y_left] * len(X)],
-                z=[z_vals, np.zeros(len(X))],
-                surfacecolor=color_surface,
-                colorscale=genre_entropy_colorscale,
-                showscale=False,
-                opacity=1,
-                hoverinfo="skip",
-                lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
+        # --- Pivot TasteFocusIndex + Entropy ---
+        df_surface = (
+            df_focus.pivot_table(
+                index="genre", columns="date_window", values="TasteFocusIndex", aggfunc="mean"
             )
+            .fillna(0)
         )
-
-        # Right wall
-        fig.add_trace(
-            go.Surface(
-                x=[X, X],
-                y=[[y_right] * len(X), [y_right] * len(X)],
-                z=[z_vals, np.zeros(len(X))],
-                surfacecolor=color_surface,
-                colorscale=genre_entropy_colorscale,
-                showscale=False,
-                opacity=1,
-                hoverinfo="skip",
-                lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
+        df_entropy = (
+            df_focus.pivot_table(
+                index="genre", columns="date_window", values="entropy", aggfunc="mean"
             )
+            .reindex(df_surface.index)
+            .fillna(0)
         )
 
-        # --- Top ribbon surface ---
-        x_grid, y_grid = np.meshgrid(X, [y_left, y_right])
-        z_grid = np.tile(z_vals, (2, 1))
+        # ===============================================================
+        # 🎯 SORT GENRES BY TOTAL "VOLUME" BELOW TRACE
+        # ===============================================================
+        # Compute approximate "volume" under each genre’s Taste Focus curve
+        genre_volume = df_surface.sum(axis=1).sort_values(ascending=False)
 
-        fig.add_trace(
-            go.Surface(
-                x=x_grid,
-                y=y_grid,
-                z=z_grid,
-                surfacecolor=np.tile(e_vals_scaled, (2, 1)),
-                colorscale=genre_entropy_colorscale,
-                showscale=False,
-                opacity=1,
-                hoverinfo="x+y+z",
-                lighting=dict(ambient=0.7, diffuse=0.5, specular=0.1),
-                name=f"{genre} ribbon",
+        # Sort both DataFrames by this metric
+        df_surface = df_surface.reindex(genre_volume.index)
+        df_entropy = df_entropy.reindex(genre_volume.index)
+
+        # --- Smoothing values (hard-coded) ---
+        smoothing_window = 10
+        smoothing_sigma = 5
+        entropy_gamma = 1
+        ridge_thickness = 0.9
+
+        # --- Apply smoothing ---
+        df_surface = df_surface.T.rolling(window=smoothing_window, min_periods=1).mean().T
+        df_entropy = df_entropy.T.rolling(window=smoothing_window, min_periods=1).mean().T
+
+        # --- Per-genre entropy normalization ---
+        entropy_norm_per_genre = df_entropy.apply(
+            lambda row: (row - np.nanmin(row)) / (np.nanmax(row) - np.nanmin(row) + 1e-9),
+            axis=1
+        )
+
+        # --- Axes prep ---
+        time_vals = df_surface.columns
+        X = np.arange(len(time_vals))
+        Z = df_surface.values
+
+        # --- Neon palette sampling ---
+        genre_colors = sample_colorscale(
+            neon_colorscale,
+            [i / max(1, len(df_surface.index) - 1) for i in range(len(df_surface.index))],
+        )
+
+        # --- Figure setup ---
+        fig = go.Figure()
+
+        # ===============================================================
+        # 🧱 BUILD TRUE 3D RIBBONS
+        # ===============================================================
+        for i, genre in enumerate(df_surface.index):
+            z_vals = df_surface.iloc[i].values
+            e_vals = entropy_norm_per_genre.iloc[i].values
+
+            if smoothing_sigma > 0:
+                z_vals = gaussian_filter1d(z_vals, sigma=smoothing_sigma)
+                e_vals = gaussian_filter1d(e_vals, sigma=smoothing_sigma / 2)
+
+            e_vals_scaled = np.clip(e_vals ** entropy_gamma, 0, 1)
+
+            base_color = genre_colors[i][1] if isinstance(genre_colors[i], (list, tuple)) else genre_colors[i]
+            genre_entropy_colorscale = [[0, "#0b110b"], [1, base_color]]
+
+            # Define ridge geometry
+            y_center = i
+            y_left = y_center - ridge_thickness / 2
+            y_right = y_center + ridge_thickness / 2
+
+            # --- Side surfaces ---
+            color_surface = [e_vals_scaled, e_vals_scaled]
+
+            # Left wall
+            fig.add_trace(
+                go.Surface(
+                    x=[X, X],
+                    y=[[y_left] * len(X), [y_left] * len(X)],
+                    z=[z_vals, np.zeros(len(X))],
+                    surfacecolor=color_surface,
+                    colorscale=genre_entropy_colorscale,
+                    showscale=False,
+                    opacity=1,
+                    hoverinfo="skip",
+                    lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
+                )
             )
-        )
 
-        fig.add_trace(
-            go.Surface(
-                x=[[0, 0], [0, 0]],  # invisible tiny surface
-                y=[[0, 0], [0, 0]],
-                z=[[0, 0], [0, 0]],
-                surfacecolor=[[0, 1], [0, 1]],  # triggers the colorbar
-                colorscale=[[0, "#0b0b0b"], [1, "#bbbbbb"]],  # neutral dark → grey
-                showscale=True,
-                opacity=0,  # invisible
-                hoverinfo="none",
-                colorbar=dict(
-                    title="Entropy (dark = low, light = high)",
-                    tickcolor="white",
-                    tickfont=dict(color="white"),
-                    titlefont=dict(color="white"),
-                    titleside="right",
-                    bgcolor="rgba(0,0,0,0)",
-                    outlinewidth=0,
-                    thickness=18,
-                    len=0.75,
+            # Right wall
+            fig.add_trace(
+                go.Surface(
+                    x=[X, X],
+                    y=[[y_right] * len(X), [y_right] * len(X)],
+                    z=[z_vals, np.zeros(len(X))],
+                    surfacecolor=color_surface,
+                    colorscale=genre_entropy_colorscale,
+                    showscale=False,
+                    opacity=1,
+                    hoverinfo="skip",
+                    lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
+                )
+            )
+
+            # --- Top ribbon surface ---
+            x_grid, y_grid = np.meshgrid(X, [y_left, y_right])
+            z_grid = np.tile(z_vals, (2, 1))
+
+            fig.add_trace(
+                go.Surface(
+                    x=x_grid,
+                    y=y_grid,
+                    z=z_grid,
+                    surfacecolor=np.tile(e_vals_scaled, (2, 1)),
+                    colorscale=genre_entropy_colorscale,
+                    showscale=False,
+                    opacity=1,
+                    hoverinfo="x+y+z",
+                    lighting=dict(ambient=0.7, diffuse=0.5, specular=0.1),
+                    name=f"{genre} ribbon",
+                )
+            )
+
+            fig.add_trace(
+                go.Surface(
+                    x=[[0, 0], [0, 0]],  # invisible tiny surface
+                    y=[[0, 0], [0, 0]],
+                    z=[[0, 0], [0, 0]],
+                    surfacecolor=[[0, 1], [0, 1]],  # triggers the colorbar
+                    colorscale=[[0, "#0b0b0b"], [1, "#bbbbbb"]],  # neutral dark → grey
+                    showscale=True,
+                    opacity=0,  # invisible
+                    hoverinfo="none",
+                    colorbar=dict(
+                        title="Entropy (dark = low, light = high)",
+                        tickcolor="white",
+                        tickfont=dict(color="white"),
+                        titlefont=dict(color="white"),
+                        titleside="right",
+                        bgcolor="rgba(0,0,0,0)",
+                        outlinewidth=0,
+                        thickness=18,
+                        len=0.75,
+                    ),
+                )
+            )
+
+        # ===============================================================
+        # 🎨 LAYOUT
+        # ===============================================================
+        fig.update_layout(
+            title=f"3D Taste Focus Ridgelines — Sorted by Total Taste Focus Volume ({year_selected})",
+            scene=dict(
+                xaxis=dict(
+                    title="Rolling Window",
+                    tickvals=list(range(0, len(time_vals), max(1, len(time_vals)//10))),
+                    ticktext=[str(c) for c in time_vals[::max(1, len(time_vals)//10)]],
+                    gridcolor="rgba(255,255,255,0.05)",
+                    backgroundcolor="rgba(0,0,0,0)",
                 ),
-            )
+                yaxis=dict(
+                    title="Genre",
+                    tickvals=list(range(len(df_surface.index))),
+                    ticktext=list(df_surface.index),
+                    gridcolor="rgba(255,255,255,0.05)",
+                    backgroundcolor="rgba(0,0,0,0)",
+                ),
+                zaxis=dict(
+                    title="Taste Focus Index",
+                    range=[0, np.nanmax(Z) * 1.1],
+                    gridcolor="rgba(255,255,255,0.05)",
+                    backgroundcolor="rgba(0,0,0,0)",
+                ),
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            height=750,
+            margin=dict(l=0, r=0, t=60, b=0),
+            showlegend=False,
         )
 
-    # ===============================================================
-    # 🎨 LAYOUT
-    # ===============================================================
-    fig.update_layout(
-        title=f"3D Taste Focus Ridgelines — Sorted by Total Taste Focus Volume ({year_selected})",
-        scene=dict(
-            xaxis=dict(
-                title="Rolling Window",
-                tickvals=list(range(0, len(time_vals), max(1, len(time_vals)//10))),
-                ticktext=[str(c) for c in time_vals[::max(1, len(time_vals)//10)]],
-                gridcolor="rgba(255,255,255,0.05)",
-                backgroundcolor="rgba(0,0,0,0)",
-            ),
-            yaxis=dict(
-                title="Genre",
-                tickvals=list(range(len(df_surface.index))),
-                ticktext=list(df_surface.index),
-                gridcolor="rgba(255,255,255,0.05)",
-                backgroundcolor="rgba(0,0,0,0)",
-            ),
-            zaxis=dict(
-                title="Taste Focus Index",
-                range=[0, np.nanmax(Z) * 1.1],
-                gridcolor="rgba(255,255,255,0.05)",
-                backgroundcolor="rgba(0,0,0,0)",
-            ),
-        ),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white"),
-        height=750,
-        margin=dict(l=0, r=0, t=60, b=0),
-        showlegend=False,
-    )
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-
-# --------------------------------- Test ------------------------------------- #
-elif page == "Test":
-
-    # ✅ Make sure dataset is loaded
-    if "current_df" not in st.session_state:
-        st.error("No dataset selected. Please go to the Home page and select a dataset.")
-        st.stop()
-
-    df, current_label = require_current_df()
-
-    user_df = df
-
-    import pandas as pd
-
-    # --- 1) Build join keys (normalized artist name) on both DataFrames ---
-    # Adjust column names here if your artist column is called something else
-    user_key = 'artist_name'
-    genre_key = 'artist_name'
-
-    # Make safe copies with a normalized join key
-    user_df = user_df.copy()
-    df_artist_genre = INFO_ARTIST_GENRE.copy()
-
-    # -------- 1) Normalize keys and clean blanks --------
-    u = user_df.copy()
-    g = df_artist_genre.copy()
-
-    u['artist_key'] = u[user_key].astype(str).str.strip().str.lower()
-    g['artist_key'] = g[genre_key].astype(str).str.strip().str.lower()
-
-    # treat empty strings as missing for genre columns
-    for col in ['primary_genre', 'supergenre']:
-        if col in g.columns:
-            g[col] = g[col].astype('string').replace(r'^\s*$', pd.NA, regex=True)
-
-    # -------- 2) Reduce to unique user artists --------
-    user_artists = (
-        u[['artist_key', user_key]]
-        .dropna(subset=['artist_key'])
-        .drop_duplicates('artist_key')
-    )
-
-    # -------- 3) Collapse df_artist_genre to one row per artist_key, favoring non-null genres --------
-    def first_nonnull(s: pd.Series):
-        s = s.dropna()
-        return s.iloc[0] if not s.empty else pd.NA
-
-    g_one = (
-        g.groupby('artist_key', as_index=False)
-        .agg({
-            'primary_genre': first_nonnull,
-            'supergenre': first_nonnull
-        })
-    )
-
-    # -------- 4) Merge with indicator to split exact cases --------
-    m = user_artists.merge(
-        g_one, on='artist_key', how='left', indicator=True
-    )
-
-    # A) NOT PRESENT at all in df_artist_genre (true anti-join)
-    not_present = (
-        m[m['_merge'] == 'left_only']
-        [[user_key, 'artist_key']]
-        .drop_duplicates('artist_key')
-        .sort_values(user_key)
-        .reset_index(drop=True)
-    )
-    not_present_count = not_present['artist_key'].nunique()
-
-    # B) PRESENT but missing either primary_genre or supergenre
-    present_but_missing = (
-        m[(m['_merge'] == 'both') & (m['primary_genre'].isna() | m['supergenre'].isna())]
-        [[user_key, 'artist_key']]
-        .drop_duplicates('artist_key')
-        .sort_values(user_key)
-        .reset_index(drop=True)
-    )
-    present_but_missing_count = present_but_missing['artist_key'].nunique()
-
-    # (Optional) Union of unenriched = not present OR present but missing
-    unenriched_all = pd.concat([not_present, present_but_missing], ignore_index=True)\
-                    .drop_duplicates('artist_key')
-    unenriched_all_count = unenriched_all['artist_key'].nunique()
-    st.session_state["unenriched_all"] = unenriched_all
-
-    print(f"Not present: {not_present_count}")
-    print(f"Present but missing genre: {present_but_missing_count}")
-    print(f"Total unenriched (union): {unenriched_all_count}")
-
-    st.metric("Artists not in df_artist_genre", not_present_count)
-    st.metric("Artists present but missing genres", present_but_missing_count)
-    st.metric("Total not enriched (union)", unenriched_all_count)
-
-    with st.expander("View artists not present"):
-        st.dataframe(not_present[[user_key]].sort_values(user_key))
-
-    with st.expander("View artists present but missing genres"):
-        st.dataframe(present_but_missing[[user_key]].sort_values(user_key))
+    else:
+        st.info("Click the button above to generate your Taste Index analysis.")
 
 # ------------------------------ On This Day --------------------------------- #
 elif page == "On This Day":

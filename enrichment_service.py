@@ -2419,131 +2419,6 @@ class MetadataEnricher:
             )
             raise
 
-    def run_phase_breadth_first_years_remaining(self, all_art: pd.DataFrame, all_show: pd.DataFrame, all_book: pd.DataFrame):
-        """
-        Remaining metadata: breadth-first over years.
-        For each year (descending), process up to 50 *new* artists, shows, and audiobooks.
-        Diagnostic version: adds deep logging and sanitization of seen_artists.
-        """
-
-        self.current_phase = "breadth_first"
-        self._check_cancel(self.cancel_event)
-        self.log("[breadth_first] Starting diagnostic phase…")
-
-        try:
-            self._load_master("albums")
-            self._load_master("tracks")
-
-            # --- Defensive cleanup of seen sets ---
-            self.seen_artists = {
-                a.strip().lower() for a in self.seen_artists
-                if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"
-            }
-
-            # --- Reset seen_artists to only include fully enriched master artists ---
-            if hasattr(self, "master_artists") and not self.master_artists.empty:
-                before = len(self.seen_artists)
-                valid_master = self.master_artists[
-                    self.master_artists["artist_id"].notna()
-                    & self.master_artists["primary_genre"].notna()
-                ]
-                self.seen_artists = set(valid_master["artist_name"].dropna().astype(str).str.lower())
-                after = len(self.seen_artists)
-                self.log(f"[breadth_first:init] Reset seen_artists from {before} → {after} (complete master only)")
-
-            years_music = sorted(all_art["year"].dropna().unique().tolist(), reverse=True) if not all_art.empty else []
-            years_show  = sorted(all_show["year"].dropna().unique().tolist(), reverse=True) if not all_show.empty else []
-            years_book  = sorted(all_book["year"].dropna().unique().tolist(), reverse=True) if not all_book.empty else []
-
-            max_cycles = max(1, len(set(years_music + years_show + years_book)))
-            self.log(f"[breadth_first] Max cycles = {max_cycles} (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)})")
-
-            self.status.set_breadth_running(self.user_id, self.label)
-            update_heartbeat(self.user_id, self.label)
-
-            # --- Main cycles ---
-            for cycle in range(1, max_cycles + 1):
-                self._check_cancel(self.cancel_event)
-                self.log(f"[breadth_first] Cycle {cycle}/{max_cycles}")
-
-                # --- Artists ---
-                for y in years_music:
-                    self._check_cancel(self.cancel_event)
-                    sub = all_art[all_art["year"] == y].sort_values("minutes_played", ascending=False)
-                    names = [n for n in sub["artist_name"].dropna().astype(str).tolist() if n.strip()]
-                    before_total = len(names)
-                    names = [n for n in names if n.strip().lower() not in self.seen_artists]
-                    after_seen = len(names)
-                    names_prefilter = list(names)
-                    names = self._filter_known_artists(names)
-                    after_filter = len(names)
-                    self.log(f"[breadth_first] Year {y}: candidates={before_total}, after_seen={after_seen}, after_filter={after_filter}")
-                    batch = names[:50]
-                    if batch:
-                        self.fetch_and_save_artists(batch, cancel_event=self.cancel_event)
-                        self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                            detail=f"breadth_first(artists) • year={y} • +{len(batch)}")
-                        self._done_batches += 1
-                        self._maybe_autosave(self._done_batches, self._total_batches)
-                        self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip()}
-                    update_heartbeat(self.user_id, self.label)
-
-                # --- Shows ---
-                for y in years_show:
-                    self._check_cancel(self.cancel_event)
-                    sub = all_show[all_show["year"] == y].sort_values("minutes_played", ascending=False)
-                    names = [n for n in sub["show_name"].dropna().astype(str).tolist() if n.strip()]
-                    before = len(names)
-                    names = [n for n in names if n.strip().lower() not in self.seen_shows]
-                    names = self._filter_known_shows(names)
-                    batch = names[:50]
-                    if batch:
-                        self.fetch_and_save_shows(batch, cancel_event=self.cancel_event)
-                        self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                            detail=f"breadth_first(shows) • year={y} • +{len(batch)}")
-                        self._done_batches += 1
-                        self._maybe_autosave(self._done_batches, self._total_batches)
-                        self.seen_shows |= {s.strip().lower() for s in batch if s.strip()}
-                    update_heartbeat(self.user_id, self.label)
-
-                # --- Audiobooks ---
-                for y in years_book:
-                    self._check_cancel(self.cancel_event)
-                    sub = all_book[all_book["year"] == y].sort_values("minutes_played", ascending=False)
-                    titles = [t for t in sub["audiobook_title"].dropna().astype(str).tolist() if t.strip()]
-                    before = len(titles)
-                    titles = [t for t in titles if t.strip().lower() not in self.seen_audiobooks]
-                    titles = self._filter_known_audiobooks(titles)
-                    batch = titles[:50]
-                    if batch:
-                        self.fetch_and_save_audiobooks(batch, cancel_event=self.cancel_event)
-                        self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                            detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}")
-                        self._done_batches += 1
-                        self._maybe_autosave(self._done_batches, self._total_batches)
-                        self.seen_audiobooks |= {t.strip().lower() for t in batch if t.strip()}
-                    update_heartbeat(self.user_id, self.label)
-
-                update_heartbeat(self.user_id, self.label)
-
-            # ✅ Success: mark full enrichment complete
-            self.status.finish_full_status(
-                self.user_id,
-                self.label,
-                detail=f"✅ Breadth-first enrichment completed successfully ({self._done_batches} new batches)"
-            )
-            self.log(f"[breadth_first] ✅ Completed breadth-first enrichment successfully.")
-            update_heartbeat(self.user_id, self.label)
-
-        except Exception as e:
-            self.log(f"[breadth_first] ❌ Breadth-first error: {e}")
-            self.status.finish_breadth_error(
-                self.user_id,
-                self.label,
-                detail=f"❌ Breadth-first phase failed: {e}"
-            )
-            raise
-
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """Full enrichment pipeline with detailed debug logging, flushing after each phase."""
 
@@ -2758,22 +2633,310 @@ class MetadataEnricher:
 
             self.log("[run_all] 💤 Standard enrichment pipeline fully terminated.")
 
+    def run_phase_breadth_first_years_remaining(self, all_art: pd.DataFrame, all_show: pd.DataFrame, all_book: pd.DataFrame):
+        """
+        Remaining metadata: breadth-first over years.
+        For each year (descending), process up to 50 *new* artists, shows, and audiobooks.
+        Diagnostic version: adds deep logging and sanitization of seen_artists.
+        """
+
+        self.current_phase = "breadth_first"
+        self._check_cancel(self.cancel_event)
+        self.log("[breadth_first] Starting diagnostic phase…")
+
+        try:
+            self._load_master("albums")
+            self._load_master("tracks")
+
+            # --- Defensive cleanup of seen sets ---
+            self.seen_artists = {
+                a.strip().lower() for a in self.seen_artists
+                if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"
+            }
+
+            # --- Reset seen_artists to only include fully enriched master artists ---
+            if hasattr(self, "master_artists") and not self.master_artists.empty:
+                before = len(self.seen_artists)
+                valid_master = self.master_artists[
+                    self.master_artists["artist_id"].notna()
+                    & self.master_artists["primary_genre"].notna()
+                ]
+                self.seen_artists = set(valid_master["artist_name"].dropna().astype(str).str.lower())
+                after = len(self.seen_artists)
+                self.log(f"[breadth_first:init] Reset seen_artists from {before} → {after} (complete master only)")
+
+            years_music = sorted(all_art["year"].dropna().unique().tolist(), reverse=True) if not all_art.empty else []
+            years_show  = sorted(all_show["year"].dropna().unique().tolist(), reverse=True) if not all_show.empty else []
+            years_book  = sorted(all_book["year"].dropna().unique().tolist(), reverse=True) if not all_book.empty else []
+
+            max_cycles = max(1, len(set(years_music + years_show + years_book)))
+            self.log(f"[breadth_first] Max cycles = {max_cycles} (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)})")
+
+            self.status.set_breadth_running(self.user_id, self.label)
+            update_heartbeat(self.user_id, self.label)
+
+            # --- Main cycles ---
+            for cycle in range(1, max_cycles + 1):
+                self._check_cancel(self.cancel_event)
+                self.log(f"[breadth_first] Cycle {cycle}/{max_cycles}")
+
+                # --- Artists ---
+                for y in years_music:
+                    self._check_cancel(self.cancel_event)
+                    sub = all_art[all_art["year"] == y].sort_values("minutes_played", ascending=False)
+                    names = [n for n in sub["artist_name"].dropna().astype(str).tolist() if n.strip()]
+                    before_total = len(names)
+                    names = [n for n in names if n.strip().lower() not in self.seen_artists]
+                    after_seen = len(names)
+                    names_prefilter = list(names)
+                    names = self._filter_known_artists(names)
+                    after_filter = len(names)
+                    self.log(f"[breadth_first] Year {y}: candidates={before_total}, after_seen={after_seen}, after_filter={after_filter}")
+                    batch = names[:50]
+                    if batch:
+                        self.fetch_and_save_artists(batch, cancel_event=self.cancel_event)
+                        self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                            detail=f"breadth_first(artists) • year={y} • +{len(batch)}")
+                        self._done_batches += 1
+                        self._maybe_autosave(self._done_batches, self._total_batches)
+                        self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip()}
+                    update_heartbeat(self.user_id, self.label)
+
+                # --- Shows ---
+                for y in years_show:
+                    self._check_cancel(self.cancel_event)
+                    sub = all_show[all_show["year"] == y].sort_values("minutes_played", ascending=False)
+                    names = [n for n in sub["show_name"].dropna().astype(str).tolist() if n.strip()]
+                    before = len(names)
+                    names = [n for n in names if n.strip().lower() not in self.seen_shows]
+                    names = self._filter_known_shows(names)
+                    batch = names[:50]
+                    if batch:
+                        self.fetch_and_save_shows(batch, cancel_event=self.cancel_event)
+                        self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                            detail=f"breadth_first(shows) • year={y} • +{len(batch)}")
+                        self._done_batches += 1
+                        self._maybe_autosave(self._done_batches, self._total_batches)
+                        self.seen_shows |= {s.strip().lower() for s in batch if s.strip()}
+                    update_heartbeat(self.user_id, self.label)
+
+                # --- Audiobooks ---
+                for y in years_book:
+                    self._check_cancel(self.cancel_event)
+                    sub = all_book[all_book["year"] == y].sort_values("minutes_played", ascending=False)
+                    titles = [t for t in sub["audiobook_title"].dropna().astype(str).tolist() if t.strip()]
+                    before = len(titles)
+                    titles = [t for t in titles if t.strip().lower() not in self.seen_audiobooks]
+                    titles = self._filter_known_audiobooks(titles)
+                    batch = titles[:50]
+                    if batch:
+                        self.fetch_and_save_audiobooks(batch, cancel_event=self.cancel_event)
+                        self.status.inc_status(self.user_id, self.label, add_batches=1,
+                                            detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}")
+                        self._done_batches += 1
+                        self._maybe_autosave(self._done_batches, self._total_batches)
+                        self.seen_audiobooks |= {t.strip().lower() for t in batch if t.strip()}
+                    update_heartbeat(self.user_id, self.label)
+
+                update_heartbeat(self.user_id, self.label)
+
+            # ✅ Success: mark full enrichment complete
+            self.status.finish_full_status(
+                self.user_id,
+                self.label,
+                detail=f"✅ Breadth-first enrichment completed successfully ({self._done_batches} new batches)"
+            )
+            self.log(f"[breadth_first] ✅ Completed breadth-first enrichment successfully.")
+            update_heartbeat(self.user_id, self.label)
+
+        except Exception as e:
+            self.log(f"[breadth_first] ❌ Breadth-first error: {e}")
+            self.status.finish_breadth_error(
+                self.user_id,
+                self.label,
+                detail=f"❌ Breadth-first phase failed: {e}"
+            )
+            raise
+
+    def run_phase_taste_index(self, df_artist_genre: pd.DataFrame):
+        """
+        Compute per-user 28-day rolling Taste Index (Normality Index, Entropy, Kurtosis, etc.)
+        using listening history + metadata genres, and upload results to R2.
+
+        Saves to: enrichment/taste_index/{user_id}_{label}_rolling.parquet
+        Mirrors chart_scorer pattern for consistency.
+        """
+        import pandas as pd, numpy as np, re, traceback, io
+        from datetime import timedelta, timezone
+        from scipy.stats import normaltest, skew, kurtosis, entropy
+
+        self._check_cancel(self.cancel_event)
+
+        user_id = self.user_id
+        label = getattr(self, "label", "unknown")
+        ts_str = pd.Timestamp.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        output_dir = "enrichment/taste_index"
+
+        print(f"[TasteIndex] ▶ Starting rolling analysis for {user_id}:{label}")
+
+        # --- Prepare base DataFrame ---
+        df = getattr(self, "df", None)
+        if df is None or df.empty:
+            raise ValueError("[TasteIndex] ❌ No listening data loaded (self.df is empty)")
+
+        df_artist_genre = getattr(self, "df_artist_genre", None)
+        if df_artist_genre is None or df_artist_genre.empty:
+            raise ValueError("[TasteIndex] ❌ Missing artist genre metadata")
+
+        # --- Update enrichment status ---
+        self.status.set_status(
+            user_id, label,
+            phase="taste_index",
+            detail=f"Computing rolling taste index (28-day window) [{label} {ts_str}]",
+            total=self._total_batches
+        )
+
+        # ===============================================================
+        # STEP 1 — Filter & Normalize
+        # ===============================================================
+        df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
+        print(f"[TasteIndex] ✅ Filtered for musical events: {len(df_music):,} rows")
+
+        def normalize_artist_name(name: str) -> str:
+            name = str(name).lower().strip()
+            name = re.sub(r"\(.*?\)", "", name)
+            name = re.sub(r"\b(feat\.?|ft\.?|with|and|&)\b", "", name)
+            name = re.sub(r"\boriginal motion picture soundtrack\b", "", name)
+            name = re.sub(r"\bsoundtrack\b", "", name)
+            name = re.sub(r"\bremaster(ed)?\b", "", name)
+            name = re.sub(r"[^a-z0-9\s]", "", name)
+            name = re.sub(r"\s+", " ", name).strip()
+            return name
+
+        df_music["artist_key"] = df_music["artist_name"].apply(normalize_artist_name)
+        df_artist_genre["artist_key"] = df_artist_genre["artist_name"].apply(normalize_artist_name)
+
+        def first_nonnull(s: pd.Series):
+            s = s.dropna()
+            return s.iloc[0] if not s.empty else pd.NA
+
+        df_artist_genre_unique = (
+            df_artist_genre.groupby("artist_key", as_index=False)
+            .agg({"primary_genre": first_nonnull, "supergenre": first_nonnull})
+        )
+
+        df_full = df_music.merge(df_artist_genre_unique, on="artist_key", how="left")
+        df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
+
+        # ===============================================================
+        # STEP 2 — Rolling Metrics
+        # ===============================================================
+        df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
+        df_full = df_full.dropna(subset=["datetime"])
+        df_full["date"] = df_full["datetime"].dt.date
+        df_full["minutes_played"] = df_full["minutes_played"].fillna(0)
+
+        results = []
+        all_genres = df_full["supergenre"].unique()
+        window_days = 28
+
+        print(f"[TasteIndex] ▶ Computing metrics for {len(all_genres)} genres")
+
+        for genre in all_genres:
+            self._check_cancel(self.cancel_event)
+
+            gdf = df_full[df_full["supergenre"] == genre].copy()
+            if gdf.empty:
+                continue
+
+            gdf = gdf.groupby(["date", "artist_name"])["minutes_played"].sum().reset_index()
+            gdf = gdf.sort_values("date")
+
+            all_dates = pd.date_range(gdf["date"].min(), gdf["date"].max(), freq="D")
+
+            for current_end in all_dates:
+                current_start = current_end - timedelta(days=window_days - 1)
+                wdf = gdf[(gdf["date"] >= current_start.date()) & (gdf["date"] <= current_end.date())]
+                if wdf.empty:
+                    continue
+
+                artist_counts = wdf.groupby("artist_name")["minutes_played"].sum().values
+                if len(artist_counts) < 8:
+                    continue
+
+                try:
+                    total_minutes = wdf["minutes_played"].sum()
+                    _, p_val = normaltest(artist_counts)
+                    sk = skew(artist_counts)
+                    ku = kurtosis(artist_counts)
+                    sd = np.std(artist_counts)
+                    rng = artist_counts.max() - artist_counts.min()
+                    probs = (
+                        artist_counts / artist_counts.sum()
+                        if artist_counts.sum() > 0
+                        else np.ones_like(artist_counts) / len(artist_counts)
+                    )
+                    H = entropy(probs, base=2)
+
+                    # Composite index
+                    p_norm = np.clip(p_val, 0, 1)
+                    H_norm = np.clip(H / np.log2(len(artist_counts)), 0, 1)
+                    K_adj = np.clip(1 / (1 + abs(ku)), 0, 1)
+                    normality_index = np.sqrt(p_norm * (1 - H_norm) * K_adj)
+
+                    results.append(dict(
+                        genre=genre,
+                        date_window=current_end.date(),
+                        total_minutes=total_minutes,
+                        p_value=p_val,
+                        skewness=sk,
+                        kurtosis=ku,
+                        std_dev=sd,
+                        entropy=H,
+                        range_width=rng,
+                        NormalityIndex=normality_index
+                    ))
+
+                except Exception as e:
+                    print(f"[TasteIndex] ❌ Error {genre} {current_end.date()}: {e}")
+                    traceback.print_exc()
+                    continue
+
+        df_results = pd.DataFrame(results)
+        print(f"[TasteIndex] ✅ Computed {len(df_results):,} rolling-window rows")
+
+        # ===============================================================
+        # STEP 3 — Upload to R2
+        # ===============================================================
+        try:
+            parquet_key = f"{output_dir}/{user_id}_{label}_rolling.parquet"
+            self.storage.upload_parquet(df_results, path=parquet_key, overwrite=True)
+            print(f"[TasteIndex] ☁️ Uploaded parquet to R2: {parquet_key}")
+        except Exception as e:
+            print(f"[TasteIndex] ⚠️ Upload failed: {e}")
+
+        self._done_batches += 1
+        self.status.inc_status(user_id, label, add_batches=1, detail="taste_index done")
+        update_heartbeat(user_id, label)
+
+        self.status.finish_standard_status(
+            user_id, label, detail=f"✅ Taste Index enrichment complete ({label})"
+        )
+
+        return df_results
+
     def run_breadth_only(self, cancel_event=None):
         """
-        Standalone breadth-first pipeline:
-        - best-effort sanity checks (Spotify/Discogs)
-        - set breadth_running status + heartbeat
-        - ensure masters + (optional) Discogs worker pool
-        - compute inputs (all_listens or category split)
-        - run breadth-first phase
-        - flush and shutdown worker pool
-        - finish_full_status on success
+        Breadth-only enrichment pipeline with post-phase Taste Index.
+        - Runs breadth-first enrichment
+        - Then computes Taste Index
+        - Only marks full_done after both complete
         """
         self.cancel_event = cancel_event
         self.current_phase = "breadth_only"
         self.log("[breadth_only] Starting standalone breadth-first pipeline…")
 
-        # --- Sanity checks (best effort; do not hard-crash on failure) ---
+        # --- Sanity checks ---
         try:
             if "spotify_sanity_check" in globals() and getattr(self, "spotify_token", None):
                 ok, msg = spotify_sanity_check(self.spotify_token)
@@ -2802,14 +2965,14 @@ class MetadataEnricher:
         except Exception:
             pass
 
-        # --- Ensure masters (artists/albums/tracks) ---
+        # --- Ensure masters ---
         for master in ("artists", "albums", "tracks"):
             try:
                 self._load_master(master)
             except Exception as e:
                 self.log(f"[breadth_only] Warning: could not load master '{master}': {e}")
 
-        # --- Ensure Discogs worker pool (if your class supports it) ---
+        # --- Worker pool ---
         try:
             if hasattr(self, "ensure_worker_pool"):
                 self.ensure_worker_pool()
@@ -2817,7 +2980,7 @@ class MetadataEnricher:
         except Exception as e:
             self.log(f"[breadth_only] Worker pool init skipped/failed: {e}")
 
-        # --- Build inputs (like run_all but minimal) ---
+        # --- Build inputs ---
         try:
             all_art, all_show, all_book = self.all_listens()
         except Exception as e:
@@ -2830,18 +2993,24 @@ class MetadataEnricher:
             else:
                 all_art, all_show, all_book = self.df.copy(), self.df.iloc[0:0].copy(), self.df.iloc[0:0].copy()
 
-        # --- Run the breadth-first algorithm ---
+        # --- Run breadth-first ---
+        breadth_success = False
         try:
             self.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
+            breadth_success = True
+            self.log("[breadth_only] ✅ Breadth-first phase completed successfully")
+        except Exception as e:
+            self.log(f"[breadth_only] ❌ Breadth-first failed: {e}")
+            self.status.finish_breadth_error(self.user_id, self.label, detail=f"❌ Breadth-first failed: {e}")
+            return
         finally:
-            # --- Flush and shutdown even on error ---
+            # Always flush + shutdown
             try:
                 if hasattr(self, "flush_all"):
                     self.flush_all()
                     self.log("[breadth_only] ✅ flush_all completed")
             except Exception as e:
                 self.log(f"[breadth_only] flush_all warning: {e}")
-
             try:
                 if hasattr(self, "shutdown_worker_pool"):
                     self.shutdown_worker_pool()
@@ -2849,14 +3018,55 @@ class MetadataEnricher:
             except Exception as e:
                 self.log(f"[breadth_only] shutdown_worker_pool warning: {e}")
 
-        # --- Final status ---
-        try:
-            self.status.finish_full_status(
-                self.user_id, self.label,
-                detail="✅ Breadth-first (standalone) completed successfully."
-            )
-        except Exception:
-            pass
+        # --- Only proceed to Taste Index if breadth succeeded ---
+        if breadth_success:
+            try:
+                # ✅ Mark breadth_done before starting Taste Index
+                self.status.finish_breadth_done(
+                    self.user_id,
+                    self.label,
+                    detail="✅ Breadth-first enrichment complete — starting Taste Index phase"
+                )
+
+                self.log("[breadth_only] ▶ Starting Taste Index enrichment phase…")
+                self.status.set_taste_index_running(self.user_id, self.label)
+
+                # Try to get genre mapping
+                if hasattr(self, "master_artists") and not self.master_artists.empty:
+                    df_artist_genre = self.master_artists[
+                        ["artist_name", "primary_genre", "supergenre"]
+                    ].drop_duplicates(subset=["artist_name"])
+                    self.log(f"[breadth_only] ✅ Loaded {len(df_artist_genre):,} artist-genre rows from master_artists")
+                else:
+                    global INFO_ARTIST_GENRE
+                    df_artist_genre = INFO_ARTIST_GENRE.copy() if "INFO_ARTIST_GENRE" in globals() else None
+                    if df_artist_genre is not None:
+                        self.log(f"[breadth_only] ⚠️ Using fallback INFO_ARTIST_GENRE ({len(df_artist_genre):,} rows)")
+                    else:
+                        raise ValueError("No artist-genre mapping available")
+
+                # --- Run Taste Index phase ---
+                df_taste = self.run_phase_taste_index(df_artist_genre)
+
+                if df_taste is not None and not df_taste.empty:
+                    self.log(f"[breadth_only] ✅ Taste Index phase complete — {len(df_taste):,} rows computed")
+                    self.status.finish_full_status(
+                        self.user_id,
+                        self.label,
+                        detail="✅ Full enrichment (breadth + taste_index) complete."
+                    )
+                else:
+                    raise ValueError("Taste Index returned empty DataFrame")
+
+            except Exception as e:
+                self.log(f"[breadth_only] ❌ Taste Index failed: {e}")
+                traceback.print_exc()
+                self.status.finish_taste_index_error(
+                    self.user_id,
+                    self.label,
+                    detail=f"❌ Taste Index failed after breadth-first: {e}"
+                )
+                return
 
     # --- Autosaver ---
     def _save_checkpoint(self, batches_done: int, total_batches: int):

@@ -821,9 +821,8 @@ class MetadataEnricher:
         self.master_tracks = pd.DataFrame()
 
         # --- Shared Discogs worker pool ---
-        if not hasattr(MetadataEnricher, "_discogs_pool"):
-            MetadataEnricher._discogs_pool = DiscogsWorkerPool(num_workers=5)
-        self.discogs_pool = MetadataEnricher._discogs_pool
+        self.discogs_pool = DiscogsWorkerPool.get_or_create_global(num_workers=5)
+        MetadataEnricher._discogs_pool = self.discogs_pool
 
         # --- Safe logging fallback ---
         if hasattr(log_dao, "log") and callable(getattr(log_dao, "log")):
@@ -2624,6 +2623,8 @@ class MetadataEnricher:
                     try:
                         self.discogs_pool.shutdown()
                         self.log("[run_all] ✅ Discogs worker pool shut down successfully (finally block).")
+                        GLOBAL_DISCOGS_POOL = None
+                        setattr(MetadataEnricher, "_discogs_pool", None)
                     except Exception as e:
                         self.log(f"[run_all] ⚠️ Discogs pool shutdown failed: {e}")
                 else:
@@ -3327,12 +3328,20 @@ class MetadataEnricher:
 
                     # BOUNDED shutdown (won't hang forever)
                     try:
-                        pool.shutdown(max_wait_sec=180, force_purge=False, persist_backlog=False)
+                        if GLOBAL_DISCOGS_POOL:
+                            GLOBAL_DISCOGS_POOL.nudge_workers(hb_stale_sec=60, job_stale_sec=60)
+                        pool.shutdown(max_wait_sec=60, force_purge=False, persist_backlog=False)
                         self.log("[flush_all] ✅ Discogs pool shut down successfully.")
+                        GLOBAL_DISCOGS_POOL = None
+                        setattr(MetadataEnricher, "_discogs_pool", None)
                     except TypeError:
+                        if GLOBAL_DISCOGS_POOL:
+                            GLOBAL_DISCOGS_POOL.nudge_workers(hb_stale_sec=60, job_stale_sec=60)
                         # backward-compat: old signature without args
                         pool.shutdown()
                         self.log("[flush_all] ✅ Discogs pool shut down (legacy).")
+                        GLOBAL_DISCOGS_POOL = None
+                        setattr(MetadataEnricher, "_discogs_pool", None)
                 except Exception as e:
                     self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed: {e}")
             else:
@@ -3671,6 +3680,10 @@ GLOBAL_DISCOGS_QUEUE = queue.Queue()
 GLOBAL_RATE_LOCK = threading.Lock()
 GLOBAL_LAST_CALL = 0.0
 
+# --- Global pool registry (singleton control) ---
+GLOBAL_DISCOGS_POOL: Optional["DiscogsWorkerPool"] = None
+GLOBAL_DISCOGS_LOCK = threading.Lock()
+
 class DiscogsWorkerPool:
     """
     A resilient Discogs worker pool:
@@ -3681,6 +3694,25 @@ class DiscogsWorkerPool:
     """
 
     def __init__(self, num_workers: int = 5):
+        """
+        Initialize the Discogs worker pool.
+        This version is refresh-safe for Streamlit and will never spawn duplicate pools
+        if one already exists in GLOBAL_DISCOGS_POOL.
+        """
+
+        # ---------- Pre-existing pool guard ----------
+        with GLOBAL_DISCOGS_LOCK:
+            global GLOBAL_DISCOGS_POOL
+            if GLOBAL_DISCOGS_POOL and any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers):
+                print(
+                    f"[DiscogsWorkerPool] ♻️ Reusing existing global pool "
+                    f"({len(GLOBAL_DISCOGS_POOL.workers)} workers already alive)."
+                )
+                # Re-use existing instance state instead of creating new threads
+                self.__dict__.update(GLOBAL_DISCOGS_POOL.__dict__)
+                return
+
+        # ---------- Fresh initialization ----------
         self.num_workers = int(num_workers) if num_workers else 5
         self.result_queue: queue.Queue = queue.Queue()
         self.shutdown_event = threading.Event()
@@ -3691,7 +3723,7 @@ class DiscogsWorkerPool:
         self.dropped: list[dict] = []            # dropped after max retries
         self.workers: list[threading.Thread] = []
 
-        print(f"[DiscogsWorkerPool] 🧵 Initializing pool with {self.num_workers} worker(s).")
+        print(f"[DiscogsWorkerPool] 🧵 Initializing NEW pool with {self.num_workers} worker(s).")
 
         for i in range(self.num_workers):
             name = f"discogs-worker-{i}"
@@ -3702,8 +3734,13 @@ class DiscogsWorkerPool:
         alive = [t.name for t in self.workers if t.is_alive()]
         print(f"[DiscogsWorkerPool] ✅ Started workers: {alive}")
 
+        # Register as global singleton
+        with GLOBAL_DISCOGS_LOCK:
+            if GLOBAL_DISCOGS_POOL is not None and GLOBAL_DISCOGS_POOL is not self:
+                print("[DiscogsWorkerPool] ⚠️ Replacing existing global pool reference.")
+            GLOBAL_DISCOGS_POOL = self
+            
     # --------------------- Worker internals ---------------------
-
     def _normalize_job(self, job: Any) -> dict:
         """
         Accept legacy tuple jobs (name, meta, result_q) and normalize to dict.
@@ -3984,6 +4021,19 @@ class DiscogsWorkerPool:
                 if fr:
                     traceback.print_stack(fr)
 
+    @classmethod
+    def get_or_create_global(cls, num_workers: int = 5) -> "DiscogsWorkerPool":
+        """Return the active global pool or create one if missing/dead."""
+        with GLOBAL_DISCOGS_LOCK:
+            global GLOBAL_DISCOGS_POOL
+            if GLOBAL_DISCOGS_POOL is None:
+                print("[DiscogsWorkerPool] 🌍 Creating global pool (none exists).")
+                GLOBAL_DISCOGS_POOL = cls(num_workers=num_workers)
+            elif not any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers):
+                print("[DiscogsWorkerPool] ⚠️ Global pool dead — recreating.")
+                GLOBAL_DISCOGS_POOL = cls(num_workers=num_workers)
+            return GLOBAL_DISCOGS_POOL
+
     # --------------------- Shutdown ---------------------
 
     def shutdown(self, max_wait_sec: int = 180, force_purge: bool = False, persist_backlog: bool = False, storage=None):
@@ -3993,6 +4043,12 @@ class DiscogsWorkerPool:
           - wait up to max_wait_sec while nudging workers
           - optionally purge leftover jobs or persist them
         """
+        with GLOBAL_DISCOGS_LOCK:
+            global GLOBAL_DISCOGS_POOL
+            if GLOBAL_DISCOGS_POOL is not self:
+                print("[DiscogsWorkerPool] ⚠️ Shutdown requested on non-global pool; skipping.")
+                return
+
         try:
             alive_workers = [t.name for t in threading.enumerate() if t.name.startswith("discogs-worker")]
             qsize_before = GLOBAL_DISCOGS_QUEUE.qsize()
@@ -4063,6 +4119,9 @@ class DiscogsWorkerPool:
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ Shutdown error: {e}")
 
+        with GLOBAL_DISCOGS_LOCK:
+            GLOBAL_DISCOGS_POOL = None
+
     def _drain_queue_nonblocking(self):
         """Drain whatever is immediately available from the global queue (debug/cleanup)."""
         items = []
@@ -4077,3 +4136,16 @@ class DiscogsWorkerPool:
             except queue.Empty:
                 break
         return items
+
+def kill_zombie_discogs_threads(threshold_sec: int = 600):
+    """Detect Discogs threads that stopped heartbeating and terminate the pool."""
+    from threading import enumerate
+    pool = globals().get("GLOBAL_DISCOGS_POOL")
+    if not pool:
+        return 0
+    now = time.time()
+    zombies = [n for n, ts in pool.worker_heartbeats.items() if now - ts > threshold_sec]
+    if zombies:
+        print(f"[DiscogsWorkerPool] ⚰️ Killing {len(zombies)} stale Discogs workers: {zombies}")
+        pool.shutdown(force_purge=True)
+    return len(zombies)

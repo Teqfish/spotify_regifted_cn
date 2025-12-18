@@ -637,6 +637,58 @@ def clear_stale_locks(max_age_minutes: int = 10):
                     except Exception as e:
                         print(f"[startup] ⚠️ Could not release lock for {uid}: {e}")
 
+def safe_user_lock_acquire(
+    user_id: str,
+    *,
+    max_age_minutes: int = 10,
+    wait_attempts: int = 10,
+    wait_interval: float = 1.0,
+    log_prefix: str = "[lock]",
+) -> bool:
+    """
+    Attempts to acquire the user's enrichment lock safely.
+    Auto-releases stale locks (no heartbeat within max_age_minutes).
+    Waits up to wait_attempts × wait_interval seconds.
+    Returns True if acquired, False if not.
+    """
+    import time
+
+    lock = get_user_lock(user_id)
+
+    # Check for staleness
+    now = time.time()
+    last_hb = None
+    with ENRICH_HEARTBEATS_LOCK:
+        for (uid, _label), ts in ENRICH_HEARTBEATS.items():
+            if uid == user_id:
+                last_hb = ts
+                break
+
+    age_sec = (now - last_hb) if last_hb else None
+    if age_sec is None or age_sec > max_age_minutes * 60:
+        with ENRICH_LOCKS_LOCK:
+            entry = ENRICH_LOCKS.get(user_id)
+            if entry and lock.locked():
+                try:
+                    lock.release()
+                    print(f"{log_prefix} 🧹 Released stale lock for {user_id} (no heartbeat {age_sec or 'unknown'}s).")
+                except Exception as e:
+                    print(f"{log_prefix} ⚠️ Could not release stale lock for {user_id}: {e}")
+
+    # Try acquiring with retries
+    for attempt in range(1, wait_attempts + 1):
+        got_it = lock.acquire(timeout=wait_interval)
+        if got_it:
+            mark_lock_acquired(user_id)
+            print(f"{log_prefix} 🔒 Lock acquired for {user_id} on attempt {attempt}.")
+            return True
+        else:
+            print(f"{log_prefix} ⏳ Lock busy — waiting ({attempt}/{wait_attempts})…")
+            time.sleep(wait_interval)
+
+    print(f"{log_prefix} 🚫 Could not acquire lock for {user_id} after {wait_attempts} attempts.")
+    return False
+
 # global heartbeat tracking
 ENRICH_HEARTBEATS = {}
 ENRICH_HEARTBEATS_LOCK = threading.Lock()
@@ -2636,128 +2688,132 @@ class MetadataEnricher:
 
     def run_phase_breadth_first_years_remaining(self, all_art: pd.DataFrame, all_show: pd.DataFrame, all_book: pd.DataFrame):
         """
-        Remaining metadata: breadth-first over years.
-        For each year (descending), process up to 50 *new* artists, shows, and audiobooks.
-        Diagnostic version: adds deep logging and sanitization of seen_artists.
+        Breadth-first metadata enrichment by year, with robust lock + heartbeat tracking.
+        Auto-releases stale locks and gracefully handles cancel events.
         """
+        import time
 
         self.current_phase = "breadth_first"
+        user_id = getattr(self, "user_id", "unknown")
+        label = getattr(self, "label", "unknown")
+
         self._check_cancel(self.cancel_event)
-        self.log("[breadth_first] Starting diagnostic phase…")
+        self.log("[breadth_first] ▶ Starting diagnostic phase…")
+
+        # ---------- Lock protection ----------
+        if not safe_user_lock_acquire(user_id, log_prefix="[breadth_first]"):
+            self.log(f"[breadth_first] 🚫 Could not acquire lock for {user_id} (still held).")
+            return
+        mark_lock_acquired(user_id)
 
         try:
-            self._load_master("albums")
-            self._load_master("tracks")
+            # --- Load masters ---
+            for m in ("albums", "tracks"):
+                try:
+                    self._load_master(m)
+                except Exception as e:
+                    self.log(f"[breadth_first:init] ⚠️ Could not load master {m}: {e}")
 
-            # --- Defensive cleanup of seen sets ---
+            # --- Clean seen sets ---
             self.seen_artists = {
-                a.strip().lower() for a in self.seen_artists
+                a.strip().lower() for a in getattr(self, "seen_artists", [])
                 if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"
             }
-
-            # --- Reset seen_artists to only include fully enriched master artists ---
             if hasattr(self, "master_artists") and not self.master_artists.empty:
                 before = len(self.seen_artists)
-                valid_master = self.master_artists[
-                    self.master_artists["artist_id"].notna()
-                    & self.master_artists["primary_genre"].notna()
+                valid = self.master_artists[
+                    self.master_artists["artist_id"].notna() &
+                    self.master_artists["primary_genre"].notna()
                 ]
-                self.seen_artists = set(valid_master["artist_name"].dropna().astype(str).str.lower())
-                after = len(self.seen_artists)
-                self.log(f"[breadth_first:init] Reset seen_artists from {before} → {after} (complete master only)")
+                self.seen_artists = set(valid["artist_name"].dropna().astype(str).str.lower())
+                self.log(f"[breadth_first:init] Reset seen_artists from {before} → {len(self.seen_artists)} (master complete).")
 
+            # --- Year buckets ---
             years_music = sorted(all_art["year"].dropna().unique().tolist(), reverse=True) if not all_art.empty else []
             years_show  = sorted(all_show["year"].dropna().unique().tolist(), reverse=True) if not all_show.empty else []
             years_book  = sorted(all_book["year"].dropna().unique().tolist(), reverse=True) if not all_book.empty else []
 
             max_cycles = max(1, len(set(years_music + years_show + years_book)))
-            self.log(f"[breadth_first] Max cycles = {max_cycles} (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)})")
+            self.log(f"[breadth_first] Max cycles = {max_cycles} (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)}).")
 
-            self.status.set_breadth_running(self.user_id, self.label)
-            update_heartbeat(self.user_id, self.label)
+            self.status.set_breadth_running(user_id, label)
+            update_heartbeat(user_id, label)
 
-            # --- Main cycles ---
+            # --- Cycles ---
             for cycle in range(1, max_cycles + 1):
                 self._check_cancel(self.cancel_event)
                 self.log(f"[breadth_first] Cycle {cycle}/{max_cycles}")
+                update_heartbeat(user_id, label)
 
-                # --- Artists ---
+                # ========== Artists ==========
                 for y in years_music:
                     self._check_cancel(self.cancel_event)
                     sub = all_art[all_art["year"] == y].sort_values("minutes_played", ascending=False)
                     names = [n for n in sub["artist_name"].dropna().astype(str).tolist() if n.strip()]
-                    before_total = len(names)
                     names = [n for n in names if n.strip().lower() not in self.seen_artists]
-                    after_seen = len(names)
-                    names_prefilter = list(names)
                     names = self._filter_known_artists(names)
-                    after_filter = len(names)
-                    self.log(f"[breadth_first] Year {y}: candidates={before_total}, after_seen={after_seen}, after_filter={after_filter}")
                     batch = names[:50]
                     if batch:
                         self.fetch_and_save_artists(batch, cancel_event=self.cancel_event)
-                        self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                            detail=f"breadth_first(artists) • year={y} • +{len(batch)}")
+                        self.status.inc_status(user_id, label, add_batches=1, detail=f"breadth_first(artists) • year={y} • +{len(batch)}")
                         self._done_batches += 1
                         self._maybe_autosave(self._done_batches, self._total_batches)
                         self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip()}
-                    update_heartbeat(self.user_id, self.label)
+                    update_heartbeat(user_id, label)
 
-                # --- Shows ---
+                # ========== Shows ==========
                 for y in years_show:
                     self._check_cancel(self.cancel_event)
                     sub = all_show[all_show["year"] == y].sort_values("minutes_played", ascending=False)
                     names = [n for n in sub["show_name"].dropna().astype(str).tolist() if n.strip()]
-                    before = len(names)
-                    names = [n for n in names if n.strip().lower() not in self.seen_shows]
+                    names = [n for n in names if n.strip().lower() not in getattr(self, "seen_shows", set())]
                     names = self._filter_known_shows(names)
                     batch = names[:50]
                     if batch:
                         self.fetch_and_save_shows(batch, cancel_event=self.cancel_event)
-                        self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                            detail=f"breadth_first(shows) • year={y} • +{len(batch)}")
+                        self.status.inc_status(user_id, label, add_batches=1, detail=f"breadth_first(shows) • year={y} • +{len(batch)}")
                         self._done_batches += 1
                         self._maybe_autosave(self._done_batches, self._total_batches)
                         self.seen_shows |= {s.strip().lower() for s in batch if s.strip()}
-                    update_heartbeat(self.user_id, self.label)
+                    update_heartbeat(user_id, label)
 
-                # --- Audiobooks ---
+                # ========== Audiobooks ==========
                 for y in years_book:
                     self._check_cancel(self.cancel_event)
                     sub = all_book[all_book["year"] == y].sort_values("minutes_played", ascending=False)
                     titles = [t for t in sub["audiobook_title"].dropna().astype(str).tolist() if t.strip()]
-                    before = len(titles)
-                    titles = [t for t in titles if t.strip().lower() not in self.seen_audiobooks]
+                    titles = [t for t in titles if t.strip().lower() not in getattr(self, "seen_audiobooks", set())]
                     titles = self._filter_known_audiobooks(titles)
                     batch = titles[:50]
                     if batch:
                         self.fetch_and_save_audiobooks(batch, cancel_event=self.cancel_event)
-                        self.status.inc_status(self.user_id, self.label, add_batches=1,
-                                            detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}")
+                        self.status.inc_status(user_id, label, add_batches=1, detail=f"breadth_first(audiobooks) • year={y} • +{len(batch)}")
                         self._done_batches += 1
                         self._maybe_autosave(self._done_batches, self._total_batches)
                         self.seen_audiobooks |= {t.strip().lower() for t in batch if t.strip()}
-                    update_heartbeat(self.user_id, self.label)
+                    update_heartbeat(user_id, label)
 
-                update_heartbeat(self.user_id, self.label)
-
-            # ✅ Success: mark full enrichment complete
+            # --- Mark success ---
             self.status.finish_full_status(
-                self.user_id,
-                self.label,
-                detail=f"✅ Breadth-first enrichment completed successfully ({self._done_batches} new batches)"
+                user_id, label,
+                detail=f"✅ Breadth-first enrichment completed successfully ({self._done_batches} new batches)."
             )
-            self.log(f"[breadth_first] ✅ Completed breadth-first enrichment successfully.")
-            update_heartbeat(self.user_id, self.label)
+            self.log("[breadth_first] ✅ Completed breadth-first enrichment successfully.")
+            update_heartbeat(user_id, label)
 
         except Exception as e:
             self.log(f"[breadth_first] ❌ Breadth-first error: {e}")
-            self.status.finish_breadth_error(
-                self.user_id,
-                self.label,
-                detail=f"❌ Breadth-first phase failed: {e}"
-            )
+            self.status.finish_breadth_error(user_id, label, detail=f"❌ Breadth-first phase failed: {e}")
             raise
+        finally:
+            # Release lock safely
+            lock = get_user_lock(user_id)
+            if lock.locked():
+                try:
+                    lock.release()
+                    self.log(f"[breadth_first] 🔓 Released lock for {user_id}")
+                except Exception as e:
+                    self.log(f"[breadth_first] ⚠️ Could not release lock: {e}")
 
     def run_phase_taste_index(self, df_artist_genre: pd.DataFrame):
         """
@@ -2929,145 +2985,159 @@ class MetadataEnricher:
     def run_breadth_only(self, cancel_event=None):
         """
         Breadth-only enrichment pipeline with post-phase Taste Index.
+        - Uses self-healing user lock (auto-releases stale ones)
         - Runs breadth-first enrichment
         - Then computes Taste Index
-        - Only marks full_done after both complete
+        - Marks full_done only after both phases complete successfully
         """
+        import traceback, time
+
         self.cancel_event = cancel_event
         self.current_phase = "breadth_only"
-        self.log("[breadth_only] Starting standalone breadth-first pipeline…")
+        user_id = getattr(self, "user_id", "unknown")
+        label = getattr(self, "label", "unknown")
 
-        # --- Sanity checks ---
+        self.log(f"[breadth_only] ▶ Starting breadth-only enrichment for {label}…")
+
+        # ========== Acquire user lock safely ==========
+        if not safe_user_lock_acquire(user_id, log_prefix="[breadth_only]"):
+            self.log(f"[breadth_only] 🚫 Lock acquisition failed for {user_id} — another run may be active.")
+            return
+
+        mark_lock_acquired(user_id)
+        self.log(f"[breadth_only] 🔒 Acquired lock for {user_id}")
+
+        # ========== Sanity checks ==========
         try:
             if "spotify_sanity_check" in globals() and getattr(self, "spotify_token", None):
                 ok, msg = spotify_sanity_check(self.spotify_token)
                 if not ok:
                     self.status.finish_standard_error(
-                        self.user_id, self.label, detail=f"Spotify check failed: {msg}"
+                        user_id, label, detail=f"Spotify check failed: {msg}"
                     )
                     return
             if "discogs_sanity_check" in globals() and getattr(self, "discogs_key", None) and getattr(self, "discogs_secret", None):
                 ok, msg = discogs_sanity_check(self.discogs_key, self.discogs_secret)
                 if not ok:
                     self.status.finish_standard_error(
-                        self.user_id, self.label, detail=f"Discogs check failed: {msg}"
+                        user_id, label, detail=f"Discogs check failed: {msg}"
                     )
                     return
         except Exception as e:
-            self.log(f"[breadth_only] Sanity checks skipped or non-fatal error: {e}")
+            self.log(f"[breadth_only] Sanity checks skipped or non-fatal: {e}")
 
-        # --- Status & heartbeat ---
+        # ========== Status + heartbeat ==========
         try:
-            self.status.set_breadth_running(self.user_id, self.label)
+            self.status.set_breadth_running(user_id, label)
         except Exception:
             pass
-        try:
-            update_heartbeat(self.user_id, self.label)
-        except Exception:
-            pass
+        update_heartbeat(user_id, label)
 
-        # --- Ensure masters ---
+        # ========== Ensure master tables ==========
         for master in ("artists", "albums", "tracks"):
             try:
                 self._load_master(master)
             except Exception as e:
-                self.log(f"[breadth_only] Warning: could not load master '{master}': {e}")
+                self.log(f"[breadth_only] ⚠️ Could not load master '{master}': {e}")
 
-        # --- Worker pool ---
+        # ========== Worker pool ==========
         try:
             if hasattr(self, "ensure_worker_pool"):
                 self.ensure_worker_pool()
-                self.log("[breadth_only] ✅ Discogs worker pool ready")
+                self.log("[breadth_only] ✅ Discogs worker pool ready.")
         except Exception as e:
-            self.log(f"[breadth_only] Worker pool init skipped/failed: {e}")
+            self.log(f"[breadth_only] Worker pool init failed or skipped: {e}")
 
-        # --- Build inputs ---
+        # ========== Build inputs ==========
         try:
             all_art, all_show, all_book = self.all_listens()
         except Exception as e:
-            self.log(f"[breadth_only] all_listens() failed: {e} — using category split")
-            cat = self.df["category"].astype(str).str.lower() if "category" in self.df.columns else None
-            if cat is not None and len(cat) == len(self.df):
+            self.log(f"[breadth_only] all_listens() failed: {e}")
+            cat = self.df.get("category")
+            if cat is not None:
+                cat = cat.astype(str).str.lower()
                 all_art  = self.df[cat.eq("music")].copy()
                 all_show = self.df[cat.eq("show")].copy()
                 all_book = self.df[cat.eq("audiobook")].copy()
             else:
                 all_art, all_show, all_book = self.df.copy(), self.df.iloc[0:0].copy(), self.df.iloc[0:0].copy()
 
-        # --- Run breadth-first ---
+        # ========== Run breadth-first ==========
         breadth_success = False
         try:
             self.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
             breadth_success = True
-            self.log("[breadth_only] ✅ Breadth-first phase completed successfully")
+            self.log("[breadth_only] ✅ Breadth-first phase completed successfully.")
         except Exception as e:
             self.log(f"[breadth_only] ❌ Breadth-first failed: {e}")
-            self.status.finish_breadth_error(self.user_id, self.label, detail=f"❌ Breadth-first failed: {e}")
+            self.status.finish_breadth_error(user_id, label, detail=f"❌ Breadth-first failed: {e}")
             return
         finally:
             # Always flush + shutdown
             try:
                 if hasattr(self, "flush_all"):
                     self.flush_all()
-                    self.log("[breadth_only] ✅ flush_all completed")
+                    self.log("[breadth_only] ✅ flush_all completed.")
             except Exception as e:
                 self.log(f"[breadth_only] flush_all warning: {e}")
             try:
                 if hasattr(self, "shutdown_worker_pool"):
                     self.shutdown_worker_pool()
-                    self.log("[breadth_only] 💤 Discogs pool shutdown")
+                    self.log("[breadth_only] 💤 Discogs pool shutdown.")
             except Exception as e:
                 self.log(f"[breadth_only] shutdown_worker_pool warning: {e}")
+            finally:
+                # Always release lock
+                lock = get_user_lock(user_id)
+                if lock.locked():
+                    try:
+                        lock.release()
+                        self.log(f"[breadth_only] 🔓 Released lock for {user_id}")
+                    except Exception as e:
+                        self.log(f"[breadth_only] ⚠️ Lock release failed: {e}")
 
-        # --- Only proceed to Taste Index if breadth succeeded ---
-        if breadth_success:
-            try:
-                # ✅ Mark breadth_done before starting Taste Index
-                self.status.finish_breadth_done(
-                    self.user_id,
-                    self.label,
-                    detail="✅ Breadth-first enrichment complete — starting Taste Index phase"
-                )
+        # ========== Taste Index phase ==========
+        if not breadth_success:
+            return
 
-                self.log("[breadth_only] ▶ Starting Taste Index enrichment phase…")
-                self.status.set_taste_index_running(self.user_id, self.label)
+        try:
+            self.status.finish_breadth_done(
+                user_id, label,
+                detail="✅ Breadth-first enrichment complete — starting Taste Index phase."
+            )
+            self.log("[breadth_only] ▶ Starting Taste Index enrichment phase…")
+            self.status.set_taste_index_running(user_id, label)
 
-                # Try to get genre mapping
-                if hasattr(self, "master_artists") and not self.master_artists.empty:
-                    df_artist_genre = self.master_artists[
-                        ["artist_name", "primary_genre", "supergenre"]
-                    ].drop_duplicates(subset=["artist_name"])
-                    self.log(f"[breadth_only] ✅ Loaded {len(df_artist_genre):,} artist-genre rows from master_artists")
+            if hasattr(self, "master_artists") and not self.master_artists.empty:
+                df_artist_genre = self.master_artists[
+                    ["artist_name", "primary_genre", "supergenre"]
+                ].drop_duplicates(subset=["artist_name"])
+                self.log(f"[breadth_only] ✅ Loaded {len(df_artist_genre):,} artist-genre rows from master_artists.")
+            else:
+                global INFO_ARTIST_GENRE
+                df_artist_genre = INFO_ARTIST_GENRE.copy() if "INFO_ARTIST_GENRE" in globals() else None
+                if df_artist_genre is not None:
+                    self.log(f"[breadth_only] ⚠️ Using fallback INFO_ARTIST_GENRE ({len(df_artist_genre):,} rows).")
                 else:
-                    global INFO_ARTIST_GENRE
-                    df_artist_genre = INFO_ARTIST_GENRE.copy() if "INFO_ARTIST_GENRE" in globals() else None
-                    if df_artist_genre is not None:
-                        self.log(f"[breadth_only] ⚠️ Using fallback INFO_ARTIST_GENRE ({len(df_artist_genre):,} rows)")
-                    else:
-                        raise ValueError("No artist-genre mapping available")
+                    raise ValueError("No artist-genre mapping available")
 
-                # --- Run Taste Index phase ---
-                df_taste = self.run_phase_taste_index(df_artist_genre)
+            df_taste = self.run_phase_taste_index(df_artist_genre)
 
-                if df_taste is not None and not df_taste.empty:
-                    self.log(f"[breadth_only] ✅ Taste Index phase complete — {len(df_taste):,} rows computed")
-                    self.status.finish_full_status(
-                        self.user_id,
-                        self.label,
-                        detail="✅ Full enrichment (breadth + taste_index) complete."
-                    )
-                else:
-                    raise ValueError("Taste Index returned empty DataFrame")
-
-            except Exception as e:
-                self.log(f"[breadth_only] ❌ Taste Index failed: {e}")
-                traceback.print_exc()
-                self.status.finish_taste_index_error(
-                    self.user_id,
-                    self.label,
-                    detail=f"❌ Taste Index failed after breadth-first: {e}"
+            if df_taste is not None and not df_taste.empty:
+                self.log(f"[breadth_only] ✅ Taste Index complete — {len(df_taste):,} rows.")
+                self.status.finish_full_status(
+                    user_id, label,
+                    detail="✅ Full enrichment (breadth + taste_index) complete."
                 )
-                return
+            else:
+                raise ValueError("Taste Index returned empty DataFrame.")
+        except Exception as e:
+            self.log(f"[breadth_only] ❌ Taste Index failed: {e}")
+            traceback.print_exc()
+            self.status.finish_taste_index_error(
+                user_id, label,
+                detail=f"❌ Taste Index failed after breadth-first: {e}"
+            )
 
     # --- Autosaver ---
     def _save_checkpoint(self, batches_done: int, total_batches: int):
@@ -3671,7 +3741,7 @@ class MetadataEnricher:
         self.log(f"[filter] Audiobooks filtered out: {filtered}/{before} (remaining={len(out)})")
         return out
 
-# -------------------- Discogs Pool Party --------------------
+# ---------------------------- Discogs Pool Party ---------------------------- #
 DISCOGS_KEY = st.secrets["discogs"]["key"]
 DISCOGS_SECRET = st.secrets["discogs"]["secret"]
 
@@ -3682,7 +3752,45 @@ GLOBAL_LAST_CALL = 0.0
 
 # --- Global pool registry (singleton control) ---
 GLOBAL_DISCOGS_POOL: Optional["DiscogsWorkerPool"] = None
-GLOBAL_DISCOGS_LOCK = threading.Lock()
+GLOBAL_DISCOGS_LOCK = threading.RLock()  # ✅ Use RLock instead of Lock!
+
+# --- Safety cleanup at module import ---
+def safe_is_locked(lock):
+    """Return True if a Lock or RLock is currently held."""
+    if hasattr(lock, "locked"):  # normal Lock
+        try:
+            return lock.locked()
+        except Exception:
+            return False
+    else:  # fallback for RLock
+        try:
+            acquired = lock.acquire(blocking=False)
+            if acquired:
+                lock.release()
+                return False
+            else:
+                return True
+        except Exception:
+            return False
+
+try:
+    if safe_is_locked(GLOBAL_DISCOGS_LOCK):
+        print("[startup] 🔓 Forcing release of stale Discogs lock.")
+        try:
+            GLOBAL_DISCOGS_LOCK.release()
+        except Exception as e:
+            print(f"[startup] ⚠️ Could not release Discogs lock: {e}")
+
+    if (
+        "GLOBAL_DISCOGS_POOL" in globals()
+        and GLOBAL_DISCOGS_POOL
+        and not any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers)
+    ):
+        print("[startup] 🪦 Found stale GLOBAL_DISCOGS_POOL with no live workers. Resetting.")
+        GLOBAL_DISCOGS_POOL = None
+
+except Exception as e:
+    print(f"[startup] ⚠️ Discogs startup safety check failed: {e}")
 
 class DiscogsWorkerPool:
     """
@@ -3696,21 +3804,47 @@ class DiscogsWorkerPool:
     def __init__(self, num_workers: int = 5):
         """
         Initialize the Discogs worker pool.
-        This version is refresh-safe for Streamlit and will never spawn duplicate pools
-        if one already exists in GLOBAL_DISCOGS_POOL.
+        Refresh-safe for Streamlit, re-entrant safe (RLock), and fully instrumented.
         """
+
+        import threading, time
+
+        # --- Debug diagnostics before taking the lock ---
+        try:
+            print(f"[DiscogsWorkerPool:init] debug → GLOBAL_DISCOGS_LOCK.locked()={GLOBAL_DISCOGS_LOCK.locked()}")
+            print(f"[DiscogsWorkerPool:init] debug → GLOBAL_DISCOGS_POOL={GLOBAL_DISCOGS_POOL}")
+            if GLOBAL_DISCOGS_POOL:
+                alive = [t.name for t in GLOBAL_DISCOGS_POOL.workers if t.is_alive()]
+                print(f"[DiscogsWorkerPool:init] debug → existing workers alive={alive}")
+                print(f"[DiscogsWorkerPool:init] debug → shutdown_event.set? {GLOBAL_DISCOGS_POOL.shutdown_event.is_set()}")
+            print(f"[DiscogsWorkerPool:init] debug → Thread dump:")
+            for t in threading.enumerate():
+                print(f"   {t.name} (daemon={t.daemon})")
+        except Exception as e:
+            print(f"[DiscogsWorkerPool:init] ⚠️ Debug preflight failed: {e}")
 
         # ---------- Pre-existing pool guard ----------
         with GLOBAL_DISCOGS_LOCK:
-            global GLOBAL_DISCOGS_POOL
-            if GLOBAL_DISCOGS_POOL and any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers):
+            if (
+                "GLOBAL_DISCOGS_POOL" in globals()
+                and GLOBAL_DISCOGS_POOL
+                and any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers)
+            ):
                 print(
                     f"[DiscogsWorkerPool] ♻️ Reusing existing global pool "
                     f"({len(GLOBAL_DISCOGS_POOL.workers)} workers already alive)."
                 )
-                # Re-use existing instance state instead of creating new threads
                 self.__dict__.update(GLOBAL_DISCOGS_POOL.__dict__)
                 return
+
+            # If stale pool (no live workers) → reset
+            if (
+                "GLOBAL_DISCOGS_POOL" in globals()
+                and GLOBAL_DISCOGS_POOL
+                and not any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers)
+            ):
+                print("[DiscogsWorkerPool] 🪦 Found stale pool (no live workers). Resetting global reference.")
+                globals()["GLOBAL_DISCOGS_POOL"] = None
 
         # ---------- Fresh initialization ----------
         self.num_workers = int(num_workers) if num_workers else 5
@@ -3719,27 +3853,31 @@ class DiscogsWorkerPool:
 
         # diagnostics & recovery
         self.worker_heartbeats: dict[str, float] = {}
-        self.inflight: dict[Any, dict] = {}      # {job_id: {...}}
-        self.dropped: list[dict] = []            # dropped after max retries
+        self.inflight: dict[Any, dict] = {}
+        self.dropped: list[dict] = []
         self.workers: list[threading.Thread] = []
 
         print(f"[DiscogsWorkerPool] 🧵 Initializing NEW pool with {self.num_workers} worker(s).")
 
         for i in range(self.num_workers):
             name = f"discogs-worker-{i}"
-            t = threading.Thread(target=self._worker, args=(name,), name=name, daemon=True)
-            t.start()
-            self.workers.append(t)
+            try:
+                t = threading.Thread(target=self._worker, args=(name,), name=name, daemon=True)
+                t.start()
+                self.workers.append(t)
+            except Exception as e:
+                print(f"[DiscogsWorkerPool] ⚠️ Failed to start worker {i}: {e}")
 
         alive = [t.name for t in self.workers if t.is_alive()]
         print(f"[DiscogsWorkerPool] ✅ Started workers: {alive}")
 
         # Register as global singleton
         with GLOBAL_DISCOGS_LOCK:
-            if GLOBAL_DISCOGS_POOL is not None and GLOBAL_DISCOGS_POOL is not self:
+            existing = globals().get("GLOBAL_DISCOGS_POOL")
+            if existing is not None and existing is not self:
                 print("[DiscogsWorkerPool] ⚠️ Replacing existing global pool reference.")
-            GLOBAL_DISCOGS_POOL = self
-            
+            globals()["GLOBAL_DISCOGS_POOL"] = self
+
     # --------------------- Worker internals ---------------------
     def _normalize_job(self, job: Any) -> dict:
         """
@@ -3821,16 +3959,32 @@ class DiscogsWorkerPool:
         return [str(x) for x in genres if isinstance(x, str)]
 
     def _worker(self, name: str):
-        """Background worker fetching genres from the shared Discogs queue."""
-        self.worker_heartbeats[name] = time.time()
+        """
+        Background worker fetching genres from the shared Discogs queue.
+        - Periodic heartbeat update
+        - Checks shutdown_event frequently
+        - Detects and reports stale behaviour
+        """
+        import time, requests, queue, traceback
 
-        while not self.shutdown_event.is_set():
-            # 1) Get a job (non-blocking forever)
+        self.worker_heartbeats[name] = time.time()
+        print(f"[DiscogsWorkerPool] 👷 Worker {name} started.")
+
+        while True:
+            if self.shutdown_event.is_set():
+                print(f"[DiscogsWorkerPool] 💤 {name} detected shutdown_event — exiting.")
+                break
+
             try:
                 raw = GLOBAL_DISCOGS_QUEUE.get(timeout=1.0)
             except queue.Empty:
+                # periodic heartbeat refresh
                 self.worker_heartbeats[name] = time.time()
                 continue
+
+            if self.shutdown_event.is_set():
+                GLOBAL_DISCOGS_QUEUE.task_done()
+                break
 
             job = self._normalize_job(raw)
             job_id = self._job_id(job)
@@ -3847,7 +4001,6 @@ class DiscogsWorkerPool:
                 while retries < 10 and not self.shutdown_event.is_set():
                     try:
                         genres = self._process_job(job, http_timeout=(3.05, 15))
-                        # success → emit result and break
                         try:
                             job["result_q"].put({
                                 "artist_name": job.get("artist"),
@@ -3862,7 +4015,6 @@ class DiscogsWorkerPool:
                         resp = getattr(e, "response", None)
                         status = getattr(resp, "status_code", None)
                         if status == 429:
-                            # bounded retry-after with shutdown-aware sleep
                             try:
                                 retry_after = int(resp.headers.get("Retry-After", "1"))
                             except Exception:
@@ -3872,7 +4024,6 @@ class DiscogsWorkerPool:
                             retries += 1
                             job["attempts"] = retries
                             continue
-                        # other HTTP errors → requeue or drop
                         self._requeue(job, reason=f"http_{status}", exc=e)
                         break
 
@@ -3885,11 +4036,12 @@ class DiscogsWorkerPool:
                         break
 
                     except Exception as e:
+                        print(f"[DiscogsWorkerPool] ⚠️ unexpected error in {name}: {e}")
+                        traceback.print_exc()
                         self._requeue(job, reason=f"unexpected:{e.__class__.__name__}", exc=e)
                         break
 
             finally:
-                # ALWAYS update diagnostics and mark done
                 self.inflight.pop(job_id, None)
                 try:
                     GLOBAL_DISCOGS_QUEUE.task_done()
@@ -3897,18 +4049,41 @@ class DiscogsWorkerPool:
                     pass
                 self.worker_heartbeats[name] = time.time()
 
-    # --------------------- Public API ---------------------
+        print(f"[DiscogsWorkerPool] 🪦 Worker {name} exited cleanly.")
 
+    # --------------------- Public API ---------------------
     def ensure_worker_pool(self):
         """Back-compat alias used elsewhere in your code."""
         return self.ensure_alive()
 
     def ensure_alive(self):
-        """If all workers are dead, reinitialize them."""
-        if any(t.is_alive() for t in self.workers):
-            return
-        print("[DiscogsWorkerPool] ⚠️ All workers dead — restarting pool.")
-        self.__init__(num_workers=len(self.workers) or 5)
+        """
+        Verify pool health and restart if all workers are dead or shutdown.
+        """
+        import time
+
+        try:
+            if getattr(self, "shutdown_event", None) and self.shutdown_event.is_set():
+                print("[DiscogsWorkerPool] ⚠️ Pool marked as shutdown — reinitializing.")
+                self.__init__(num_workers=self.num_workers)
+                return
+
+            alive_workers = [t for t in self.workers if t.is_alive()] if hasattr(self, "workers") else []
+            if alive_workers:
+                print(f"[DiscogsWorkerPool] ✅ Pool healthy — {len(alive_workers)} worker(s) alive.")
+                return
+
+            print("[DiscogsWorkerPool] ⚠️ All workers dead — restarting pool.")
+            self.__init__(num_workers=self.num_workers)
+            time.sleep(0.5)
+
+            # ensure new pool is registered globally
+            with GLOBAL_DISCOGS_LOCK:
+                globals()["GLOBAL_DISCOGS_POOL"] = self
+                print("[DiscogsWorkerPool] ♻️ Global pool reference refreshed after restart.")
+
+        except Exception as e:
+            print(f"[DiscogsWorkerPool] ⚠️ ensure_alive() failed: {e}")
 
     def submit(self, names: list[str], meta: dict | None = None):
         """Queue up artist lookups into the global queue."""
@@ -3951,7 +4126,6 @@ class DiscogsWorkerPool:
         return pd.DataFrame(rows)
 
     # --------------------- Debugging & Recovery ---------------------
-
     def snapshot_queue(self, max_n: int = 50) -> dict:
         """
         Inspect the global queue contents (debug only).
@@ -4035,50 +4209,50 @@ class DiscogsWorkerPool:
             return GLOBAL_DISCOGS_POOL
 
     # --------------------- Shutdown ---------------------
-
     def shutdown(self, max_wait_sec: int = 180, force_purge: bool = False, persist_backlog: bool = False, storage=None):
         """
-        Bounded shutdown:
-          - set shutdown_event
-          - wait up to max_wait_sec while nudging workers
-          - optionally purge leftover jobs or persist them
+        Bounded shutdown with diagnostics, forced drain, and automatic global reset.
         """
-        with GLOBAL_DISCOGS_LOCK:
-            global GLOBAL_DISCOGS_POOL
-            if GLOBAL_DISCOGS_POOL is not self:
-                print("[DiscogsWorkerPool] ⚠️ Shutdown requested on non-global pool; skipping.")
-                return
+        import time, threading
+
+        print(f"[DiscogsWorkerPool] 💤 Shutdown requested (force_purge={force_purge}, persist_backlog={persist_backlog})")
+        start = time.time()
 
         try:
-            alive_workers = [t.name for t in threading.enumerate() if t.name.startswith("discogs-worker")]
-            qsize_before = GLOBAL_DISCOGS_QUEUE.qsize()
-            print(f"[DiscogsWorkerPool] Active Discogs worker threads: {alive_workers or 'None'}")
-            print(f"[DiscogsWorkerPool] 💤 Shutdown requested — queue size: {qsize_before}")
+            with GLOBAL_DISCOGS_LOCK:
+                pool = globals().get("GLOBAL_DISCOGS_POOL")
+                if pool is not self:
+                    print("[DiscogsWorkerPool] ⚠️ Shutdown requested on non-global pool; skipping.")
+                    return
 
-            self.shutdown_event.set()
-            start = time.time()
-            last = -1
+                self.shutdown_event.set()
+                alive_workers = [t.name for t in self.workers if t.is_alive()]
+                print(f"[DiscogsWorkerPool] Active workers before shutdown: {alive_workers or 'None'}")
 
-            while True:
+            # Wait up to max_wait_sec for unfinished tasks to drain
+            last_remaining = -1
+            for sec in range(max_wait_sec):
                 remaining = GLOBAL_DISCOGS_QUEUE.unfinished_tasks
-                print(f"[DiscogsWorkerPool] ⏳ Waiting for {remaining} jobs to finish…")
                 if remaining == 0:
                     break
-
-                self.nudge_workers(hb_stale_sec=90, job_stale_sec=90)
-
-                # If no progress, snapshot and (optionally) dump stacks
-                if remaining == last:
-                    self.snapshot_queue(max_n=10)
-                last = remaining
-
-                if time.time() - start > max_wait_sec:
-                    print(f"[DiscogsWorkerPool] ⛔ Max wait exceeded; proceeding to finalize.")
-                    break
-
+                if sec % 10 == 0:
+                    hb_staleness = {
+                        n: int(time.time() - ts)
+                        for n, ts in self.worker_heartbeats.items()
+                    }
+                    print(f"[DiscogsWorkerPool] ⏳ waiting... {remaining} tasks remain | heartbeat_age={hb_staleness}")
                 time.sleep(1.0)
+                last_remaining = remaining
 
-            # Optional: persist or purge leftover queue
+            # Force drain if still stuck
+            if GLOBAL_DISCOGS_QUEUE.unfinished_tasks > 0:
+                print("[DiscogsWorkerPool] ⛔ Force draining queue after max wait.")
+                try:
+                    self._drain_queue_nonblocking()
+                except Exception as e:
+                    print(f"[DiscogsWorkerPool] ⚠️ drain failed: {e}")
+
+            # Handle leftovers
             leftovers = []
             if GLOBAL_DISCOGS_QUEUE.qsize() > 0:
                 leftovers = self._drain_queue_nonblocking()
@@ -4087,21 +4261,19 @@ class DiscogsWorkerPool:
                         try:
                             payload = [
                                 {
-                                    "artist": (j.get("artist") if isinstance(j, dict) else str(j)),
-                                    "meta": (j.get("meta") if isinstance(j, dict) else {}),
-                                    "attempts": (j.get("attempts") if isinstance(j, dict) else 0),
+                                    "artist": j.get("artist", ""),
+                                    "meta": j.get("meta", {}),
+                                    "attempts": j.get("attempts", 0),
                                 }
                                 for j in leftovers
                             ]
                             storage.put_json("enrichment/backlog/discogs_jobs.json", payload)
-                            print(f"[DiscogsWorkerPool] 📦 persisted {len(payload)} leftover jobs for resume")
+                            print(f"[DiscogsWorkerPool] 📦 Persisted {len(payload)} leftover jobs for resume")
                         except Exception as e:
-                            print(f"[DiscogsWorkerPool] ⚠️ failed to persist backlog: {e}")
+                            print(f"[DiscogsWorkerPool] ⚠️ Failed to persist backlog: {e}")
                     elif force_purge:
                         print(f"[DiscogsWorkerPool] ⚠️ Purging {len(leftovers)} leftover jobs (force_purge=True)")
-                        # already drained; nothing else to do
                     else:
-                        # Requeue them back so they can be picked up next run
                         for j in leftovers:
                             try:
                                 GLOBAL_DISCOGS_QUEUE.put(j)
@@ -4112,15 +4284,16 @@ class DiscogsWorkerPool:
             # Join worker threads (bounded)
             for t in list(self.workers):
                 if t.is_alive():
-                    t.join(timeout=3)
-
-            print(f"[DiscogsWorkerPool] ✅ Shutdown complete. Final queue size: {GLOBAL_DISCOGS_QUEUE.qsize()}")
+                    t.join(timeout=2)
+            print(f"[DiscogsWorkerPool] ✅ Shutdown complete. Final queue size={GLOBAL_DISCOGS_QUEUE.qsize()}")
 
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ Shutdown error: {e}")
 
-        with GLOBAL_DISCOGS_LOCK:
-            GLOBAL_DISCOGS_POOL = None
+        finally:
+            with GLOBAL_DISCOGS_LOCK:
+                globals()["GLOBAL_DISCOGS_POOL"] = None
+            print("[DiscogsWorkerPool] 🔓 Global pool reference cleared.")
 
     def _drain_queue_nonblocking(self):
         """Drain whatever is immediately available from the global queue (debug/cleanup)."""
@@ -4137,6 +4310,7 @@ class DiscogsWorkerPool:
                 break
         return items
 
+# These are meant to be outside the class
 def kill_zombie_discogs_threads(threshold_sec: int = 600):
     """Detect Discogs threads that stopped heartbeating and terminate the pool."""
     from threading import enumerate
@@ -4149,3 +4323,32 @@ def kill_zombie_discogs_threads(threshold_sec: int = 600):
         print(f"[DiscogsWorkerPool] ⚰️ Killing {len(zombies)} stale Discogs workers: {zombies}")
         pool.shutdown(force_purge=True)
     return len(zombies)
+
+def peek_discogs_queue(max_items=20):
+    import itertools
+    if GLOBAL_DISCOGS_QUEUE.empty():
+        print("[debug] Discogs queue empty.")
+        return
+    print(f"[debug] Peeking first {max_items} items from Discogs queue (non-destructive):")
+    with GLOBAL_DISCOGS_QUEUE.mutex:
+        sample = list(itertools.islice(GLOBAL_DISCOGS_QUEUE.queue, 0, max_items))
+        for i, job in enumerate(sample):
+            artist = job.get("artist") if isinstance(job, dict) else str(job)
+            print(f"   {i+1:02d}: {artist}")
+    print(f"[debug] total={GLOBAL_DISCOGS_QUEUE.qsize()} jobs queued")
+
+def debug_discogs_pool_state():
+    """Print diagnostic summary of current Discogs worker pool."""
+    import time, threading
+    pool = globals().get("GLOBAL_DISCOGS_POOL")
+    if not pool:
+        print("[debug] No GLOBAL_DISCOGS_POOL currently.")
+        return
+    print(f"[debug] Workers: {len(pool.workers)} | Queue size={GLOBAL_DISCOGS_QUEUE.qsize()} | unfinished={GLOBAL_DISCOGS_QUEUE.unfinished_tasks}")
+    for t in pool.workers:
+        print(f"   - {t.name} alive={t.is_alive()}")
+    if pool.worker_heartbeats:
+        now = time.time()
+        ages = {n: int(now - ts) for n, ts in pool.worker_heartbeats.items()}
+        print(f"[debug] Heartbeat ages: {ages}")
+    print(f"[debug] inflight={len(pool.inflight)}")

@@ -733,11 +733,11 @@ def terminate_stale_enrichment_threads(user_id: str, max_age_sec: int = 600):
 
 def recovery_sweep(user_id: str, dataset_label: str, log_dao=None):
     """
-    Detects and repairs 'zombie running' enrichment states:
-    when the status says running, but no active thread or recent heartbeat exists.
+    Detect and repair zombie 'running' enrichments.
+    Uses runtime signature detection to call set_status() safely
+    regardless of whether the DAO expects a payload dict or kwargs.
     """
-
-    import time, streamlit as st
+    import time, inspect, streamlit as st
     from dao_selector import DAOS
     from enrichment_service import get_user_lock, get_last_heartbeat
 
@@ -747,50 +747,97 @@ def recovery_sweep(user_id: str, dataset_label: str, log_dao=None):
 
         current_status = (d1_status.get("status") or "").lower()
         current_phase = (d1_status.get("phase") or "").lower()
+        current_stage = (d1_status.get("stage") or "").lower()
 
-        # Skip if not "running" or "breadth_running"
         if current_status not in ("running", "breadth_running"):
+            print(f"[recovery_sweep] ✅ No zombie sweep needed (status={current_status}, phase={current_phase})")
             return
 
-        reg = st.session_state.get("_enrichment_registry", {})
+        reg = getattr(st, "session_state", {}).get("_enrichment_registry", {})
         active_thread = reg.get("thread")
-        is_alive = active_thread and active_thread.is_alive()
+        is_alive = bool(active_thread and getattr(active_thread, "is_alive", lambda: False)())
 
-        # Heartbeat check
         last_hb = get_last_heartbeat(user_id, dataset_label)
         now = time.time()
-        if last_hb is not None:
-            hb_age = now - last_hb
-        else:
-            hb_age = None
-        stale_hb = (hb_age is None) or (hb_age > 600)  # 10 min threshold
-
+        hb_age = now - last_hb if last_hb is not None else None
+        stale_hb = (hb_age is None) or (hb_age > 600)
         age_display = f"{int(hb_age)}s" if hb_age is not None else "no heartbeat"
 
-        if not is_alive and stale_hb:
-            print(f"[recovery_sweep] ⚠️ Zombie state detected for {dataset_label}: "
-                  f"status={current_status}, phase={current_phase}, hb_age={age_display}")
+        if is_alive or not stale_hb:
+            print(f"[recovery_sweep] ✅ No zombie detected for {dataset_label} (alive={is_alive}, hb_age={age_display})")
+            return
 
-            # Release lock if held
+        # --- Zombie detected ---
+        print(f"[recovery_sweep] ⚠️ Zombie state detected for {dataset_label}: "
+              f"status={current_status}, phase={current_phase}, hb_age={age_display}")
+
+        # Release any stale lock
+        try:
             user_lock = get_user_lock(user_id)
-            if user_lock.locked():
-                try:
-                    user_lock.release()
-                    print(f"[recovery_sweep] 🔓 Released stale lock for {user_id}")
-                except Exception as e:
-                    print(f"[recovery_sweep] ⚠️ Failed to release stale lock: {e}")
+            if hasattr(user_lock, "locked") and user_lock.locked():
+                user_lock.release()
+                print(f"[recovery_sweep] 🔓 Released stale lock for {user_id}")
+        except Exception as e:
+            print(f"[recovery_sweep] ⚠️ Lock release failed: {e}")
 
-            # Mark error in status
-            detail = f"⚠️ Stuck in running state with no active thread (hb_age={age_display})"
-            status_dao.finish_standard_error(user_id, dataset_label, detail=detail)
-
-            if log_dao:
-                log_dao.log(user_id, dataset_label, "recovery", detail, level="warning")
-
-            print(f"[recovery_sweep] ✅ Status updated to error for {dataset_label}")
+        # Classify the error more precisely
+        if "breadth" in current_phase or current_status == "breadth_running":
+            new_status = "breadth_error"
+        elif "album" in current_phase:
+            new_status = "per_album_error"
+        elif "standard" in current_stage:
+            new_status = "standard_error"
         else:
-            print(f"[recovery_sweep] ✅ No zombie detected for {dataset_label} "
-                  f"(alive={is_alive}, hb_age={age_display})")
+            new_status = "error"
+
+        detail = f"⚠️ Stuck in {current_phase or 'running'} state with no active thread (hb_age={age_display})"
+
+        # --- Adaptive call ---
+        try:
+            sig = inspect.signature(status_dao.set_status)
+            params = list(sig.parameters.values())
+            accepts_kwargs = any(p.kind == p.VAR_KEYWORD for p in params)
+
+            if accepts_kwargs:
+                # Modern DAO → keyword-style call
+                status_dao.set_status(
+                    user_id,
+                    dataset_label,
+                    status=new_status,
+                    phase=current_phase or "unknown",
+                    stage=current_stage or "unknown",
+                    detail=detail,
+                )
+                print(f"[recovery_sweep] 🧭 Status updated via kwargs → {new_status} for {dataset_label}")
+
+            else:
+                # Legacy DAO → 3-positional style
+                payload = {
+                    "status": new_status,
+                    "phase": current_phase or "unknown",
+                    "stage": current_stage or "unknown",
+                    "detail": detail,
+                    "timestamp": int(now),
+                }
+                status_dao.set_status(user_id, dataset_label, payload)
+                print(f"[recovery_sweep] 🧭 Status updated via dict payload → {new_status} for {dataset_label}")
+
+        except Exception as e:
+            print(f"[recovery_sweep] ⚠️ set_status() failed: {e}")
+            # fallback: try finish_standard_error if available
+            try:
+                if hasattr(status_dao, "finish_standard_error"):
+                    status_dao.finish_standard_error(user_id, dataset_label, detail=detail)
+                    print(f"[recovery_sweep] 🧭 Fallback finish_standard_error() succeeded for {dataset_label}")
+            except Exception as e2:
+                print(f"[recovery_sweep] ⚠️ Fallback also failed: {e2}")
+
+        # --- Optional log entry ---
+        if log_dao:
+            try:
+                log_dao.log(user_id, dataset_label, "recovery", detail, level="warning")
+            except Exception as e:
+                print(f"[recovery_sweep] ⚠️ log_dao.log failed: {e}")
 
     except Exception as e:
         print(f"[recovery_sweep] ⚠️ Error during recovery sweep: {e}")
@@ -4294,6 +4341,46 @@ class DiscogsWorkerPool:
             with GLOBAL_DISCOGS_LOCK:
                 globals()["GLOBAL_DISCOGS_POOL"] = None
             print("[DiscogsWorkerPool] 🔓 Global pool reference cleared.")
+
+    def shutdown_worker_pool(self, timeout: int = 10, force_purge: bool = False):
+        """
+        Graceful wrapper for shutdown(), used by background_enrich() and breadth_only.
+        Ensures all threads stop even if GLOBAL_DISCOGS_POOL reference is missing or mismatched.
+        """
+        import threading, time
+
+        try:
+            # Normal path: call existing shutdown()
+            print(f"[DiscogsWorkerPool] 🧹 shutdown_worker_pool() called (timeout={timeout})")
+            self.shutdown(max_wait_sec=timeout, force_purge=force_purge)
+            return
+
+        except Exception as e:
+            print(f"[DiscogsWorkerPool] ⚠️ shutdown() raised exception: {e}")
+
+        # Fallback: attempt direct thread cleanup if shutdown() failed
+        try:
+            alive = [t for t in getattr(self, "workers", []) if t.is_alive()]
+            if alive:
+                print(f"[DiscogsWorkerPool] ⚠️ Forcing {len(alive)} worker(s) to stop manually.")
+                for t in alive:
+                    try:
+                        if hasattr(t, "stop_event"):
+                            t.stop_event.set()
+                    except Exception:
+                        pass
+                for t in alive:
+                    t.join(timeout=2)
+        except Exception as e:
+            print(f"[DiscogsWorkerPool] ⚠️ Fallback thread cleanup failed: {e}")
+
+        # Final global reset safety net
+        try:
+            global GLOBAL_DISCOGS_POOL
+            GLOBAL_DISCOGS_POOL = None
+            print("[DiscogsWorkerPool] 🔓 GLOBAL_DISCOGS_POOL cleared.")
+        except Exception as e:
+            print(f"[DiscogsWorkerPool] ⚠️ Failed to clear global pool reference: {e}")
 
     def _drain_queue_nonblocking(self):
         """Drain whatever is immediately available from the global queue (debug/cleanup)."""

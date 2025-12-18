@@ -720,6 +720,36 @@ def ensure_daos_initialized_for_thread():
     except Exception as e:
         print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
 
+def preflight_enrichment_cleanup(user_id: str, dataset_label: str, log_dao=None):
+    """
+    Runs before any enrichment thread starts.
+    Ensures there are no stale threads or stuck locks preventing restart.
+    """
+    from enrichment_service import (
+        clear_stale_locks,
+        terminate_stale_enrichment_threads,
+        recovery_sweep,
+    )
+
+    print(f"[preflight] 🧹 Checking for stale threads and locks for {user_id} ({dataset_label})")
+
+    try:
+        terminate_stale_enrichment_threads(user_id=user_id, max_age_sec=600)
+    except Exception as e:
+        print(f"[preflight] ⚠️ terminate_stale_enrichment_threads failed: {e}")
+
+    try:
+        clear_stale_locks(max_age_minutes=10)
+    except Exception as e:
+        print(f"[preflight] ⚠️ clear_stale_locks failed: {e}")
+
+    try:
+        recovery_sweep(user_id, dataset_label, log_dao)
+    except Exception as e:
+        print(f"[preflight] ⚠️ recovery_sweep failed: {e}")
+
+    print(f"[preflight] ✅ Cleanup complete for {dataset_label}")
+
 def _audit_artist_genre_coverage(
     user_id: str,
     dataset_label: str,
@@ -978,11 +1008,10 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
     it verifies coverage (are all user artists enriched?) and, if needed,
     launches a targeted breadth-only backfill using the *same dataset* the UI is showing.
 
-    Debug: uses _trace() and _log_df() checkpoints to show control flow & data shapes.
+    Now includes preflight cleanup to clear stale threads/locks/status before starting any enrichment.
     """
-    import time, threading, unicodedata
-    import pandas as pd
-    import streamlit as st
+
+    import time, threading, pandas as pd, streamlit as st
     from dao_selector import DAOS
     from enrichment_service import (
         get_user_lock,
@@ -990,40 +1019,78 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         is_stale_status,
         terminate_stale_enrichment_threads,
         recovery_sweep,
+        clear_stale_locks,
     )
 
     print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
     _trace("enter_auto_check", user_id=user_id, label=dataset_label, table_name=table_name)
 
-    # ---- Helper: get the cleaned dataset currently in use (prefer session, fallback to DAO) ----
+    # ------------------------------------
+    # Helper: Preflight stale cleanup
+    # ------------------------------------
+    def preflight_enrichment_cleanup(user_id: str, dataset_label: str, log_dao=None):
+        from enrichment_service import (
+            clear_stale_locks,
+            terminate_stale_enrichment_threads,
+            recovery_sweep,
+        )
+        print(f"[preflight] 🧹 Checking for stale threads/locks for {user_id} ({dataset_label})")
+        try:
+            terminate_stale_enrichment_threads(user_id=user_id, max_age_sec=600)
+        except Exception as e:
+            print(f"[preflight] ⚠️ terminate_stale_enrichment_threads failed: {e}")
+        try:
+            clear_stale_locks(max_age_minutes=10)
+        except Exception as e:
+            print(f"[preflight] ⚠️ clear_stale_locks failed: {e}")
+        try:
+            recovery_sweep(user_id, dataset_label, log_dao)
+        except Exception as e:
+            print(f"[preflight] ⚠️ recovery_sweep failed: {e}")
+        print(f"[preflight] ✅ Cleanup complete for {dataset_label}")
+
+    # ------------------------------------
+    # Helper: get currently loaded dataset
+    # ------------------------------------
     def _get_df_source():
         src = "session"
-        key_used = st.session_state.get("last_table_name")
-        df_source = st.session_state.get("current_df")
+        key_used = None
+        df_source = None
+        try:
+            key_used = st.session_state.get("last_table_name")
+            df_source = st.session_state.get("current_df")
+        except Exception:
+            pass
+
         _trace("get_df_source@session", has_df=(df_source is not None), empty=(getattr(df_source, "empty", True)))
         _log_df(df_source, "current_df@session")
 
-        if df_source is None or df_source.empty:
+        if df_source is None or getattr(df_source, "empty", True):
             try:
                 user_dao = DAOS.get("user_data")
                 src = "dao"
                 key = table_name or key_used
                 if not key:
-                    # last-resort mapping label → table
                     try:
                         mapping = dict(user_dao.list_datasets(user_id))
                         key = mapping.get(dataset_label)
                     except Exception as e:
                         print(f"[auto_reenrich] ⚠️ list_datasets failed: {e}")
                         key = None
-                _trace("get_df_source@dao_try", key=key)
                 if key:
                     df_source = user_dao.load_user_data(key)
                     key_used = key
                     _log_df(df_source, f"load_user_data[{key}]")
             except Exception as e:
                 print(f"[auto_reenrich] ⚠️ DAO load failed: {e}")
+
         return df_source, src, key_used
+
+    # --- Run initial preflight cleanup ---
+    try:
+        preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
+    except Exception as e:
+        print(f"[auto_reenrich] ⚠️ Preflight cleanup failed: {e}")
 
     try:
         status_dao = DAOS.get("status")
@@ -1039,14 +1106,12 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         print(f"[auto_reenrich] 🧭 D1={d1_state}, R2={r2_state}")
         _trace("states", d1=d1_state, r2=r2_state)
 
-        # =========================
-        # 1) FULL_DONE → audit coverage, then start targeted breadth-only if gaps exist
-        # =========================
+        # =======================================================
+        # 1) FULL_DONE → audit coverage, then breadth-only if gaps
+        # =======================================================
         if d1_state == "full_done" and r2_state == "full_done":
             print(f"[auto_reenrich] full_done→ running coverage audit for {dataset_label}")
             _trace("full_done_branch", label=dataset_label)
-
-            # Use the same dataset the UI is using (avoids flip/flop counts)
             df_source, src, key_used = _get_df_source()
 
             try:
@@ -1062,40 +1127,27 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 return "error"
 
             counts = audit["counts"]
-            # Defensive: compute unique user artists from the same df we’ll filter
             user_unique = 0
             if df_source is not None and not df_source.empty and "artist_name" in df_source.columns:
                 user_unique = (
-                    df_source["artist_name"]
-                    .astype(str).str.strip().str.lower()
-                    .nunique()
+                    df_source["artist_name"].astype(str).str.strip().str.lower().nunique()
                 )
 
             print(
                 f"[auto_reenrich] 📊 audit: not_present={counts['not_present']}, "
                 f"present_but_missing={counts['present_but_missing']}, total_unenriched={counts['unenriched_all']} "
-                f"| source={src}, user_rows={0 if df_source is None else len(df_source)}, "
-                f"user_unique={user_unique}, key={key_used}"
+                f"| source={src}, rows={len(df_source) if df_source is not None else 0}, "
+                f"user_unique={user_unique}"
             )
-            _trace("audit_done",
-                   not_present=counts['not_present'],
-                   present_missing=counts['present_but_missing'],
-                   total=counts['unenriched_all'],
-                   source=src, user_unique=user_unique, key=key_used)
+            _trace("audit_done", **counts, source=src, user_unique=user_unique)
 
-            # If UI hasn't loaded a dataset yet, defer
             if user_unique == 0:
                 print("[auto_reenrich] 💤 user_df has 0 unique artists — deferring audit")
-                _trace("returning", reason="deferred_user_df_empty")
                 return "deferred"
-
-            # No gaps → nothing to do
             if counts["unenriched_all"] == 0:
-                print(f"[auto_reenrich] ✅ Coverage OK — skipping targeted backfill for {dataset_label}")
-                _trace("returning", reason="coverage_ok")
+                print(f"[auto_reenrich] ✅ Coverage OK — skipping backfill for {dataset_label}")
                 return "ok"
 
-            # Build missing keys (artist_key is deterministic after normalization)
             try:
                 missing_keys = (
                     audit["unenriched_all"]["artist_key"]
@@ -1103,61 +1155,52 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 )
             except Exception as e:
                 print(f"[auto_reenrich] ❌ failed to build missing_keys: {e}")
-                _trace("returning", reason="missing_keys_build_failed")
                 return "error"
 
-            _trace("build_missing_keys", missing_count=len(missing_keys))
-            print(f"[auto_reenrich] 🧩 targeted backfill (breadth-only) → {len(missing_keys)} artists")
+            print(f"[auto_reenrich] 🧩 targeted breadth-only → {len(missing_keys)} artists")
 
-            # Filter the same df the UI is using; KEEP ALL COLUMNS
             if df_source is None or df_source.empty:
-                print("[auto_reenrich] 💤 cleaned_df is empty — cannot start targeted backfill")
-                _trace("returning", reason="no_df_for_targeted")
+                print("[auto_reenrich] 💤 cleaned_df empty — cannot start targeted backfill")
                 return "nothing_to_do"
 
             df_tmp = df_source.copy()
-            # derive artist_key identical to audit
-            df_tmp["artist_key"] = (
-                df_tmp["artist_name"].astype(str).str.strip().str.lower()
-                if "artist_name" in df_tmp.columns else ""
-            )
-            filtered_df = df_tmp[df_tmp["artist_key"].isin(missing_keys)].copy()
+            if "artist_name" in df_tmp.columns:
+                df_tmp["artist_key"] = df_tmp["artist_name"].astype(str).str.strip().str.lower()
+            else:
+                df_tmp["artist_key"] = ""
 
-            # Optional: keep only category=='music' rows
+            filtered_df = df_tmp[df_tmp["artist_key"].isin(missing_keys)].copy()
             if "category" in filtered_df.columns:
-                mask_music = filtered_df["category"].astype(str).str.lower().eq("music") | filtered_df["category"].isna()
+                mask_music = (
+                    filtered_df["category"].astype(str).str.lower().eq("music")
+                    | filtered_df["category"].isna()
+                )
                 filtered_df = filtered_df[mask_music]
 
             _log_df(filtered_df, "filtered_df@Targeted(breadth_only)")
-            print(f"[auto_reenrich] 🧪 filtered_df rows={len(filtered_df)} (from total {len(df_source)})")
             if filtered_df.empty:
                 print("[auto_reenrich] 💤 filtered_df empty after filtering — skipping targeted breadth-only")
-                _trace("returning", reason="filtered_empty")
                 return "nothing_to_do"
 
-            # 🔹 Launch targeted breadth-only (threaded) using the subset
-            _log_df(filtered_df, "breadth_only.df_source[filtered_df]")
+            # preflight before starting new thread
+            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
             res = start_breadth_first_only(
                 user_id=user_id,
                 dataset_label=dataset_label,
                 log_dao=log_dao,
-                table_name=key_used,         # keeps status/log continuity with current dataset
-                filtered_df=filtered_df,     # 👈 targeted subset
+                table_name=key_used,
+                filtered_df=filtered_df,
             )
             print(f"[auto_reenrich] breadth_only starter returned: {res}")
-            _trace("returning", reason=f"breadth_only:{res}")
-            # Normalize return code a bit for callsites that expect “targeted_*”
             return "targeted_breadth_started" if res == "breadth_only_started" else res
 
-        # =========================
-        # 2) Existing flow for other states
-        # =========================
-
-        reg = st.session_state.get("_enrichment_registry", {})
+        # =======================================================
+        # 2) Other state handling
+        # =======================================================
+        reg = getattr(st.session_state, "_enrichment_registry", {}) if hasattr(st, "session_state") else {}
         active_thread = reg.get("thread")
         cancel_event = reg.get("cancel_event")
 
-        # Heartbeat + staleness checks
         stale_d1 = is_stale_status(d1_status, threshold_minutes=5)
         last_hb = get_last_heartbeat(user_id, dataset_label)
         now = time.time()
@@ -1165,17 +1208,14 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         hb_age = int(now - last_hb) if last_hb else "?"
 
         user_lock = get_user_lock(user_id)
-
-        # Lock cleanup if no active thread
-        if (not active_thread or not active_thread.is_alive()) and user_lock.locked():
+        if (not active_thread or not getattr(active_thread, "is_alive", lambda: False)()) and user_lock.locked():
             print(f"[auto_reenrich] 🧹 Found stale lock for {user_id} — releasing.")
             try:
                 user_lock.release()
             except Exception as e:
                 print(f"[auto_reenrich] ⚠️ Failed to release stale lock: {e}")
 
-        # If active thread exists
-        if active_thread and active_thread.is_alive():
+        if active_thread and getattr(active_thread, "is_alive", lambda: False)():
             extended_threshold = 900 if d1_state == "breadth_running" or r2_state == "breadth_running" else 300
             is_really_stale = (last_hb is None) or ((now - last_hb) > extended_threshold)
 
@@ -1197,30 +1237,22 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 st.session_state["_enrichment_registry"] = {}
             else:
                 print(f"[auto_reenrich] ❤️ Heartbeat OK ({hb_age}s ago). Skipping restart.")
-                _trace("returning", reason="running_active_ok")
                 return "running"
 
-        # Explicit intermediate states
+        # Enrichment already running
         if d1_state in ("breadth_running", "running") or r2_state in ("breadth_running", "running"):
             print(f"[auto_reenrich] 🌀 Enrichment already in progress for {dataset_label}")
-
-            # Zombie recovery check
             recovery_sweep(user_id, dataset_label, log_dao)
-
-            # Re-check status after sweep
             refreshed = metadata_dao.read_status(user_id, dataset_label) or {}
             new_state = (refreshed.get("status") or "").lower()
-
             if new_state == "error":
-                print(f"[auto_reenrich] 🔄 Recovery flipped {dataset_label} to error — triggering re-enrichment.")
+                print(f"[auto_reenrich] 🔄 Recovery flipped {dataset_label} to error — restarting.")
+                preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
                 time.sleep(1.5)
-
                 df_source, _, _ = _get_df_source()
                 if df_source is None or df_source.empty:
                     print("[auto_reenrich] 💤 No data available to restart.")
-                    _trace("returning", reason="no_df_on_recovery_restart")
                     return "nothing_to_do"
-
                 cancel_event = threading.Event()
                 user_lock = get_user_lock(user_id)
                 for attempt in range(10):
@@ -1228,15 +1260,12 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                         from enrichment_service import mark_lock_acquired
                         mark_lock_acquired(user_id)
                         break
-                    print(f"[auto_reenrich] 🔒 Lock active for {user_id} — waiting ({attempt+1}/10)...")
                     time.sleep(1)
                 else:
                     print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping restart.")
-                    _trace("returning", reason="lock_unavailable_recovery")
                     return "locked"
 
                 terminate_stale_enrichment_threads(user_id)
-
                 enrichment_thread = threading.Thread(
                     target=background_enrich,
                     kwargs=dict(
@@ -1249,43 +1278,36 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                     daemon=True,
                 )
                 enrichment_thread.start()
-
                 st.session_state["_enrichment_registry"] = {
                     "thread": enrichment_thread,
                     "cancel_event": cancel_event,
                     "dataset_label": dataset_label,
                     "user_id": user_id,
                 }
-
-                print(f"[auto_reenrich] 🚀 Restarted enrichment automatically after zombie recovery for {dataset_label}")
-                _trace("returning", reason="restarted_after_recovery")
+                print(f"[auto_reenrich] 🚀 Restarted enrichment after zombie recovery for {dataset_label}")
                 return "restarted_after_recovery"
-
-            _trace("returning", reason="running_in_progress")
             return "running"
 
         # Resume or retry breadth-first
         if d1_state == "standard_done" or r2_state == "standard_done":
-            print(f"[auto_reenrich] 🌐 Standard enrichment detected — resuming breadth-first for {dataset_label}")
+            print(f"[auto_reenrich] 🌐 Standard enrichment done — resuming breadth-first for {dataset_label}")
+            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
-            _trace("returning", reason="resumed_breadth_first")
             return "resumed_breadth_first"
 
-        # --- Handle taste_index integration ---
-        # If breadth finished but taste_index hasn't completed, restart from breadth_only.
-        if (d1_state == "breadth_done" or r2_state == "breadth_done"):
-            print(f"[auto_reenrich] 🎚️ Breadth-first complete but Taste Index missing — restarting breadth_only for {dataset_label}")
+        if d1_state == "breadth_done" or r2_state == "breadth_done":
+            print(f"[auto_reenrich] 🎚️ Breadth-first done, Taste Index missing — restarting breadth_only.")
+            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
-            _trace("returning", reason="restarted_taste_index_pending")
             return "restarted_taste_index_pending"
 
         if d1_state == "breadth_error" or r2_state == "breadth_error":
-            print(f"[auto_reenrich] 🌀 Breadth-first error detected — restarting breadth-only for {dataset_label}")
+            print(f"[auto_reenrich] 🌀 Breadth-first error — restarting breadth_only.")
+            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
-            _trace("returning", reason="restarted_breadth_error")
             return "restarted_breadth_error"
 
-        # Determine if a full restart is required
+        # Fallback → full restart
         last_hb = get_last_heartbeat(user_id, dataset_label)
         stale_hb = (last_hb is None) or ((time.time() - last_hb) > 300)
         should_restart = (
@@ -1294,13 +1316,11 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         ) or stale_d1 or stale_hb
 
         if should_restart:
-            print(f"[auto_reenrich] ⚠️ Triggering full re-enrichment for {dataset_label} "
-                  f"(D1={d1_state}, R2={r2_state}, stale_d1={stale_d1}, stale_hb={stale_hb})")
-
+            print(f"[auto_reenrich] ⚠️ Triggering full re-enrichment for {dataset_label}")
+            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
             df_source, _, _ = _get_df_source()
             if df_source is None or df_source.empty:
                 print("[auto_reenrich] 💤 No data available to restart.")
-                _trace("returning", reason="no_df_for_full_restart")
                 return "nothing_to_do"
 
             cancel_event = threading.Event()
@@ -1310,15 +1330,12 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                     from enrichment_service import mark_lock_acquired
                     mark_lock_acquired(user_id)
                     break
-                print(f"[auto_reenrich] 🔒 Lock active for {user_id} — waiting ({attempt+1}/10)...")
                 time.sleep(1)
             else:
                 print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping new enrichment.")
-                _trace("returning", reason="lock_unavailable_full_restart")
                 return "locked"
 
             terminate_stale_enrichment_threads(user_id)
-
             enrichment_thread = threading.Thread(
                 target=background_enrich,
                 kwargs=dict(
@@ -1331,20 +1348,16 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 daemon=True,
             )
             enrichment_thread.start()
-
             st.session_state["_enrichment_registry"] = {
                 "thread": enrichment_thread,
                 "cancel_event": cancel_event,
                 "dataset_label": dataset_label,
                 "user_id": user_id,
             }
-
             print(f"[auto_reenrich] 🚀 Started enrichment thread for {dataset_label}")
-            _trace("returning", reason="restarted_full")
             return "restarted"
 
-        print(f"[auto_reenrich] ✅ Enrichment verified as complete for {dataset_label}")
-        _trace("returning", reason="ok_no_action")
+        print(f"[auto_reenrich] ✅ Enrichment verified complete for {dataset_label}")
         return "ok"
 
     except Exception as e:
@@ -1569,17 +1582,13 @@ def background_enrich(
     cleaned_df: pd.DataFrame,
     log_dao=None,
     cancel_event: Optional[threading.Event] = None,
-    mode: str = "full",  # NEW: "full" (default) or "breadth_only"
+    mode: str = "full",  # "full" (default) or "breadth_only"
 ):
     """
     Background enrichment runner using DAOs.
     Ensures only one enrichment runs per user_id at a time.
     Cancels older threads and prioritizes the latest dataset selection or upload.
     Includes heartbeat updates for watchdog monitoring.
-
-    mode:
-      - "full": run the complete pipeline (run_all)
-      - "breadth_only": if available, call enricher.run_breadth_only(); otherwise fallback to run_all
     """
 
     import traceback, time, threading, streamlit as st
@@ -1592,10 +1601,26 @@ def background_enrich(
     )
     from dao_selector import DAOS, get_log_dao
 
+    # ✅ define thread name first
     thread_name = threading.current_thread().name
     print(f"[enrich:{thread_name}] Starting enrichment thread for {dataset_label}")
 
-    # --- Acquire per-user lock with retries (lock should already be held by caller in most paths, but safe) ---
+    # --- Preflight stale cleanup ---
+    try:
+        from enrichment_service import (
+            clear_stale_locks,
+            terminate_stale_enrichment_threads,
+            recovery_sweep,
+        )
+        print(f"[enrich:{thread_name}] 🧹 Running preflight cleanup before enrichment start…")
+        terminate_stale_enrichment_threads(user_id=user_id, max_age_sec=600)
+        clear_stale_locks(max_age_minutes=10)
+        recovery_sweep(user_id, dataset_label, log_dao)
+        print(f"[enrich:{thread_name}] ✅ Preflight cleanup complete.")
+    except Exception as e:
+        print(f"[enrich:{thread_name}] ⚠️ Preflight cleanup failed: {e}")
+
+    # --- Acquire per-user lock ---
     user_lock = get_user_lock(user_id)
     mark_lock_acquired(user_id)
     print(f"[enrich:{thread_name}] Proceeding with enrichment under lock for {user_id}")
@@ -1625,10 +1650,10 @@ def background_enrich(
 
         _check_cancel("initialization")
 
-        # --- initialize heartbeat ---
+        # --- heartbeat init ---
         update_heartbeat(user_id, dataset_label)
 
-        # --- sanity checks (Spotify + Discogs) ---
+        # --- sanity checks ---
         log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
         ok, msg = spotify_sanity_check(token)
         _check_cancel("spotify_sanity_check")
@@ -1678,27 +1703,24 @@ def background_enrich(
         # ✅ Ensure / expose Discogs pool + start watchdog
         try:
             if hasattr(enricher, "ensure_worker_pool"):
-                enricher.ensure_worker_pool()  # or .ensure_alive() inside the class
-            # Make the pool visible to the UI (debug expander below)
+                enricher.ensure_worker_pool()
             if hasattr(enricher, "pool"):
                 st.session_state["_discogs_pool"] = enricher.pool
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ pool init failed (continuing): {e}")
 
-        # 🔎 Start a watchdog for the pool (self-healing nudges + snapshots)
+        # --- watchdog for Discogs pool ---
         def _discogs_watchdog(pool, label, stop_event):
-            # Wake every 5s; nudge if heartbeats/jobs are stale > 90s
             while not stop_event.is_set():
                 try:
                     pool.nudge_workers(hb_stale_sec=90, job_stale_sec=90)
-                    # Log a small snapshot if jobs appear stuck
                     if getattr(es.GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 0) > 0:
                         pool.snapshot_queue(max_n=5)
                 except Exception as _e:
                     print(f"[discogs_watchdog:{label}] ⚠️ {_e}")
-                # short sleep so we respond quickly to shutdowns
                 for _ in range(10):
-                    if stop_event.is_set(): break
+                    if stop_event.is_set():
+                        break
                     time.sleep(0.5)
 
         watchdog_stop = threading.Event()
@@ -1714,20 +1736,18 @@ def background_enrich(
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ watchdog start failed: {e}")
 
-        # --- heartbeat updater thread ---
+        # --- heartbeat updater ---
         def _heartbeat_loop():
             while not (cancel_event and cancel_event.is_set()):
                 update_heartbeat(user_id, dataset_label)
                 time.sleep(60)
 
-        hb_thread = threading.Thread(target=_heartbeat_loop, daemon=True)
-        hb_thread.start()
+        threading.Thread(target=_heartbeat_loop, daemon=True).start()
 
-        # --- Execute enrichment (mode aware) ---
+        # --- Execute enrichment ---
         print(f"[enrich:{thread_name}] mode={mode}")
 
         if mode == "breadth_only":
-            # --- Mode: breadth-only (targeted) ---
             print(f"[enrich:{thread_name}] ▶ breadth-only mode selected")
             log_dao.log(user_id, dataset_label, "enrichment", "Starting breadth-only pipeline")
             status_dao.set_status(
@@ -1740,44 +1760,38 @@ def background_enrich(
             _check_cancel("before breadth_only")
 
             if hasattr(enricher, "run_breadth_only"):
-                # 👇 the wrapper takes care of: sanity, masters, pool, phase, flush, shutdown, final status
                 enricher.run_breadth_only(cancel_event=cancel_event)
             else:
-                # --- Back-compat fallback (kept minimal on purpose); remove when wrapper is in place ---
+                # simplified inline fallback
                 print(f"[enrich:{thread_name}] ⚠️ run_breadth_only() not found; running inline minimal breadth")
-                # Build inputs (prefer summarizer, fallback to category split)
                 try:
                     all_art, all_show, all_book = enricher.all_listens()
                 except Exception as e:
-                    print(f"[enrich:{thread_name}] all_listens() failed: {e} — using category split")
-                    try:
-                        get_cat = lambda s: enricher.df.get("category", "").astype(str).str.lower().eq(s)
-                        all_art  = enricher.df[get_cat("music")].copy()
-                        all_show = enricher.df[get_cat("show")].copy()
-                        all_book = enricher.df[get_cat("audiobook")].copy()
-                    except Exception:
-                        # last resort: treat all as music
+                    print(f"[enrich:{thread_name}] all_listens() failed: {e}")
+                    cat = enricher.df.get("category")
+                    if cat is not None:
+                        cat = cat.astype(str).str.lower()
+                        all_art  = enricher.df[cat.eq("music")].copy()
+                        all_show = enricher.df[cat.eq("show")].copy()
+                        all_book = enricher.df[cat.eq("audiobook")].copy()
+                    else:
                         all_art, all_show, all_book = enricher.df.copy(), enricher.df.iloc[0:0].copy(), enricher.df.iloc[0:0].copy()
 
-                # Masters + pool (best effort)
                 for master in ("artists", "albums", "tracks"):
                     try:
                         enricher._load_master(master)
                     except Exception as e:
-                        print(f"[enrich:{thread_name}] ⚠️ master load failed (non-fatal): {e}")
+                        print(f"[enrich:{thread_name}] ⚠️ master load failed: {e}")
 
                 try:
                     if hasattr(enricher, "ensure_worker_pool"):
                         enricher.ensure_worker_pool()
-                        print(f"[enrich:{thread_name}] ✅ ensured Discogs worker pool")
                 except Exception as e:
-                    print(f"[enrich:{thread_name}] ⚠️ ensure_worker_pool failed (continuing): {e}")
+                    print(f"[enrich:{thread_name}] ⚠️ ensure_worker_pool failed: {e}")
 
-                # Run the breadth phase (no run_all fallback)
                 enricher.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
                 _check_cancel("after breadth_first")
 
-                # Flush & shutdown (best effort)
                 try:
                     if hasattr(enricher, "flush_all"):
                         enricher.flush_all()
@@ -1792,7 +1806,6 @@ def background_enrich(
                 except Exception as e:
                     print(f"[enrich:{thread_name}] ⚠️ worker-pool shutdown failed: {e}")
 
-                # Mark complete
                 status_dao.finish_full_status(
                     user_id,
                     dataset_label,
@@ -1802,47 +1815,59 @@ def background_enrich(
             _check_cancel("after breadth_only_wrapper")
 
         else:
-            # default: full pipeline
+            # --- Full pipeline ---
             log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
             status_dao.set_status(
-                user_id, dataset_label,
+                user_id,
+                dataset_label,
                 phase="running",
-                detail="Executing enrichment run"
+                detail="Executing enrichment run",
             )
+
             _check_cancel("before run_all")
             enricher.run_all(cancel_event=cancel_event)
             _check_cancel("after run_all")
 
-            # --- Decide which completion marker to use (unchanged) ---
-            last_phase = getattr(enricher, "current_phase", None)
-            final_status = getattr(enricher, "status", None)
             current_status = None
             try:
                 current_status = status_dao.read_status(user_id, dataset_label)
             except Exception:
                 pass
 
-            if current_status and current_status.get("status") == "standard_done":
-                status_dao.finish_standard_status(
-                    user_id,
-                    dataset_label,
-                    detail="✅ Standard enrichment completed successfully."
-                )
-            elif current_status and current_status.get("status") == "breadth_running":
-                status_dao.finish_full_status(
-                    user_id,
-                    dataset_label,
-                    detail="✅ Full enrichment completed successfully."
-                )
-            else:
-                status_dao.finish_standard_status(
-                    user_id,
-                    dataset_label,
-                    detail="✅ Standard enrichment completed successfully (default)."
-                )
+            try:
+                if current_status and current_status.get("status") == "standard_done":
+                    status_dao.finish_standard_status(
+                        user_id, dataset_label, detail="✅ Standard enrichment completed successfully."
+                    )
+                elif current_status and current_status.get("status") == "breadth_running":
+                    status_dao.finish_full_status(
+                        user_id, dataset_label, detail="✅ Full enrichment completed successfully."
+                    )
+                else:
+                    status_dao.finish_standard_status(
+                        user_id, dataset_label, detail="✅ Standard enrichment completed successfully (default)."
+                    )
+            except Exception as e:
+                print(f"[enrich:{thread_name}] ⚠️ Failed to finalize enrichment status: {e}")
 
-        log_dao.log(user_id, dataset_label, "enrichment", "✅ Enrichment completed successfully.")
-        print(f"[enrich:{thread_name}] ✅ Enrichment completed for {dataset_label}")
+        # --- Controlled success logging ---
+        try:
+            current_status = status_dao.read_status(user_id, dataset_label) or {}
+            state = current_status.get("status")
+            if state in ("breadth_done", "full_done", "standard_done"):
+                log_dao.log(user_id, dataset_label, "enrichment", "✅ Enrichment completed successfully.")
+                print(f"[enrich:{thread_name}] ✅ Enrichment completed for {dataset_label}")
+            else:
+                log_dao.log(
+                    user_id,
+                    dataset_label,
+                    "enrichment",
+                    f"⚠️ Skipped or partial enrichment — status={state}.",
+                    level="warning",
+                )
+                print(f"[enrich:{thread_name}] ⚠️ Enrichment incomplete for {dataset_label} (status={state})")
+        except Exception as e:
+            print(f"[enrich:{thread_name}] ⚠️ Final logging failed: {e}")
 
     except CancelledError:
         print(f"[enrich:{thread_name}] 🛑 Cancelled by user or dataset switch.")
@@ -1856,25 +1881,15 @@ def background_enrich(
         tb = traceback.format_exc()
         print(f"[enrich:{thread_name}] ❌ Exception: {e}\n{tb}")
         try:
-            # Determine which phase failed
             if "breadth_first" in str(tb).lower():
-                status_dao.finish_breadth_error(
-                    user_id,
-                    dataset_label,
-                    detail=f"❌ Breadth-first error: {e}"
-                )
+                status_dao.finish_breadth_error(user_id, dataset_label, detail=f"❌ Breadth-first error: {e}")
             else:
-                status_dao.finish_standard_error(
-                    user_id,
-                    dataset_label,
-                    detail=f"❌ Standard enrichment error: {e}"
-                )
+                status_dao.finish_standard_error(user_id, dataset_label, detail=f"❌ Standard enrichment error: {e}")
         except Exception:
             pass
         log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
 
     finally:
-        # --- release per-user lock ---
         try:
             if user_lock.locked():
                 user_lock.release()
@@ -1882,7 +1897,6 @@ def background_enrich(
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to release lock: {e}")
 
-        # --- cleanup registry ---
         try:
             reg = st.session_state.get("_enrichment_registry", {})
             if reg.get("dataset_label") == dataset_label:
@@ -1891,23 +1905,18 @@ def background_enrich(
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to clear registry: {e}")
 
-        # --- signal cancel to subthreads ---
         if cancel_event:
             cancel_event.set()
 
-        # --- auto-trigger breadth-first if standard_done detected (unchanged) ---
         try:
             status_info = status_dao.read_status(user_id, dataset_label) or {}
             if status_info.get("status") == "standard_done":
                 print(f"[enrich:{thread_name}] 🌐 Standard enrichment done — triggering breadth-first auto-check.")
                 import threading
                 from dao_selector import get_log_dao
-
                 log_dao = get_log_dao()
                 table_name = getattr(enricher, "table_name", None) or getattr(enricher, "input_table_name", None)
-
-                time.sleep(1.5)  # allow R2/D1 status propagation
-
+                time.sleep(1.5)
                 threading.Thread(
                     target=_auto_check_and_reenrich_if_needed,
                     args=(user_id, dataset_label, log_dao),
@@ -1922,7 +1931,6 @@ def background_enrich(
         except Exception:
             pass
 
-        # --- final thread summary logging ---
         log_enrichment_thread_count("enrichment finished or cancelled")
         try:
             log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
@@ -2493,7 +2501,7 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
 
 # ------------------------------ GENRE DETECTIVE ----------------------------- #
 def start_missing_genre_detective_task(
-    dataset_label: str,
+    dataset_label: str | None = None,
     *,
     provider_name: str = "gemini",
     batch_size: int = 120,
@@ -2507,35 +2515,35 @@ def start_missing_genre_detective_task(
     debug_dump_other_fix_to_r2: bool = False,
 ) -> None:
     """
-    Public launcher. Decides whether to start the genre-detective worker.
-    - Logs thread counts before/after decisions.
-    - Loads GEMINI_API_KEY on the main thread from st.secrets (no st.* in worker).
-    - Delegates to _start_genre_detective_thread(...) to actually spawn.
+    Safe launcher for genre_detective worker.
+    dataset_label is optional (defaults to '__app_boot__') so that early imports
+    or preflights won't crash the app during initialization.
     """
-    import os, time, logging
+    import os, logging, streamlit as st
+
+    if not dataset_label:
+        dataset_label = "__app_boot__"
+        logging.warning("[genre_detective] dataset_label missing — defaulting to '__app_boot__'")
 
     reg = task_registry()
     task_key = f"genre_detective::{dataset_label}"
 
-    # Snapshot BEFORE we decide to start anything
     try:
         log_enrichment_thread_count("genre_detective pre-check")
     except Exception:
         logging.debug("[thread_monitor] (log_enrichment_thread_count unavailable)")
 
-    # If a live worker exists, do nothing
     entry = reg.get(task_key)
     alive = bool(entry and entry.get("thread") and entry["thread"].is_alive())
     if alive:
         logging.info("[genre_detective] already running: %s", entry["thread"].name)
-        # Log again on early return to show 'no change'
         try:
             log_enrichment_thread_count("genre_detective already running (no start)")
         except Exception:
             pass
         return
 
-    # MAIN THREAD ONLY: set GEMINI_API_KEY from st.secrets (worker must not call st.*)
+    # MAIN THREAD ONLY: set GEMINI_API_KEY from st.secrets
     try:
         gem_key = st.secrets.get("gemini", {}).get("api_key")
         if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
@@ -2544,7 +2552,6 @@ def start_missing_genre_detective_task(
     except Exception as e:
         logging.warning("[genre_detective] cannot read st.secrets: %s", e)
 
-    # Spawn the worker
     _start_genre_detective_thread(
         task_key=task_key,
         dataset_label=dataset_label,

@@ -49,7 +49,7 @@ import zipfile
 from dao import CloudflareDAOs
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
 import enrichment_service as es
-from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key
+from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release
 from chart_scorer import parse_label_ts_from_table_name
 
 # -------------------------------- DEBUGGER ---------------------------------- #
@@ -1936,7 +1936,21 @@ def background_enrich(
             log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ log_dao thread log failed: {e}")
-        print(f"[enrich:{thread_name}] 💤 Thread finished for {dataset_label}")
+
+        finally:
+            try:
+                # Debug check for lock state
+                lock = get_user_lock(user_id)
+                print(f"[debug:lock-cleanup] id={id(lock)} locked={getattr(lock, 'locked', lambda: '?')()}")
+            except Exception as e:
+                print(f"[debug:lock-cleanup] ⚠️ could not inspect lock: {e}")
+
+            try:
+                safe_user_lock_release(user_id, log_prefix=f"[enrich:{thread_name}]")
+            except Exception as e:
+                print(f"[enrich:{thread_name}] ⚠️ Failed to safely release lock: {e}")
+
+            print(f"[enrich:{thread_name}] 💤 Thread finished for {dataset_label}")
 
 def start_breadth_first_only(
     user_id: str,

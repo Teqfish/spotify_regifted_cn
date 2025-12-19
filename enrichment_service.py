@@ -600,9 +600,10 @@ def get_user_lock(user_id: str):
     with ENRICH_LOCKS_LOCK:
         entry = ENRICH_LOCKS.get(user_id)
         if entry is None:
-            entry = {"lock": threading.Lock(), "last_acquired": None}
+            entry = {"lock": threading.RLock(), "last_acquired": None}
             ENRICH_LOCKS[user_id] = entry
         return entry["lock"]
+    print(f"[debug:lock] get_user_lock({user_id}) id={id(lock)} locked={getattr(lock, 'locked', lambda: '?')()}")
 
 def mark_lock_acquired(user_id: str):
     """Record timestamp of when the user lock was acquired."""
@@ -688,6 +689,38 @@ def safe_user_lock_acquire(
 
     print(f"{log_prefix} 🚫 Could not acquire lock for {user_id} after {wait_attempts} attempts.")
     return False
+
+def safe_user_lock_release(user_id: str, *, log_prefix: str = "[lock]"):
+    """
+    Safely release a user's enrichment lock if it's currently held.
+    Cleans up stale dictionary entries and prints diagnostics.
+    """
+    with ENRICH_LOCKS_LOCK:
+        entry = ENRICH_LOCKS.get(user_id)
+        if not entry:
+            print(f"{log_prefix} ⚠️ No lock entry found for {user_id} during release.")
+            return
+
+        lock = entry.get("lock")
+        if lock is None:
+            print(f"{log_prefix} ⚠️ Missing lock object for {user_id}.")
+            return
+
+        # Log current state
+        locked_state = getattr(lock, "locked", lambda: None)()
+        print(f"{log_prefix} 🔍 Releasing lock for {user_id} (locked={locked_state}, id={id(lock)})")
+
+        if locked_state:
+            try:
+                lock.release()
+                print(f"{log_prefix} 🔓 Released lock for {user_id}")
+            except Exception as e:
+                print(f"{log_prefix} ⚠️ Failed to release lock for {user_id}: {e}")
+        else:
+            print(f"{log_prefix} ⚠️ Lock for {user_id} was already unlocked.")
+
+        # Optional: clean up entry
+        ENRICH_LOCKS.pop(user_id, None)
 
 # global heartbeat tracking
 ENRICH_HEARTBEATS = {}

@@ -49,7 +49,7 @@ import zipfile
 from dao import CloudflareDAOs
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
 import enrichment_service as es
-from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release
+from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release, lock_is_locked
 from chart_scorer import parse_label_ts_from_table_name
 
 # -------------------------------- DEBUGGER ---------------------------------- #
@@ -974,7 +974,7 @@ def _start_targeted_artist_backfill_with_background_enrich(
                 pass
         finally:
             try:
-                if user_lock.locked():
+                if lock_is_locked(user_lock):
                     user_lock.release()
             except Exception as e:
                 logger.error("[targeted] failed to release lock: %s", e)
@@ -1208,7 +1208,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         hb_age = int(now - last_hb) if last_hb else "?"
 
         user_lock = get_user_lock(user_id)
-        if (not active_thread or not getattr(active_thread, "is_alive", lambda: False)()) and user_lock.locked():
+        if (not active_thread or not getattr(active_thread, "is_alive", lambda: False)()) and lock_is_locked(user_lock):
             print(f"[auto_reenrich] 🧹 Found stale lock for {user_id} — releasing.")
             try:
                 user_lock.release()
@@ -1224,7 +1224,7 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
                 if cancel_event:
                     cancel_event.set()
                 for i in range(15):
-                    if not user_lock.locked():
+                    if not lock_is_locked(user_lock):
                         break
                     print(f"[auto_reenrich] ⏳ Waiting for lock release ({i+1}/15)...")
                     time.sleep(1)
@@ -1890,13 +1890,39 @@ def background_enrich(
         log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
 
     finally:
+        # --- Post-run sanity finalizer -------------------------------------
         try:
-            if user_lock.locked():
-                user_lock.release()
-                print(f"[enrich:{thread_name}] 🔓 Released lock for {user_id}")
-        except Exception as e:
-            print(f"[enrich:{thread_name}] ⚠️ Failed to release lock: {e}")
+            from dao_selector import DAOS
+            status_dao = DAOS.get("status")
+            d1_status = status_dao.read_status(user_id, dataset_label) or {}
+            current_status = (d1_status.get("status") or "").lower()
 
+            if current_status in ("running", "breadth_running"):
+                print(f"[{thread_name}] ⚠️ Finalizer: forcing stale status → breadth_error")
+                status_dao.finish_breadth_error(
+                    user_id,
+                    dataset_label,
+                    detail="Auto-corrected stale running status at thread exit.",
+                )
+            elif current_status == "taste_index_running":
+                print(f"[{thread_name}] ⚠️ Finalizer: forcing stale status → taste_index_error")
+                status_dao.finish_taste_index_error(
+                    user_id,
+                    dataset_label,
+                    detail="Auto-corrected stale taste_index_running at thread exit.",
+                )
+            else:
+                print(f"[{thread_name}] ✅ Status clean post-run: {current_status}")
+        except Exception as e:
+            print(f"[{thread_name}] ⚠️ Finalizer failed: {e}")
+
+        # --- Release user lock safely -------------------------------------
+        try:
+            safe_user_lock_release(user_id, log_prefix=f"[enrich:{thread_name}]")
+        except Exception as e:
+            print(f"[enrich:{thread_name}] ⚠️ Failed to safely release lock: {e}")
+
+        # --- Clean Streamlit registry & heartbeat stop ---------------------
         try:
             reg = st.session_state.get("_enrichment_registry", {})
             if reg.get("dataset_label") == dataset_label:
@@ -1905,14 +1931,18 @@ def background_enrich(
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to clear registry: {e}")
 
-        if cancel_event:
-            cancel_event.set()
+        try:
+            if cancel_event:
+                cancel_event.set()
+        except Exception:
+            pass
 
+        # --- Auto-trigger breadth follow-up if needed ---------------------
         try:
             status_info = status_dao.read_status(user_id, dataset_label) or {}
             if status_info.get("status") == "standard_done":
                 print(f"[enrich:{thread_name}] 🌐 Standard enrichment done — triggering breadth-first auto-check.")
-                import threading
+                import threading, time
                 from dao_selector import get_log_dao
                 log_dao = get_log_dao()
                 table_name = getattr(enricher, "table_name", None) or getattr(enricher, "input_table_name", None)
@@ -1926,31 +1956,20 @@ def background_enrich(
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ Failed to auto-trigger breadth-first: {e}")
 
+        # --- Stop watchdog thread -----------------------------------------
         try:
             watchdog_stop.set()
         except Exception:
             pass
 
+        # --- Thread accounting & final log --------------------------------
         log_enrichment_thread_count("enrichment finished or cancelled")
         try:
             log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
         except Exception as e:
             print(f"[enrich:{thread_name}] ⚠️ log_dao thread log failed: {e}")
 
-        finally:
-            try:
-                # Debug check for lock state
-                lock = get_user_lock(user_id)
-                print(f"[debug:lock-cleanup] id={id(lock)} locked={getattr(lock, 'locked', lambda: '?')()}")
-            except Exception as e:
-                print(f"[debug:lock-cleanup] ⚠️ could not inspect lock: {e}")
-
-            try:
-                safe_user_lock_release(user_id, log_prefix=f"[enrich:{thread_name}]")
-            except Exception as e:
-                print(f"[enrich:{thread_name}] ⚠️ Failed to safely release lock: {e}")
-
-            print(f"[enrich:{thread_name}] 💤 Thread finished for {dataset_label}")
+        print(f"[enrich:{thread_name}] 💤 Thread finished for {dataset_label}")
 
 def start_breadth_first_only(
     user_id: str,
@@ -2030,7 +2049,7 @@ def start_breadth_first_only(
             print(f"[{thread_name}] ❌ breadth_only error: {e}\n{traceback.format_exc()}")
         finally:
             try:
-                if user_lock.locked():
+                if lock_is_locked(user_lock):
                     user_lock.release()
                     print(f"[{thread_name}] 🔓 Released user lock for {user_id}")
             except Exception as e:
@@ -7065,25 +7084,48 @@ elif page == "Taste":
     with col2:
         force_run = st.button("🚀 Force Run Breadth + Taste Enrichment", key="force_breadth_taste")
 
-    # --- Force full recompute using breadth_only pipeline ---
     if force_run:
-        try:
-            # from enrichment_service import start_breadth_first_only
-            from dao_selector import DAOS
-            log_dao = st.session_state.get("log_dao")
+        if st.session_state.get("breadth_taste_running"):
+            st.warning("A breadth/taste enrichment thread is already running.")
+            st.stop()
 
-            st.info("🚀 Starting full Breadth + Taste Index pipeline in the background…")
-            start_breadth_first_only(
-                user_id=user_id,
-                dataset_label=current_label,
-                log_dao=log_dao,
-                table_name=st.session_state.get("last_table_name"),
-            )
-            st.success("✅ Pipeline triggered successfully — refresh later to see results.")
-            st.stop()
-        except Exception as e:
-            st.error(f"⚠️ Failed to trigger enrichment: {e}")
-            st.stop()
+        st.session_state["breadth_taste_running"] = True
+        st.info("🚀 Starting full Breadth + Taste Index pipeline in the background…")
+
+        # Collect all UI data up front — no Streamlit calls inside the thread
+        user_id_copy = user_id
+        dataset_label_copy = current_label
+        log_dao_copy = st.session_state.get("log_dao")
+        table_name_copy = st.session_state.get("last_table_name")
+
+        import threading
+
+        def background_trigger():
+            import traceback
+            try:
+                # NOTE: Do not call st.* in this thread!
+                from app import start_breadth_first_only
+                start_breadth_first_only(
+                    user_id=user_id_copy,
+                    dataset_label=dataset_label_copy,
+                    log_dao=log_dao_copy,
+                    table_name=table_name_copy,
+                )
+                print(f"[ui:breadth_taste] ✅ Triggered start_breadth_first_only for {user_id_copy}")
+            except Exception as e:
+                print(f"[ui:breadth_taste] ❌ Background trigger failed: {e}\n{traceback.format_exc()}")
+            finally:
+                # Safe: Streamlit session_state is dict-like
+                st.session_state["breadth_taste_running"] = False
+
+        threading.Thread(
+            target=background_trigger,
+            name=f"ui-force-breadth-taste:{user_id}",
+            daemon=True,
+        ).start()
+
+        st.success("✅ Pipeline triggered successfully — refresh later to see results.")
+        st.stop()
 
     # --- Try to load cached parquet from R2 if not in session ---
     if df_rolling is None and storage_dao is not None:

@@ -738,7 +738,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         payload = {
             "user_id": user_id,
             "dataset_label": dataset_label,
-            "status": "taste_index",
+            "status": "taste_index_running",
             "phase": "taste_index",
             "detail": detail or "🎧 Taste Index analysis in progress (28-day rolling metrics)",
             "batches_done": 0,
@@ -759,7 +759,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         payload = {
             "user_id": user_id,
             "dataset_label": dataset_label,
-            "status": "breadth_error",
+            "status": "taste_index_error",
             "phase": "taste_index",
             "detail": detail or "❌ Error during Taste Index analysis (phase 9)",
             "batches_done": 0,
@@ -780,7 +780,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             "user_id": user_id,
             "dataset_label": dataset_label,
             "status": "full_done",
-            "phase": "taste_index",
+            "phase": "full_done",
             "detail": detail or "✅ Full enrichment completed (Standard + Breadth + Taste Index)",
             "batches_done": 1,
             "total_batches": 1,

@@ -591,25 +591,73 @@ def safe_process(func, retries: int = 3, backoff: int = 2, cancel_event: Optiona
             print(f"[Retry] {func.__name__} failed (attempt {attempt}/{retries}): {e} — retrying in {sleep_for:.1f}s")
             time.sleep(sleep_for)
 
-# ============ Threading Helpers ============
+# Global registries
 ENRICH_LOCKS = {}
-ENRICH_LOCKS_LOCK = threading.Lock()
+ENRICH_LOCKS_LOCK = threading.Lock()       # registry lock (non-reentrant)
+ENRICH_HEARTBEATS = {}
+ENRICH_HEARTBEATS_LOCK = threading.Lock()  # heartbeat tracking
+
+def lock_is_locked(lock) -> bool:
+    """Cross-version safe check for whether a Lock or RLock is currently held.
+    Works for _thread.RLock which has no .locked() method on some builds.
+    """
+    try:
+        fn = getattr(lock, "locked", None)
+        if callable(fn):
+            return fn()
+        # fallback: try non-blocking acquire to test if held
+        acquired = lock.acquire(blocking=False)
+        if acquired:
+            lock.release()
+            return False
+        return True
+    except Exception:
+        return False
 
 def get_user_lock(user_id: str):
-    """Get or create a per-user lock with timestamp metadata."""
+    """Get or create a per-user reentrant lock with tracking metadata."""
     with ENRICH_LOCKS_LOCK:
         entry = ENRICH_LOCKS.get(user_id)
         if entry is None:
-            entry = {"lock": threading.RLock(), "last_acquired": None}
+            entry = {
+                "lock": threading.RLock(),          # <-- reentrant lock per user
+                "last_acquired": None,
+                "owner_thread_id": None,
+            }
             ENRICH_LOCKS[user_id] = entry
         return entry["lock"]
-    print(f"[debug:lock] get_user_lock({user_id}) id={id(lock)} locked={getattr(lock, 'locked', lambda: '?')()}")
 
 def mark_lock_acquired(user_id: str):
-    """Record timestamp of when the user lock was acquired."""
+    """Record timestamp and thread ownership when acquired."""
     with ENRICH_LOCKS_LOCK:
         if user_id in ENRICH_LOCKS:
             ENRICH_LOCKS[user_id]["last_acquired"] = time.time()
+            ENRICH_LOCKS[user_id]["owner_thread_id"] = threading.get_ident()
+
+def release_user_lock(user_id: str, *, force=False, log_prefix="[lock]"):
+    """Safely release and remove a user's lock (even if stale)."""
+    with ENRICH_LOCKS_LOCK:
+        entry = ENRICH_LOCKS.get(user_id)
+        if not entry:
+            print(f"{log_prefix} 🧭 No lock found for {user_id}")
+            return
+
+        lock = entry.get("lock")
+        try:
+            # Note: RLock doesn't have .locked() in older Python, so getattr safe
+            is_locked = getattr(lock, "locked", lambda: False)()
+            if is_locked:
+                lock.release()
+                print(f"{log_prefix} 🔓 Released lock for {user_id}")
+            elif force:
+                ENRICH_LOCKS.pop(user_id, None)
+                print(f"{log_prefix} 🗑️ Force-removed stale lock for {user_id}")
+        except RuntimeError as e:
+            if "release unlocked lock" in str(e):
+                ENRICH_LOCKS.pop(user_id, None)
+                print(f"{log_prefix} ⚠️ Lock already unlocked; entry removed for {user_id}")
+            else:
+                print(f"{log_prefix} ⚠️ Lock release failed for {user_id}: {e}")
 
 def is_stale_status(status_obj, threshold_minutes=1):
     """Return True if the dataset status hasn't been updated recently."""
@@ -624,19 +672,20 @@ def is_stale_status(status_obj, threshold_minutes=1):
         return True
 
 def clear_stale_locks(max_age_minutes: int = 10):
-    """Force release locks older than max_age_minutes."""
+    """Release locks older than max_age_minutes."""
     now = time.time()
     with ENRICH_LOCKS_LOCK:
         for uid, entry in list(ENRICH_LOCKS.items()):
-            lock = entry.get("lock")
             ts = entry.get("last_acquired")
+            lock = entry.get("lock")
             if ts and (now - ts) > max_age_minutes * 60:
-                if lock.locked():
-                    try:
+                try:
+                    if getattr(lock, "locked", lambda: False)():
                         lock.release()
-                        print(f"[startup] 🧹 Released stale lock for {uid}")
-                    except Exception as e:
-                        print(f"[startup] ⚠️ Could not release lock for {uid}: {e}")
+                    ENRICH_LOCKS.pop(uid, None)
+                    print(f"[startup] 🧹 Released stale lock for {uid}")
+                except Exception as e:
+                    print(f"[startup] ⚠️ Could not release stale lock for {uid}: {e}")
 
 def safe_user_lock_acquire(
     user_id: str,
@@ -646,17 +695,10 @@ def safe_user_lock_acquire(
     wait_interval: float = 1.0,
     log_prefix: str = "[lock]",
 ) -> bool:
-    """
-    Attempts to acquire the user's enrichment lock safely.
-    Auto-releases stale locks (no heartbeat within max_age_minutes).
-    Waits up to wait_attempts × wait_interval seconds.
-    Returns True if acquired, False if not.
-    """
-    import time
-
+    """Acquire the user's enrichment lock safely, with stale detection."""
     lock = get_user_lock(user_id)
 
-    # Check for staleness
+    # Check for staleness using heartbeats
     now = time.time()
     last_hb = None
     with ENRICH_HEARTBEATS_LOCK:
@@ -669,25 +711,25 @@ def safe_user_lock_acquire(
     if age_sec is None or age_sec > max_age_minutes * 60:
         with ENRICH_LOCKS_LOCK:
             entry = ENRICH_LOCKS.get(user_id)
-            if entry and lock.locked():
+            if entry and getattr(lock, "locked", lambda: False)():
                 try:
                     lock.release()
-                    print(f"{log_prefix} 🧹 Released stale lock for {user_id} (no heartbeat {age_sec or 'unknown'}s).")
+                    print(f"{log_prefix} 🧹 Released stale lock for {user_id} (no heartbeat {age_sec or 'unknown'}s)")
                 except Exception as e:
                     print(f"{log_prefix} ⚠️ Could not release stale lock for {user_id}: {e}")
 
-    # Try acquiring with retries
+    # Attempt to acquire with retries
     for attempt in range(1, wait_attempts + 1):
         got_it = lock.acquire(timeout=wait_interval)
         if got_it:
             mark_lock_acquired(user_id)
-            print(f"{log_prefix} 🔒 Lock acquired for {user_id} on attempt {attempt}.")
+            print(f"{log_prefix} 🔒 Lock acquired for {user_id} on attempt {attempt}")
             return True
         else:
             print(f"{log_prefix} ⏳ Lock busy — waiting ({attempt}/{wait_attempts})…")
             time.sleep(wait_interval)
 
-    print(f"{log_prefix} 🚫 Could not acquire lock for {user_id} after {wait_attempts} attempts.")
+    print(f"{log_prefix} 🚫 Could not acquire lock for {user_id} after {wait_attempts} attempts")
     return False
 
 def safe_user_lock_release(user_id: str, *, log_prefix: str = "[lock]"):
@@ -721,10 +763,6 @@ def safe_user_lock_release(user_id: str, *, log_prefix: str = "[lock]"):
 
         # Optional: clean up entry
         ENRICH_LOCKS.pop(user_id, None)
-
-# global heartbeat tracking
-ENRICH_HEARTBEATS = {}
-ENRICH_HEARTBEATS_LOCK = threading.Lock()
 
 def update_heartbeat(user_id: str, dataset_label: str):
     """Record a timestamp for the active enrichment thread."""
@@ -3891,7 +3929,8 @@ class DiscogsWorkerPool:
 
         # --- Debug diagnostics before taking the lock ---
         try:
-            print(f"[DiscogsWorkerPool:init] debug → GLOBAL_DISCOGS_LOCK.locked()={GLOBAL_DISCOGS_LOCK.locked()}")
+            from enrichment_service import lock_is_locked
+            print(f"[DiscogsWorkerPool:init] debug → GLOBAL_DISCOGS_LOCK.locked()={lock_is_locked(GLOBAL_DISCOGS_LOCK)}")
             print(f"[DiscogsWorkerPool:init] debug → GLOBAL_DISCOGS_POOL={GLOBAL_DISCOGS_POOL}")
             if GLOBAL_DISCOGS_POOL:
                 alive = [t.name for t in GLOBAL_DISCOGS_POOL.workers if t.is_alive()]

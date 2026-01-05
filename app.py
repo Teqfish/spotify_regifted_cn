@@ -888,6 +888,33 @@ def _audit_artist_genre_coverage(
         },
     }
 
+def safe_auto_check_thread(user_id: str, dataset_label: str, table_name: Optional[str] = None):
+    """
+    Safely run auto_check in a background thread.
+    This version isolates from Streamlit's runtime context and avoids using st.* inside the thread.
+    """
+    import threading, time, traceback
+    from dao_selector import get_log_dao
+    from app import _auto_check_and_reenrich_if_needed  # self-reference is fine at runtime
+
+    def _runner():
+        try:
+            log_dao = get_log_dao()
+            print(f"[safe_auto_check_thread] 🧩 Launching auto_check for {dataset_label}")
+            time.sleep(1.5)  # allow D1 to propagate 'standard_done'
+            _auto_check_and_reenrich_if_needed(user_id, dataset_label, log_dao, table_name=table_name)
+            print(f"[safe_auto_check_thread] ✅ auto_check completed for {dataset_label}")
+        except Exception as e:
+            print(f"[safe_auto_check_thread] ⚠️ Failed during auto_check: {e}\n{traceback.format_exc()}")
+
+    t = threading.Thread(
+        target=_runner,
+        name=f"auto_check:{dataset_label}",
+        daemon=True,
+    )
+    t.start()
+    return t
+
 def _start_targeted_artist_backfill_with_background_enrich(
     *,
     user_id: str,
@@ -1940,21 +1967,14 @@ def background_enrich(
         # --- Auto-trigger breadth follow-up if needed ---------------------
         try:
             status_info = status_dao.read_status(user_id, dataset_label) or {}
-            if status_info.get("status") == "standard_done":
-                print(f"[enrich:{thread_name}] 🌐 Standard enrichment done — triggering breadth-first auto-check.")
-                import threading, time
-                from dao_selector import get_log_dao
-                log_dao = get_log_dao()
+            current_status = (status_info.get("status") or "").lower()
+            if current_status == "standard_done":
+                print(f"[enrich:{thread_name}] 🌐 Standard enrichment done — launching safe auto-check thread.")
+                from app import safe_auto_check_thread
                 table_name = getattr(enricher, "table_name", None) or getattr(enricher, "input_table_name", None)
-                time.sleep(1.5)
-                threading.Thread(
-                    target=_auto_check_and_reenrich_if_needed,
-                    args=(user_id, dataset_label, log_dao),
-                    kwargs=dict(table_name=table_name),
-                    daemon=True,
-                ).start()
+                safe_auto_check_thread(user_id, dataset_label, table_name)
         except Exception as e:
-            print(f"[enrich:{thread_name}] ⚠️ Failed to auto-trigger breadth-first: {e}")
+            print(f"[enrich:{thread_name}] ⚠️ Failed to trigger safe auto-check: {e}")
 
         # --- Stop watchdog thread -----------------------------------------
         try:

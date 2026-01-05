@@ -805,12 +805,12 @@ def terminate_stale_enrichment_threads(user_id: str, max_age_sec: int = 600):
 def recovery_sweep(user_id: str, dataset_label: str, log_dao=None):
     """
     Detect and repair zombie 'running' enrichments.
-    Uses runtime signature detection to call set_status() safely
-    regardless of whether the DAO expects a payload dict or kwargs.
+    Compatible with both legacy and modern DAOs.
+    Auto-releases stale locks and corrects stuck 'running' or 'breadth_running' states.
     """
     import time, inspect, streamlit as st
     from dao_selector import DAOS
-    from enrichment_service import get_user_lock, get_last_heartbeat
+    # from enrichment_service import get_user_lock, get_last_heartbeat
 
     try:
         status_dao = DAOS.get("status")
@@ -820,6 +820,7 @@ def recovery_sweep(user_id: str, dataset_label: str, log_dao=None):
         current_phase = (d1_status.get("phase") or "").lower()
         current_stage = (d1_status.get("stage") or "").lower()
 
+        # Skip if not running/breadth_running
         if current_status not in ("running", "breadth_running"):
             print(f"[recovery_sweep] ✅ No zombie sweep needed (status={current_status}, phase={current_phase})")
             return
@@ -851,59 +852,64 @@ def recovery_sweep(user_id: str, dataset_label: str, log_dao=None):
         except Exception as e:
             print(f"[recovery_sweep] ⚠️ Lock release failed: {e}")
 
-        # Classify the error more precisely
+        # Decide which status correction to apply
         if "breadth" in current_phase or current_status == "breadth_running":
             new_status = "breadth_error"
+            corrector = getattr(status_dao, "finish_breadth_error", None)
         elif "album" in current_phase:
             new_status = "per_album_error"
+            corrector = getattr(status_dao, "finish_standard_error", None)
         elif "standard" in current_stage:
             new_status = "standard_error"
+            corrector = getattr(status_dao, "finish_standard_error", None)
         else:
             new_status = "error"
+            corrector = getattr(status_dao, "finish_standard_error", None)
 
         detail = f"⚠️ Stuck in {current_phase or 'running'} state with no active thread (hb_age={age_display})"
 
-        # --- Adaptive call ---
+        # --- Attempt modern-safe update using set_status() ---
         try:
             sig = inspect.signature(status_dao.set_status)
-            params = list(sig.parameters.values())
-            accepts_kwargs = any(p.kind == p.VAR_KEYWORD for p in params)
-
-            if accepts_kwargs:
-                # Modern DAO → keyword-style call
+            if "phase" in sig.parameters:
+                # Step 1: use set_status to safely update R2/D1
                 status_dao.set_status(
                     user_id,
                     dataset_label,
-                    status=new_status,
-                    phase=current_phase or "unknown",
-                    stage=current_stage or "unknown",
-                    detail=detail,
+                    phase=new_status,  # CloudflareDAO signature
+                    detail=detail
                 )
-                print(f"[recovery_sweep] 🧭 Status updated via kwargs → {new_status} for {dataset_label}")
+                print(f"[recovery_sweep] 🧭 set_status() → phase={new_status} for {dataset_label}")
+
+                # Step 2: immediately mark as error to override its 'running' default
+                try:
+                    status_dao.finish_status(
+                        user_id,
+                        dataset_label,
+                        ok=False,
+                        detail=f"Auto-corrected zombie state → {new_status}"
+                    )
+                    print(f"[recovery_sweep] 🧭 Forced status=error for {dataset_label}")
+                except Exception as e_force:
+                    print(f"[recovery_sweep] ⚠️ finish_status() correction failed: {e_force}")
 
             else:
-                # Legacy DAO → 3-positional style
-                payload = {
-                    "status": new_status,
-                    "phase": current_phase or "unknown",
-                    "stage": current_stage or "unknown",
-                    "detail": detail,
-                    "timestamp": int(now),
-                }
-                status_dao.set_status(user_id, dataset_label, payload)
-                print(f"[recovery_sweep] 🧭 Status updated via dict payload → {new_status} for {dataset_label}")
-
+                # fallback to finish_* style methods
+                raise TypeError("set_status signature does not support phase=…")
         except Exception as e:
             print(f"[recovery_sweep] ⚠️ set_status() failed: {e}")
-            # fallback: try finish_standard_error if available
+            # fallback correction path
             try:
-                if hasattr(status_dao, "finish_standard_error"):
+                if corrector:
+                    corrector(user_id, dataset_label, detail=detail)
+                    print(f"[recovery_sweep] 🧭 Fallback {corrector.__name__}() succeeded for {dataset_label}")
+                else:
                     status_dao.finish_standard_error(user_id, dataset_label, detail=detail)
-                    print(f"[recovery_sweep] 🧭 Fallback finish_standard_error() succeeded for {dataset_label}")
+                    print(f"[recovery_sweep] 🧭 Fallback finish_standard_error() used for {dataset_label}")
             except Exception as e2:
                 print(f"[recovery_sweep] ⚠️ Fallback also failed: {e2}")
 
-        # --- Optional log entry ---
+        # Optional log entry
         if log_dao:
             try:
                 log_dao.log(user_id, dataset_label, "recovery", detail, level="warning")
@@ -3518,8 +3524,29 @@ class MetadataEnricher:
                     try:
                         if GLOBAL_DISCOGS_POOL:
                             GLOBAL_DISCOGS_POOL.nudge_workers(hb_stale_sec=60, job_stale_sec=60)
+
+                        print("[flush_all][DEBUG] >>> Entering Discogs shutdown sequence")
+                        import threading
+                        try:
+                            live_discogs = [t.name for t in threading.enumerate() if "discogs" in t.name]
+                            print(f"[flush_all][DEBUG] Discogs threads currently alive: {live_discogs}")
+                        except Exception as e:
+                            print(f"[flush_all][DEBUG] Could not enumerate threads: {e}")
+
+                        try:
+                            qsize = getattr(GLOBAL_DISCOGS_QUEUE, "qsize", lambda: 'noqueue')()
+                            unfinished = getattr(GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 'noqueue')
+                            print(f"[flush_all][DEBUG] Queue state before shutdown: size={qsize} unfinished={unfinished}")
+                        except Exception as e:
+                            print(f"[flush_all][DEBUG] Could not check queue: {e}")
+
+                        print("[flush_all][DEBUG] >>> Calling pool.shutdown(...) now")
+
                         pool.shutdown(max_wait_sec=60, force_purge=False, persist_backlog=False)
+
+                        print("[flush_all][DEBUG] <<< pool.shutdown() returned successfully")
                         self.log("[flush_all] ✅ Discogs pool shut down successfully.")
+                        
                         GLOBAL_DISCOGS_POOL = None
                         setattr(MetadataEnricher, "_discogs_pool", None)
                     except TypeError:
@@ -4328,11 +4355,20 @@ class DiscogsWorkerPool:
             return GLOBAL_DISCOGS_POOL
 
     # --------------------- Shutdown ---------------------
-    def shutdown(self, max_wait_sec: int = 180, force_purge: bool = False, persist_backlog: bool = False, storage=None):
+    def shutdown(
+        self,
+        max_wait_sec: int = 180,
+        force_purge: bool = False,
+        persist_backlog: bool = False,
+        storage=None,
+    ):
         """
         Bounded shutdown with diagnostics, forced drain, and automatic global reset.
+        Now includes timeout-based escape to prevent permanent hangs if queue/pool are gone.
         """
-        import time, threading
+        import time, threading, queue
+
+        print(f"[DiscogsWorkerPool][DEBUG] Queue unfinished_tasks = {getattr(GLOBAL_DISCOGS_QUEUE, 'unfinished_tasks', 'N/A')}")
 
         print(f"[DiscogsWorkerPool] 💤 Shutdown requested (force_purge={force_purge}, persist_backlog={persist_backlog})")
         start = time.time()
@@ -4343,16 +4379,26 @@ class DiscogsWorkerPool:
                 if pool is not self:
                     print("[DiscogsWorkerPool] ⚠️ Shutdown requested on non-global pool; skipping.")
                     return
-
                 self.shutdown_event.set()
                 alive_workers = [t.name for t in self.workers if t.is_alive()]
                 print(f"[DiscogsWorkerPool] Active workers before shutdown: {alive_workers or 'None'}")
 
-            # Wait up to max_wait_sec for unfinished tasks to drain
+            import threading
+            live_threads = [t.name for t in threading.enumerate() if "discogs" in t.name]
+            print(f"[DiscogsWorkerPool][DEBUG] live Discogs threads: {live_threads}")
+
+            # --- early exit if queue/pool vanished ---
+            if "GLOBAL_DISCOGS_QUEUE" not in globals() or globals().get("GLOBAL_DISCOGS_QUEUE") is None:
+                print("[DiscogsWorkerPool] ⚠️ No GLOBAL_DISCOGS_QUEUE present — skipping graceful drain.")
+                return
+
+            # --- bounded drain wait ---
             last_remaining = -1
+            drained = False
             for sec in range(max_wait_sec):
-                remaining = GLOBAL_DISCOGS_QUEUE.unfinished_tasks
+                remaining = getattr(GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 0)
                 if remaining == 0:
+                    drained = True
                     break
                 if sec % 10 == 0:
                     hb_staleness = {
@@ -4363,48 +4409,56 @@ class DiscogsWorkerPool:
                 time.sleep(1.0)
                 last_remaining = remaining
 
-            # Force drain if still stuck
-            if GLOBAL_DISCOGS_QUEUE.unfinished_tasks > 0:
-                print("[DiscogsWorkerPool] ⛔ Force draining queue after max wait.")
-                try:
-                    self._drain_queue_nonblocking()
-                except Exception as e:
-                    print(f"[DiscogsWorkerPool] ⚠️ drain failed: {e}")
+            # --- timeout guard ---
+            if not drained:
+                print(f"[DiscogsWorkerPool] ⚠️ Timeout reached after {max_wait_sec}s. Forcing skip.")
+                remaining = getattr(GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 0)
+                if remaining > 0:
+                    print(f"[DiscogsWorkerPool] ⛔ Force draining {remaining} leftover tasks.")
+                    try:
+                        self._drain_queue_nonblocking()
+                    except Exception as e:
+                        print(f"[DiscogsWorkerPool] ⚠️ drain failed: {e}")
 
-            # Handle leftovers
+            # --- leftover handling ---
             leftovers = []
-            if GLOBAL_DISCOGS_QUEUE.qsize() > 0:
-                leftovers = self._drain_queue_nonblocking()
-                if leftovers:
-                    if persist_backlog and storage is not None:
-                        try:
-                            payload = [
-                                {
-                                    "artist": j.get("artist", ""),
-                                    "meta": j.get("meta", {}),
-                                    "attempts": j.get("attempts", 0),
-                                }
-                                for j in leftovers
-                            ]
-                            storage.put_json("enrichment/backlog/discogs_jobs.json", payload)
-                            print(f"[DiscogsWorkerPool] 📦 Persisted {len(payload)} leftover jobs for resume")
-                        except Exception as e:
-                            print(f"[DiscogsWorkerPool] ⚠️ Failed to persist backlog: {e}")
-                    elif force_purge:
-                        print(f"[DiscogsWorkerPool] ⚠️ Purging {len(leftovers)} leftover jobs (force_purge=True)")
-                    else:
-                        for j in leftovers:
-                            try:
-                                GLOBAL_DISCOGS_QUEUE.put(j)
-                            except Exception:
-                                pass
-                        print(f"[DiscogsWorkerPool] ↩️ Re-queued {len(leftovers)} leftover jobs for next session")
+            try:
+                if GLOBAL_DISCOGS_QUEUE.qsize() > 0:
+                    leftovers = self._drain_queue_nonblocking()
+            except Exception:
+                leftovers = []
 
-            # Join worker threads (bounded)
+            if leftovers:
+                if persist_backlog and storage is not None:
+                    try:
+                        payload = [
+                            {
+                                "artist": j.get("artist", ""),
+                                "meta": j.get("meta", {}),
+                                "attempts": j.get("attempts", 0),
+                            }
+                            for j in leftovers
+                        ]
+                        storage.put_json("enrichment/backlog/discogs_jobs.json", payload)
+                        print(f"[DiscogsWorkerPool] 📦 Persisted {len(payload)} leftover jobs for resume")
+                    except Exception as e:
+                        print(f"[DiscogsWorkerPool] ⚠️ Failed to persist backlog: {e}")
+                elif force_purge:
+                    print(f"[DiscogsWorkerPool] ⚠️ Purging {len(leftovers)} leftover jobs (force_purge=True)")
+                else:
+                    for j in leftovers:
+                        try:
+                            GLOBAL_DISCOGS_QUEUE.put(j)
+                        except Exception:
+                            pass
+                    print(f"[DiscogsWorkerPool] ↩️ Re-queued {len(leftovers)} leftover jobs for next session")
+
+            # --- join worker threads (short-timeout) ---
             for t in list(self.workers):
                 if t.is_alive():
                     t.join(timeout=2)
-            print(f"[DiscogsWorkerPool] ✅ Shutdown complete. Final queue size={GLOBAL_DISCOGS_QUEUE.qsize()}")
+            duration = round(time.time() - start, 2)
+            print(f"[DiscogsWorkerPool] ✅ Shutdown complete in {duration}s. Final queue size={GLOBAL_DISCOGS_QUEUE.qsize()}")
 
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ Shutdown error: {e}")
@@ -4417,12 +4471,16 @@ class DiscogsWorkerPool:
     def shutdown_worker_pool(self, timeout: int = 10, force_purge: bool = False):
         """
         Graceful wrapper for shutdown(), used by background_enrich() and breadth_only.
-        Ensures all threads stop even if GLOBAL_DISCOGS_POOL reference is missing or mismatched.
+        Now skips gracefully if no global pool exists or threads are already gone.
         """
-        import threading, time
+        import time
 
         try:
-            # Normal path: call existing shutdown()
+            if not getattr(self, "workers", None):
+                print("[DiscogsWorkerPool] 💤 No workers present — skipping shutdown.")
+                globals()["GLOBAL_DISCOGS_POOL"] = None
+                return
+
             print(f"[DiscogsWorkerPool] 🧹 shutdown_worker_pool() called (timeout={timeout})")
             self.shutdown(max_wait_sec=timeout, force_purge=force_purge)
             return
@@ -4430,7 +4488,7 @@ class DiscogsWorkerPool:
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ shutdown() raised exception: {e}")
 
-        # Fallback: attempt direct thread cleanup if shutdown() failed
+        # --- fallback cleanup if shutdown() itself breaks ---
         try:
             alive = [t for t in getattr(self, "workers", []) if t.is_alive()]
             if alive:
@@ -4446,27 +4504,30 @@ class DiscogsWorkerPool:
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ Fallback thread cleanup failed: {e}")
 
-        # Final global reset safety net
+        # --- final global reset ---
         try:
-            global GLOBAL_DISCOGS_POOL
-            GLOBAL_DISCOGS_POOL = None
+            globals()["GLOBAL_DISCOGS_POOL"] = None
             print("[DiscogsWorkerPool] 🔓 GLOBAL_DISCOGS_POOL cleared.")
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ Failed to clear global pool reference: {e}")
 
     def _drain_queue_nonblocking(self):
         """Drain whatever is immediately available from the global queue (debug/cleanup)."""
+        import queue
         items = []
-        while True:
-            try:
-                items.append(GLOBAL_DISCOGS_QUEUE.get_nowait())
-                # Mark as done so unfinished_tasks doesn't block shutdown forever
+        try:
+            while True:
                 try:
-                    GLOBAL_DISCOGS_QUEUE.task_done()
-                except Exception:
-                    pass
-            except queue.Empty:
-                break
+                    job = GLOBAL_DISCOGS_QUEUE.get_nowait()
+                    items.append(job)
+                    try:
+                        GLOBAL_DISCOGS_QUEUE.task_done()
+                    except Exception:
+                        pass
+                except queue.Empty:
+                    break
+        except Exception as e:
+            print(f"[DiscogsWorkerPool] ⚠️ drain_queue_nonblocking error: {e}")
         return items
 
 # These are meant to be outside the class
@@ -4496,6 +4557,8 @@ def peek_discogs_queue(max_items=20):
             print(f"   {i+1:02d}: {artist}")
     print(f"[debug] total={GLOBAL_DISCOGS_QUEUE.qsize()} jobs queued")
 
+# peek_discogs_queue()
+
 def debug_discogs_pool_state():
     """Print diagnostic summary of current Discogs worker pool."""
     import time, threading
@@ -4511,3 +4574,5 @@ def debug_discogs_pool_state():
         ages = {n: int(now - ts) for n, ts in pool.worker_heartbeats.items()}
         print(f"[debug] Heartbeat ages: {ages}")
     print(f"[debug] inflight={len(pool.inflight)}")
+
+# debug_discogs_pool_state()

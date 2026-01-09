@@ -91,11 +91,16 @@ def _normalize_genre_key(genre: str) -> str:
 
 # ---- Spotify token the way you had it (unchanged) ----
 class SpotifyToken:
+    """
+    Lightweight token manager for Spotify's Client Credentials flow.
+    Automatically refreshes when expired, and self-heals after 401 errors.
+    """
     def __init__(self, client_id: str, client_secret: str):
         self.client_id = client_id
         self.client_secret = client_secret
         self.access_token: Optional[str] = None
         self.expires_at: datetime = datetime.min
+        self.last_known_401: float = 0.0  # used for defensive re-fetch
 
     def _fetch(self) -> None:
         auth_b64 = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
@@ -113,12 +118,37 @@ class SpotifyToken:
         self.access_token = payload["access_token"]
         ttl = int(payload.get("expires_in", 3600)) - 60
         self.expires_at = datetime.now(timezone.utc) + timedelta(seconds=max(ttl, 60))
+        print(f"[SpotifyToken] 🔑 Refreshed token, valid for {ttl} seconds")
+
+    def mark_unauthorized(self):
+        """
+        Called when a 401 is detected, to force an early refresh next time.
+        """
+        self.last_known_401 = time.time()
+        # clear current token to force immediate re-fetch
+        self.access_token = None
+        self.expires_at = datetime.min
 
     def get(self) -> str:
-        if not self.access_token or datetime.now(timezone.utc) >= self.expires_at:
+        """
+        Returns a valid token, refreshing if expired or previously marked unauthorized.
+        """
+        now = datetime.now(timezone.utc)
+
+        # force-refresh if expired or invalidated after a 401
+        if not self.access_token or now >= self.expires_at:
+            print("[SpotifyToken] ⚠️ Token missing or expired — fetching new one.")
             self._fetch()
-        if self.access_token is None:
+
+        # if a 401 was recently recorded, double-check validity
+        elif time.time() - self.last_known_401 < 300:  # within last 5 minutes
+            print("[SpotifyToken] ⚠️ Recent 401 detected — refreshing token proactively.")
+            self._fetch()
+            self.last_known_401 = 0.0
+
+        if not self.access_token:
             raise RuntimeError("Spotify access token unavailable after fetch")
+
         return self.access_token
 
 BASE = "https://api.spotify.com/v1"
@@ -206,6 +236,7 @@ def get_several(endpoint: str, ids: list[str], *, token, user_id: str = None,
       • global + per-endpoint counters
       • rolling 30-second rate tracking
       • automatic throttling (<=3 req/sec default)
+      • automatic token refresh on HTTP 401
     """
     if not ids:
         return {}
@@ -234,8 +265,9 @@ def get_several(endpoint: str, ids: list[str], *, token, user_id: str = None,
             _log(f"⏸️ Throttling Spotify API: {current_rate:.2f} req/s > {SPOTIFY_MAX_RATE}, sleeping {sleep_time:.2f}s", level="warning")
             time.sleep(sleep_time)
 
-    # ---- attempt Spotify fetch with retries ----
-    for attempt in range(3):  # up to 3 tries
+    refreshed_once = False  # track if we already retried after 401
+
+    for attempt in range(3):  # up to 3 tries for transient issues
         hdrs = make_auth_header(token)
         try:
             r = safe_process(lambda: requests.get(url, headers=hdrs, timeout=30))
@@ -243,7 +275,7 @@ def get_several(endpoint: str, ids: list[str], *, token, user_id: str = None,
             _log(f"safe_process exception: {e}", level="error")
             raise
 
-        # --- rate limited (HTTP 429) ---
+        # --- handle rate limit (HTTP 429) ---
         if r.status_code == 429:
             retry_after = r.headers.get("Retry-After")
             try:
@@ -252,20 +284,40 @@ def get_several(endpoint: str, ids: list[str], *, token, user_id: str = None,
                     raise ValueError("Retry-After too high")
             except Exception:
                 delay = 5.0
-            delay = max(1.0, min(delay + 1.0, 60.0))  # +1s cushion, clamp 1–60s
+            delay = max(1.0, min(delay + 1.0, 60.0))
             _log(f"⚠️ Rate limited (HTTP 429), sleeping {delay:.1f}s", level="warning")
             time.sleep(delay)
             continue
 
-        # --- transient server errors ---
+        # --- transient Spotify server errors ---
         if r.status_code in {500, 502, 503, 504}:
             backoff = 2 ** attempt
             _log(f"Transient {r.status_code}, backoff {backoff}s", level="warning")
             time.sleep(backoff)
             continue
 
+        # --- unauthorized (HTTP 401) ---
+        if r.status_code == 401 and not refreshed_once:
+            _log("⚠️ Spotify token appears invalid or expired — refreshing and retrying once.", level="warning")
+            try:
+                token.mark_unauthorized()
+                token._fetch()  # force-refresh the access token
+                refreshed_once = True
+                time.sleep(1.0)
+                continue
+            except Exception as e:
+                _log(f"❌ Token refresh failed: {e}", level="error")
+                raise
+
+        # --- any other HTTP error ---
+        if r.status_code >= 400:
+            try:
+                r.raise_for_status()
+            except Exception as e:
+                _log(f"❌ Spotify returned {r.status_code} ({e})", level="error")
+                raise
+
         # --- success ---
-        r.raise_for_status()
         payload = r.json()
 
         # ---- update global + per-endpoint counters ----
@@ -277,10 +329,8 @@ def get_several(endpoint: str, ids: list[str], *, token, user_id: str = None,
             SPOTIFY_CALL_TIMES.append(now)
             while SPOTIFY_CALL_TIMES and now - SPOTIFY_CALL_TIMES[0] > SPOTIFY_WINDOW_SEC:
                 SPOTIFY_CALL_TIMES.popleft()
-
             rate = len(SPOTIFY_CALL_TIMES) / SPOTIFY_WINDOW_SEC
             if SPOTIFY_CALL_COUNT % 10 == 0:
-                # Compose short endpoint summary
                 ep_summary = ", ".join(
                     f"{ep}:{cnt}" for ep, cnt in sorted(SPOTIFY_CALLS_PER_ENDPOINT.items())
                 )
@@ -2793,20 +2843,74 @@ class MetadataEnricher:
 
         # --- Always clean up system resources ---
         finally:
+            import threading, time, traceback
+
             try:
-                if hasattr(self, "discogs_pool"):
-                    self.log("[run_all] Cleaning up Discogs worker pool (finally block)…")
+                pool = getattr(self, "discogs_pool", None)
+                self.log("[run_all] 🧹 Entering final cleanup stage…")
+
+                # --- Detect whether pool still has live worker threads ---
+                def _has_live_discogs_threads() -> bool:
                     try:
-                        self.discogs_pool.shutdown()
-                        self.log("[run_all] ✅ Discogs worker pool shut down successfully (finally block).")
-                        GLOBAL_DISCOGS_POOL = None
-                        setattr(MetadataEnricher, "_discogs_pool", None)
+                        import threading
+                        active = [t.name for t in threading.enumerate() if "discogs" in t.name.lower()]
+                        if active:
+                            self.log(f"[run_all] 🔍 Active Discogs threads detected: {active}")
+                        else:
+                            self.log("[run_all] ✅ No Discogs threads appear to be alive.")
+                        return bool(active)
                     except Exception as e:
-                        self.log(f"[run_all] ⚠️ Discogs pool shutdown failed: {e}")
+                        self.log(f"[run_all] ⚠️ Could not enumerate threads: {e}")
+                        return True  # be safe and assume alive if uncertain
+
+                # --- Detect whether the pool is already cleared or invalid ---
+                def _is_pool_active(p) -> bool:
+                    try:
+                        if p is None:
+                            return False
+                        # Try a lightweight property check
+                        qsize = getattr(getattr(p, "queue", None), "qsize", lambda: 0)()
+                        thread_count = len(getattr(p, "workers", [])) if hasattr(p, "workers") else 0
+                        self.log(f"[run_all] Pool diagnostics: qsize={qsize}, thread_count={thread_count}")
+                        if qsize == 0 and thread_count == 0:
+                            return False
+                        return True
+                    except Exception as e:
+                        self.log(f"[run_all] ⚠️ Pool state check failed: {e}")
+                        return True
+
+                # --- Conditional shutdown only if necessary ---
+                if pool is not None and _is_pool_active(pool) and _has_live_discogs_threads():
+                    self.log("[run_all] Cleaning up Discogs worker pool (finally block, bounded)…")
+
+                    def _safe_shutdown():
+                        try:
+                            pool.shutdown(max_wait_sec=20, force_purge=False, persist_backlog=False)
+                            self.log("[run_all] ✅ Discogs pool shut down cleanly (finally block).")
+                        except Exception as e:
+                            tb = traceback.format_exc()
+                            self.log(f"[run_all] ⚠️ Discogs pool shutdown failed in finally: {e}\n{tb}")
+
+                    t = threading.Thread(target=_safe_shutdown, daemon=True)
+                    t.start()
+                    t.join(timeout=25)
+
+                    if t.is_alive():
+                        self.log("[run_all] ⏭️ Discogs shutdown still running after timeout — skipping and clearing pool manually.")
+                        try:
+                            import enrichment_service
+                            enrichment_service.GLOBAL_DISCOGS_POOL = None
+                            setattr(MetadataEnricher, "_discogs_pool", None)
+                            self.discogs_pool = None
+                            self.log("[run_all] 🔓 Forced GLOBAL_DISCOGS_POOL cleared manually (finally block).")
+                        except Exception as e:
+                            self.log(f"[run_all] ⚠️ Manual clear failed: {e}")
                 else:
-                    self.log("[run_all] (finally) No Discogs worker pool found — skipping shutdown.")
+                    self.log("[run_all] (finally) No active Discogs pool found — skipping shutdown entirely.")
+
             except Exception as e:
-                self.log(f"[run_all] ⚠️ Unexpected error during final cleanup: {e}")
+                tb = traceback.format_exc()
+                self.log(f"[run_all] ⚠️ Unexpected error during final cleanup: {e}\n{tb}")
 
             self.log("[run_all] 💤 Standard enrichment pipeline fully terminated.")
 
@@ -2965,9 +3069,13 @@ class MetadataEnricher:
         if df is None or df.empty:
             raise ValueError("[TasteIndex] ❌ No listening data loaded (self.df is empty)")
 
-        df_artist_genre = getattr(self, "df_artist_genre", None)
+        # ✅ Use the passed-in parameter if provided
         if df_artist_genre is None or df_artist_genre.empty:
-            raise ValueError("[TasteIndex] ❌ Missing artist genre metadata")
+            df_artist_genre = getattr(self, "df_artist_genre", None)
+            if df_artist_genre is None or df_artist_genre.empty:
+                raise ValueError("[TasteIndex] ❌ Missing artist genre metadata")
+        else:
+            self.df_artist_genre = df_artist_genre.copy()
 
         # --- Update enrichment status ---
         self.status.set_status(
@@ -3123,14 +3231,6 @@ class MetadataEnricher:
 
         self.log(f"[breadth_only] ▶ Starting breadth-only enrichment for {label}…")
 
-        # ========== Acquire user lock safely ==========
-        if not safe_user_lock_acquire(user_id, log_prefix="[breadth_only]"):
-            self.log(f"[breadth_only] 🚫 Lock acquisition failed for {user_id} — another run may be active.")
-            return
-
-        mark_lock_acquired(user_id)
-        self.log(f"[breadth_only] 🔒 Acquired lock for {user_id}")
-
         # ========== Sanity checks ==========
         try:
             if "spotify_sanity_check" in globals() and getattr(self, "spotify_token", None):
@@ -3210,21 +3310,21 @@ class MetadataEnricher:
                     self.log("[breadth_only] 💤 Discogs pool shutdown.")
             except Exception as e:
                 self.log(f"[breadth_only] shutdown_worker_pool warning: {e}")
-            finally:
-                # Always release lock
-                lock = get_user_lock(user_id)
-                if lock.locked():
-                    try:
-                        lock.release()
-                        self.log(f"[breadth_only] 🔓 Released lock for {user_id}")
-                    except Exception as e:
-                        self.log(f"[breadth_only] ⚠️ Lock release failed: {e}")
 
         # ========== Taste Index phase ==========
         if not breadth_success:
             return
 
         try:
+            # --- Reload masters from storage to ensure Taste Index sees new genres ---
+            try:
+                self._load_master("artists")
+                self._load_master("albums")
+                self._load_master("tracks")
+                self.log("[breadth_only] 🔄 Reloaded master tables after breadth-first flush.")
+            except Exception as e:
+                self.log(f"[breadth_only] ⚠️ Could not reload master tables before Taste Index: {e}")
+
             self.status.finish_breadth_done(
                 user_id, label,
                 detail="✅ Breadth-first enrichment complete — starting Taste Index phase."
@@ -3504,61 +3604,36 @@ class MetadataEnricher:
             pool = getattr(self, "discogs_pool", None) or getattr(self, "pool", None)
             if pool is not None:
                 try:
-                    self.log("[flush_all] Cleaning up Discogs worker pool…")
-                    try:
-                        # Snapshot before shutdown to understand any remaining backlog
-                        pool.snapshot_queue(max_n=10)
-                        # If backlog still non-zero, optionally dump worker stacks to terminal
-                        from enrichment_service import GLOBAL_DISCOGS_QUEUE as _Q  # shared queue
-                        remaining = getattr(_Q, "qsize", lambda: None)()
-                        if remaining:
-                            from enrichment_service import DiscogsWorkerPool as _PoolClass  # ensure type
-                            try:
-                                _PoolClass.dump_worker_stacks(prefix=f"[discogs-dump:{self.label}]")
-                            except Exception:
-                                pass
-                    except Exception as e:
-                        self.log(f"[flush_all] ⚠️ pre-shutdown diagnostics failed: {e}")
+                    self.log("[flush_all] Cleaning up Discogs worker pool (bounded attempt)…")
 
-                    # BOUNDED shutdown (won't hang forever)
-                    try:
-                        if GLOBAL_DISCOGS_POOL:
-                            GLOBAL_DISCOGS_POOL.nudge_workers(hb_stale_sec=60, job_stale_sec=60)
+                    import threading, time
 
-                        print("[flush_all][DEBUG] >>> Entering Discogs shutdown sequence")
-                        import threading
+                    # Run shutdown in a background thread with timeout
+                    def _try_shutdown():
                         try:
-                            live_discogs = [t.name for t in threading.enumerate() if "discogs" in t.name]
-                            print(f"[flush_all][DEBUG] Discogs threads currently alive: {live_discogs}")
+                            pool.snapshot_queue(max_n=5)
+                            pool.shutdown(max_wait_sec=15, force_purge=False, persist_backlog=False)
+                            self.log("[flush_all] ✅ Discogs pool shut down cleanly.")
                         except Exception as e:
-                            print(f"[flush_all][DEBUG] Could not enumerate threads: {e}")
+                            self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed internally: {e}")
 
+                    t = threading.Thread(target=_try_shutdown, daemon=True)
+                    t.start()
+                    t.join(timeout=20)
+
+                    if t.is_alive():
+                        self.log("[flush_all] ⏭️ Skipping Discogs shutdown (timeout reached). Forcing continuation.")
                         try:
-                            qsize = getattr(GLOBAL_DISCOGS_QUEUE, "qsize", lambda: 'noqueue')()
-                            unfinished = getattr(GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 'noqueue')
-                            print(f"[flush_all][DEBUG] Queue state before shutdown: size={qsize} unfinished={unfinished}")
+                            # try to release globals manually
+                            setattr(MetadataEnricher, "_discogs_pool", None)
+                            import enrichment_service
+                            enrichment_service.GLOBAL_DISCOGS_POOL = None
+                            self.log("[flush_all] 🔓 Forced GLOBAL_DISCOGS_POOL cleared manually.")
                         except Exception as e:
-                            print(f"[flush_all][DEBUG] Could not check queue: {e}")
+                            self.log(f"[flush_all] ⚠️ Failed to clear GLOBAL_DISCOGS_POOL manually: {e}")
 
-                        print("[flush_all][DEBUG] >>> Calling pool.shutdown(...) now")
-
-                        pool.shutdown(max_wait_sec=60, force_purge=False, persist_backlog=False)
-
-                        print("[flush_all][DEBUG] <<< pool.shutdown() returned successfully")
-                        self.log("[flush_all] ✅ Discogs pool shut down successfully.")
-                        
-                        GLOBAL_DISCOGS_POOL = None
-                        setattr(MetadataEnricher, "_discogs_pool", None)
-                    except TypeError:
-                        if GLOBAL_DISCOGS_POOL:
-                            GLOBAL_DISCOGS_POOL.nudge_workers(hb_stale_sec=60, job_stale_sec=60)
-                        # backward-compat: old signature without args
-                        pool.shutdown()
-                        self.log("[flush_all] ✅ Discogs pool shut down (legacy).")
-                        GLOBAL_DISCOGS_POOL = None
-                        setattr(MetadataEnricher, "_discogs_pool", None)
                 except Exception as e:
-                    self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed: {e}")
+                    self.log(f"[flush_all] ⚠️ Discogs cleanup skipped due to error: {e}")
             else:
                 self.log("[flush_all] (finally) No Discogs worker pool found — skipping shutdown.")
 

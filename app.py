@@ -131,6 +131,12 @@ main_dao       = DAOS.get("main")  # Optional (used for Supabase, may be None)
 #    so you can reference storage_dao instead of guessing between metadata/user_data
 storage_dao = metadata_dao or user_data_dao
 
+# --- Persist DAOs in session state so all pages can access them ---
+st.session_state.setdefault("status_dao", status_dao)
+st.session_state.setdefault("metadata_dao", metadata_dao)
+st.session_state.setdefault("user_data_dao", user_data_dao)
+st.session_state.setdefault("storage_dao", storage_dao)
+
 if storage_dao is None:
     st.warning("⚠️ No storage DAO configured. Metadata tables not loaded.")
 else:
@@ -6951,14 +6957,14 @@ elif page == "Popularity":
 # -------------------------------- Taste ------------------------------------- #
 elif page == "Taste":
     # ----------------------------------------------------------------------
-    # 🎧 DATASET VALIDATION
+    # 🎧 DATASET VALIDATION & LOADING
     # ----------------------------------------------------------------------
     st.session_state["last_page"] = "Taste"
     user_id = st.session_state.user["user_id"]
 
     # --- Load current dataset ---
     df, current_label = require_current_df()
-    df_music = df[df["category"] == "music"].copy()
+    df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
 
     # --- Normalize datetime column safely ---
     df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
@@ -6970,78 +6976,42 @@ elif page == "Taste":
     status_dao = st.session_state.get("status_dao")
     storage_dao = st.session_state.get("storage_dao")
 
-    # --- Expected R2 path for taste index parquet ---
+    # --- Expected R2 path for Taste Index parquet ---
     parquet_key = f"enrichment/taste_index/{user_id}_{current_label}_rolling.parquet"
 
-    # --- Session-persistent cache for taste data ---
+    # --- Cached Taste Index data ---
     if "df_rolling" not in st.session_state:
         st.session_state["df_rolling"] = None
     df_rolling = st.session_state["df_rolling"]
 
     # ----------------------------------------------------------------------
-    # 🧮 LOAD EXISTING TASTE INDEX OR FORCE RECOMPUTE
+    # ☁️ LOAD TASTE INDEX RESULTS (NO COMPUTATION)
     # ----------------------------------------------------------------------
     st.markdown("### 🧮 28-Day Rolling Taste Index")
+    st.caption("Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.")
 
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.caption("Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.")
-    with col2:
-        force_run = st.button("🚀 Force Run Breadth + Taste Enrichment", key="force_breadth_taste")
+    # if storage_dao is not None:
+    #     print("🧩 Debug: checking Taste Index file existence in R2...")
+    #     try:
+    #         r2 = storage_dao.r2
+    #         resp = r2.list_objects(Bucket=storage_dao.bucket, Prefix="enrichment/taste_index/")
+    #         keys = [obj["Key"] for obj in resp.get("Contents", [])]
+    #         print("Available keys:", keys[:10])  # first few
+    #         print("Expected key:", parquet_key)
+    #     except Exception as e:
+    #         print(f"Could not list objects: {e}")
+    # else:
+    #     print(f"[Taste DEBUG] It empty bitch")
 
-    if force_run:
-        if st.session_state.get("breadth_taste_running"):
-            st.warning("A breadth/taste enrichment thread is already running.")
-            st.stop()
-
-        st.session_state["breadth_taste_running"] = True
-        st.info("🚀 Starting full Breadth + Taste Index pipeline in the background…")
-
-        # Collect all UI data up front — no Streamlit calls inside the thread
-        user_id_copy = user_id
-        dataset_label_copy = current_label
-        log_dao_copy = st.session_state.get("log_dao")
-        table_name_copy = st.session_state.get("last_table_name")
-
-        import threading
-
-        def background_trigger():
-            import traceback
-            try:
-                # NOTE: Do not call st.* in this thread!
-                from app import start_breadth_first_only
-                start_breadth_first_only(
-                    user_id=user_id_copy,
-                    dataset_label=dataset_label_copy,
-                    log_dao=log_dao_copy,
-                    table_name=table_name_copy,
-                )
-                print(f"[ui:breadth_taste] ✅ Triggered start_breadth_first_only for {user_id_copy}")
-            except Exception as e:
-                print(f"[ui:breadth_taste] ❌ Background trigger failed: {e}\n{traceback.format_exc()}")
-            finally:
-                # Safe: Streamlit session_state is dict-like
-                st.session_state["breadth_taste_running"] = False
-
-        threading.Thread(
-            target=background_trigger,
-            name=f"ui-force-breadth-taste:{user_id}",
-            daemon=True,
-        ).start()
-
-        st.success("✅ Pipeline triggered successfully — refresh later to see results.")
-        st.stop()
-
-    # --- Try to load cached parquet from R2 if not in session ---
     if df_rolling is None and storage_dao is not None:
         try:
-            st.info("☁️ Loading cached Taste Index results from R2…")
-            df_rolling = storage_dao.safe_download_parquet(parquet_key)
+            with st.spinner("☁️ Loading cached Taste Index results from R2…"):
+                df_rolling = storage_dao.safe_download_parquet(parquet_key)
             if df_rolling is not None and not df_rolling.empty:
                 st.session_state["df_rolling"] = df_rolling
-                st.success("✅ Loaded cached Taste Index results from R2.")
+                st.success(f"✅ Loaded cached Taste Index results from R2 ({len(df_rolling):,} rows).")
             else:
-                st.warning("No cached Taste Index results found. Run the enrichment to generate them.")
+                st.warning("⚠️ No cached Taste Index results found. Run enrichment to generate them.")
         except Exception as e:
             st.warning(f"⚠️ Could not load cached Taste Index results: {e}")
 
@@ -7050,15 +7020,11 @@ elif page == "Taste":
     # ----------------------------------------------------------------------
     if df_rolling is not None and not df_rolling.empty:
         st.markdown("## 🎚️ Taste Stability Analysis")
-        # (your chart + filters go here)
-    # else:
-    #     st.info("No Taste Index data available yet — run Breadth + Taste enrichment to generate it.")
 
         # ===============================================================
         # YEAR FILTER
         # ===============================================================
-        # Extract available years
-        df_rolling["year"] = pd.to_datetime(df_rolling["date_window"]).dt.year
+        df_rolling["year"] = pd.to_datetime(df_rolling["date_window"], errors="coerce").dt.year
         years = sorted(df_rolling["year"].dropna().unique())
         year_options = ["All Years"] + [str(y) for y in years]
         year_selected = st.segmented_control(
@@ -7072,7 +7038,7 @@ elif page == "Taste":
         if not year_selected:
             year_selected = "All Years"
 
-        # Filter results by year (if not All)
+        # Filter results by year
         if year_selected != "All Years":
             df_filtered = df_rolling[df_rolling["year"] == int(year_selected)].copy()
         else:
@@ -7083,49 +7049,50 @@ elif page == "Taste":
         # ===============================================================
         st.markdown("### 🎨 Taste Stability Heatmap — *Normality Index by Genre Over Time*")
 
+        import plotly.graph_objects as go
+
         df_heatmap = df_filtered.pivot_table(
             index="genre", columns="date_window", values="NormalityIndex", aggfunc="mean"
         )
 
-        # Order genres by average stability
-        df_heatmap = df_heatmap.loc[df_heatmap.mean(axis=1).sort_values(ascending=False).index]
+        if not df_heatmap.empty:
+            # Order genres by average stability
+            df_heatmap = df_heatmap.loc[df_heatmap.mean(axis=1).sort_values(ascending=False).index]
 
-        fig_heatmap = go.Figure(data=go.Heatmap(
-            z=df_heatmap.values,
-            x=df_heatmap.columns,
-            y=df_heatmap.index,
-            colorscale=[
-                [0.0, "#150d20"],
-                [0.25, "#3b1148"],
-                [0.5, "#71207d"],
-                [0.75, "#b74d8f"],
-                [1.0, "#ff7ee3"],
-            ],
-            colorbar=dict(
-                title="Normality Index",
-                tickcolor="white",
-                tickfont=dict(color="white"),
-                titlefont=dict(color="white"),
-            ),
-            hovertemplate=(
-                "<b>Genre:</b> %{y}<br>"
-                "<b>Date:</b> %{x|%Y-%m-%d}<br>"
-                "<b>Normality:</b> %{z:.3f}<extra></extra>"
-            ),
-        ))
+            fig_heatmap = go.Figure(data=go.Heatmap(
+                z=df_heatmap.values,
+                x=df_heatmap.columns,
+                y=df_heatmap.index,
+                colorscale=[
+                    [0.0, "#150d20"],
+                    [0.25, "#3b1148"],
+                    [0.5, "#71207d"],
+                    [0.75, "#b74d8f"],
+                    [1.0, "#ff7ee3"],
+                ],
+                colorbar=dict(
+                    title="Normality Index",
+                    tickcolor="white",
+                    tickfont=dict(color="white"),
+                    titlefont=dict(color="white"),
+                ),
+                hovertemplate="<b>Genre:</b> %{y}<br><b>Date:</b> %{x|%Y-%m-%d}<br><b>Normality:</b> %{z:.3f}<extra></extra>",
+            ))
 
-        fig_heatmap.update_layout(
-            title=f"Taste Stability Heatmap (28-Day Rolling) — {year_selected}",
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            xaxis=dict(title="Date Window", tickfont=dict(size=10, color="white")),
-            yaxis=dict(title="Genre", tickfont=dict(size=12, color="white")),
-            margin=dict(l=120, r=20, t=60, b=40),
-            height=650,
-        )
+            fig_heatmap.update_layout(
+                title=f"Taste Stability Heatmap (28-Day Rolling) — {year_selected}",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis=dict(title="Date Window", tickfont=dict(size=10, color="white")),
+                yaxis=dict(title="Genre", tickfont=dict(size=12, color="white")),
+                margin=dict(l=120, r=20, t=60, b=40),
+                height=650,
+            )
 
-        st.plotly_chart(fig_heatmap, width="stretch", config={"displayModeBar": False})
+            st.plotly_chart(fig_heatmap, width="stretch", config={"displayModeBar": False})
+        else:
+            st.info("No data available for heatmap rendering.")
 
         # ===============================================================
         # TREND — Average NormalityIndex Across All Genres
@@ -7504,9 +7471,9 @@ elif page == "Taste":
         else:
             st.info("Not enough genres to compute an embedding map.")
 
-    # ===============================================================
-    # Genre Taste Stability — Distribution & Median Focus"
-    # ===============================================================
+        # ===============================================================
+        # Genre Taste Stability — Distribution & Median Focus"
+        # ===============================================================
 
         st.markdown("### 🎻 Genre Taste Stability — *Distribution & Median Focus*")
 
@@ -7880,7 +7847,7 @@ elif page == "Taste":
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     else:
-        st.info("Click the button above to generate your Taste Index analysis.")
+        st.info("No Taste Index data available yet — please rerun enrichment to generate results.")
 
 # ------------------------------ On This Day --------------------------------- #
 elif page == "On This Day":

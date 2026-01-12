@@ -12,10 +12,24 @@ from dao import StatusDAO, StorageDAO, InfoTableDAO
 
 # ----------- Master Table Inits ------------ #
 try:
-    from dao_selector import get_daos
-    DAOS = get_daos("server")  # or pass your global SERVER_MODE if available
-    storage_dao = DAOS.get("metadata") or DAOS.get("storage") or DAOS.get("user_data")
+    from dao_selector import get_daos, get_server_mode
 
+    # --- Use consistent mode as app.py (default: cloudflare) ---
+    SERVER_MODE = get_server_mode(default="cloudflare")
+    # print(f"[enrichment_service:init] 🌐 Using SERVER_MODE='{SERVER_MODE}' for DAO initialization")
+
+    # --- Initialize DAOs and storage handle ---
+    DAOS = get_daos(SERVER_MODE)
+    storage_dao = (
+        DAOS.get("metadata")
+        or DAOS.get("storage")
+        or DAOS.get("user_data")
+    )
+
+    if storage_dao is None:
+        raise RuntimeError("No valid storage DAO available (metadata/user_data/storage all missing)")
+
+    # --- Load master tables from R2 ---
     INFO_ARTIST_GENRE = storage_dao.safe_download_csv(
         "enrichment/metadata/info_artist_genre.csv",
         required_cols=[
@@ -26,7 +40,10 @@ try:
 
     INFO_ALBUM = storage_dao.safe_download_csv(
         "enrichment/metadata/info_album.csv",
-        required_cols=["album_id", "artist_name", "release_date", "album_name", "album_artwork"],
+        required_cols=[
+            "album_id", "artist_name", "release_date",
+            "album_name", "album_artwork",
+        ],
     )
 
     INFO_TRACK = storage_dao.safe_download_csv(
@@ -37,10 +54,17 @@ try:
         ],
     )
 
-    print(f"[enrichment_service:init] ✅ INFO_ARTIST_GENRE loaded ({len(INFO_ARTIST_GENRE):,} rows)")
+    print(
+        f"[enrichment_service:init] ✅ Loaded master tables: "
+        f"INFO_ARTIST_GENRE={len(INFO_ARTIST_GENRE):,}, "
+        f"INFO_ALBUM={len(INFO_ALBUM):,}, INFO_TRACK={len(INFO_TRACK):,}"
+    )
+
 except Exception as e:
     print(f"[enrichment_service:init] ⚠️ Failed to initialize global metadata from R2: {e}")
-    INFO_ARTIST_GENRE = None
+    INFO_ARTIST_GENRE = pd.DataFrame()
+    INFO_ALBUM = pd.DataFrame()
+    INFO_TRACK = pd.DataFrame()
 
 # ---- Cancel gate ----
 class CancelledError(Exception):

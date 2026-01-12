@@ -1325,6 +1325,12 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
 
         if d1_state == "breadth_done" or r2_state == "breadth_done":
             print(f"[auto_reenrich] 🎚️ Breadth-first done, Taste Index missing — restarting breadth_only.")
+
+            # 🧩 Prevent duplicate Taste Index triggers if thread already running
+            if "taste_index" in [t.name for t in threading.enumerate() if t.is_alive()]:
+                print(f"[auto_reenrich] ⏳ Taste Index thread already active — skipping restart.")
+                return "taste_index_running"
+
             preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
             start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
             return "restarted_taste_index_pending"
@@ -1748,13 +1754,52 @@ def background_enrich(
             status_dao.set_status(user_id, dataset_label, phase="breadth_running", detail="Executing targeted breadth-only")
             _check_cancel("before breadth_only")
 
-            if hasattr(enricher, "run_breadth_only"):
-                enricher.run_breadth_only(cancel_event=cancel_event)
-            else:
-                enricher.run_phase_breadth_first_years_remaining(*enricher.all_listens())
-                if hasattr(enricher, "flush_all"):
-                    enricher.flush_all()
-            status_dao.finish_full_status(user_id, dataset_label, detail="✅ Breadth-only enrichment complete.")
+            try:
+                if hasattr(enricher, "run_breadth_only"):
+                    enricher.run_breadth_only(cancel_event=cancel_event)
+                else:
+                    enricher.run_phase_breadth_first_years_remaining(*enricher.all_listens())
+                    if hasattr(enricher, "flush_all"):
+                        enricher.flush_all()
+
+                # ✅ Breadth-first completed successfully
+                print(f"[enrich:{thread_name}] ✅ Breadth-only enrichment completed successfully.")
+                log_dao.log(user_id, dataset_label, "enrichment", "Breadth-only enrichment completed successfully.", level="info")
+
+                # 🟢 Explicitly mark as breadth_done (not full_done)
+                try:
+                    status_dao.finish_breadth_done(
+                        user_id,
+                        dataset_label,
+                        detail="✅ Breadth-first enrichment complete — Taste Index pending."
+                    )
+                except Exception as e_status:
+                    print(f"[enrich:{thread_name}] ⚠️ Could not set status to 'breadth_done': {e_status}")
+                    # fallback for older DAOs
+                    try:
+                        status_dao.finish_full_status(
+                            user_id,
+                            dataset_label,
+                            detail="✅ Breadth-first enrichment complete (fallback status).",
+                        )
+                    except Exception as e2:
+                        print(f"[enrich:{thread_name}] ⚠️ Fallback finish_full_status failed: {e2}")
+
+                # 🧭 Optional heartbeat mark (for safety)
+                update_heartbeat(user_id, dataset_label)
+
+            except Exception as e:
+                import traceback
+                print(f"[enrich:{thread_name}] ❌ Breadth-only error: {e}\n{traceback.format_exc()}")
+                try:
+                    status_dao.finish_breadth_error(
+                        user_id,
+                        dataset_label,
+                        detail=f"❌ Breadth-first enrichment failed: {e}",
+                    )
+                except Exception as e2:
+                    print(f"[enrich:{thread_name}] ⚠️ Failed to mark breadth_error: {e2}")
+                raise
         else:
             log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
             status_dao.set_status(user_id, dataset_label, phase="running", detail="Executing enrichment run")
@@ -1808,15 +1853,12 @@ def start_breadth_first_only(
     dataset_label: str,
     log_dao,
     table_name: Optional[str] = None,
-    filtered_df: Optional[pd.DataFrame] = None,  # NEW: targeted subset
+    filtered_df: Optional[pd.DataFrame] = None,
 ):
     """
     Launch a breadth-first-only enrichment thread.
     If filtered_df is provided, it runs against that targeted subset.
-    Otherwise it loads the dataset by table_name or session state.
-
-    Internally delegates to background_enrich(..., mode="breadth_only") and keeps
-    locking/heartbeat/status behavior consistent.
+    After successful completion, it automatically triggers the Taste Index phase.
     """
     import time, threading, streamlit as st
     from dao_selector import DAOS
@@ -1825,7 +1867,7 @@ def start_breadth_first_only(
         terminate_stale_enrichment_threads, update_heartbeat
     )
 
-    # --- choose source df ---
+    # --- Choose dataset source ---
     if filtered_df is not None and not filtered_df.empty:
         df_source = filtered_df
         src = "filtered_df"
@@ -1842,31 +1884,31 @@ def start_breadth_first_only(
         print("[breadth_only] 💤 No data available to start breadth-only.")
         return "nothing_to_do"
 
-    # --- acquire lock ---
+    # --- Acquire lock ---
     user_lock = get_user_lock(user_id)
     acquired = False
     for attempt in range(10):
         if user_lock.acquire(blocking=False):
             mark_lock_acquired(user_id)
             acquired = True
-            print(f"[breadth_only] 🔒 lock acquired for {user_id} on attempt {attempt+1}")
+            print(f"[breadth_only] 🔒 Lock acquired for {user_id} on attempt {attempt+1}")
             break
-        print(f"[breadth_only] ⏳ lock busy — waiting ({attempt+1}/10)")
+        print(f"[breadth_only] ⏳ Lock busy — waiting ({attempt+1}/10)")
         time.sleep(1)
     if not acquired:
-        print("[breadth_only] 🚫 could not acquire lock")
+        print("[breadth_only] 🚫 Could not acquire lock")
         return "locked"
 
     terminate_stale_enrichment_threads(user_id)
     cancel_event = threading.Event()
 
+    # --- Main runner for breadth-only ---
     def _runner():
         thread_name = threading.current_thread().name
         try:
-            print(f"[{thread_name}] ▶ breadth_only starting; rows={len(df_source)}")
+            print(f"[{thread_name}] ▶ Breadth-only starting; rows={len(df_source)}")
             update_heartbeat(user_id, dataset_label)
 
-            # 👇 run targeted breadth-only (falls back to full if not supported)
             background_enrich(
                 user_id=user_id,
                 dataset_label=dataset_label,
@@ -1876,10 +1918,41 @@ def start_breadth_first_only(
                 mode="breadth_only",
                 assume_locked=True,
             )
-            print(f"[{thread_name}] ✅ breadth_only completed")
+
+            print(f"[{thread_name}] ✅ Breadth-only completed successfully")
+
+            # --- Auto-trigger Taste Index as follow-up ---
+            def _trigger_taste_index():
+                try:
+                    print(f"[{thread_name}] 🎚️ Launching Taste Index phase for {dataset_label}")
+                    from enrichment_service import MetadataEnricher
+                    from dao_selector import DAOS
+
+                    status_dao = DAOS.get("status")
+                    metadata_dao = DAOS.get("r2")
+
+                    enricher = MetadataEnricher(
+                        user_id=user_id,
+                        label=dataset_label,
+                        df=pd.DataFrame(),  # will reload full dataset internally
+                        spotify_token=None,
+                        discogs_key=None,
+                        discogs_secret=None,
+                        status_dao=status_dao,
+                        storage_dao=metadata_dao,
+                        log_dao=log_dao,
+                    )
+                    enricher.run_phase_taste_index()
+                    print(f"[{thread_name}] ✅ Taste Index completed for {dataset_label}")
+                except Exception as e:
+                    import traceback
+                    print(f"[{thread_name}] ⚠️ Taste Index trigger failed: {e}\n{traceback.format_exc()}")
+
+            threading.Thread(target=_trigger_taste_index, name=f"taste_index:{user_id}:{dataset_label}", daemon=True).start()
+
         except Exception as e:
             import traceback
-            print(f"[{thread_name}] ❌ breadth_only error: {e}\n{traceback.format_exc()}")
+            print(f"[{thread_name}] ❌ Breadth-only error: {e}\n{traceback.format_exc()}")
         finally:
             try:
                 from enrichment_service import safe_user_lock_release
@@ -1909,7 +1982,7 @@ def start_breadth_first_only(
     t._cancel_event = cancel_event
     t._start_time = time.time()
 
-    print(f"[breadth_only] 🚀 starting thread: {t.name}")
+    print(f"[breadth_only] 🚀 Starting thread: {t.name}")
     t.start()
     return "breadth_only_started"
 

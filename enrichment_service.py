@@ -10,6 +10,38 @@ import sys
 
 from dao import StatusDAO, StorageDAO, InfoTableDAO
 
+# ----------- Master Table Inits ------------ #
+try:
+    from dao_selector import get_daos
+    DAOS = get_daos("server")  # or pass your global SERVER_MODE if available
+    storage_dao = DAOS.get("metadata") or DAOS.get("storage") or DAOS.get("user_data")
+
+    INFO_ARTIST_GENRE = storage_dao.safe_download_csv(
+        "enrichment/metadata/info_artist_genre.csv",
+        required_cols=[
+            "artist_name", "supergenre", "primary_genre",
+            "artist_image", "artist_id", "artist_popularity",
+        ],
+    )
+
+    INFO_ALBUM = storage_dao.safe_download_csv(
+        "enrichment/metadata/info_album.csv",
+        required_cols=["album_id", "artist_name", "release_date", "album_name", "album_artwork"],
+    )
+
+    INFO_TRACK = storage_dao.safe_download_csv(
+        "enrichment/metadata/info_track.csv",
+        required_cols=[
+            "track_id", "artist_name", "explicit", "track_popularity",
+            "release_date", "track_name", "album_name", "user_id",
+        ],
+    )
+
+    print(f"[enrichment_service:init] ✅ INFO_ARTIST_GENRE loaded ({len(INFO_ARTIST_GENRE):,} rows)")
+except Exception as e:
+    print(f"[enrichment_service:init] ⚠️ Failed to initialize global metadata from R2: {e}")
+    INFO_ARTIST_GENRE = None
+
 # ---- Cancel gate ----
 class CancelledError(Exception):
     """Raised when a cancel_event is set to stop enrichment early."""
@@ -990,6 +1022,8 @@ class MetadataEnricher:
         info_table_dao=None,
         verbose: bool = True,
     ):
+        import pandas as pd
+
         # --- Core metadata ---
         self.user_id = user_id
         self.label = label
@@ -1046,6 +1080,17 @@ class MetadataEnricher:
         self.master_albums = pd.DataFrame()
         self.master_tracks = pd.DataFrame()
 
+        # --- Load master tables (artist/album/track metadata) ---
+        try:
+            if hasattr(self, "_load_master_tables"):
+                self._load_master_tables()
+                self.log(f"[init] ✅ Master tables loaded: artists={len(self.master_artists):,}, "
+                        f"albums={len(self.master_albums):,}, tracks={len(self.master_tracks):,}")
+            else:
+                self.log("[init] ⚠️ No _load_master_tables() defined, skipping master table load.")
+        except Exception as e:
+            self.log(f"[init] ⚠️ Failed to load master tables: {e}")
+
         # --- Shared Discogs worker pool ---
         self.discogs_pool = DiscogsWorkerPool.get_or_create_global(num_workers=5)
         MetadataEnricher._discogs_pool = self.discogs_pool
@@ -1054,9 +1099,14 @@ class MetadataEnricher:
         if hasattr(log_dao, "log") and callable(getattr(log_dao, "log")):
             def _log(msg, level="info"):
                 try:
-                    log_dao.log(user_id=self.user_id,dataset_label=self.label,where="init",message=msg,level=level)
+                    log_dao.log(
+                        user_id=self.user_id,
+                        dataset_label=self.label,
+                        where="init",
+                        message=msg,
+                        level=level
+                    )
                 except Exception:
-                    # print(f"[log_dao] ⚠️ Failed to log remotely(init): {msg}")
                     print(msg)
             self.log = _log
         else:
@@ -2916,8 +2966,8 @@ class MetadataEnricher:
 
     def run_phase_breadth_first_years_remaining(self, all_art: pd.DataFrame, all_show: pd.DataFrame, all_book: pd.DataFrame):
         """
-        Breadth-first metadata enrichment by year, with robust lock + heartbeat tracking.
-        Auto-releases stale locks and gracefully handles cancel events.
+        Breadth-first metadata enrichment by year, using the filtered_df of not-yet-enriched artists.
+        Assumes caller (breadth_only) handles locking.
         """
         import time
 
@@ -2925,55 +2975,50 @@ class MetadataEnricher:
         user_id = getattr(self, "user_id", "unknown")
         label = getattr(self, "label", "unknown")
 
-        self._check_cancel(self.cancel_event)
-        self.log("[breadth_first] ▶ Starting diagnostic phase…")
+        df = getattr(self, "df", None)
+        if df is None or df.empty:
+            raise RuntimeError("[breadth_first] ❌ Missing filtered_df in self.df — check start_breadth_first_only()")
 
-        # ---------- Lock protection ----------
-        if not safe_user_lock_acquire(user_id, log_prefix="[breadth_first]"):
-            self.log(f"[breadth_first] 🚫 Could not acquire lock for {user_id} (still held).")
-            return
-        mark_lock_acquired(user_id)
+        self.log(f"[breadth_first] ✅ Using filtered dataset (shape={df.shape})")
+        self._check_cancel(self.cancel_event)
 
         try:
-            # --- Load masters ---
-            for m in ("albums", "tracks"):
-                try:
-                    self._load_master(m)
-                except Exception as e:
-                    self.log(f"[breadth_first:init] ⚠️ Could not load master {m}: {e}")
+            # Ensure masters loaded
+            if self.master_artists.empty or self.master_albums.empty:
+                self._load_master_tables()
+                self.log("[breadth_first:init] ⚙️ Master tables reloaded for breadth phase.")
 
             # --- Clean seen sets ---
             self.seen_artists = {
                 a.strip().lower() for a in getattr(self, "seen_artists", [])
                 if isinstance(a, str) and a.strip() and a.strip().lower() != "nan"
             }
-            if hasattr(self, "master_artists") and not self.master_artists.empty:
+
+            if not self.master_artists.empty:
                 before = len(self.seen_artists)
                 valid = self.master_artists[
                     self.master_artists["artist_id"].notna() &
                     self.master_artists["primary_genre"].notna()
                 ]
                 self.seen_artists = set(valid["artist_name"].dropna().astype(str).str.lower())
-                self.log(f"[breadth_first:init] Reset seen_artists from {before} → {len(self.seen_artists)} (master complete).")
+                self.log(f"[breadth_first:init] Reset seen_artists from {before} → {len(self.seen_artists)}")
 
             # --- Year buckets ---
             years_music = sorted(all_art["year"].dropna().unique().tolist(), reverse=True) if not all_art.empty else []
-            years_show  = sorted(all_show["year"].dropna().unique().tolist(), reverse=True) if not all_show.empty else []
-            years_book  = sorted(all_book["year"].dropna().unique().tolist(), reverse=True) if not all_book.empty else []
+            years_show = sorted(all_show["year"].dropna().unique().tolist(), reverse=True) if not all_show.empty else []
+            years_book = sorted(all_book["year"].dropna().unique().tolist(), reverse=True) if not all_book.empty else []
 
             max_cycles = max(1, len(set(years_music + years_show + years_book)))
-            self.log(f"[breadth_first] Max cycles = {max_cycles} (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)}).")
-
             self.status.set_breadth_running(user_id, label)
             update_heartbeat(user_id, label)
+            self.log(f"[breadth_first] ▶ Running {max_cycles} cycles (music={len(years_music)}, shows={len(years_show)}, books={len(years_book)})")
 
-            # --- Cycles ---
             for cycle in range(1, max_cycles + 1):
                 self._check_cancel(self.cancel_event)
                 self.log(f"[breadth_first] Cycle {cycle}/{max_cycles}")
                 update_heartbeat(user_id, label)
 
-                # ========== Artists ==========
+                # --- Artists ---
                 for y in years_music:
                     self._check_cancel(self.cancel_event)
                     sub = all_art[all_art["year"] == y].sort_values("minutes_played", ascending=False)
@@ -2989,7 +3034,7 @@ class MetadataEnricher:
                         self.seen_artists |= {a.strip().lower() for a in batch if isinstance(a, str) and a.strip()}
                     update_heartbeat(user_id, label)
 
-                # ========== Shows ==========
+                # --- Shows ---
                 for y in years_show:
                     self._check_cancel(self.cancel_event)
                     sub = all_show[all_show["year"] == y].sort_values("minutes_played", ascending=False)
@@ -3005,7 +3050,7 @@ class MetadataEnricher:
                         self.seen_shows |= {s.strip().lower() for s in batch if s.strip()}
                     update_heartbeat(user_id, label)
 
-                # ========== Audiobooks ==========
+                # --- Audiobooks ---
                 for y in years_book:
                     self._check_cancel(self.cancel_event)
                     sub = all_book[all_book["year"] == y].sort_values("minutes_played", ascending=False)
@@ -3021,198 +3066,148 @@ class MetadataEnricher:
                         self.seen_audiobooks |= {t.strip().lower() for t in batch if t.strip()}
                     update_heartbeat(user_id, label)
 
-            # --- Mark success ---
-            self.status.finish_full_status(
-                user_id, label,
-                detail=f"✅ Breadth-first enrichment completed successfully ({self._done_batches} new batches)."
-            )
+            self.status.finish_full_status(user_id, label, detail=f"✅ Breadth-first completed ({self._done_batches} batches).")
             self.log("[breadth_first] ✅ Completed breadth-first enrichment successfully.")
             update_heartbeat(user_id, label)
 
         except Exception as e:
             self.log(f"[breadth_first] ❌ Breadth-first error: {e}")
-            self.status.finish_breadth_error(user_id, label, detail=f"❌ Breadth-first phase failed: {e}")
+            self.status.finish_breadth_error(user_id, label, detail=f"❌ Breadth-first failed: {e}")
             raise
-        finally:
-            # Release lock safely
-            lock = get_user_lock(user_id)
-            if lock.locked():
-                try:
-                    lock.release()
-                    self.log(f"[breadth_first] 🔓 Released lock for {user_id}")
-                except Exception as e:
-                    self.log(f"[breadth_first] ⚠️ Could not release lock: {e}")
 
-    def run_phase_taste_index(self, df_artist_genre: pd.DataFrame):
+    def run_phase_taste_index(self, df_artist_genre: pd.DataFrame = None):
         """
-        Compute per-user 28-day rolling Taste Index (Normality Index, Entropy, Kurtosis, etc.)
-        using listening history + metadata genres, and upload results to R2.
-
-        Saves to: enrichment/taste_index/{user_id}_{label}_rolling.parquet
-        Mirrors chart_scorer pattern for consistency.
+        Compute per-user 28-day rolling Taste Index (Normality, Entropy, Kurtosis).
+        Uses the *full user dataset* reloaded from R2 and joined with master artist genre info.
         """
-        import pandas as pd, numpy as np, re, traceback, io
+        import pandas as pd, numpy as np, re, traceback
         from datetime import timedelta, timezone
         from scipy.stats import normaltest, skew, kurtosis, entropy
 
-        self._check_cancel(self.cancel_event)
-
-        user_id = self.user_id
+        user_id = getattr(self, "user_id", "unknown")
         label = getattr(self, "label", "unknown")
-        ts_str = pd.Timestamp.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        output_dir = "enrichment/taste_index"
+        parquet_key = f"enrichment/taste_index/{user_id}_{label}_rolling.parquet"
 
-        print(f"[TasteIndex] ▶ Starting rolling analysis for {user_id}:{label}")
+        self.log(f"[TasteIndex] ▶ Starting 28-day rolling analysis for {user_id}:{label}")
 
-        # --- Prepare base DataFrame ---
-        df = getattr(self, "df", None)
-        if df is None or df.empty:
-            raise ValueError("[TasteIndex] ❌ No listening data loaded (self.df is empty)")
+        # ===============================================================
+        # Load full dataset from R2
+        # ===============================================================
+        try:
+            table_name = getattr(self, "table_name", None)
+            if not table_name and hasattr(self, "storage_dao"):
+                datasets = self.storage_dao.list_datasets(user_id)
+                table_name = next((tbl for lbl, tbl in datasets if lbl == label), None)
+            if not table_name:
+                raise RuntimeError(f"[TasteIndex] ❌ Could not resolve dataset for {label}")
 
-        # ✅ Use the passed-in parameter if provided
+            df_full = self.storage_dao.load_user_data(table_name)
+            if df_full is None or df_full.empty:
+                raise ValueError(f"[TasteIndex] ❌ Could not reload dataset {table_name} from R2.")
+            df = df_full.copy()
+            self.log(f"[TasteIndex] ✅ Loaded dataset from R2: {table_name} (shape={df.shape})")
+        except Exception as e:
+            raise RuntimeError(f"[TasteIndex] ❌ Failed to load user data from R2: {e}")
+
+        # ===============================================================
+        # Filter to music and prepare dates
+        # ===============================================================
+        df = df[df["category"].str.contains("music", case=False, na=False)].copy()
+        if df.empty:
+            raise ValueError("[TasteIndex] ❌ No music rows available for Taste Index.")
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce").dt.tz_localize(None)
+        df = df.dropna(subset=["datetime"])
+        df["date"] = df["datetime"].dt.date
+
+        # ===============================================================
+        # Use master_artists for genre mapping
+        # ===============================================================
         if df_artist_genre is None or df_artist_genre.empty:
-            df_artist_genre = getattr(self, "df_artist_genre", None)
-            if df_artist_genre is None or df_artist_genre.empty:
-                raise ValueError("[TasteIndex] ❌ Missing artist genre metadata")
-        else:
-            self.df_artist_genre = df_artist_genre.copy()
-
-        # --- Update enrichment status ---
-        self.status.set_status(
-            user_id, label,
-            phase="taste_index",
-            detail=f"Computing rolling taste index (28-day window) [{label} {ts_str}]",
-            total=self._total_batches
-        )
-
-        # ===============================================================
-        # STEP 1 — Filter & Normalize
-        # ===============================================================
-        df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
-        print(f"[TasteIndex] ✅ Filtered for musical events: {len(df_music):,} rows")
+            if hasattr(self, "master_artists") and not self.master_artists.empty:
+                df_artist_genre = self.master_artists[["artist_name", "primary_genre", "supergenre"]].copy()
+                self.log(f"[TasteIndex] ✅ Using master_artists for genre map ({len(df_artist_genre):,} rows).")
+            else:
+                raise ValueError("[TasteIndex] ❌ No genre mapping found (master_artists empty).")
 
         def normalize_artist_name(name: str) -> str:
             name = str(name).lower().strip()
             name = re.sub(r"\(.*?\)", "", name)
             name = re.sub(r"\b(feat\.?|ft\.?|with|and|&)\b", "", name)
-            name = re.sub(r"\boriginal motion picture soundtrack\b", "", name)
-            name = re.sub(r"\bsoundtrack\b", "", name)
-            name = re.sub(r"\bremaster(ed)?\b", "", name)
             name = re.sub(r"[^a-z0-9\s]", "", name)
-            name = re.sub(r"\s+", " ", name).strip()
-            return name
+            return re.sub(r"\s+", " ", name).strip()
 
-        df_music["artist_key"] = df_music["artist_name"].apply(normalize_artist_name)
+        df["artist_key"] = df["artist_name"].apply(normalize_artist_name)
         df_artist_genre["artist_key"] = df_artist_genre["artist_name"].apply(normalize_artist_name)
 
-        def first_nonnull(s: pd.Series):
-            s = s.dropna()
-            return s.iloc[0] if not s.empty else pd.NA
+        genre_map = df_artist_genre.groupby("artist_key", as_index=False).agg({
+            "primary_genre": "first",
+            "supergenre": "first"
+        })
 
-        df_artist_genre_unique = (
-            df_artist_genre.groupby("artist_key", as_index=False)
-            .agg({"primary_genre": first_nonnull, "supergenre": first_nonnull})
-        )
-
-        df_full = df_music.merge(df_artist_genre_unique, on="artist_key", how="left")
-        df_full["supergenre"] = df_full["supergenre"].fillna("Unlisted")
+        df_joined = df.merge(genre_map, on="artist_key", how="left")
+        df_joined["supergenre"] = df_joined["supergenre"].fillna("Unlisted")
+        self.log(f"[TasteIndex] 🔍 Joined dataset shape={df_joined.shape}, genres={df_joined['supergenre'].nunique()}")
 
         # ===============================================================
-        # STEP 2 — Rolling Metrics
+        # Rolling window metrics
         # ===============================================================
-        df_full["datetime"] = pd.to_datetime(df_full["datetime"], errors="coerce")
-        df_full = df_full.dropna(subset=["datetime"])
-        df_full["date"] = df_full["datetime"].dt.date
-        df_full["minutes_played"] = df_full["minutes_played"].fillna(0)
-
         results = []
-        all_genres = df_full["supergenre"].unique()
-        window_days = 28
-
-        print(f"[TasteIndex] ▶ Computing metrics for {len(all_genres)} genres")
-
-        for genre in all_genres:
-            self._check_cancel(self.cancel_event)
-
-            gdf = df_full[df_full["supergenre"] == genre].copy()
+        for genre in df_joined["supergenre"].unique():
+            gdf = df_joined[df_joined["supergenre"] == genre]
             if gdf.empty:
                 continue
 
             gdf = gdf.groupby(["date", "artist_name"])["minutes_played"].sum().reset_index()
-            gdf = gdf.sort_values("date")
-
-            all_dates = pd.date_range(gdf["date"].min(), gdf["date"].max(), freq="D")
-
-            for current_end in all_dates:
-                current_start = current_end - timedelta(days=window_days - 1)
-                wdf = gdf[(gdf["date"] >= current_start.date()) & (gdf["date"] <= current_end.date())]
-                if wdf.empty:
+            for end_date in pd.date_range(gdf["date"].min(), gdf["date"].max(), freq="D"):
+                start_date = end_date - timedelta(days=27)
+                window = gdf[(gdf["date"] >= start_date.date()) & (gdf["date"] <= end_date.date())]
+                if window.empty or len(window["artist_name"].unique()) < 8:
                     continue
 
-                artist_counts = wdf.groupby("artist_name")["minutes_played"].sum().values
-                if len(artist_counts) < 8:
-                    continue
-
+                counts = window.groupby("artist_name")["minutes_played"].sum().values
                 try:
-                    total_minutes = wdf["minutes_played"].sum()
-                    _, p_val = normaltest(artist_counts)
-                    sk = skew(artist_counts)
-                    ku = kurtosis(artist_counts)
-                    sd = np.std(artist_counts)
-                    rng = artist_counts.max() - artist_counts.min()
-                    probs = (
-                        artist_counts / artist_counts.sum()
-                        if artist_counts.sum() > 0
-                        else np.ones_like(artist_counts) / len(artist_counts)
+                    _, p_val = normaltest(counts)
+                    sk = skew(counts)
+                    ku = kurtosis(counts)
+                    H = entropy(counts / counts.sum(), base=2)
+                    norm_index = np.sqrt(
+                        np.clip(p_val, 0, 1)
+                        * (1 - np.clip(H / np.log2(len(counts)), 0, 1))
+                        * np.clip(1 / (1 + abs(ku)), 0, 1)
                     )
-                    H = entropy(probs, base=2)
-
-                    # Composite index
-                    p_norm = np.clip(p_val, 0, 1)
-                    H_norm = np.clip(H / np.log2(len(artist_counts)), 0, 1)
-                    K_adj = np.clip(1 / (1 + abs(ku)), 0, 1)
-                    normality_index = np.sqrt(p_norm * (1 - H_norm) * K_adj)
-
-                    results.append(dict(
-                        genre=genre,
-                        date_window=current_end.date(),
-                        total_minutes=total_minutes,
-                        p_value=p_val,
-                        skewness=sk,
-                        kurtosis=ku,
-                        std_dev=sd,
-                        entropy=H,
-                        range_width=rng,
-                        NormalityIndex=normality_index
-                    ))
-
+                    results.append({
+                        "genre": genre,
+                        "date_window": end_date.date(),
+                        "NormalityIndex": norm_index,
+                        "p_val": p_val,
+                        "skewness": sk,
+                        "kurtosis": ku,
+                        "entropy": H,
+                    })
                 except Exception as e:
-                    print(f"[TasteIndex] ❌ Error {genre} {current_end.date()}: {e}")
-                    traceback.print_exc()
-                    continue
+                    self.log(f"[TasteIndex] ⚠️ Error computing window {genre} {end_date.date()}: {e}")
 
-        df_results = pd.DataFrame(results)
-        print(f"[TasteIndex] ✅ Computed {len(df_results):,} rolling-window rows")
+        df_out = pd.DataFrame(results)
+        self.log(f"[TasteIndex] ✅ Computed {len(df_out):,} window rows")
 
-        # ===============================================================
-        # STEP 3 — Upload to R2
-        # ===============================================================
         try:
-            parquet_key = f"{output_dir}/{user_id}_{label}_rolling.parquet"
-            self.storage.upload_parquet(df_results, path=parquet_key, overwrite=True)
-            print(f"[TasteIndex] ☁️ Uploaded parquet to R2: {parquet_key}")
+            self.storage_dao.upload_parquet(df_out, path=parquet_key, overwrite=True)
+            self.log(f"[TasteIndex] ☁️ Uploaded parquet to R2: {parquet_key}")
         except Exception as e:
-            print(f"[TasteIndex] ⚠️ Upload failed: {e}")
+            self.log(f"[TasteIndex] ⚠️ Upload failed: {e}")
 
-        self._done_batches += 1
-        self.status.inc_status(user_id, label, add_batches=1, detail="taste_index done")
-        update_heartbeat(user_id, label)
+        # ✅ Finalize enrichment status (mark as fully complete)
+        try:
+            self.status.finish_full_status(
+                user_id,
+                label,
+                detail="✅ Full enrichment completed (Standard + Breadth + Taste Index)."
+            )
+            self.log("[TasteIndex] 🏁 Marked full enrichment as complete (status=full_done).")
+        except Exception as e:
+            self.log(f"[TasteIndex] ⚠️ Could not update final status: {e}")
 
-        self.status.finish_standard_status(
-            user_id, label, detail=f"✅ Taste Index enrichment complete ({label})"
-        )
-
-        return df_results
+        return df_out
 
     def run_breadth_only(self, cancel_event=None):
         """
@@ -3402,64 +3397,6 @@ class MetadataEnricher:
         except Exception as e:
             # Non-fatal, keep going
             print(f"[autosave] flush_partial failed: {e}")
-
-    # def validate_master_integrity(self):
-        """
-        Perform lightweight consistency checks on master metadata files in Cloudflare.
-        - Ensures required columns exist
-        - Ensures no duplicate key values
-        - Logs summary counts for visibility
-        """
-        import pandas as pd
-
-        master_files = {
-            "info_artist_genre.csv": ["artist_id"],
-            "info_album.csv": ["album_id"],
-            "info_track.csv": ["track_id", "user_id"],
-            "info_show.csv": ["show_id"],
-            "info_audiobook.csv": ["audiobook_id"],
-        }
-
-        self.log("[integrity] Starting master consistency validation...")
-
-        for filename, keys in master_files.items():
-            key = f"enrichment/metadata/{filename}"
-
-            try:
-                # ✅ Use the DAO's safe downloader (automatically handles not-found, R2 errors, etc.)
-                df = self.storage_dao.safe_download_csv(key)
-                if df is None or df.empty:
-                    self.log(f"[integrity] ℹ️ {filename} not found or empty (skipping).")
-                    continue
-
-                row_count = len(df)
-                col_count = len(df.columns)
-
-                # Ensure all required columns exist
-                missing_cols = [k for k in keys if k not in df.columns]
-                if missing_cols:
-                    self.log(f"[integrity] ⚠️ {filename}: missing key columns {missing_cols}")
-                    continue
-
-                # Check for duplicates by key columns
-                dup_count = df.duplicated(subset=keys, keep=False).sum()
-                if dup_count > 0:
-                    self.log(f"[integrity] ⚠️ {filename}: {dup_count} duplicate rows by {keys}")
-                else:
-                    dup_count = 0  # for reporting clarity
-
-                # ✅ Report summary
-                self.log(
-                    f"[integrity] ✅ {filename}: {row_count} rows, "
-                    f"{col_count} columns, {dup_count} duplicates"
-                )
-
-            except FileNotFoundError:
-                self.log(f"[integrity] ℹ️ {filename} not found (skipping).")
-            except Exception as e:
-                self.log(f"[integrity] ❌ Failed to validate {filename}: {e}")
-
-        self.log("[integrity] Validation complete.")
 
     def _maybe_flush_discogs(self, batch_i: int, every: int = 10):
         """Occasionally flush Discogs results during enrichment."""

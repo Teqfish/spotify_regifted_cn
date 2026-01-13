@@ -1104,22 +1104,7 @@ class MetadataEnricher:
         self.master_albums = pd.DataFrame()
         self.master_tracks = pd.DataFrame()
 
-        # --- Load master tables (artist/album/track metadata) ---
-        try:
-            if hasattr(self, "_load_master_tables"):
-                self._load_master_tables()
-                self.log(f"[init] ✅ Master tables loaded: artists={len(self.master_artists):,}, "
-                        f"albums={len(self.master_albums):,}, tracks={len(self.master_tracks):,}")
-            else:
-                self.log("[init] ⚠️ No _load_master_tables() defined, skipping master table load.")
-        except Exception as e:
-            self.log(f"[init] ⚠️ Failed to load master tables: {e}")
-
-        # --- Shared Discogs worker pool ---
-        self.discogs_pool = DiscogsWorkerPool.get_or_create_global(num_workers=5)
-        MetadataEnricher._discogs_pool = self.discogs_pool
-
-        # --- Safe logging fallback ---
+        # --- Safe logging setup ---
         if hasattr(log_dao, "log") and callable(getattr(log_dao, "log")):
             def _log(msg, level="info"):
                 try:
@@ -1128,7 +1113,7 @@ class MetadataEnricher:
                         dataset_label=self.label,
                         where="init",
                         message=msg,
-                        level=level
+                        level=level,
                     )
                 except Exception:
                     print(msg)
@@ -1136,6 +1121,34 @@ class MetadataEnricher:
         else:
             print("[init] ⚠️ log_dao invalid or missing .log(); defaulting to print()")
             self.log = lambda msg, level="info": print(msg)
+
+        # --- Load master tables (artist/album/track metadata) ---
+        try:
+            if hasattr(self, "_load_master_tables"):
+                self._load_master_tables()
+                self.log(
+                    f"[init] ✅ Master tables loaded: artists={len(self.master_artists):,}, "
+                    f"albums={len(self.master_albums):,}, tracks={len(self.master_tracks):,}"
+                )
+            else:
+                self.log("[init] ⚠️ No _load_master_tables() defined, skipping master table load.")
+        except Exception as e:
+            self.log(f"[init] ⚠️ Failed to load master tables: {e}")
+
+        # --- Initialize local Discogs worker pool (non-global) ---
+        try:
+            from enrichment_service import DiscogsWorkerPool
+            self.discogs_pool = DiscogsWorkerPool(num_workers=5)
+            self.discogs_pool.ensure_alive()
+            MetadataEnricher._discogs_pool = self.discogs_pool
+            self.log("[init] ✅ Local DiscogsWorkerPool initialized (non-global, isolated).")
+        except Exception as e:
+            self.log(f"[init] ⚠️ Could not initialize DiscogsWorkerPool: {e}")
+            self.discogs_pool = None
+
+        # --- Optional info tables ---
+        if self.info_tables is not None:
+            self.log("[init] ℹ️ Info tables DAO provided.")
 
     # --- Logging helper ---
     def log(self, msg: str, level: str = "info"):
@@ -2631,37 +2644,30 @@ class MetadataEnricher:
         Compute per-user chart scorer (Fri→Fri, 5-week decay) after enrichment.
 
         Uses CloudflareDAO (or local equivalent) for all file I/O.
-        Writes to: enrichment/chart_scorer/
+        Writes to: enrichment/chart_scorer/{user_id}_{label}_chart-scores.parquet
         Reads charts from: reference/info_charts.csv
         """
-        from chart_scorer import compute_chart_scorer_if_missing, parse_label_ts_from_table_name
+        from chart_scorer import compute_chart_scorer_if_missing
 
         self._check_cancel(self.cancel_event)
 
         charts_path = "reference/info_charts.csv"
         output_dir = "enrichment/chart_scorer"
 
-        # Derive label & timestamp for naming
-        label, ts_str = None, None
-        table_name = getattr(self, "table_name", None) or getattr(self, "input_table_name", None)
-        if table_name:
-            label, ts_str = parse_label_ts_from_table_name(table_name)
+        # --- Determine label deterministically (no timestamp) ---
+        label = getattr(self, "label", "unknown")
 
-        if not label:
-            label = getattr(self, "label", "unknown")
-        if not ts_str:
-            ts_str = pd.Timestamp.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-
-        # Minimal listening view
+        # --- Minimal listening view ---
         cols = [c for c in ["datetime", "artist_name", "track_name"] if c in self.df.columns]
         listening_view = self.df.loc[:, cols].copy()
 
-        # Update enrichment status
+        # --- Update enrichment status ---
         self.status.set_status(
-            self.user_id, self.label,
+            self.user_id,
+            self.label,
             phase="chart_scorer",
-            detail=f"Scoring UK Top 50 (Fri→Fri, decay=10) [{label} {ts_str}]",
-            total=self._total_batches
+            detail=f"Scoring UK Top 50 (Fri→Fri, decay=10) [{label}]",
+            total=self._total_batches,
         )
 
         try:
@@ -2669,11 +2675,11 @@ class MetadataEnricher:
             charts_df = self.storage.download_csv(path=charts_path)
             print(f"[ChartScorer] ✅ Loaded charts from R2: {charts_path}")
 
-            # --- Compute results entirely in-memory ---
+            # --- Compute results entirely in-memory (no local writes) ---
             points_df, global_df = compute_chart_scorer_if_missing(
                 user_id=self.user_id,
                 label=label,
-                ts_str=ts_str,
+                ts_str=None,  # ignored internally, kept for backward compat
                 listening=listening_view,
                 charts=charts_df,
                 output_dir=None,
@@ -2686,7 +2692,7 @@ class MetadataEnricher:
                 return_dataframes=True,
             )
 
-            # --- Upload results ---
+            # --- Upload results deterministically (no timestamps) ---
             user_parquet_key = f"enrichment/chart_scorer/{self.user_id}_{label}_chart-scores.parquet"
             global_parquet_key = "enrichment/chart_scorer/global_chart-summaries.parquet"
 
@@ -2697,15 +2703,16 @@ class MetadataEnricher:
                 self.storage.upload_csv(points_df, path=user_parquet_key.replace(".parquet", ".csv"))
                 self.storage.upload_csv(global_df, path=global_parquet_key.replace(".parquet", ".csv"))
 
+            # --- Update progress/status ---
             self._done_batches += 1
             self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
             update_heartbeat(self.user_id, self.label)
 
-            # ✅ Mark standard enrichment complete
+            # ✅ Mark enrichment complete
             self.status.finish_standard_status(
                 self.user_id,
                 self.label,
-                detail=f"✅ Chart scoring complete ({label}) — standard enrichment fully done"
+                detail=f"✅ Chart scoring complete ({label}) — standard enrichment fully done",
             )
             print(f"[ChartScorer] 🧭 Marked standard enrichment as complete for {self.label}")
 
@@ -2714,12 +2721,14 @@ class MetadataEnricher:
             self.status.finish_standard_error(
                 self.user_id,
                 self.label,
-                detail=f"❌ Chart scorer failed: {e}"
+                detail=f"❌ Chart scorer failed: {e}",
             )
             raise
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """Full enrichment pipeline with detailed debug logging, flushing after each phase."""
+
+        import traceback
 
         self.cancel_event = cancel_event
         self._load_master_tables()
@@ -2742,27 +2751,21 @@ class MetadataEnricher:
             # 🟡 No new data to enrich — mark as already complete
             if total == 0:
                 self.log("[run_all] Nothing new to enrich (all entities already in masters)")
-
-                # ✅ Use the new standard completion marker
                 self.status.finish_standard_status(
                     self.user_id,
                     self.label,
                     detail="✅ All enrichment already up to date (no new entities)"
                 )
-
-                # Safety flush to ensure masters are synced
                 try:
                     self.flush_all()
                     self.log("[run_all] Performed final flush for empty enrichment case.")
                 except Exception as e:
                     self.log(f"[run_all] ⚠️ flush_all failed during empty enrichment: {e}")
-
-                # Mark enrichment thread as gracefully finished
                 self.log("[run_all] Exiting early — no enrichment required.")
                 update_heartbeat(self.user_id, self.label)
                 return
 
-            # --- Phase tracking helper ---
+            # Helper for ending each phase
             def _end_phase(name: str, before: int):
                 added = self._done_batches - before
                 self.log(f"[run_all] Completed phase: {name} (batches +{added})")
@@ -2772,88 +2775,34 @@ class MetadataEnricher:
                     detail=f"Phase '{name}' finished • {added} new batches",
                     total=total
                 )
-                # ✅ Persist incremental progress
                 try:
                     self.flush_partial()
                     self.log(f"[run_all] Flushed partial results after phase '{name}'")
                 except Exception as e:
                     self.log(f"[run_all] ⚠️ flush_partial failed after {name}: {e}")
 
-            # 1) Build priority sets
-            self._check_cancel(self.cancel_event)
-            self.log("[run_all] Building priority sets…")
-            all_art, all_show, all_book = self.all_listens()
-            self.log(f"[run_all] Total counts: artists={len(all_art)}, shows={len(all_show)}, books={len(all_book)}")
-            top_art, top_shows, top_books = self.top_overall()
-            self.log(f"[run_all] Top overall counts: artists={len(top_art)}, shows={len(top_shows)}, books={len(top_books)}")
-            per_art, per_show, per_book = self.top_per_year(set(), set(), set())
-            self.log(f"[run_all] Per-year counts: artists={len(per_art)}, shows={len(per_show)}, books={len(per_book)}")
+            # Enrichment phases
+            phases = [
+                ("overall", self.run_phase_overall_first50, ()),
+                ("per_year", self.run_phase_per_year, ()),
+                ("albums_of_year", self.run_phase_per_artist_albums_of_year, ()),
+                ("top_tracks_per_month", self.run_phase_top_tracks_per_month, ()),
+                ("popularity_timeseries", self.run_phase_popularity_timeseries, ()),
+                ("chart_scorer", self.run_phase_chart_scorer, ()),
+                ("per_album", self.run_phase_per_album_all_albums_for_top_artists, ()),
+            ]
 
-            # 2) Phases
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "overall"
-            self.log("[run_all] Starting phase: overall")
-            before = self._done_batches
-            self.run_phase_overall_first50(top_art, top_shows, top_books)
-            # --- Phase-end Discogs synchronization ---
-            self.log("[overall] Checking for pending Discogs results before phase end…")
-            self._flush_discogs_results(timeout=15)
-            if getattr(self, "_pending_discogs_artists", None):
-                self.log(f"[overall] ⚠️ {len(self._pending_discogs_artists)} Discogs jobs still pending at phase end.")
-            else:
-                self.log("[overall] ✅ No pending Discogs jobs.")
-            _end_phase("overall", before)
-            update_heartbeat(self.user_id, self.label)
+            # Phase execution loop
+            for name, fn, args in phases:
+                self._check_cancel(self.cancel_event)
+                self.current_phase = name
+                self.log(f"[run_all] Starting phase: {name}")
+                before = self._done_batches
+                fn(*args)
+                _end_phase(name, before)
+                update_heartbeat(self.user_id, self.label)
 
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "per_year"
-            self.log("[run_all] Starting phase: per_year")
-            before = self._done_batches
-            self.run_phase_per_year(per_art, per_show, per_book)
-            _end_phase("per_year", before)
-            update_heartbeat(self.user_id, self.label)
-
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "albums_of_year"
-            self.log("[run_all] Starting phase: albums_of_year")
-            before = self._done_batches
-            self.run_phase_per_artist_albums_of_year()
-            _end_phase("albums_of_year", before)
-            update_heartbeat(self.user_id, self.label)
-
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "top_tracks_per_month"
-            self.log("[run_all] Starting phase: top_tracks_per_month")
-            before = self._done_batches
-            self.run_phase_top_tracks_per_month()
-            _end_phase("top_tracks_per_month", before)
-            update_heartbeat(self.user_id, self.label)
-
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "popularity_timeseries"
-            self.log("[run_all] Starting phase: popularity_timeseries")
-            before = self._done_batches
-            self.run_phase_popularity_timeseries()
-            _end_phase("popularity_timeseries", before)
-            update_heartbeat(self.user_id, self.label)
-
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "chart_scorer"
-            self.log("[run_all] Starting phase: chart_scorer")
-            before = self._done_batches
-            self.run_phase_chart_scorer()
-            _end_phase("chart_scorer", before)
-            update_heartbeat(self.user_id, self.label)
-
-            self._check_cancel(self.cancel_event)
-            self.current_phase = "per_album"
-            self.log("[run_all] Starting phase: per_album")
-            before = self._done_batches
-            self.run_phase_per_album_all_albums_for_top_artists()
-            _end_phase("per_album", before)
-            update_heartbeat(self.user_id, self.label)
-
-            # ✅ Finalize standard enrichment (phases 1–7)
+            # ✅ Finalize enrichment
             self.log("[run_all] All standard enrichment phases completed — starting final flush.")
             self.current_phase = "flush_standard"
             try:
@@ -2862,25 +2811,17 @@ class MetadataEnricher:
             except Exception as e:
                 self.log(f"[run_all] ⚠️ Final flush after standard enrichment failed: {e}")
 
-            # ✅ Mark standard enrichment completion
-            try:
-                self.status.finish_standard_status(
-                    self.user_id,
-                    self.label,
-                    detail="✅ Standard enrichment completed successfully (phases 1–7)"
-                )
-                self.log("[run_all] 🧭 Recorded standard enrichment completion in status.")
-                update_heartbeat(self.user_id, self.label)
-            except Exception as e:
-                self.log(f"[run_all] ⚠️ Failed to record standard enrichment completion: {e}")
-
-            # --- Graceful stop after standard enrichment ---
+            self.status.finish_standard_status(
+                self.user_id, self.label,
+                detail="✅ Standard enrichment completed successfully (phases 1–7)"
+            )
+            self.log("[run_all] 🧭 Recorded standard enrichment completion in status.")
+            update_heartbeat(self.user_id, self.label)
             self._done_batches = self._total_batches
+
             self.log("[run_all] Returning cleanly after standard enrichment (breadth-first deferred).")
+            return
 
-            return  # 🚪 Exit run_all() here — do NOT continue to breadth_first
-
-        # --- Handle cancellation mid-phase ---
         except CancelledError:
             self.log("[run_all] 🛑 CancelledError caught — flushing partial results.")
             try:
@@ -2888,7 +2829,6 @@ class MetadataEnricher:
                 self.log("[run_all] ✅ Partial results flushed after cancellation.")
             except Exception as e:
                 self.log(f"[run_all] ⚠️ flush_partial failed during cancel: {e}")
-
             self.status.finish_standard_error(
                 self.user_id,
                 self.label,
@@ -2896,18 +2836,14 @@ class MetadataEnricher:
             )
             raise
 
-        # --- Handle unexpected errors in standard enrichment ---
         except Exception as e:
-            import traceback
             tb = traceback.format_exc()
             self.log(f"[run_all] ❌ Exception during standard enrichment: {e}\n{tb}")
-
             try:
                 self.flush_partial()
                 self.log("[run_all] ✅ Partial results flushed after exception.")
             except Exception as e2:
                 self.log(f"[run_all] ⚠️ flush_partial failed during exception handling: {e2}")
-
             self.status.finish_standard_error(
                 self.user_id,
                 self.label,
@@ -2915,77 +2851,7 @@ class MetadataEnricher:
             )
             raise
 
-        # --- Always clean up system resources ---
         finally:
-            import threading, time, traceback
-
-            try:
-                pool = getattr(self, "discogs_pool", None)
-                self.log("[run_all] 🧹 Entering final cleanup stage…")
-
-                # --- Detect whether pool still has live worker threads ---
-                def _has_live_discogs_threads() -> bool:
-                    try:
-                        import threading
-                        active = [t.name for t in threading.enumerate() if "discogs" in t.name.lower()]
-                        if active:
-                            self.log(f"[run_all] 🔍 Active Discogs threads detected: {active}")
-                        else:
-                            self.log("[run_all] ✅ No Discogs threads appear to be alive.")
-                        return bool(active)
-                    except Exception as e:
-                        self.log(f"[run_all] ⚠️ Could not enumerate threads: {e}")
-                        return True  # be safe and assume alive if uncertain
-
-                # --- Detect whether the pool is already cleared or invalid ---
-                def _is_pool_active(p) -> bool:
-                    try:
-                        if p is None:
-                            return False
-                        # Try a lightweight property check
-                        qsize = getattr(getattr(p, "queue", None), "qsize", lambda: 0)()
-                        thread_count = len(getattr(p, "workers", [])) if hasattr(p, "workers") else 0
-                        self.log(f"[run_all] Pool diagnostics: qsize={qsize}, thread_count={thread_count}")
-                        if qsize == 0 and thread_count == 0:
-                            return False
-                        return True
-                    except Exception as e:
-                        self.log(f"[run_all] ⚠️ Pool state check failed: {e}")
-                        return True
-
-                # --- Conditional shutdown only if necessary ---
-                if pool is not None and _is_pool_active(pool) and _has_live_discogs_threads():
-                    self.log("[run_all] Cleaning up Discogs worker pool (finally block, bounded)…")
-
-                    def _safe_shutdown():
-                        try:
-                            pool.shutdown(max_wait_sec=20, force_purge=False, persist_backlog=False)
-                            self.log("[run_all] ✅ Discogs pool shut down cleanly (finally block).")
-                        except Exception as e:
-                            tb = traceback.format_exc()
-                            self.log(f"[run_all] ⚠️ Discogs pool shutdown failed in finally: {e}\n{tb}")
-
-                    t = threading.Thread(target=_safe_shutdown, daemon=True)
-                    t.start()
-                    t.join(timeout=25)
-
-                    if t.is_alive():
-                        self.log("[run_all] ⏭️ Discogs shutdown still running after timeout — skipping and clearing pool manually.")
-                        try:
-                            import enrichment_service
-                            enrichment_service.GLOBAL_DISCOGS_POOL = None
-                            setattr(MetadataEnricher, "_discogs_pool", None)
-                            self.discogs_pool = None
-                            self.log("[run_all] 🔓 Forced GLOBAL_DISCOGS_POOL cleared manually (finally block).")
-                        except Exception as e:
-                            self.log(f"[run_all] ⚠️ Manual clear failed: {e}")
-                else:
-                    self.log("[run_all] (finally) No active Discogs pool found — skipping shutdown entirely.")
-
-            except Exception as e:
-                tb = traceback.format_exc()
-                self.log(f"[run_all] ⚠️ Unexpected error during final cleanup: {e}\n{tb}")
-
             self.log("[run_all] 💤 Standard enrichment pipeline fully terminated.")
 
     def run_phase_breadth_first_years_remaining(self, all_art: pd.DataFrame, all_show: pd.DataFrame, all_book: pd.DataFrame):
@@ -3236,12 +3102,8 @@ class MetadataEnricher:
     def run_breadth_only(self, cancel_event=None):
         """
         Breadth-only enrichment pipeline with post-phase Taste Index.
-        - Uses self-healing user lock (auto-releases stale ones)
-        - Runs breadth-first enrichment
-        - Then computes Taste Index
-        - Marks full_done only after both phases complete successfully
         """
-        import traceback, time
+        import traceback
 
         self.cancel_event = cancel_event
         self.current_phase = "breadth_only"
@@ -3250,48 +3112,36 @@ class MetadataEnricher:
 
         self.log(f"[breadth_only] ▶ Starting breadth-only enrichment for {label}…")
 
-        # ========== Sanity checks ==========
+        # --- Sanity checks ---
         try:
             if "spotify_sanity_check" in globals() and getattr(self, "spotify_token", None):
                 ok, msg = spotify_sanity_check(self.spotify_token)
                 if not ok:
-                    self.status.finish_standard_error(
-                        user_id, label, detail=f"Spotify check failed: {msg}"
-                    )
+                    self.status.finish_standard_error(user_id, label, detail=f"Spotify check failed: {msg}")
                     return
             if "discogs_sanity_check" in globals() and getattr(self, "discogs_key", None) and getattr(self, "discogs_secret", None):
                 ok, msg = discogs_sanity_check(self.discogs_key, self.discogs_secret)
                 if not ok:
-                    self.status.finish_standard_error(
-                        user_id, label, detail=f"Discogs check failed: {msg}"
-                    )
+                    self.status.finish_standard_error(user_id, label, detail=f"Discogs check failed: {msg}")
                     return
         except Exception as e:
             self.log(f"[breadth_only] Sanity checks skipped or non-fatal: {e}")
 
-        # ========== Status + heartbeat ==========
+        # --- Status + heartbeat ---
         try:
             self.status.set_breadth_running(user_id, label)
         except Exception:
             pass
         update_heartbeat(user_id, label)
 
-        # ========== Ensure master tables ==========
+        # --- Ensure master tables ---
         for master in ("artists", "albums", "tracks"):
             try:
                 self._load_master(master)
             except Exception as e:
                 self.log(f"[breadth_only] ⚠️ Could not load master '{master}': {e}")
 
-        # ========== Worker pool ==========
-        try:
-            if hasattr(self, "ensure_worker_pool"):
-                self.ensure_worker_pool()
-                self.log("[breadth_only] ✅ Discogs worker pool ready.")
-        except Exception as e:
-            self.log(f"[breadth_only] Worker pool init failed or skipped: {e}")
-
-        # ========== Build inputs ==========
+        # --- Build inputs ---
         try:
             all_art, all_show, all_book = self.all_listens()
         except Exception as e:
@@ -3305,7 +3155,7 @@ class MetadataEnricher:
             else:
                 all_art, all_show, all_book = self.df.copy(), self.df.iloc[0:0].copy(), self.df.iloc[0:0].copy()
 
-        # ========== Run breadth-first ==========
+        # --- Run breadth-first ---
         breadth_success = False
         try:
             self.run_phase_breadth_first_years_remaining(all_art, all_show, all_book)
@@ -3316,33 +3166,21 @@ class MetadataEnricher:
             self.status.finish_breadth_error(user_id, label, detail=f"❌ Breadth-first failed: {e}")
             return
         finally:
-            # Always flush + shutdown
             try:
-                if hasattr(self, "flush_all"):
-                    self.flush_all()
-                    self.log("[breadth_only] ✅ flush_all completed.")
+                self.flush_all()
+                self.log("[breadth_only] ✅ flush_all completed.")
             except Exception as e:
                 self.log(f"[breadth_only] flush_all warning: {e}")
-            try:
-                if hasattr(self, "shutdown_worker_pool"):
-                    self.shutdown_worker_pool()
-                    self.log("[breadth_only] 💤 Discogs pool shutdown.")
-            except Exception as e:
-                self.log(f"[breadth_only] shutdown_worker_pool warning: {e}")
 
-        # ========== Taste Index phase ==========
+        # --- Taste Index phase ---
         if not breadth_success:
             return
 
         try:
-            # --- Reload masters from storage to ensure Taste Index sees new genres ---
-            try:
-                self._load_master("artists")
-                self._load_master("albums")
-                self._load_master("tracks")
-                self.log("[breadth_only] 🔄 Reloaded master tables after breadth-first flush.")
-            except Exception as e:
-                self.log(f"[breadth_only] ⚠️ Could not reload master tables before Taste Index: {e}")
+            self._load_master("artists")
+            self._load_master("albums")
+            self._load_master("tracks")
+            self.log("[breadth_only] 🔄 Reloaded master tables after breadth-first flush.")
 
             self.status.finish_breadth_done(
                 user_id, label,
@@ -3365,7 +3203,6 @@ class MetadataEnricher:
                     raise ValueError("No artist-genre mapping available")
 
             df_taste = self.run_phase_taste_index(df_artist_genre)
-
             if df_taste is not None and not df_taste.empty:
                 self.log(f"[breadth_only] ✅ Taste Index complete — {len(df_taste):,} rows.")
                 self.status.finish_full_status(
@@ -3511,7 +3348,7 @@ class MetadataEnricher:
         Final flush at the end of a run (or on graceful cancel).
         Writes all buffered metadata tables into global masters with
         row-count diagnostics and atomic upload safety.
-        Adds Discogs queue diagnostics and bounded shutdown.
+        Adds Discogs queue diagnostics and fast poison-pill shutdown.
         """
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         self.log(f"[flush_all] Starting global master merges at {ts}")
@@ -3561,38 +3398,43 @@ class MetadataEnricher:
             self.log(f"[flush_all] ❌ Exception during flush_all: {e}")
 
         finally:
-            # ---- Discogs diagnostics + bounded shutdown ----
-            pool = getattr(self, "discogs_pool", None) or getattr(self, "pool", None)
+            pool = getattr(self, "discogs_pool", None)
             if pool is not None:
                 try:
-                    self.log("[flush_all] Cleaning up Discogs worker pool (bounded attempt)…")
+                    self.log("[flush_all] 🧹 Initiating Discogs worker pool shutdown (poison-pill mode)...")
+                    import threading, queue, time
 
-                    import threading, time
-
-                    # Run shutdown in a background thread with timeout
-                    def _try_shutdown():
+                    def _shutdown_fast():
                         try:
-                            pool.snapshot_queue(max_n=5)
-                            pool.shutdown(max_wait_sec=15, force_purge=False, persist_backlog=False)
-                            self.log("[flush_all] ✅ Discogs pool shut down cleanly.")
-                        except Exception as e:
-                            self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed internally: {e}")
+                            pool.shutdown_event.set()
+                            for _ in pool.workers:
+                                try:
+                                    GLOBAL_DISCOGS_QUEUE.put_nowait(None)
+                                except Exception:
+                                    pass
 
-                    t = threading.Thread(target=_try_shutdown, daemon=True)
+                            start = time.time()
+                            for t in list(pool.workers):
+                                t.join(timeout=1.5)
+                            dur = round(time.time() - start, 2)
+                            self.log(f"[flush_all] ✅ Discogs pool shut down cleanly in {dur}s (poison-pill).")
+                        except Exception as e:
+                            self.log(f"[flush_all] ⚠️ Discogs pool shutdown failed: {e}")
+
+                        try:
+                            with GLOBAL_DISCOGS_LOCK:
+                                globals()["GLOBAL_DISCOGS_POOL"] = None
+                                setattr(MetadataEnricher, "_discogs_pool", None)
+                            self.log("[flush_all] 🔓 Cleared GLOBAL_DISCOGS_POOL and class-level references.")
+                        except Exception as e:
+                            self.log(f"[flush_all] ⚠️ Cleanup references failed: {e}")
+
+                    t = threading.Thread(target=_shutdown_fast, daemon=True)
                     t.start()
-                    t.join(timeout=20)
+                    t.join(timeout=8)
 
                     if t.is_alive():
-                        self.log("[flush_all] ⏭️ Skipping Discogs shutdown (timeout reached). Forcing continuation.")
-                        try:
-                            # try to release globals manually
-                            setattr(MetadataEnricher, "_discogs_pool", None)
-                            import enrichment_service
-                            enrichment_service.GLOBAL_DISCOGS_POOL = None
-                            self.log("[flush_all] 🔓 Forced GLOBAL_DISCOGS_POOL cleared manually.")
-                        except Exception as e:
-                            self.log(f"[flush_all] ⚠️ Failed to clear GLOBAL_DISCOGS_POOL manually: {e}")
-
+                        self.log("[flush_all] ⚠️ Shutdown thread timeout — forcing continuation but pool should exit soon.")
                 except Exception as e:
                     self.log(f"[flush_all] ⚠️ Discogs cleanup skipped due to error: {e}")
             else:
@@ -3975,71 +3817,29 @@ except Exception as e:
 
 class DiscogsWorkerPool:
     """
-    A resilient Discogs worker pool:
-      - Global work queue (GLOBAL_DISCOGS_QUEUE), per-pool result queue
-      - Heartbeats and in-flight tracking for debugging
-      - Shutdown-aware backoff and bounded shutdown
-      - Self-healing: can replace dead workers and requeue stuck jobs
+    A resilient Discogs worker pool (per-phase safe, global-free):
+      - Each pool owns its own job_queue and result_queue.
+      - Heartbeats, in-flight tracking, and stale recovery retained.
+      - Supports poison-pill (None) shutdown.
+      - Self-healing: can replace dead workers and requeue stuck jobs.
     """
 
     def __init__(self, num_workers: int = 5):
-        """
-        Initialize the Discogs worker pool.
-        Refresh-safe for Streamlit, re-entrant safe (RLock), and fully instrumented.
-        """
+        """Initialize a fresh pool with local queue + workers."""
+        import threading, queue, time
 
-        import threading, time
-
-        # --- Debug diagnostics before taking the lock ---
-        try:
-            from enrichment_service import lock_is_locked
-            print(f"[DiscogsWorkerPool:init] debug → GLOBAL_DISCOGS_LOCK.locked()={lock_is_locked(GLOBAL_DISCOGS_LOCK)}")
-            print(f"[DiscogsWorkerPool:init] debug → GLOBAL_DISCOGS_POOL={GLOBAL_DISCOGS_POOL}")
-            if GLOBAL_DISCOGS_POOL:
-                alive = [t.name for t in GLOBAL_DISCOGS_POOL.workers if t.is_alive()]
-                print(f"[DiscogsWorkerPool:init] debug → existing workers alive={alive}")
-                print(f"[DiscogsWorkerPool:init] debug → shutdown_event.set? {GLOBAL_DISCOGS_POOL.shutdown_event.is_set()}")
-            print(f"[DiscogsWorkerPool:init] debug → Thread dump:")
-            for t in threading.enumerate():
-                print(f"   {t.name} (daemon={t.daemon})")
-        except Exception as e:
-            print(f"[DiscogsWorkerPool:init] ⚠️ Debug preflight failed: {e}")
-
-        # ---------- Pre-existing pool guard ----------
-        with GLOBAL_DISCOGS_LOCK:
-            if (
-                "GLOBAL_DISCOGS_POOL" in globals()
-                and GLOBAL_DISCOGS_POOL
-                and any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers)
-            ):
-                print(
-                    f"[DiscogsWorkerPool] ♻️ Reusing existing global pool "
-                    f"({len(GLOBAL_DISCOGS_POOL.workers)} workers already alive)."
-                )
-                self.__dict__.update(GLOBAL_DISCOGS_POOL.__dict__)
-                return
-
-            # If stale pool (no live workers) → reset
-            if (
-                "GLOBAL_DISCOGS_POOL" in globals()
-                and GLOBAL_DISCOGS_POOL
-                and not any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers)
-            ):
-                print("[DiscogsWorkerPool] 🪦 Found stale pool (no live workers). Resetting global reference.")
-                globals()["GLOBAL_DISCOGS_POOL"] = None
-
-        # ---------- Fresh initialization ----------
         self.num_workers = int(num_workers) if num_workers else 5
         self.result_queue: queue.Queue = queue.Queue()
+        self.job_queue: queue.Queue = queue.Queue()
         self.shutdown_event = threading.Event()
 
-        # diagnostics & recovery
+        # Diagnostics and tracking
         self.worker_heartbeats: dict[str, float] = {}
         self.inflight: dict[Any, dict] = {}
         self.dropped: list[dict] = []
         self.workers: list[threading.Thread] = []
 
-        print(f"[DiscogsWorkerPool] 🧵 Initializing NEW pool with {self.num_workers} worker(s).")
+        print(f"[DiscogsWorkerPool] 🧵 Initializing new isolated pool ({self.num_workers} worker(s)).")
 
         for i in range(self.num_workers):
             name = f"discogs-worker-{i}"
@@ -4053,64 +3853,55 @@ class DiscogsWorkerPool:
         alive = [t.name for t in self.workers if t.is_alive()]
         print(f"[DiscogsWorkerPool] ✅ Started workers: {alive}")
 
-        # Register as global singleton
-        with GLOBAL_DISCOGS_LOCK:
-            existing = globals().get("GLOBAL_DISCOGS_POOL")
-            if existing is not None and existing is not self:
-                print("[DiscogsWorkerPool] ⚠️ Replacing existing global pool reference.")
-            globals()["GLOBAL_DISCOGS_POOL"] = self
-
     # --------------------- Worker internals ---------------------
     def _normalize_job(self, job: Any) -> dict:
-        """
-        Accept legacy tuple jobs (name, meta, result_q) and normalize to dict.
-        """
+        """Accept legacy tuple jobs and normalize to dict."""
         if isinstance(job, dict) and "artist" in job and "result_q" in job:
             job.setdefault("attempts", 0)
             return job
         if isinstance(job, tuple):
-            # legacy: (name, meta, result_q)
             try:
                 name, meta, result_q = job
             except Exception:
-                # best effort
                 name, meta, result_q = str(job), {}, self.result_queue
             return {"artist": name, "meta": (meta or {}), "result_q": result_q, "attempts": 0}
-        # best-effort fallback
         return {"artist": str(job), "meta": {}, "result_q": self.result_queue, "attempts": 0}
 
     def _sleep_with_cancel(self, total_sec: float) -> None:
-        """Sleep in small slices so we can detect shutdown quickly."""
+        """Sleep in small slices to allow shutdown detection."""
+        import time
         end = time.time() + total_sec
         while time.time() < end and not self.shutdown_event.is_set():
             time.sleep(min(0.5, end - time.time()))
 
     def _job_id(self, job: dict) -> tuple:
-        """Stable job id for inflight tracking."""
         return (job.get("artist"), id(job.get("result_q")))
 
     def _requeue(self, job: dict, reason: str, exc: Optional[Exception] = None, max_retries: int = 3):
+        """Requeue failed jobs into the pool-local queue."""
         job["attempts"] = int(job.get("attempts", 0)) + 1
         if job["attempts"] <= max_retries and not self.shutdown_event.is_set():
             print(f"[DiscogsWorkerPool] 🔁 Re-queue '{job.get('artist')}' (attempt {job['attempts']}/{max_retries}) reason={reason}")
             try:
-                GLOBAL_DISCOGS_QUEUE.put(job)
+                self.job_queue.put(job)
             except Exception as e:
                 print(f"[DiscogsWorkerPool] ⚠️ Failed to requeue job: {e}")
         else:
             print(f"[DiscogsWorkerPool] ❌ Dropping '{job.get('artist')}' after {job['attempts']-1} retries reason={reason} exc={exc}")
-            self.dropped.append({"job": {"artist": job.get("artist"), "meta": job.get("meta")}, "reason": reason, "exc": str(exc) if exc else None})
+            self.dropped.append({
+                "job": {"artist": job.get("artist"), "meta": job.get("meta")},
+                "reason": reason,
+                "exc": str(exc) if exc else None,
+            })
 
     def _process_job(self, job: dict, http_timeout=(3.05, 15)) -> list[str]:
-        """
-        Execute the Discogs search. Returns list of genres/styles (strings).
-        Raises on non-HTTP exceptions; HTTP is handled in caller.
-        """
-        global GLOBAL_LAST_CALL
+        """Fetch genres/styles from Discogs API."""
+        import time, requests
+        global DISCOGS_KEY, DISCOGS_SECRET, GLOBAL_RATE_LOCK, GLOBAL_LAST_CALL
 
         name = job["artist"]
 
-        # global 1 rps rate limit across all datasets
+        # Global 1 rps rate limit
         with GLOBAL_RATE_LOCK:
             elapsed = time.time() - GLOBAL_LAST_CALL
             if elapsed < 1.0:
@@ -4119,53 +3910,38 @@ class DiscogsWorkerPool:
 
             r = requests.get(
                 "https://api.discogs.com/database/search",
-                params={
-                    "artist": name,
-                    "key": DISCOGS_KEY,
-                    "secret": DISCOGS_SECRET,
-                },
-                timeout=http_timeout,  # (connect, read)
+                params={"artist": name, "key": DISCOGS_KEY, "secret": DISCOGS_SECRET},
+                timeout=http_timeout,
             )
 
         if r.status_code == 429:
-            # handled by caller to honor Retry-After with shutdown awareness
             raise requests.HTTPError("429 Too Many Requests", response=r)
-
         r.raise_for_status()
+
         data = r.json()
         results = data.get("results") or []
         first = results[0] if results else {}
-        genre = first.get("genre") or []
-        style = first.get("style") or []
-        genres = (genre or []) + (style or [])
+        genres = (first.get("genre") or []) + (first.get("style") or [])
         return [str(x) for x in genres if isinstance(x, str)]
 
     def _worker(self, name: str):
-        """
-        Background worker fetching genres from the shared Discogs queue.
-        - Periodic heartbeat update
-        - Checks shutdown_event frequently
-        - Detects and reports stale behaviour
-        """
+        """Worker thread loop for processing artist lookups."""
         import time, requests, queue, traceback
 
         self.worker_heartbeats[name] = time.time()
         print(f"[DiscogsWorkerPool] 👷 Worker {name} started.")
 
-        while True:
-            if self.shutdown_event.is_set():
-                print(f"[DiscogsWorkerPool] 💤 {name} detected shutdown_event — exiting.")
-                break
-
+        while not self.shutdown_event.is_set():
             try:
-                raw = GLOBAL_DISCOGS_QUEUE.get(timeout=1.0)
+                raw = self.job_queue.get(timeout=1.0)
             except queue.Empty:
-                # periodic heartbeat refresh
                 self.worker_heartbeats[name] = time.time()
                 continue
 
-            if self.shutdown_event.is_set():
-                GLOBAL_DISCOGS_QUEUE.task_done()
+            # Poison pill handling
+            if raw is None:
+                print(f"[DiscogsWorkerPool] ☠️ {name} received poison pill — exiting.")
+                self.job_queue.task_done()
                 break
 
             job = self._normalize_job(raw)
@@ -4226,7 +4002,7 @@ class DiscogsWorkerPool:
             finally:
                 self.inflight.pop(job_id, None)
                 try:
-                    GLOBAL_DISCOGS_QUEUE.task_done()
+                    self.job_queue.task_done()
                 except Exception:
                     pass
                 self.worker_heartbeats[name] = time.time()
@@ -4235,53 +4011,44 @@ class DiscogsWorkerPool:
 
     # --------------------- Public API ---------------------
     def ensure_worker_pool(self):
-        """Back-compat alias used elsewhere in your code."""
+        """Alias for compatibility."""
         return self.ensure_alive()
 
     def ensure_alive(self):
-        """
-        Verify pool health and restart if all workers are dead or shutdown.
-        """
-        import time
+        """Restart pool if workers dead."""
+        import time, threading
 
         try:
-            if getattr(self, "shutdown_event", None) and self.shutdown_event.is_set():
+            if self.shutdown_event.is_set():
                 print("[DiscogsWorkerPool] ⚠️ Pool marked as shutdown — reinitializing.")
                 self.__init__(num_workers=self.num_workers)
                 return
 
-            alive_workers = [t for t in self.workers if t.is_alive()] if hasattr(self, "workers") else []
-            if alive_workers:
-                print(f"[DiscogsWorkerPool] ✅ Pool healthy — {len(alive_workers)} worker(s) alive.")
+            alive = [t for t in self.workers if t.is_alive()]
+            if alive:
+                print(f"[DiscogsWorkerPool] ✅ Pool healthy — {len(alive)} worker(s) alive.")
                 return
 
             print("[DiscogsWorkerPool] ⚠️ All workers dead — restarting pool.")
             self.__init__(num_workers=self.num_workers)
             time.sleep(0.5)
-
-            # ensure new pool is registered globally
-            with GLOBAL_DISCOGS_LOCK:
-                globals()["GLOBAL_DISCOGS_POOL"] = self
-                print("[DiscogsWorkerPool] ♻️ Global pool reference refreshed after restart.")
-
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ ensure_alive() failed: {e}")
 
     def submit(self, names: list[str], meta: dict | None = None):
-        """Queue up artist lookups into the global queue."""
+        """Queue artist lookups into this pool's private queue."""
         self.ensure_alive()
         m = meta or {}
         for n in names:
             try:
-                # Use normalized job dict so attempts can be tracked and requeued safely
                 job = {"artist": n, "meta": m, "result_q": self.result_queue, "attempts": 0}
-                GLOBAL_DISCOGS_QUEUE.put(job)
+                self.job_queue.put(job)
             except Exception as e:
                 print(f"[DiscogsWorkerPool] ⚠️ Failed to enqueue '{n}': {e}")
 
     def gather(self, expected: int, timeout: int = 300) -> "pd.DataFrame":
-        """Wait for results destined to this pool only."""
-        import pandas as pd
+        """Wait for pool-local results."""
+        import pandas as pd, time, queue
 
         rows = []
         deadline = time.time() + timeout
@@ -4309,31 +4076,24 @@ class DiscogsWorkerPool:
 
     # --------------------- Debugging & Recovery ---------------------
     def snapshot_queue(self, max_n: int = 50) -> dict:
-        """
-        Inspect the global queue contents (debug only).
-        Returns {'total': int, 'sample': list}
-        """
+        """Inspect the local queue contents."""
         total = 0
         sample = []
         try:
-            with GLOBAL_DISCOGS_QUEUE.mutex:
-                total = GLOBAL_DISCOGS_QUEUE.qsize()
-                sample = list(itertools.islice(GLOBAL_DISCOGS_QUEUE.queue, max_n))
+            with self.job_queue.mutex:
+                total = self.job_queue.qsize()
+                sample = list(itertools.islice(self.job_queue.queue, max_n))
             print(f"[DiscogsWorkerPool] 🧾 snapshot: total={total}, sample={min(max_n, len(sample))}")
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ snapshot_queue failed: {e}")
         return {"total": total, "sample": sample}
 
     def nudge_workers(self, hb_stale_sec: int = 120, job_stale_sec: int = 120):
-        """
-        Re-invigorate workers:
-          - replace dead threads
-          - warn on stale heartbeats
-          - requeue jobs stuck in-flight too long
-        """
+        """Reinvigorate workers and requeue stale jobs."""
+        import time, threading
         now = time.time()
 
-        # 1) Replace dead workers
+        # Replace dead threads
         for t in list(self.workers):
             if not t.is_alive() and not self.shutdown_event.is_set():
                 print(f"[DiscogsWorkerPool] 🧰 Worker {t.name} died — spawning replacement")
@@ -4342,19 +4102,18 @@ class DiscogsWorkerPool:
                 self.workers.remove(t)
                 self.workers.append(nt)
 
-        # 2) Stale heartbeats
+        # Stale heartbeats
         for wname, hb in list(self.worker_heartbeats.items()):
             age = now - hb
             if age > hb_stale_sec:
                 print(f"[DiscogsWorkerPool] ⚠️ Stale heartbeat: {wname} (age={int(age)}s)")
 
-        # 3) Requeue stuck inflight jobs
+        # Requeue stuck inflight jobs
         for job_id, meta in list(self.inflight.items()):
             age = now - meta.get("started_at", now)
             if age > job_stale_sec:
                 artist = meta.get("payload", {}).get("artist")
-                print(f"[DiscogsWorkerPool] ♻️ Requeue stuck job {job_id} '{artist}' (age={int(age)}s) from {meta.get('worker')}")
-                # Reconstruct a normalized job and requeue
+                print(f"[DiscogsWorkerPool] ♻️ Requeue stuck job '{artist}' (age={int(age)}s) from {meta.get('worker')}")
                 job = {
                     "artist": artist,
                     "meta": meta.get("payload", {}).get("meta", {}),
@@ -4362,13 +4121,12 @@ class DiscogsWorkerPool:
                     "attempts": meta.get("attempts", 0) + 1,
                 }
                 self._requeue(job, reason="stale_inflight")
-
-                # Clear from inflight
                 self.inflight.pop(job_id, None)
 
     @staticmethod
     def dump_worker_stacks(prefix: str = "[DiscogsWorkerPool]"):
         """Print stack traces of all discogs workers."""
+        import sys, threading, traceback
         frames = sys._current_frames()
         for th in threading.enumerate():
             if th.name.startswith("discogs-worker"):
@@ -4377,189 +4135,128 @@ class DiscogsWorkerPool:
                 if fr:
                     traceback.print_stack(fr)
 
-    @classmethod
-    def get_or_create_global(cls, num_workers: int = 5) -> "DiscogsWorkerPool":
-        """Return the active global pool or create one if missing/dead."""
-        with GLOBAL_DISCOGS_LOCK:
-            global GLOBAL_DISCOGS_POOL
-            if GLOBAL_DISCOGS_POOL is None:
-                print("[DiscogsWorkerPool] 🌍 Creating global pool (none exists).")
-                GLOBAL_DISCOGS_POOL = cls(num_workers=num_workers)
-            elif not any(t.is_alive() for t in GLOBAL_DISCOGS_POOL.workers):
-                print("[DiscogsWorkerPool] ⚠️ Global pool dead — recreating.")
-                GLOBAL_DISCOGS_POOL = cls(num_workers=num_workers)
-            return GLOBAL_DISCOGS_POOL
-
     # --------------------- Shutdown ---------------------
     def shutdown(
         self,
-        max_wait_sec: int = 180,
+        max_wait_sec: int = 10,
         force_purge: bool = False,
         persist_backlog: bool = False,
         storage=None,
     ):
         """
-        Bounded shutdown with diagnostics, forced drain, and automatic global reset.
-        Now includes timeout-based escape to prevent permanent hangs if queue/pool are gone.
+        Bounded shutdown with poison-pill signaling and instant drain fallback.
+        No more indefinite hangs waiting for unfinished_tasks.
         """
-        import time, threading, queue
-
-        print(f"[DiscogsWorkerPool][DEBUG] Queue unfinished_tasks = {getattr(GLOBAL_DISCOGS_QUEUE, 'unfinished_tasks', 'N/A')}")
+        import time, threading, queue, traceback
 
         print(f"[DiscogsWorkerPool] 💤 Shutdown requested (force_purge={force_purge}, persist_backlog={persist_backlog})")
         start = time.time()
 
         try:
-            with GLOBAL_DISCOGS_LOCK:
-                pool = globals().get("GLOBAL_DISCOGS_POOL")
-                if pool is not self:
-                    print("[DiscogsWorkerPool] ⚠️ Shutdown requested on non-global pool; skipping.")
-                    return
-                self.shutdown_event.set()
-                alive_workers = [t.name for t in self.workers if t.is_alive()]
-                print(f"[DiscogsWorkerPool] Active workers before shutdown: {alive_workers or 'None'}")
+            # --- Signal all workers to stop ---
+            self.shutdown_event.set()
 
-            import threading
-            live_threads = [t.name for t in threading.enumerate() if "discogs" in t.name]
-            print(f"[DiscogsWorkerPool][DEBUG] live Discogs threads: {live_threads}")
+            # --- Inject poison pills (safe exit triggers) ---
+            for _ in self.workers:
+                try:
+                    GLOBAL_DISCOGS_QUEUE.put_nowait(None)
+                except Exception:
+                    pass
 
-            # --- early exit if queue/pool vanished ---
-            if "GLOBAL_DISCOGS_QUEUE" not in globals() or globals().get("GLOBAL_DISCOGS_QUEUE") is None:
-                print("[DiscogsWorkerPool] ⚠️ No GLOBAL_DISCOGS_QUEUE present — skipping graceful drain.")
-                return
-
-            # --- bounded drain wait ---
-            last_remaining = -1
+            # --- Quick drain safeguard ---
+            last_remaining = None
             drained = False
             for sec in range(max_wait_sec):
-                remaining = getattr(GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 0)
+                try:
+                    remaining = getattr(GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 0)
+                except Exception:
+                    remaining = 0
+
                 if remaining == 0:
                     drained = True
                     break
-                if sec % 10 == 0:
-                    hb_staleness = {
+
+                # Check if all threads are gone → break early
+                live = [t for t in self.workers if t.is_alive()]
+                if not live:
+                    print(f"[DiscogsWorkerPool] ✅ All workers exited early after {sec}s.")
+                    drained = True
+                    break
+
+                # Periodic diagnostic every 2s
+                if sec % 2 == 0:
+                    hb_ages = {
                         n: int(time.time() - ts)
                         for n, ts in self.worker_heartbeats.items()
                     }
-                    print(f"[DiscogsWorkerPool] ⏳ waiting... {remaining} tasks remain | heartbeat_age={hb_staleness}")
+                    print(f"[DiscogsWorkerPool] ⏳ waiting... {remaining} tasks remain | HB ages={hb_ages}")
+
                 time.sleep(1.0)
                 last_remaining = remaining
 
-            # --- timeout guard ---
+            # --- Timeout fallback ---
             if not drained:
-                print(f"[DiscogsWorkerPool] ⚠️ Timeout reached after {max_wait_sec}s. Forcing skip.")
-                remaining = getattr(GLOBAL_DISCOGS_QUEUE, "unfinished_tasks", 0)
-                if remaining > 0:
-                    print(f"[DiscogsWorkerPool] ⛔ Force draining {remaining} leftover tasks.")
-                    try:
-                        self._drain_queue_nonblocking()
-                    except Exception as e:
-                        print(f"[DiscogsWorkerPool] ⚠️ drain failed: {e}")
-
-            # --- leftover handling ---
-            leftovers = []
-            try:
-                if GLOBAL_DISCOGS_QUEUE.qsize() > 0:
-                    leftovers = self._drain_queue_nonblocking()
-            except Exception:
-                leftovers = []
-
-            if leftovers:
-                if persist_backlog and storage is not None:
-                    try:
-                        payload = [
-                            {
-                                "artist": j.get("artist", ""),
-                                "meta": j.get("meta", {}),
-                                "attempts": j.get("attempts", 0),
-                            }
-                            for j in leftovers
-                        ]
-                        storage.put_json("enrichment/backlog/discogs_jobs.json", payload)
-                        print(f"[DiscogsWorkerPool] 📦 Persisted {len(payload)} leftover jobs for resume")
-                    except Exception as e:
-                        print(f"[DiscogsWorkerPool] ⚠️ Failed to persist backlog: {e}")
-                elif force_purge:
-                    print(f"[DiscogsWorkerPool] ⚠️ Purging {len(leftovers)} leftover jobs (force_purge=True)")
-                else:
-                    for j in leftovers:
+                print(f"[DiscogsWorkerPool] ⚠️ Timeout after {max_wait_sec}s — forcing drain.")
+                try:
+                    # non-blocking queue drain
+                    items = []
+                    while True:
+                        job = GLOBAL_DISCOGS_QUEUE.get_nowait()
+                        items.append(job)
                         try:
-                            GLOBAL_DISCOGS_QUEUE.put(j)
+                            GLOBAL_DISCOGS_QUEUE.task_done()
                         except Exception:
                             pass
-                    print(f"[DiscogsWorkerPool] ↩️ Re-queued {len(leftovers)} leftover jobs for next session")
+                    print(f"[DiscogsWorkerPool] ⚠️ Force-drained {len(items)} leftover jobs.")
+                except queue.Empty:
+                    pass
+                except Exception as e:
+                    print(f"[DiscogsWorkerPool] ⚠️ Force drain failed: {e}")
 
-            # --- join worker threads (short-timeout) ---
+            # --- Kill any lingering worker threads ---
             for t in list(self.workers):
                 if t.is_alive():
-                    t.join(timeout=2)
-            duration = round(time.time() - start, 2)
-            print(f"[DiscogsWorkerPool] ✅ Shutdown complete in {duration}s. Final queue size={GLOBAL_DISCOGS_QUEUE.qsize()}")
+                    t.join(timeout=1.5)
 
-        except Exception as e:
-            print(f"[DiscogsWorkerPool] ⚠️ Shutdown error: {e}")
-
-        finally:
+            # --- Final cleanup ---
             with GLOBAL_DISCOGS_LOCK:
                 globals()["GLOBAL_DISCOGS_POOL"] = None
-            print("[DiscogsWorkerPool] 🔓 Global pool reference cleared.")
 
-    def shutdown_worker_pool(self, timeout: int = 10, force_purge: bool = False):
-        """
-        Graceful wrapper for shutdown(), used by background_enrich() and breadth_only.
-        Now skips gracefully if no global pool exists or threads are already gone.
-        """
-        import time
-
-        try:
-            if not getattr(self, "workers", None):
-                print("[DiscogsWorkerPool] 💤 No workers present — skipping shutdown.")
-                globals()["GLOBAL_DISCOGS_POOL"] = None
-                return
-
-            print(f"[DiscogsWorkerPool] 🧹 shutdown_worker_pool() called (timeout={timeout})")
-            self.shutdown(max_wait_sec=timeout, force_purge=force_purge)
-            return
+            dur = round(time.time() - start, 2)
+            print(f"[DiscogsWorkerPool] ✅ Shutdown complete in {dur}s (drained={drained}).")
 
         except Exception as e:
             print(f"[DiscogsWorkerPool] ⚠️ shutdown() raised exception: {e}")
+            traceback.print_exc()
 
-        # --- fallback cleanup if shutdown() itself breaks ---
-        try:
-            alive = [t for t in getattr(self, "workers", []) if t.is_alive()]
-            if alive:
-                print(f"[DiscogsWorkerPool] ⚠️ Forcing {len(alive)} worker(s) to stop manually.")
-                for t in alive:
-                    try:
-                        if hasattr(t, "stop_event"):
-                            t.stop_event.set()
-                    except Exception:
-                        pass
-                for t in alive:
-                    t.join(timeout=2)
-        except Exception as e:
-            print(f"[DiscogsWorkerPool] ⚠️ Fallback thread cleanup failed: {e}")
+        finally:
+            try:
+                self.workers.clear()
+            except Exception:
+                pass
+            print("[DiscogsWorkerPool] 🔓 Cleared local worker references.")
 
-        # --- final global reset ---
+    def shutdown_worker_pool(self, timeout: int = 10, force_purge: bool = False):
+        """Convenience wrapper for shutdown()."""
         try:
-            globals()["GLOBAL_DISCOGS_POOL"] = None
-            print("[DiscogsWorkerPool] 🔓 GLOBAL_DISCOGS_POOL cleared.")
+            if not getattr(self, "workers", None):
+                print("[DiscogsWorkerPool] 💤 No workers present — skipping shutdown.")
+                return
+            print(f"[DiscogsWorkerPool] 🧹 shutdown_worker_pool() called (timeout={timeout})")
+            self.shutdown(max_wait_sec=timeout, force_purge=force_purge)
         except Exception as e:
-            print(f"[DiscogsWorkerPool] ⚠️ Failed to clear global pool reference: {e}")
+            print(f"[DiscogsWorkerPool] ⚠️ shutdown() raised exception: {e}")
 
     def _drain_queue_nonblocking(self):
-        """Drain whatever is immediately available from the global queue (debug/cleanup)."""
+        """Drain whatever is immediately available from the local queue."""
         import queue
         items = []
         try:
             while True:
                 try:
-                    job = GLOBAL_DISCOGS_QUEUE.get_nowait()
+                    job = self.job_queue.get_nowait()
                     items.append(job)
-                    try:
-                        GLOBAL_DISCOGS_QUEUE.task_done()
-                    except Exception:
-                        pass
+                    self.job_queue.task_done()
                 except queue.Empty:
                     break
         except Exception as e:

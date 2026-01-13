@@ -52,6 +52,8 @@ import enrichment_service as es
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release, lock_is_locked
 from chart_scorer import parse_label_ts_from_table_name
 
+os.environ["NUMBA_THREADING_LAYER"] = "tbb"
+
 # -------------------------------- DEBUGGER ---------------------------------- #
 _DEBUG_SEQ = 0
 def _trace(tag: str, **kv):
@@ -1036,11 +1038,10 @@ def _start_targeted_artist_backfill_with_background_enrich(
 
 def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao, table_name: Optional[str] = None):
     """
-    Checks D1/R2 consistency & heartbeats. When both stores report 'full_done',
-    it verifies coverage (are all user artists enriched?) and, if needed,
-    launches a targeted breadth-only backfill using the *same dataset* the UI is showing.
-
-    Now includes preflight cleanup to clear stale threads/locks/status before starting any enrichment.
+    Checks D1/R2 consistency, heartbeats, and genre coverage.
+    - If both stores are full_done, audit metadata coverage and trigger breadth-only if gaps remain.
+    - Otherwise, determines whether to run full or breadth-only enrichment.
+    - All enrichment threads are handled by background_enrich().
     """
 
     import time, threading, pandas as pd, streamlit as st
@@ -1051,361 +1052,200 @@ def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao
         is_stale_status,
         terminate_stale_enrichment_threads,
         recovery_sweep,
-        clear_stale_locks,
+        mark_lock_acquired,
     )
 
     print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
-    _trace("enter_auto_check", user_id=user_id, label=dataset_label, table_name=table_name)
 
     # ------------------------------------
-    # Helper: Preflight stale cleanup
+    # Preflight cleanup (stale locks/threads)
     # ------------------------------------
-    def preflight_enrichment_cleanup(user_id: str, dataset_label: str, log_dao=None):
-        from enrichment_service import (
-            clear_stale_locks,
-            terminate_stale_enrichment_threads,
-            recovery_sweep,
-        )
-        print(f"[preflight] 🧹 Checking for stale threads/locks for {user_id} ({dataset_label})")
+    def preflight_enrichment_cleanup():
+        from enrichment_service import clear_stale_locks
         try:
             terminate_stale_enrichment_threads(user_id=user_id, max_age_sec=600)
-        except Exception as e:
-            print(f"[preflight] ⚠️ terminate_stale_enrichment_threads failed: {e}")
-        try:
             clear_stale_locks(max_age_minutes=10)
-        except Exception as e:
-            print(f"[preflight] ⚠️ clear_stale_locks failed: {e}")
-        try:
             recovery_sweep(user_id, dataset_label, log_dao)
+            print(f"[preflight] ✅ Cleanup complete for {dataset_label}")
         except Exception as e:
-            print(f"[preflight] ⚠️ recovery_sweep failed: {e}")
-        print(f"[preflight] ✅ Cleanup complete for {dataset_label}")
+            print(f"[preflight] ⚠️ Cleanup failed: {e}")
+
+    preflight_enrichment_cleanup()
 
     # ------------------------------------
-    # Helper: get currently loaded dataset
+    # DAO setup + status read
+    # ------------------------------------
+    status_dao = DAOS.get("status")
+    metadata_dao = DAOS.get("r2")
+
+    d1_status = status_dao.read_status(user_id, dataset_label) or {}
+    r2_status = metadata_dao.read_status(user_id, dataset_label) or {}
+
+    def s_label(s): return (s or {}).get("status", "").lower()
+    d1_state, r2_state = s_label(d1_status), s_label(r2_status)
+    print(f"[auto_reenrich] 🧭 D1={d1_state}, R2={r2_state}")
+
+    # ------------------------------------
+    # Helper: load dataset
     # ------------------------------------
     def _get_df_source():
-        src = "session"
-        key_used = None
-        df_source = None
+        df_source = st.session_state.get("current_df")
+        if df_source is not None and not df_source.empty:
+            return df_source
         try:
-            key_used = st.session_state.get("last_table_name")
-            df_source = st.session_state.get("current_df")
-        except Exception:
-            pass
+            user_dao = DAOS.get("user_data")
+            mapping = dict(user_dao.list_datasets(user_id))
+            tbl = mapping.get(dataset_label)
+            if tbl:
+                return user_dao.load_user_data(tbl)
+        except Exception as e:
+            print(f"[auto_reenrich] ⚠️ DAO load failed: {e}")
+        return pd.DataFrame()
 
-        _trace("get_df_source@session", has_df=(df_source is not None), empty=(getattr(df_source, "empty", True)))
-        _log_df(df_source, "current_df@session")
-
-        if df_source is None or getattr(df_source, "empty", True):
-            try:
-                user_dao = DAOS.get("user_data")
-                src = "dao"
-                key = table_name or key_used
-                if not key:
-                    try:
-                        mapping = dict(user_dao.list_datasets(user_id))
-                        key = mapping.get(dataset_label)
-                    except Exception as e:
-                        print(f"[auto_reenrich] ⚠️ list_datasets failed: {e}")
-                        key = None
-                if key:
-                    df_source = user_dao.load_user_data(key)
-                    key_used = key
-                    _log_df(df_source, f"load_user_data[{key}]")
-            except Exception as e:
-                print(f"[auto_reenrich] ⚠️ DAO load failed: {e}")
-
-        return df_source, src, key_used
-
-    # --- Run initial preflight cleanup ---
-    try:
-        preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
-    except Exception as e:
-        print(f"[auto_reenrich] ⚠️ Preflight cleanup failed: {e}")
-
-    try:
-        status_dao = DAOS.get("status")
-        metadata_dao = DAOS.get("r2")
-
-        d1_status = status_dao.read_status(user_id, dataset_label) or {}
-        r2_status = metadata_dao.read_status(user_id, dataset_label) or {}
-
-        def status_label(s):
-            return (s or {}).get("status", "").lower()
-
-        d1_state, r2_state = status_label(d1_status), status_label(r2_status)
-        print(f"[auto_reenrich] 🧭 D1={d1_state}, R2={r2_state}")
-        _trace("states", d1=d1_state, r2=r2_state)
-
-        # =======================================================
-        # 1) FULL_DONE → audit coverage, then breadth-only if gaps
-        # =======================================================
-        if d1_state == "full_done" and r2_state == "full_done":
-            print(f"[auto_reenrich] full_done→ running coverage audit for {dataset_label}")
-            _trace("full_done_branch", label=dataset_label)
-            df_source, src, key_used = _get_df_source()
-
-            try:
-                audit = _audit_artist_genre_coverage(
-                    user_id=user_id,
-                    dataset_label=dataset_label,
-                    table_name=key_used,
-                    user_df=df_source,
-                )
-            except Exception as e:
-                print(f"[auto_reenrich] ❌ audit failed: {e}")
-                _trace("returning", reason="audit_failed")
-                return "error"
-
-            counts = audit["counts"]
-            user_unique = 0
-            if df_source is not None and not df_source.empty and "artist_name" in df_source.columns:
-                user_unique = (
-                    df_source["artist_name"].astype(str).str.strip().str.lower().nunique()
-                )
-
-            print(
-                f"[auto_reenrich] 📊 audit: not_present={counts['not_present']}, "
-                f"present_but_missing={counts['present_but_missing']}, total_unenriched={counts['unenriched_all']} "
-                f"| source={src}, rows={len(df_source) if df_source is not None else 0}, "
-                f"user_unique={user_unique}"
-            )
-            _trace("audit_done", **counts, source=src, user_unique=user_unique)
-
-            if user_unique == 0:
-                print("[auto_reenrich] 💤 user_df has 0 unique artists — deferring audit")
-                return "deferred"
-            if counts["unenriched_all"] == 0:
-                print(f"[auto_reenrich] ✅ Coverage OK — skipping backfill for {dataset_label}")
-                return "ok"
-
-            try:
-                missing_keys = (
-                    audit["unenriched_all"]["artist_key"]
-                    .dropna().astype(str).str.strip().str.lower().unique().tolist()
-                )
-            except Exception as e:
-                print(f"[auto_reenrich] ❌ failed to build missing_keys: {e}")
-                return "error"
-
-            print(f"[auto_reenrich] 🧩 targeted breadth-only → {len(missing_keys)} artists")
-
-            if df_source is None or df_source.empty:
-                print("[auto_reenrich] 💤 cleaned_df empty — cannot start targeted backfill")
-                return "nothing_to_do"
-
-            df_tmp = df_source.copy()
-            if "artist_name" in df_tmp.columns:
-                df_tmp["artist_key"] = df_tmp["artist_name"].astype(str).str.strip().str.lower()
-            else:
-                df_tmp["artist_key"] = ""
-
-            filtered_df = df_tmp[df_tmp["artist_key"].isin(missing_keys)].copy()
-            if "category" in filtered_df.columns:
-                mask_music = (
-                    filtered_df["category"].astype(str).str.lower().eq("music")
-                    | filtered_df["category"].isna()
-                )
-                filtered_df = filtered_df[mask_music]
-
-            _log_df(filtered_df, "filtered_df@Targeted(breadth_only)")
-            if filtered_df.empty:
-                print("[auto_reenrich] 💤 filtered_df empty after filtering — skipping targeted breadth-only")
-                return "nothing_to_do"
-
-            # preflight before starting new thread
-            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
-            res = start_breadth_first_only(
+    # ------------------------------------
+    # Case 1: both full_done → audit coverage
+    # ------------------------------------
+    if d1_state == "full_done" and r2_state == "full_done":
+        print(f"[auto_reenrich] full_done → running genre coverage audit for {dataset_label}")
+        try:
+            df_source = _get_df_source()
+            audit = _audit_artist_genre_coverage(
                 user_id=user_id,
                 dataset_label=dataset_label,
-                log_dao=log_dao,
-                table_name=key_used,
-                filtered_df=filtered_df,
+                table_name=table_name,
+                user_df=df_source,
             )
-            print(f"[auto_reenrich] breadth_only starter returned: {res}")
-            return "targeted_breadth_started" if res == "breadth_only_started" else res
+        except Exception as e:
+            print(f"[auto_reenrich] ❌ coverage audit failed: {e}")
+            return "error"
 
-        # =======================================================
-        # 2) Other state handling
-        # =======================================================
-        reg = getattr(st.session_state, "_enrichment_registry", {}) if hasattr(st, "session_state") else {}
-        active_thread = reg.get("thread")
-        cancel_event = reg.get("cancel_event")
+        counts = audit["counts"]
+        unenriched = counts.get("unenriched_all", 0)
+        user_unique = audit["telemetry"]["user_unique_artists"]
+        print(f"[auto_reenrich] 📊 Audit results: unenriched={unenriched}, user_unique={user_unique}")
 
-        stale_d1 = is_stale_status(d1_status, threshold_minutes=5)
-        last_hb = get_last_heartbeat(user_id, dataset_label)
-        now = time.time()
-        stale_hb = (last_hb is None) or ((now - last_hb) > 300)
-        hb_age = int(now - last_hb) if last_hb else "?"
+        if user_unique == 0:
+            print(f"[auto_reenrich] 💤 No user artists — skipping.")
+            return "nothing_to_do"
+        if unenriched == 0:
+            print(f"[auto_reenrich] ✅ Coverage OK — no backfill required.")
+            return "ok"
 
+        print(f"[auto_reenrich] 🧩 Running targeted breadth-only to backfill missing genres ({unenriched} artists).")
+        preflight_enrichment_cleanup()
+
+        cancel_event = threading.Event()
         user_lock = get_user_lock(user_id)
-        if (not active_thread or not getattr(active_thread, "is_alive", lambda: False)()) and lock_is_locked(user_lock):
-            print(f"[auto_reenrich] 🧹 Found stale lock for {user_id} — releasing.")
-            try:
-                user_lock.release()
-            except Exception as e:
-                print(f"[auto_reenrich] ⚠️ Failed to release stale lock: {e}")
+        if not user_lock.acquire(blocking=False):
+            print(f"[auto_reenrich] 🚫 Lock busy, skipping backfill.")
+            return "locked"
+        mark_lock_acquired(user_id)
 
-        if active_thread and getattr(active_thread, "is_alive", lambda: False)():
-            extended_threshold = 900 if d1_state == "breadth_running" or r2_state == "breadth_running" else 300
-            is_really_stale = (last_hb is None) or ((now - last_hb) > extended_threshold)
+        df_source = _get_df_source()
+        if df_source is None or df_source.empty:
+            print(f"[auto_reenrich] 💤 No data for breadth-only.")
+            return "nothing_to_do"
 
-            if stale_d1 or is_really_stale:
-                print(f"[auto_reenrich] ⚠️ Thread stale (>threshold). Cancelling + waiting for cleanup.")
-                if cancel_event:
-                    cancel_event.set()
-                for i in range(15):
-                    if not lock_is_locked(user_lock):
-                        break
-                    print(f"[auto_reenrich] ⏳ Waiting for lock release ({i+1}/15)...")
-                    time.sleep(1)
-                else:
-                    print(f"[auto_reenrich] 🚫 Lock still held after timeout — forcing release.")
-                    try:
-                        user_lock.release()
-                    except Exception as e:
-                        print(f"[auto_reenrich] ⚠️ Error while releasing lock: {e}")
-                st.session_state["_enrichment_registry"] = {}
-            else:
-                print(f"[auto_reenrich] ❤️ Heartbeat OK ({hb_age}s ago). Skipping restart.")
-                return "running"
+        t = threading.Thread(
+            target=background_enrich,
+            kwargs=dict(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                cleaned_df=df_source,
+                log_dao=log_dao,
+                cancel_event=cancel_event,
+                mode="breadth_only",
+                assume_locked=True,
+            ),
+            daemon=True,
+        )
+        t.start()
+        st.session_state["_enrichment_registry"] = {
+            "thread": t,
+            "cancel_event": cancel_event,
+            "dataset_label": dataset_label,
+            "user_id": user_id,
+        }
+        print(f"[auto_reenrich] 🚀 Targeted breadth-only thread started.")
+        return "targeted_breadth_started"
 
-        # Enrichment already running
-        if d1_state in ("breadth_running", "running") or r2_state in ("breadth_running", "running"):
-            print(f"[auto_reenrich] 🌀 Enrichment already in progress for {dataset_label}")
-            recovery_sweep(user_id, dataset_label, log_dao)
-            refreshed = metadata_dao.read_status(user_id, dataset_label) or {}
-            new_state = (refreshed.get("status") or "").lower()
-            if new_state == "error":
-                print(f"[auto_reenrich] 🔄 Recovery flipped {dataset_label} to error — restarting.")
-                preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
-                time.sleep(1.5)
-                df_source, _, _ = _get_df_source()
-                if df_source is None or df_source.empty:
-                    print("[auto_reenrich] 💤 No data available to restart.")
-                    return "nothing_to_do"
-                cancel_event = threading.Event()
-                user_lock = get_user_lock(user_id)
-                for attempt in range(10):
-                    if user_lock.acquire(blocking=False):
-                        from enrichment_service import mark_lock_acquired
-                        mark_lock_acquired(user_id)
-                        break
-                    time.sleep(1)
-                else:
-                    print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping restart.")
-                    return "locked"
+    # ------------------------------------
+    # Case 2: standard_done → resume breadth_only
+    # ------------------------------------
+    if d1_state == "standard_done" or r2_state == "standard_done":
+        print(f"[auto_reenrich] 🌐 Standard enrichment done — resuming breadth-only for {dataset_label}")
+        preflight_enrichment_cleanup()
 
-                terminate_stale_enrichment_threads(user_id)
-                # --- spawn background enrichment thread, assuming lock already held ---
-                enrichment_thread = threading.Thread(
-                    target=background_enrich,
-                    kwargs=dict(
-                        user_id=user_id,
-                        dataset_label=dataset_label,
-                        cleaned_df=df_source,
-                        log_dao=log_dao,
-                        cancel_event=cancel_event,
-                        assume_locked=True,  # <- NEW FLAG
-                    ),
-                    daemon=True,
-                )
-                enrichment_thread.start()
-                st.session_state["_enrichment_registry"] = {
-                    "thread": enrichment_thread,
-                    "cancel_event": cancel_event,
-                    "dataset_label": dataset_label,
-                    "user_id": user_id,
-                }
-                print(f"[auto_reenrich] 🚀 Restarted enrichment after zombie recovery for {dataset_label}")
-                return "restarted_after_recovery"
-            return "running"
+        df_source = _get_df_source()
+        cancel_event = threading.Event()
+        user_lock = get_user_lock(user_id)
+        if not user_lock.acquire(blocking=False):
+            print(f"[auto_reenrich] 🚫 Lock busy, skipping breadth-only.")
+            return "locked"
+        mark_lock_acquired(user_id)
 
-        # Resume or retry breadth-first
-        if d1_state == "standard_done" or r2_state == "standard_done":
-            print(f"[auto_reenrich] 🌐 Standard enrichment done — resuming breadth-first for {dataset_label}")
-            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
-            start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
-            return "resumed_breadth_first"
+        t = threading.Thread(
+            target=background_enrich,
+            kwargs=dict(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                cleaned_df=df_source,
+                log_dao=log_dao,
+                cancel_event=cancel_event,
+                mode="breadth_only",
+                assume_locked=True,
+            ),
+            daemon=True,
+        )
+        t.start()
+        st.session_state["_enrichment_registry"] = {
+            "thread": t,
+            "cancel_event": cancel_event,
+            "dataset_label": dataset_label,
+            "user_id": user_id,
+        }
+        return "resumed_breadth_first"
 
-        if d1_state == "breadth_done" or r2_state == "breadth_done":
-            print(f"[auto_reenrich] 🎚️ Breadth-first done, Taste Index missing — restarting breadth_only.")
+    # ------------------------------------
+    # Case 3: fallback → full enrichment
+    # ------------------------------------
+    print(f"[auto_reenrich] ⚠️ Triggering full enrichment for {dataset_label}")
+    preflight_enrichment_cleanup()
 
-            # 🧩 Prevent duplicate Taste Index triggers if thread already running
-            if "taste_index" in [t.name for t in threading.enumerate() if t.is_alive()]:
-                print(f"[auto_reenrich] ⏳ Taste Index thread already active — skipping restart.")
-                return "taste_index_running"
+    df_source = _get_df_source()
+    if df_source is None or df_source.empty:
+        print(f"[auto_reenrich] 💤 No data to start enrichment.")
+        return "nothing_to_do"
 
-            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
-            start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
-            return "restarted_taste_index_pending"
+    cancel_event = threading.Event()
+    user_lock = get_user_lock(user_id)
+    if not user_lock.acquire(blocking=False):
+        print(f"[auto_reenrich] 🚫 Lock busy, skipping full enrichment.")
+        return "locked"
+    mark_lock_acquired(user_id)
 
-        if d1_state == "breadth_error" or r2_state == "breadth_error":
-            print(f"[auto_reenrich] 🌀 Breadth-first error — restarting breadth_only.")
-            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
-            start_breadth_first_only(user_id, dataset_label, log_dao, table_name=table_name)
-            return "restarted_breadth_error"
-
-        # Fallback → full restart
-        last_hb = get_last_heartbeat(user_id, dataset_label)
-        stale_hb = (last_hb is None) or ((time.time() - last_hb) > 300)
-        should_restart = (
-            d1_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error", "breadth_done")
-            and r2_state not in ("full_done", "running", "breadth_running", "standard_done", "breadth_error", "breadth_done")
-        ) or stale_d1 or stale_hb
-
-        if should_restart:
-            print(f"[auto_reenrich] ⚠️ Triggering full re-enrichment for {dataset_label}")
-            preflight_enrichment_cleanup(user_id, dataset_label, log_dao)
-            df_source, _, _ = _get_df_source()
-            if df_source is None or df_source.empty:
-                print("[auto_reenrich] 💤 No data available to restart.")
-                return "nothing_to_do"
-
-            cancel_event = threading.Event()
-            user_lock = get_user_lock(user_id)
-            for attempt in range(10):
-                if user_lock.acquire(blocking=False):
-                    from enrichment_service import mark_lock_acquired
-                    mark_lock_acquired(user_id)
-                    break
-                time.sleep(1)
-            else:
-                print(f"[auto_reenrich] 🚫 Could not acquire lock — skipping new enrichment.")
-                return "locked"
-
-            terminate_stale_enrichment_threads(user_id)
-            # --- spawn background enrichment thread, assuming lock already held ---
-            enrichment_thread = threading.Thread(
-                target=background_enrich,
-                kwargs=dict(
-                    user_id=user_id,
-                    dataset_label=dataset_label,
-                    cleaned_df=df_source,
-                    log_dao=log_dao,
-                    cancel_event=cancel_event,
-                    assume_locked=True,  # <- NEW FLAG
-                ),
-                daemon=True,
-            )
-            enrichment_thread.start()
-            st.session_state["_enrichment_registry"] = {
-                "thread": enrichment_thread,
-                "cancel_event": cancel_event,
-                "dataset_label": dataset_label,
-                "user_id": user_id,
-            }
-            print(f"[auto_reenrich] 🚀 Started enrichment thread for {dataset_label}")
-            return "restarted"
-
-        print(f"[auto_reenrich] ✅ Enrichment verified complete for {dataset_label}")
-        return "ok"
-
-    except Exception as e:
-        print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
-        _trace("returning", reason="exception", error=str(e))
-        return "error"
+    t = threading.Thread(
+        target=background_enrich,
+        kwargs=dict(
+            user_id=user_id,
+            dataset_label=dataset_label,
+            cleaned_df=df_source,
+            log_dao=log_dao,
+            cancel_event=cancel_event,
+            mode="full",
+            assume_locked=True,
+        ),
+        daemon=True,
+    )
+    t.start()
+    st.session_state["_enrichment_registry"] = {
+        "thread": t,
+        "cancel_event": cancel_event,
+        "dataset_label": dataset_label,
+        "user_id": user_id,
+    }
+    print(f"[auto_reenrich] 🚀 Full enrichment thread started.")
+    return "full_started"
 
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
     """
@@ -1624,234 +1464,189 @@ def background_enrich(
     cleaned_df: pd.DataFrame,
     log_dao=None,
     cancel_event: Optional[threading.Event] = None,
-    mode: str = "full",  # "full" (default) or "breadth_only"
-    assume_locked: bool = False,  # NEW FLAG: caller already holds lock
+    mode: str = "full",
+    assume_locked: bool = False,
 ):
     """
-    Background enrichment runner using DAOs.
-    If assume_locked=True, the caller (auto_check) already holds the user lock.
-    In that case, this function will not re-acquire or release it.
+    Unified background enrichment runner (thread entry point).
+    Handles both full and breadth_only enrichment in a single thread.
+    Creates a *dedicated* Discogs worker pool with its own queue
+    and guarantees poison-pill shutdown before the thread exits.
     """
-
-    import traceback, time, threading, streamlit as st
+    import time, threading, traceback, queue, streamlit as st
     from enrichment_service import (
-        get_user_lock,
-        mark_lock_acquired,
-        update_heartbeat,
-        safe_user_lock_release,
-        CancelledError,
-        MetadataEnricher,
+        get_user_lock, mark_lock_acquired, safe_user_lock_release,
+        update_heartbeat, CancelledError, MetadataEnricher, DiscogsWorkerPool
     )
     from dao_selector import DAOS, get_log_dao
 
     thread_name = threading.current_thread().name
-    print(f"[enrich:{thread_name}] Starting enrichment thread for {dataset_label}")
+    print(f"[enrich:{thread_name}] ▶ Starting enrichment thread for {dataset_label} ({mode})")
 
-    # --- Preflight cleanup -----------------------------------------
-    try:
-        from enrichment_service import clear_stale_locks, terminate_stale_enrichment_threads, recovery_sweep
-        print(f"[enrich:{thread_name}] 🧹 Running preflight cleanup before enrichment start…")
-        terminate_stale_enrichment_threads(user_id=user_id, max_age_sec=600)
-        clear_stale_locks(max_age_minutes=10)
-        recovery_sweep(user_id, dataset_label, log_dao)
-        print(f"[enrich:{thread_name}] ✅ Preflight cleanup complete.")
-    except Exception as e:
-        print(f"[enrich:{thread_name}] ⚠️ Preflight cleanup failed: {e}")
-
-    # --- Conditional lock acquisition ------------------------------
+    # --- User lock acquisition ---
     user_lock = get_user_lock(user_id)
     if not assume_locked:
         if not user_lock.acquire(blocking=False):
-            print(f"[enrich:{thread_name}] 🚫 Could not acquire lock for {user_id} — another run active.")
+            print(f"[enrich:{thread_name}] 🚫 Lock busy — skipping enrichment.")
             return "locked"
         mark_lock_acquired(user_id)
-        print(f"[enrich:{thread_name}] 🔒 Acquired user lock internally for {user_id}")
+        print(f"[enrich:{thread_name}] 🔒 Acquired lock internally.")
     else:
-        print(f"[enrich:{thread_name}] 🔁 Running under pre-acquired user lock (auto_check owns it)")
+        print(f"[enrich:{thread_name}] 🔁 Using pre-acquired lock (auto_check owns it).")
 
     try:
+        # Initialize DAOs in this thread
         ensure_daos_initialized_for_thread()
 
-        # --- log_dao validation ---
         if log_dao is None or not hasattr(log_dao, "log"):
-            print(f"[enrich:{thread_name}] ⚠️ log_dao missing — reloading via dao_selector.get_log_dao()")
             log_dao = get_log_dao()
-        if not hasattr(log_dao, "log"):
-            raise TypeError("log_dao missing .log()")
-
         status_dao = DAOS.get("status")
         metadata_dao = DAOS.get("r2")
 
-        def _check_cancel(point=""):
-            if cancel_event and cancel_event.is_set():
-                msg = f"Enrichment cancelled{' during ' + point if point else ''}."
-                log_dao.log(user_id, dataset_label, "enrichment", msg, level="warning")
-                print(f"[enrich:{thread_name}] 🛑 {msg}")
-                raise CancelledError(msg)
-
-        _check_cancel("initialization")
-        update_heartbeat(user_id, dataset_label)
-
-        # --- Sanity checks (Spotify + Discogs) ----------------------
-        log_dao.log(user_id, dataset_label, "sanity", "Starting Spotify sanity check")
-        ok, msg = spotify_sanity_check(token)
-        _check_cancel("spotify_sanity_check")
-        if not ok:
-            status_dao.finish_standard_error(user_id, dataset_label, detail=f"Spotify check failed: {msg}")
-            return
-
-        log_dao.log(user_id, dataset_label, "sanity", "Starting Discogs sanity check")
-        ok, msg = discogs_sanity_check(DISCOGS_KEY, DISCOGS_SECRET)
-        _check_cancel("discogs_sanity_check")
-        if not ok:
-            status_dao.finish_standard_error(user_id, dataset_label, detail=f"Discogs check failed: {msg}")
-            return
-
-        _check_cancel("MetadataEnricher init")
-
-        # --- Dataset reload if needed --------------------------------
+        # --- Reload dataset if missing ---
         if cleaned_df is None or cleaned_df.empty:
-            print(f"[enrich:{thread_name}] ⚠️ cleaned_df empty — reloading from R2 before enrichment")
-            from dao_selector import get_daos
-            daos = get_daos()
-            user_dao = daos.get("user_data")
-            latest = dict(user_dao.list_datasets(user_id)).get(dataset_label)
-            if latest:
-                cleaned_df = user_dao.load_user_data(latest)
-                print(f"[enrich:{thread_name}] ✅ Reloaded dataset from R2 ({len(cleaned_df)} rows)")
-            if cleaned_df is None or cleaned_df.empty:
-                raise RuntimeError(f"cleaned_df still empty — cannot start enrichment for {dataset_label}")
+            user_dao = DAOS.get("user_data")
+            mapping = dict(user_dao.list_datasets(user_id))
+            tbl = mapping.get(dataset_label)
+            if not tbl:
+                raise RuntimeError(f"❌ No dataset found in user_data DAO for {dataset_label}")
+            cleaned_df = user_dao.load_user_data(tbl)
+            print(f"[enrich:{thread_name}] ✅ Reloaded dataset ({len(cleaned_df)} rows)")
 
-        # --- Construct enricher -------------------------------------
+        # --- Build enricher (no imports from enrichment_service at top level) ---
         enricher = MetadataEnricher(
             user_id=user_id,
             label=dataset_label,
             df=cleaned_df,
             spotify_token=token,
-            discogs_key=DISCOGS_KEY,
-            discogs_secret=DISCOGS_SECRET,
+            discogs_key=None,          # keys handled internally
+            discogs_secret=None,
             status_dao=status_dao,
             storage_dao=metadata_dao,
             log_dao=log_dao,
         )
 
-        # --- Ensure Discogs worker pool ------------------------------
-        try:
-            if hasattr(enricher, "ensure_worker_pool"):
-                enricher.ensure_worker_pool()
-            if hasattr(enricher, "pool"):
-                st.session_state["_discogs_pool"] = enricher.pool
-        except Exception as e:
-            print(f"[enrich:{thread_name}] ⚠️ pool init failed: {e}")
-
-        # --- Heartbeat loop -----------------------------------------
+        # --- Heartbeat thread ---
         def _heartbeat_loop():
             while not (cancel_event and cancel_event.is_set()):
                 update_heartbeat(user_id, dataset_label)
                 time.sleep(60)
         threading.Thread(target=_heartbeat_loop, daemon=True).start()
 
-        # --- Enrichment execution -----------------------------------
-        print(f"[enrich:{thread_name}] mode={mode}")
+        # --- Helper: build dedicated pool + queue ---
+        def make_discogs_pool(num_workers=5) -> DiscogsWorkerPool:
+            """Create an isolated pool with a private queue and poison-pill exit."""
+            q = queue.Queue()
+            pool = DiscogsWorkerPool(num_workers=num_workers)
+            pool.result_queue = queue.Queue()  # results local to this pool
+            pool.job_queue = q                  # attach private queue
+            return pool
 
-        if mode == "breadth_only":
-            print(f"[enrich:{thread_name}] ▶ breadth-only mode selected")
-            log_dao.log(user_id, dataset_label, "enrichment", "Starting breadth-only pipeline")
-            status_dao.set_status(user_id, dataset_label, phase="breadth_running", detail="Executing targeted breadth-only")
-            _check_cancel("before breadth_only")
+        # --- Helper: poison-pill shutdown ---
+        def shutdown_pool(pool: DiscogsWorkerPool, reason: str):
+            try:
+                if pool is None:
+                    print(f"[enrich:{thread_name}] 💤 No pool to shut down ({reason}).")
+                    return
+                # push poison pills to wake workers
+                for _ in getattr(pool, "workers", []):
+                    try:
+                        pool.job_queue.put(None)
+                    except Exception:
+                        pass
+                # wait briefly for workers to die
+                start = time.time()
+                for t in getattr(pool, "workers", []):
+                    t.join(timeout=3)
+                elapsed = round(time.time() - start, 2)
+                alive = [t.name for t in getattr(pool, "workers", []) if t.is_alive()]
+                if alive:
+                    print(f"[enrich:{thread_name}] ⚠️ Some workers still alive after poison pills: {alive}")
+                else:
+                    print(f"[enrich:{thread_name}] ✅ Discogs pool shut down cleanly ({reason}) in {elapsed}s.")
+            except Exception as e:
+                print(f"[enrich:{thread_name}] ⚠️ Shutdown error ({reason}): {e}")
+
+        # ------------------------------------------------------------------
+        # 🧭 PHASE 1 — FULL ENRICHMENT (run_all)
+        # ------------------------------------------------------------------
+        if mode == "full":
+            status_dao.set_status(user_id, dataset_label, phase="running", detail="Full enrichment pipeline running")
+
+            # create dedicated pool for full run
+            enricher.discogs_pool = make_discogs_pool(num_workers=5)
 
             try:
-                if hasattr(enricher, "run_breadth_only"):
-                    enricher.run_breadth_only(cancel_event=cancel_event)
-                else:
-                    enricher.run_phase_breadth_first_years_remaining(*enricher.all_listens())
-                    if hasattr(enricher, "flush_all"):
-                        enricher.flush_all()
-
-                # ✅ Breadth-first completed successfully
-                print(f"[enrich:{thread_name}] ✅ Breadth-only enrichment completed successfully.")
-                log_dao.log(user_id, dataset_label, "enrichment", "Breadth-only enrichment completed successfully.", level="info")
-
-                # 🟢 Explicitly mark as breadth_done (not full_done)
-                try:
-                    status_dao.finish_breadth_done(
-                        user_id,
-                        dataset_label,
-                        detail="✅ Breadth-first enrichment complete — Taste Index pending."
-                    )
-                except Exception as e_status:
-                    print(f"[enrich:{thread_name}] ⚠️ Could not set status to 'breadth_done': {e_status}")
-                    # fallback for older DAOs
-                    try:
-                        status_dao.finish_full_status(
-                            user_id,
-                            dataset_label,
-                            detail="✅ Breadth-first enrichment complete (fallback status).",
-                        )
-                    except Exception as e2:
-                        print(f"[enrich:{thread_name}] ⚠️ Fallback finish_full_status failed: {e2}")
-
-                # 🧭 Optional heartbeat mark (for safety)
-                update_heartbeat(user_id, dataset_label)
-
+                enricher.run_all(cancel_event=cancel_event)
+                print(f"[enrich:{thread_name}] ✅ Standard enrichment completed successfully.")
             except Exception as e:
-                import traceback
-                print(f"[enrich:{thread_name}] ❌ Breadth-only error: {e}\n{traceback.format_exc()}")
-                try:
-                    status_dao.finish_breadth_error(
-                        user_id,
-                        dataset_label,
-                        detail=f"❌ Breadth-first enrichment failed: {e}",
-                    )
-                except Exception as e2:
-                    print(f"[enrich:{thread_name}] ⚠️ Failed to mark breadth_error: {e2}")
+                tb = traceback.format_exc()
+                print(f"[enrich:{thread_name}] ❌ Exception during run_all: {e}\n{tb}")
+                status_dao.finish_standard_error(user_id, dataset_label, detail=str(e))
                 raise
-        else:
-            log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
-            status_dao.set_status(user_id, dataset_label, phase="running", detail="Executing enrichment run")
-            _check_cancel("before run_all")
-            enricher.run_all(cancel_event=cancel_event)
-            _check_cancel("after run_all")
-            status_dao.finish_standard_status(user_id, dataset_label, detail="✅ Standard enrichment completed successfully.")
+            finally:
+                shutdown_pool(getattr(enricher, "discogs_pool", None), reason="after run_all")
+                enricher.discogs_pool = None
 
-        print(f"[enrich:{thread_name}] ✅ Enrichment completed for {dataset_label}")
+            # ------------------------------------------------------------------
+            # 🧭 PHASE 2 — BREADTH + TASTE INDEX
+            # ------------------------------------------------------------------
+            print(f"[enrich:{thread_name}] ▶ Starting breadth-only phase for {dataset_label}…")
+            enricher.discogs_pool = make_discogs_pool(num_workers=5)
+
+            try:
+                enricher.run_breadth_only(cancel_event=cancel_event)
+                print(f"[enrich:{thread_name}] ✅ Full enrichment (Standard + Breadth + Taste Index) completed.")
+                status_dao.finish_full_status(user_id, dataset_label, detail="✅ Full enrichment completed successfully")
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(f"[enrich:{thread_name}] ❌ Exception during breadth-only: {e}\n{tb}")
+                status_dao.finish_breadth_error(user_id, dataset_label, detail=str(e))
+                raise
+            finally:
+                shutdown_pool(getattr(enricher, "discogs_pool", None), reason="after breadth_only")
+                enricher.discogs_pool = None
+
+        # ------------------------------------------------------------------
+        # 🧭 PHASE 3 — BREADTH_ONLY ENTRY
+        # ------------------------------------------------------------------
+        elif mode == "breadth_only":
+            status_dao.set_status(user_id, dataset_label, phase="breadth_running", detail="Breadth-only enrichment started")
+
+            enricher.discogs_pool = make_discogs_pool(num_workers=5)
+            try:
+                enricher.run_breadth_only(cancel_event=cancel_event)
+                print(f"[enrich:{thread_name}] ✅ Breadth-only enrichment completed.")
+                status_dao.finish_full_status(user_id, dataset_label, detail="✅ Breadth-only + Taste Index completed")
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(f"[enrich:{thread_name}] ❌ Breadth-only exception: {e}\n{tb}")
+                status_dao.finish_breadth_error(user_id, dataset_label, detail=str(e))
+                raise
+            finally:
+                shutdown_pool(getattr(enricher, "discogs_pool", None), reason="breadth_only")
+                enricher.discogs_pool = None
+
+        else:
+            raise ValueError(f"Unsupported mode: {mode}")
 
     except CancelledError:
-        print(f"[enrich:{thread_name}] 🛑 Cancelled by user or dataset switch.")
-        try:
-            status_dao.finish_standard_error(user_id, dataset_label, detail="🛑 Cancelled by user or dataset switch.")
-        except Exception:
-            pass
-        log_dao.log(user_id, dataset_label, "enrichment", "Cancelled mid-run by user.", level="warning")
+        print(f"[enrich:{thread_name}] 🛑 Cancelled mid-run.")
+        status_dao.finish_standard_error(user_id, dataset_label, detail="🛑 Cancelled mid-run")
 
     except Exception as e:
         tb = traceback.format_exc()
-        print(f"[enrich:{thread_name}] ❌ Exception: {e}\n{tb}")
+        print(f"[enrich:{thread_name}] ❌ Uncaught exception: {e}\n{tb}")
         try:
-            if "breadth_first" in tb.lower():
-                status_dao.finish_breadth_error(user_id, dataset_label, detail=f"❌ Breadth-first error: {e}")
-            else:
-                status_dao.finish_standard_error(user_id, dataset_label, detail=f"❌ Standard enrichment error: {e}")
+            status_dao.finish_standard_error(user_id, dataset_label, detail=str(e))
         except Exception:
             pass
-        log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
 
     finally:
-        # --- Only release lock if we acquired it here ---------------
         if not assume_locked:
-            try:
-                safe_user_lock_release(user_id, log_prefix=f"[enrich:{thread_name}]")
-            except Exception as e:
-                print(f"[enrich:{thread_name}] ⚠️ Failed to release lock: {e}")
+            safe_user_lock_release(user_id, log_prefix=f"[enrich:{thread_name}]")
         else:
-            print(f"[enrich:{thread_name}] 🔁 Skipping lock release (owned by auto_check)")
-
-        log_enrichment_thread_count("enrichment finished or cancelled")
-        try:
-            log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
-        except Exception as e:
-            print(f"[enrich:{thread_name}] ⚠️ log_dao thread log failed: {e}")
-
+            print(f"[enrich:{thread_name}] 🔁 Lock held by auto_check; skipping release.")
         print(f"[enrich:{thread_name}] 💤 Thread finished for {dataset_label}")
 
 def start_breadth_first_only(
@@ -6492,62 +6287,97 @@ elif page == "Popularity":
 
         # --- Normalize to long format if necessary ---
         if "type" not in user_monthly.columns:
-            # detect avg_popularity-like columns
-            value_cols = [c for c in user_monthly.columns if c not in ["month", "user_id"]]
-            user_long = user_monthly.melt(id_vars="month", value_vars=value_cols, var_name="type", value_name="avg_popularity")
-            global_long = global_monthly.melt(id_vars="month", value_vars=value_cols, var_name="type", value_name="avg_popularity") if not global_monthly.empty else pd.DataFrame(columns=user_long.columns)
+            # Only focus on weighted popularity columns
+            value_cols = [c for c in user_monthly.columns if "weighted_" in c]
+            if not value_cols:
+                st.warning("⚠️ Weighted popularity metrics not found in this dataset.")
+                return
+
+            user_long = user_monthly.melt(
+                id_vars="month", value_vars=value_cols, var_name="type", value_name="avg_popularity"
+            )
+            global_long = (
+                global_monthly.melt(
+                    id_vars="month", value_vars=value_cols, var_name="type", value_name="avg_popularity"
+                )
+                if not global_monthly.empty
+                else pd.DataFrame(columns=user_long.columns)
+            )
         else:
-            user_long, global_long = user_monthly.copy(), global_monthly.copy()
+            user_long = user_monthly[user_monthly["type"].str.contains("weighted_")].copy()
+            global_long = (
+                global_monthly[global_monthly["type"].str.contains("weighted_")].copy()
+                if not global_monthly.empty
+                else pd.DataFrame(columns=user_long.columns)
+            )
+
+        # Keep only the two target types
+        valid_types = ["weighted_artist", "weighted_track"]
+        user_long = user_long[user_long["type"].isin(valid_types)]
+        global_long = global_long[global_long["type"].isin(valid_types)]
 
         # --- Sort and smooth ---
         um = user_long.sort_values("month")
         gm = global_long.sort_values("month") if not global_long.empty else pd.DataFrame(columns=um.columns)
 
-        smoothed_um, smoothed_gm = [], []
-
-        for df_src, smoothed_list in [(um, smoothed_um), (gm, smoothed_gm)]:
-            if df_src.empty:
-                continue
+        def smooth_df(df_src):
+            smoothed = []
             for t in df_src["type"].unique():
-                subset = df_src[df_src["type"] == t].copy()
-                subset["avg_popularity_smooth"] = subset["avg_popularity"].rolling(window=smoothing_window, min_periods=1, center=True).mean()
-                smoothed_list.append(subset)
+                sub = df_src[df_src["type"] == t].copy()
+                sub["avg_popularity_smooth"] = (
+                    sub["avg_popularity"]
+                    .rolling(window=smoothing_window, min_periods=1, center=True)
+                    .mean()
+                )
+                smoothed.append(sub)
+            return pd.concat(smoothed, ignore_index=True) if smoothed else pd.DataFrame()
 
-        um_smooth = pd.concat(smoothed_um, ignore_index=True) if smoothed_um else pd.DataFrame()
-        gm_smooth = pd.concat(smoothed_gm, ignore_index=True) if smoothed_gm else pd.DataFrame()
+        um_smooth = smooth_df(um)
+        gm_smooth = smooth_df(gm) if not gm.empty else pd.DataFrame()
 
-        # --- Plot as before ---
+        # --- Plot ---
         fig = go.Figure()
 
-        # --- User smoothed traces ---
+        # Solid lines for user
+        color_map = {
+            "weighted_artist": "#3b82f6",  # blue
+            "weighted_track": "#22c55e",   # green
+        }
+
         for t in um_smooth["type"].unique():
             sub = um_smooth[um_smooth["type"] == t]
-            fig.add_trace(go.Scatter(
-                x=sub["month"],
-                y=sub["avg_popularity_smooth"],
-                mode="lines",
-                name=f"{user_name} – {t.replace('_', ' ').title()}",
-                line=dict(width=2),
-            ))
-
-        # --- Global smoothed traces ---
-        if not gm_smooth.empty:
-            for t in gm_smooth["type"].unique():
-                sub = gm_smooth[gm_smooth["type"] == t]
-                fig.add_trace(go.Scatter(
+            label = "Artist" if "artist" in t else "Track"
+            fig.add_trace(
+                go.Scatter(
                     x=sub["month"],
                     y=sub["avg_popularity_smooth"],
                     mode="lines",
-                    name=f"Global Avg – {t.replace('_', ' ').title()}",
-                    line=dict(dash="dot", width=2),
-                ))
+                    name=f"{user_name} – {label}",
+                    line=dict(width=3, color=color_map.get(t, None)),
+                )
+            )
+
+        # Dotted lines for global
+        if not gm_smooth.empty:
+            for t in gm_smooth["type"].unique():
+                sub = gm_smooth[gm_smooth["type"] == t]
+                label = "Artist" if "artist" in t else "Track"
+                fig.add_trace(
+                    go.Scatter(
+                        x=sub["month"],
+                        y=sub["avg_popularity_smooth"],
+                        mode="lines",
+                        name=f"Global Avg – {label}",
+                        line=dict(width=2, dash="dot", color=color_map.get(t, None)),
+                    )
+                )
 
         # --- Layout ---
         fig.update_yaxes(range=[0, 100])
         fig.update_layout(
-            title=f"{user_name} vs Global Average — Monthly Popularity (Smoothed)",
+            title=f"{user_name} vs Global Average — Weighted Popularity (Smoothed)",
             xaxis_title="Month",
-            yaxis_title="Average Popularity (0–100)",
+            yaxis_title="Weighted Popularity (0–100)",
             hovermode="x unified",
             legend=dict(
                 title="Metric",
@@ -6559,14 +6389,13 @@ elif page == "Popularity":
             margin=dict(t=60, b=40, l=60, r=40),
         )
 
-        # --- Updated Streamlit call (no deprecated kwargs) ---
         st.plotly_chart(
             fig,
             width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
-                "scrollZoom": False
+                "scrollZoom": False,
             },
         )
 
@@ -6634,37 +6463,66 @@ elif page == "Popularity":
 
         return monthly
 
-    def load_chart_points_for_selected_dataset(user_id: str, table_name: str, base_dir: str = "enrichment/chart_scorer") -> pd.DataFrame | None:
+    def load_chart_points_for_selected_dataset(
+        user_id: str,
+        table_name: str,
+        base_dir: str = "enrichment/chart_scorer",
+        storage_dao=None
+    ) -> pd.DataFrame | None:
         """
-        Load the *matching* chart_scorer parquet for the currently-selected dataset,
-        e.g., {user}_{label}_{timestamp}_chart-scores.parquet.
-        If not found, fall back to the latest file for this user.
+        Load the chart_scorer parquet for the current dataset.
+        Expected filename (no timestamp): {user_id}_{label}_chart-scores.parquet
+
+        Will:
+        - Try to load directly from R2 (via storage_dao) if available
+        - Fallback to local 'datasets/enrichment/chart_scorer/' if running locally
         """
-        base = Path(base_dir)
-        if not base.exists():
+        import pandas as pd
+        from pathlib import Path
+        import re
+
+        if not user_id or not table_name:
+            print("[load_chart_points_for_selected_dataset] ❌ Missing user_id or table_name")
             return None
 
-        label, ts_str = parse_label_ts_from_table_name(table_name) if table_name else (None, None)
+        # --- Extract clean label ---
+        # e.g. table_name = "58d0bd65d3f40b92_full_local-1Dec_1_20251201-074049_history"
+        stem = Path(table_name).stem
+        stem = stem.replace("_history", "")
 
-        target = None
-        if label and ts_str:
-            candidate = base / f"{user_id}_{label}_{ts_str}_chart-scores.parquet"
-            if candidate.exists():
-                target = candidate
+        # Remove user_id prefix and timestamp suffix if present
+        label = re.sub(rf"^{user_id}_", "", stem)     # strip user_id prefix
+        label = re.sub(r"_\d{8}-\d{6}$", "", label)   # strip _YYYYMMDD-HHMMSS
 
-        if target is None:
-            # Fallback: latest file matching the user prefix
-            candidates = sorted(base.glob(f"{user_id}_*_chart-scores.parquet"), key=lambda p: p.stat().st_mtime)
-            if candidates:
-                target = candidates[-1]
+        parquet_filename = f"{user_id}_{label}_chart-scores.parquet"
+        parquet_path = f"{base_dir.rstrip('/')}/{parquet_filename}"
 
-        if target is None or not target.exists():
-            return None
+        print(f"[load_chart_points_for_selected_dataset] 🔍 Looking for: {parquet_path}")
 
-        try:
-            return pd.read_parquet(target)
-        except Exception:
-            return None
+        # --- Prefer Cloudflare R2 (storage_dao) if provided ---
+        if storage_dao is not None and hasattr(storage_dao, "safe_download_parquet"):
+            try:
+                df = storage_dao.safe_download_parquet(parquet_path)
+                if df is not None and not df.empty:
+                    print(f"[load_chart_points_for_selected_dataset] ✅ Loaded from R2 ({len(df):,} rows)")
+                    return df
+                else:
+                    print("[load_chart_points_for_selected_dataset] ⚠️ Parquet found but empty")
+            except Exception as e:
+                print(f"[load_chart_points_for_selected_dataset] ⚠️ Could not load from R2: {e}")
+
+        # --- Fallback: local file system ---
+        local_path = Path(parquet_path)
+        if local_path.exists():
+            try:
+                df = pd.read_parquet(local_path)
+                print(f"[load_chart_points_for_selected_dataset] ✅ Loaded local parquet ({len(df):,} rows)")
+                return df
+            except Exception as e:
+                print(f"[load_chart_points_for_selected_dataset] ⚠️ Could not read local parquet: {e}")
+
+        print(f"[load_chart_points_for_selected_dataset] ❌ No chart-scorer data found for {user_id}:{label}")
+        return None
 
     # -------------------- Data Prep -------------------- #
     # ✅ Ensure dataset loaded
@@ -6782,7 +6640,11 @@ elif page == "Popularity":
     # -------------------- Chart scorer (per-user parquet) -------------------- #
     # Resolve the currently selected dataset's table name
     table_name = st.session_state.get("last_table_name")
-    points_df = load_chart_points_for_selected_dataset(user_id, table_name)
+    points_df = load_chart_points_for_selected_dataset(
+        user_id=user_id,
+        table_name=st.session_state.get("last_table_name"),
+        storage_dao=storage_dao,
+    )
 
     # Build *filtered* points view (All vs Year) using the event = first_listen_week_start Friday
     if points_df is not None and not points_df.empty:
@@ -6859,25 +6721,49 @@ elif page == "Popularity":
         c1, c2, c3 = st.columns([3, 1, 1])
         with c1:
             year_options = ["All"] + [str(y) for y in year_list]
-            new_year = st.segmented_control("Year", year_options, selection_mode="single", default=st.session_state.farm_filter_year)
+            new_year = st.segmented_control(
+                "Year",
+                year_options,
+                selection_mode="single",
+                default=st.session_state.farm_filter_year,
+            )
             if new_year != st.session_state.farm_filter_year:
                 st.session_state.farm_filter_year = new_year
                 st.rerun()
 
         # ---------- Popularity comparison (smoothed) ----------
         st.subheader("How _populist_ is your music taste (popularity over time)?")
-        # Smoothing window larger for “All”, smaller for a single year
         smoothing_window = 10 if st.session_state.farm_filter_year == "All" else 4
 
-        # If a specific year is chosen, trim monthly tables
+        # Filter user/global data to selected year
         if st.session_state.farm_filter_year != "All":
             y = int(st.session_state.farm_filter_year)
-            um_f = user_monthly[pd.to_datetime(user_monthly["month"]).dt.year == y] if not user_monthly.empty else user_monthly
-            gm_f = global_monthly[pd.to_datetime(global_monthly["month"]).dt.year == y] if not global_monthly.empty else global_monthly
+            um_f = (
+                user_monthly[pd.to_datetime(user_monthly["month"]).dt.year == y]
+                if not user_monthly.empty
+                else user_monthly
+            )
+            gm_f = (
+                global_monthly[pd.to_datetime(global_monthly["month"]).dt.year == y]
+                if not global_monthly.empty
+                else global_monthly
+            )
         else:
             um_f, gm_f = user_monthly, global_monthly
 
+        # Draw the comparison chart (user vs global)
         display_popularity_comparison_monthly(user_name, um_f, gm_f, smoothing_window)
+
+        st.markdown("### 🧠 Debug: Popularity data overview")
+        st.write("**User monthly:**", user_monthly.shape)
+        st.write("**Global monthly:**", global_monthly.shape)
+
+        if not user_monthly.empty:
+            st.dataframe(user_monthly.head(10), use_container_width=True, hide_index=True)
+        if not global_monthly.empty:
+            st.dataframe(global_monthly.head(10), use_container_width=True, hide_index=True)
+        else:
+            st.warning("⚠️ Global monthly popularity data is empty — global lines won’t appear.")
 
         # ---------- Chart scorer drill-down ----------
         if points_df is None or points_df.empty:

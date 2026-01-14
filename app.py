@@ -7,7 +7,25 @@ Please contact us to give feedback and feature requests.
 
 Built by Charlie Nash, Ben Gee, Jana Hueppe, & Tom Witt (06.2025)
 '''
+# --------------------------------- UMAP ------------------------------------- #
+import os
+
+# 🧩 Force Numba to use a safe, single-threaded backend for UMAP
+if "NUMBA_THREADING_LAYER" not in os.environ:
+    os.environ["NUMBA_THREADING_LAYER"] = "workqueue"
+if "NUMBA_NUM_THREADS" not in os.environ:
+    os.environ["NUMBA_NUM_THREADS"] = "1"
+
+# 👇 Small trick: pre-import numba BEFORE umap to lock in the backend
+import numba
+try:
+    numba.set_num_threads(1)
+except Exception as e:
+    print(f"[init] Warning: could not enforce single-thread mode ({e})")
+
 # ------------------------------- IMPORTS ------------------------------------ #
+from encodings import cp037
+from stringprep import c22_specials
 import bcrypt
 import country_converter as coco
 from datetime import date, datetime, timedelta, timezone
@@ -15,32 +33,91 @@ import dayplot as dp
 import extra_streamlit_components as stx
 import json
 import jwt
+from matplotlib.font_manager import X11FontDirectories
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pandas as pd
+from pandas.api.types import DatetimeTZDtype
 from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.colors import make_colorscale, sample_colorscale
 import re
 import secrets
 import streamlit as st
 from streamlit_carousel import carousel
+import streamlit.components.v1 as components
+from streamlit_extras.stylable_container import stylable_container
 from supabase import create_client
 import tempfile
+import textwrap
 import threading
 import time
 import traceback
-from typing import Optional
+import sys, logging
+from typing import Optional, Literal, Iterable, Dict, List, Tuple
+import unicodedata
+import uuid
 import zipfile
 
-from dao_selector import get_daos, get_server_mode
-from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError
+
+from dao import CloudflareDAOs
+from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
+import enrichment_service as es
+from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release, lock_is_locked
 from chart_scorer import parse_label_ts_from_table_name
 
-# -------------------------- CONFIG / CLIENTS -------------------------------- #
-st.set_page_config(page_title="Regifted", page_icon="./media/assets/icon_spotgreen.svg", layout="wide", initial_sidebar_state="expanded")
+# os.environ["NUMBA_THREADING_LAYER"] = "workqueue"
+# os.environ["NUMBA_NUM_THREADS"] = "1"
 
+# -------------------------------- DEBUGGER ---------------------------------- #
+_DEBUG_SEQ = 0
+def _trace(tag: str, **kv):
+    """Lightweight, ordered trace with key facts."""
+    global _DEBUG_SEQ
+    _DEBUG_SEQ += 1
+    bits = [f"{k}={v}" for k, v in kv.items()]
+    print(f"[TRACE #{_DEBUG_SEQ:03d}] {tag} :: " + " | ".join(bits))
+
+def _log_df(df, name: str, max_cols: int = 12):
+    try:
+        cols = list(df.columns)[:max_cols] if df is not None else []
+        print(f"[DF] {name}: none={df is None} empty={getattr(df, 'empty', True)} "
+              f"shape={getattr(df, 'shape', None)} cols={cols}")
+    except Exception:
+        print(f"[DF] {name}: <could not inspect> {traceback.format_exc()}")
+
+# ------------------------------- MEGA-LOGGER -------------------------------- #
+class StreamToLogger:
+    def __init__(self, logger, log_level=logging.INFO):
+        self.logger = logger
+        self.log_level = log_level
+
+    def write(self, message):
+        if message.strip():
+            self.logger.log(self.log_level, message.strip())
+
+    def flush(self):
+        pass
+
+if "logger_initialized" not in st.session_state:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler("debug_enrichment.log"),
+            logging.StreamHandler(sys.__stdout__)
+        ]
+    )
+
+    logger = logging.getLogger()
+    sys.stdout = StreamToLogger(logger, logging.INFO)
+    sys.stderr = StreamToLogger(logger, logging.ERROR)
+
+    st.session_state["logger_initialized"] = True
+    print("[logging] ✅ StreamToLogger attached")
+
+# -------------------------- CONFIG / CLIENTS -------------------------------- #
 SPOTIFY_ID = st.secrets["spotify"]["client_id"]
 SPOTIFY_SECRET = st.secrets["spotify"]["client_secret"]
 token = SpotifyToken(SPOTIFY_ID, SPOTIFY_SECRET)
@@ -71,6 +148,12 @@ main_dao       = DAOS.get("main")  # Optional (used for Supabase, may be None)
 # ✅ Alias for convenience — unified "storage" handle
 #    so you can reference storage_dao instead of guessing between metadata/user_data
 storage_dao = metadata_dao or user_data_dao
+
+# --- Persist DAOs in session state so all pages can access them ---
+st.session_state.setdefault("status_dao", status_dao)
+st.session_state.setdefault("metadata_dao", metadata_dao)
+st.session_state.setdefault("user_data_dao", user_data_dao)
+st.session_state.setdefault("storage_dao", storage_dao)
 
 if storage_dao is None:
     st.warning("⚠️ No storage DAO configured. Metadata tables not loaded.")
@@ -103,16 +186,13 @@ else:
     INFO_HEADLINE = storage_dao.safe_download_csv("reference/info_headline.csv")
     INFO_SHOW = storage_dao.safe_download_csv("enrichment/metadata/info_show.csv")
     INFO_AUDIOBOOK = storage_dao.safe_download_csv("enrichment/metadata/info_audiobook.csv")
-    GENRE_MAPPING = storage_dao.safe_download_csv("reference/supergenre_map.csv")
+    INFO_SUPERGENRE = storage_dao.safe_download_csv("reference/info_supergenre_map.csv")
 
-LOGO_BLACK = "media/assets/logo_black.svg"
-LOGO_LIGHTGREY= "media/assets/logo_lightgrey.svg"
-LOGO_OFFWHITE = "media/assets/logo_offwhite.svg"
-LOGO_DARKGREEN = "media/assets/logo_darkgreen.svg"
-LOGO_MIDGREEN = "media/assets/logo_midgreen.svg"
-LOGO_LIGHTGREEN = "media/assets/logo_lightgreen.svg"
+ICON_BROWSER = "media/assets/icon_spotgreen.svg"
+ICON_PAGE = "media/assets/icon_page.svg"
 LOGO_SPOTGREEN = "media/assets/logo_spotgreen.svg"
 IMAGE_PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
+CAROUSEL_PLACEHOLDER = "media/assets/Image-Coming-Soon_vector.png"
 
 JWT_COOKIE_NAME = "regifted_auth"
 JWT_ALG = "HS256"
@@ -124,116 +204,204 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 TASKS = {}  # dataset_label -> {"thread": Thread, "cancel": threading.Event}
 
-def log_enrichment_thread_count(context: str = ""):
-    threads = threading.enumerate()
-    enrich_threads = [
-        t for t in threads
-        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
-    ]
-    count = len(enrich_threads)
-    print(f"[thread_monitor] {count} enrichment thread(s) active "
-          f"{'after ' + context if context else ''}.")
-    return count
+# ---------- Plotly colorscales ----------
+neon_palette =["#ff8400",
+               "#c9633b",
+               "#d61e33",
+               "#C6468F",
+               "#e70cd5",
+               "#9945C5",
+               "#3f0aee",
+               "#474DC8",
+               "#0459f5",
+               "#4991C7",
+               "#09def1",
+               "#4FC19B",
+               "#0CEB4B",
+               "#49c15d",
+               ][::-1]
+neon_colorscale = make_colorscale(neon_palette)
 
-# ---------- Helper: Auto-check and re-enrich if incomplete ----------
-def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, df: pd.DataFrame):
+spotify_palette = ["#062719",
+                   "#013C24",
+                   "#106441",
+                   "#2aa355",
+                   "#2bba6d",
+                   "#1ed760",
+                   "#62d089",
+                   "#80f2af",
+                   "#e1ece3"]
+spotify_colorscale = make_colorscale(spotify_palette)
+
+# -------------------------- GENERIC HELPERS --------------------------------- #
+def scorecard(
+    title: str,
+    score: str,
+    delta: float | str = None,
+    title_size: int = 14,
+    score_size: int = 32,
+    delta_size: int = 14,
+    title_bold=False,
+    title_italic=False,
+    title_underline=False,
+    score_bold=False,
+    score_italic=False,
+    score_underline=False,
+    delta_bold=False,
+    delta_italic=False,
+    delta_underline=False,
+    background: bool = True,
+    width: int = 200,
+    height: int = 100,
+    dynamic: str = "text",
+    stretch: bool = True,
+):
+    import textwrap
+
+    delta_str = ""
+    delta_color = "#b8ccc0"
+    if delta is not None:
+        if isinstance(delta, str):
+            match = re.search(r"([-+]?\d*\.?\d+)", delta)
+            if match:
+                try:
+                    delta_val = float(match.group(1))
+                    if delta_val > 0:
+                        delta_color = "#1ed760"
+                        delta_str = f"▲ {delta.strip()}"
+                    elif delta_val < 0:
+                        delta_color = "#ed203f"
+                        delta_str = f"▼ {delta.strip()}"
+                    else:
+                        delta_str = delta.strip()
+                except ValueError:
+                    delta_str = delta.strip()
+            else:
+                delta_str = delta.strip()
+        elif isinstance(delta, (int, float)):
+            if delta > 0:
+                delta_color = "#1ed760"
+                delta_str = f"▲ {delta:+.1f}%"
+            elif delta < 0:
+                delta_color = "#b5273d"
+                delta_str = f"▼ {delta:+.1f}%"
+            else:
+                delta_str = f"{delta:+.1f}%"
+
+    bg_color = "#0d5637" if background else "transparent"
+
+    # --- Wrap text if no delta ---
+    wrapped_score = score
+    if delta is None and len(str(score)) > 20:
+        wrapped_score = "<br>".join(textwrap.wrap(str(score), width=400))
+
+    text_length = len(str(score))
+    scale_factor = 1.0
+    if dynamic == "text":
+        # Slightly reduce font faster for long wrapped text
+        scale_factor = max(0.5, min(1.0, 10 / (text_length / 3 + 4)))
+        if delta is None and "<br>" in wrapped_score:
+            scale_factor *= 0.85
+    score_px = int(score_size * scale_factor)
+
+    width_style = "100%" if stretch else f"{width}px"
+
+    # --- font-style logic ---
+    def make_style(bold, italic, underline):
+        style = f"font-weight:{'700' if bold else '400'};"
+        if italic:
+            style += "font-style:italic;"
+        if underline:
+            style += "text-decoration:underline;"
+        style += 'font-family:sans-serif;'
+        return style
+
+    title_style = make_style(title_bold, title_italic, title_underline)
+    score_style = make_style(score_bold, score_italic, score_underline)
+    delta_style = make_style(delta_bold, delta_italic, delta_underline)
+
+    # --- adjust score vertical position ---
+    score_top = "55%" if delta else "60%"
+
+    html = f"""
+    <div style="
+        position: relative;
+        background-color: {bg_color};
+        border-radius: 3px;
+        width: {width_style};
+        height: {height}px;
+        margin: 0px;
+        box-shadow: {'0 0 8px rgba(0,0,0,0.3)' if background else 'none'};
+        overflow: hidden;
+    ">
+        <div style="
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            font-size: {title_size}px;
+            color: #d9e3dd;
+            {title_style}
+        ">{title}</div>
+
+        <div style="
+            position: absolute;
+            top: {score_top};
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: {score_px}px;
+            color: #e1ece3;
+            {score_style}
+            line-height: 1.1;
+            width: 90%;
+            word-wrap: break-word;
+            white-space: normal;
+        ">{wrapped_score}</div>
+
+        <div style="
+            position: absolute;
+            bottom: 8px;
+            width: 100%;
+            text-align: center;
+            font-size: {delta_size}px;
+            color: {delta_color};
+            {delta_style}
+        ">{delta_str}</div>
+    </div>
     """
-    Checks dataset's enrichment status in D1 (fallback R2).
-    If incomplete, automatically triggers a full enrichment rerun.
-    Adds terminal logs + Streamlit feedback.
+
+    components.html(html, height=height +  5)
+
+def normalize_str(s):
+    """Normalize string for consistent comparison (case-insensitive, strip accents)."""
+    if not isinstance(s, str):
+        return ""
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("utf-8").strip().lower()
+
+def _normalize_name(s: str) -> str:
     """
-    try:
-        from dao_selector import DAOS, load_global_daos
+    Normalize strings for matching:
+    - lower-case
+    - strip accents (Miloš -> Milos)
+    - drop bracketed suffixes like (Remastered 2009) or [Deluxe]
+    - collapse non-alphanumerics to single spaces
+    """
+    if s is None:
+        return ""
+    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode("ascii")
+    s = s.lower()
+    s = re.sub(r"\([^)]*\)", "", s)   # remove (...) parts
+    s = re.sub(r"\[[^\]]*\]", "", s)  # remove [...] parts
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    return s.strip()
 
-        # Ensure global DAOs are available
-        if not DAOS or "main" not in DAOS:
-            print("[auto_reenrich] ⚙️ Global DAOs not loaded — attempting reload.")
-            load_global_daos()
-
-        if not DAOS or not ("main" in DAOS or "r2" in DAOS):
-            print("[auto_reenrich] ⚠️ Failed to initialize DAOs after reload.")
-            st.caption("⚠️ Could not access database connections — skipping enrichment check.")
-            return
-
-        print(f"\n[auto_reenrich] 🔍 Checking enrichment status for dataset '{dataset_label}' (user {user_id})")
-
-        d1 = DAOS.get("main")
-        r2 = DAOS.get("r2")
-        if not d1 and not r2:
-            print("[auto_reenrich] ⚠️ No DAOs available to check status — skipping enrichment check.")
-            return
-
-        # --- Try Cloudflare D1 first ---
-        status_row = None
-        if d1:
-            rows = d1._query(
-                "SELECT status, phase, detail FROM enrichment_status WHERE user_id=? AND dataset_label=?",
-                [user_id, dataset_label],
-            )
-            if rows:
-                status_row = rows[0]
-                print(f"[auto_reenrich] ✅ Found status in D1 → {status_row}")
-
-        # --- Fallback to R2 JSON if D1 missing ---
-        if not status_row and r2:
-            try:
-                key = f"enrichment/status/{user_id}_{dataset_label}.json"
-                import json
-                data = json.loads(r2._get_object(key))
-                status_row = {
-                    "status": data.get("status"),
-                    "phase": data.get("phase"),
-                    "detail": data.get("detail"),
-                }
-                print(f"[auto_reenrich] ✅ Found status in R2 JSON → {status_row}")
-            except FileNotFoundError:
-                print(f"[auto_reenrich] ℹ️ No R2 status JSON found for {dataset_label}")
-            except Exception as e:
-                print(f"[auto_reenrich] ⚠️ Failed to read R2 status JSON: {e}")
-
-        # --- Interpret results ---
-        if not status_row:
-            print(f"[auto_reenrich] ❌ No enrichment record found — triggering full enrichment rerun for {dataset_label}")
-            st.caption(f"🚀 Enrichment not found — starting full run for **{dataset_label}**")
-            st.session_state["_enrichment_autostart_pending"] = True
-            return
-
-        status = (status_row.get("status") or "").lower().strip()
-        phase = (status_row.get("phase") or "").lower().strip()
-        print(f"[auto_reenrich] Found status='{status}', phase='{phase}' for dataset '{dataset_label}'")
-
-        # --- Complete? Do nothing ---
-        if status in {"done", "complete"}:
-            print(f"[auto_reenrich] ✅ Enrichment already complete for {dataset_label} — nothing to do.")
-            st.caption(f"✅ Enrichment complete for **{dataset_label}**")
-            return
-
-        # --- Incomplete? Trigger new run ---
-        print(f"[auto_reenrich] 🔁 Incomplete enrichment detected for {dataset_label} — restarting background enrichment.")
-        st.caption(f"⏳ Resuming incomplete enrichment for **{dataset_label}**…")
-
-        # Prevent immediate recursive reruns during initialization
-        if not st.session_state.get("_auto_reenrich_deferred_triggered"):
-            st.session_state["_auto_reenrich_deferred_triggered"] = True
-            st.session_state["_enrichment_autostart_pending"] = True
-
-            # Use Streamlit's on-first-load deferral trick: schedule rerun *after* UI stabilizes
-            import threading, time
-
-            def _delayed_rerun():
-                time.sleep(0.3)  # small delay allows selectbox state to settle
-                import streamlit as st
-                print("[auto_reenrich] 🔁 Deferred rerun fired to kick off enrichment")
-                st.rerun()
-
-            threading.Thread(target=_delayed_rerun, daemon=True).start()
-            log_enrichment_thread_count("starting new enrichment")
-        else:
-            print("[auto_reenrich] 🔁 Deferred rerun already triggered — skipping duplicate rerun.")
-
-    except Exception as e:
-        print(f"[auto_reenrich] ⚠️ Exception during enrichment check: {e}")
-        st.caption(f"⚠️ Failed to check enrichment status for **{dataset_label}**")
+def format_hhmmss(minutes):
+    total_seconds = int(minutes * 60)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 @st.cache_resource(show_spinner=False)
 def task_registry():
@@ -242,25 +410,26 @@ def task_registry():
         st.session_state["_enrichment_tasks"] = {}
     return st.session_state["_enrichment_tasks"]
 
-# --- SESSION INIT ---
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-st.session_state.setdefault("_enrichment_registry", {
-    "thread": None,
-    "cancel_event": None,
-    "dataset_label": None,
-})
-
-# --- AUTH FUNCTIONS ---
+# ------------------------------ AUTH FUNCTIONS ------------------------------ #
 def hash_password(password: str) -> str:
-    """Securely hash a plaintext password using bcrypt."""
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    """
+    Securely hash a plaintext password using bcrypt.
+    Returns a UTF-8 string for safe DB storage.
+    """
+    if isinstance(password, bytes):
+        password = password.decode("utf-8")
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    return hashed.decode("utf-8")
 
 def verify_password(password: str, hashed: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
+    """
+    Verify a plaintext password against a bcrypt hash.
+    Handles both str/bytes safely and returns a boolean.
+    """
     try:
-        return bcrypt.checkpw(password.encode(), hashed.encode())
+        if isinstance(hashed, str):
+            hashed = hashed.encode("utf-8")
+        return bcrypt.checkpw(password.encode("utf-8"), hashed)
     except Exception:
         return False
 
@@ -416,13 +585,12 @@ def require_current_df():
         st.stop()
     return df.copy(), label
 
-# ---- Cookie Manager (singleton) ----
+# ----------------------------- Cookie/JWT Helpers --------------------------- #
 def get_cookie_manager():
     if "cookie_mgr" not in st.session_state:
         st.session_state.cookie_mgr = stx.CookieManager(key="regifted_cookies")
     return st.session_state.cookie_mgr
 
-# ---- JWT helpers ----
 def make_jwt(user: dict) -> str:
     now = datetime.now(timezone.utc)
     payload = {
@@ -507,72 +675,7 @@ def refresh_cookie_if_needed():
     set_auth_cookie(token)
     st.session_state["_cookie_refreshed_at"] = now
 
-cm = get_cookie_manager()
-_ = cm.get_all()  # hydrate component
-
-# If we just logged out, keep skipping cookie-restore until the browser shows it's gone
-if st.session_state.get("_skip_restore"):
-    if not cm.get(JWT_COOKIE_NAME):  # cookie really gone now
-        st.session_state["_skip_restore"] = False
-else:
-    try_restore_session_from_cookie()
-
-# Only refresh/slide expiry when we actually have a user
-if st.session_state.get("user"):
-    refresh_cookie_if_needed()
-
-# ---- ETL helpers (wrappers) ----
-def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
-    """
-    Wrapper around process_uploaded_zip that:
-      - Runs the ETL process
-      - Persists ETL success/failure status via DAO (Cloudflare or local)
-      - Updates Streamlit session state for UI continuity
-    """
-    import streamlit as st
-    from dao_selector import get_daos
-
-    daos = get_daos()
-    status_dao = daos.get("status")
-
-    try:
-        # --- Run ETL ---
-        table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
-
-        # --- On success ---
-        if cleaned_df is not None and not cleaned_df.empty:
-            if status_dao:
-                try:
-                    status_dao.set_status(
-                        user_id,
-                        dataset_label,
-                        phase="etl",
-                        detail="✅ ETL completed successfully",
-                        total=len(cleaned_df),
-                    )
-                    log_upload_event(user_id, table_name, dataset_label, uploaded_file.name, status="completed")
-                except Exception:
-                    pass  # Logging must never interrupt flow
-            st.session_state.etl_done = True
-
-        return table_name, cleaned_df
-
-    except Exception as e:
-        # --- On failure ---
-        if status_dao:
-            try:
-                status_dao.set_status(
-                    user_id,
-                    dataset_label,
-                    phase="etl",
-                    detail=f"❌ ETL failed: {e}",
-                    total=None,
-                )
-                log_upload_event(user_id, None, dataset_label, uploaded_file.name, status="failed")
-            except Exception:
-                pass
-        raise
-
+# -------------------------- ETL helpers (wrappers) -------------------------- #
 def list_datasets(self, user_id: str) -> list[tuple[str, str]]:
     from pathlib import Path  # Can also move to top-level import safely
 
@@ -621,54 +724,544 @@ def log_upload_event(user_id: str, table_name: str, dataset_label: str, filename
     except Exception as e:
         print(f"[upload_event] ⚠️ Failed to record upload event: {e}")
 
-# --- DATA PROCESSING ---
-def set_enrichment_status(
-    user_id: str,
-    dataset_label: str,
-    *,
-    status: str = "running",
-    phase: str = "init",
-    detail: str = None,
-    batches_done: int = 0,
-    total_batches: int | None = None,
-    percent: float | None = None,
-):
+# ----------------------------- DATA PROCESSING ------------------------------ #
+def ensure_daos_initialized_for_thread():
     """
-    Upsert (insert/update) enrichment status into Cloudflare D1.
-    Keeps R2 JSON status updates as-is.
+    Ensure that Cloudflare DAOs (D1 + R2) are initialized in this thread.
+    Runs safely inside background threads without re-printing schema logs.
     """
-    d1 = DAOS.get("main")
-    if d1 is None:
-        print("[warn] D1 DAO not configured; skipping enrichment status write.")
-        return
+    try:
+        import dao_selector
+        from dao_selector import DAOS
+
+        # Already loaded → no work needed
+        if DAOS and "main" in DAOS:
+            return
+
+        # Load DAOs quietly (guarded inside dao_selector)
+        dao_selector.load_global_daos()
+
+    except Exception as e:
+        print(f"[enrich:init] ⚠️ Failed to ensure DAOs initialized for thread: {e}")
+
+def preflight_enrichment_cleanup(user_id: str, dataset_label: str, log_dao=None):
+    """
+    Runs before any enrichment thread starts.
+    Ensures there are no stale threads or stuck locks preventing restart.
+    """
+    from enrichment_service import (
+        clear_stale_locks,
+        terminate_stale_enrichment_threads,
+        recovery_sweep,
+    )
+
+    print(f"[preflight] 🧹 Checking for stale threads and locks for {user_id} ({dataset_label})")
 
     try:
-        d1.upsert_enrichment_status(
+        terminate_stale_enrichment_threads(user_id=user_id, max_age_sec=600)
+    except Exception as e:
+        print(f"[preflight] ⚠️ terminate_stale_enrichment_threads failed: {e}")
+
+    try:
+        clear_stale_locks(max_age_minutes=10)
+    except Exception as e:
+        print(f"[preflight] ⚠️ clear_stale_locks failed: {e}")
+
+    try:
+        recovery_sweep(user_id, dataset_label, log_dao)
+    except Exception as e:
+        print(f"[preflight] ⚠️ recovery_sweep failed: {e}")
+
+    print(f"[preflight] ✅ Cleanup complete for {dataset_label}")
+
+def _audit_artist_genre_coverage(
+    user_id: str,
+    dataset_label: str,
+    table_name: Optional[str] = None,
+    user_df: Optional[pd.DataFrame] = None,
+):
+    """
+    Compare artists in the user's cleaned dataset vs the metadata artist genres.
+
+    Normalization is now consistent with enrichment_service and compute_normality:
+      - uses _normalize_artist_key() for artist name joins
+      - uses _normalize_genre_key() for genre string consistency
+
+    Returns:
+      - not_present, present_but_missing, unenriched_all (DataFrames)
+      - counts: {...}
+      - telemetry: {"user_rows", "user_unique_artists", "metadata_rows", "source"}
+    """
+    import pandas as pd
+    import streamlit as st
+    from dao_selector import DAOS
+    from enrichment_service import _normalize_artist_key, _normalize_genre_key
+
+    # --- Prefer in-memory dataset (UI session) ---
+    src = "session"
+    if user_df is None:
+        user_df = st.session_state.get("current_df")
+
+    if user_df is None or user_df.empty:
+        src = "dao"
+        user_dao = DAOS.get("user_data")
+        key = table_name or st.session_state.get("last_table_name")
+        if key:
+            user_df = user_dao.load_user_data(key)
+        else:
+            try:
+                mapping = dict(user_dao.list_datasets(user_id))
+                tbl = mapping.get(dataset_label)
+                if tbl:
+                    user_df = user_dao.load_user_data(tbl)
+                    src = "dao(list_datasets)"
+            except Exception:
+                pass
+
+    if user_df is None:
+        user_df = pd.DataFrame(columns=["artist_name"])
+
+    # --- Load master artist genre table ---
+    metadata_dao = DAOS.get("r2")
+    df_artist_genre = metadata_dao.safe_download_csv(
+        "enrichment/metadata/info_artist_genre.csv",
+        required_cols=["artist_name", "primary_genre", "supergenre"],
+    )
+
+    # --- Normalized join keys ---
+    u = user_df.copy()
+    g = df_artist_genre.copy()
+
+    # Resilient to column case
+    u_cols = {c.lower(): c for c in u.columns}
+    artist_col = u_cols.get("artist_name", "artist_name")
+
+    # ✅ Use full normalization for both sides
+    u["artist_key"] = u[artist_col].astype(str).map(_normalize_artist_key)
+    g["artist_key"] = g["artist_name"].astype(str).map(_normalize_artist_key)
+
+    # Normalize genres too (for consistent missing detection)
+    for col in ["primary_genre", "supergenre"]:
+        if col in g.columns:
+            g[col] = g[col].astype("string").replace(r"^\s*$", pd.NA, regex=True)
+            g[col] = g[col].map(lambda x: _normalize_genre_key(x) if pd.notna(x) else pd.NA)
+
+    # --- Unique user artists ---
+    user_artists = (
+        u[["artist_key", artist_col]]
+        .dropna(subset=["artist_key"])
+        .drop_duplicates("artist_key")
+        .rename(columns={artist_col: "artist_name"})
+    )
+
+    user_rows = len(u)
+    user_unique_artists = user_artists["artist_key"].nunique()
+    metadata_rows = len(g)
+
+    # --- Group metadata by normalized key ---
+    def first_nonnull(s: pd.Series):
+        s = s.dropna()
+        return s.iloc[0] if not s.empty else pd.NA
+
+    g_one = (
+        g.groupby("artist_key", as_index=False)
+         .agg({"primary_genre": first_nonnull, "supergenre": first_nonnull})
+    )
+
+    # --- Merge + detect unenriched ---
+    m = user_artists.merge(g_one, on="artist_key", how="left", indicator=True)
+
+    # Artists not in metadata table
+    not_present = (
+        m[m["_merge"] == "left_only"][["artist_name", "artist_key"]]
+        .drop_duplicates("artist_key")
+        .sort_values("artist_name")
+        .reset_index(drop=True)
+    )
+
+    # Artists present but missing genres
+    present_but_missing = (
+        m[(m["_merge"] == "both") & (m["supergenre"].isna() | m["supergenre"].eq("unlisted"))]
+        [["artist_name", "artist_key"]]
+        .drop_duplicates("artist_key")
+        .sort_values("artist_name")
+        .reset_index(drop=True)
+    )
+
+    # Combine
+    unenriched_all = (
+        pd.concat([not_present, present_but_missing], ignore_index=True)
+        .drop_duplicates("artist_key")
+        .reset_index(drop=True)
+    )
+
+    return {
+        "not_present": not_present,
+        "present_but_missing": present_but_missing,
+        "unenriched_all": unenriched_all,
+        "counts": {
+            "not_present": not_present["artist_key"].nunique(),
+            "present_but_missing": present_but_missing["artist_key"].nunique(),
+            "unenriched_all": unenriched_all["artist_key"].nunique(),
+        },
+        "telemetry": {
+            "source": src,
+            "user_rows": user_rows,
+            "user_unique_artists": user_unique_artists,
+            "metadata_rows": metadata_rows,
+        },
+    }
+
+def safe_auto_check_thread(user_id: str, dataset_label: str, table_name: Optional[str] = None):
+    """
+    Safely run auto_check in a background thread.
+    This version isolates from Streamlit's runtime context and avoids using st.* inside the thread.
+    """
+    import threading, time, traceback
+    from dao_selector import get_log_dao
+
+    def _runner():
+        try:
+            log_dao = get_log_dao()
+            print(f"[safe_auto_check_thread] 🧩 Launching auto_check for {dataset_label}")
+            time.sleep(1.5)  # allow D1 to propagate 'standard_done'
+            _auto_check_and_reenrich_if_needed(user_id, dataset_label, log_dao, table_name=table_name)
+            print(f"[safe_auto_check_thread] ✅ auto_check completed for {dataset_label}")
+        except Exception as e:
+            print(f"[safe_auto_check_thread] ⚠️ Failed during auto_check: {e}\n{traceback.format_exc()}")
+
+    t = threading.Thread(
+        target=_runner,
+        name=f"auto_check:{dataset_label}",
+        daemon=True,
+    )
+    t.start()
+    return t
+
+def _start_targeted_artist_backfill_with_background_enrich(
+    *,
+    user_id: str,
+    dataset_label: str,
+    missing_names: list[str],
+    log_dao,
+) -> str:
+    """
+    Spawns a background_enrich thread that receives a filtered cleaned_df
+    containing only the artists in `missing_names`. This reuses the existing
+    enrichment path and avoids direct dependency on tokens/MetadataEnricher here.
+    """
+    import time, threading
+    import pandas as pd
+    import logging
+    import streamlit as st
+    from dao_selector import DAOS
+    from enrichment_service import (
+        get_user_lock, mark_lock_acquired, terminate_stale_enrichment_threads,
+        update_heartbeat,
+    )
+
+    logger = logging.getLogger("enrichment")
+    logger.info("[targeted] preparing background_enrich for %d artists", len(missing_names))
+
+    # 1) Load the full cleaned dataframe (same source as other flows)
+    user_data_dao = DAOS.get("user_data")
+    cleaned_df = user_data_dao.safe_download_csv(
+        f"userdata/{dataset_label}.csv",
+        required_cols=["artist_name"]  # add more if your pipeline expects them
+    )
+
+    # 2) Filter to just the needed artists
+    #    We dedupe to keep this small; the enrich pipeline typically expands from artist names.
+    filtered_df = (
+        cleaned_df[cleaned_df["artist_name"].astype(str).str.strip().str.lower()
+                   .isin([n.strip().lower() for n in missing_names])]
+        .copy()
+    )
+    filtered_df = filtered_df.drop_duplicates(subset=["artist_name"])
+
+    if filtered_df.empty:
+        logger.info("[targeted] nothing to backfill after filtering; skipping")
+        return "nothing_to_do"
+
+    # 3) Acquire the per-user lock (same pattern as other starts)
+    user_lock = get_user_lock(user_id)
+    for attempt in range(10):
+        if user_lock.acquire(blocking=False):
+            mark_lock_acquired(user_id)
+            break
+        logger.info("[targeted] lock busy for user %s — waiting (%d/10)...", user_id, attempt + 1)
+        time.sleep(1)
+    else:
+        logger.error("[targeted] could not acquire lock; skipping")
+        return "locked"
+
+    # 4) Kill any stale enrichment threads before starting a fresh one
+    terminate_stale_enrichment_threads(user_id)
+
+    cancel_event = threading.Event()
+
+    # 5) Build and start the thread using your existing entrypoint
+    # from enrichment_service import background_enrich  # reuse your canonical path
+
+    def _runner():
+        try:
+            update_heartbeat(user_id, dataset_label)
+            logger.info("[targeted] background_enrich starting for %d artists", len(filtered_df))
+            background_enrich(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                cleaned_df=filtered_df,   # 👈 only the missing artists
+                log_dao=log_dao,
+                cancel_event=cancel_event,
+            )
+            logger.info("[targeted] background_enrich complete")
+        except Exception as e:
+            logger.exception("[targeted] error during targeted backfill: %s", e)
+            try:
+                log_dao.log(user_id, dataset_label, "enrichment",
+                            f"Targeted backfill error: {e}", level="error")
+            except Exception:
+                pass
+        finally:
+            try:
+                if lock_is_locked(user_lock):
+                    user_lock.release()
+            except Exception as e:
+                logger.error("[targeted] failed to release lock: %s", e)
+            try:
+                st.session_state.pop("_enrichment_registry", None)
+            except Exception:
+                pass
+
+    t = threading.Thread(
+        target=_runner,
+        name=f"targeted_backfill:{user_id}:{dataset_label}",
+        daemon=True,
+    )
+    st.session_state["_enrichment_registry"] = {
+        "thread": t,
+        "cancel_event": cancel_event,
+        "dataset_label": dataset_label,
+        "user_id": user_id,
+    }
+    # small markers some utilities may look for
+    t._cancel_event = cancel_event
+    t._start_time = time.time()
+
+    t.start()
+    logger.info("[targeted] started thread %s", t.name)
+    return "targeted_backfill_started"
+
+def _auto_check_and_reenrich_if_needed(user_id: str, dataset_label: str, log_dao, table_name: Optional[str] = None):
+    """
+    Checks D1/R2 consistency, heartbeats, and genre coverage.
+    - If both stores are full_done, audit metadata coverage and trigger breadth-only if gaps remain.
+    - Otherwise, determines whether to run full or breadth-only enrichment.
+    - All enrichment threads are handled by background_enrich().
+    """
+
+    import time, threading, pandas as pd, streamlit as st
+    from dao_selector import DAOS
+    from enrichment_service import (
+        get_user_lock,
+        get_last_heartbeat,
+        is_stale_status,
+        terminate_stale_enrichment_threads,
+        recovery_sweep,
+        mark_lock_acquired,
+    )
+
+    print(f"[auto_reenrich] 🔍 Checking enrichment consistency for {dataset_label}")
+
+    # ------------------------------------
+    # Preflight cleanup (stale locks/threads)
+    # ------------------------------------
+    def preflight_enrichment_cleanup():
+        from enrichment_service import clear_stale_locks
+        try:
+            terminate_stale_enrichment_threads(user_id=user_id, max_age_sec=600)
+            clear_stale_locks(max_age_minutes=10)
+            recovery_sweep(user_id, dataset_label, log_dao)
+            print(f"[preflight] ✅ Cleanup complete for {dataset_label}")
+        except Exception as e:
+            print(f"[preflight] ⚠️ Cleanup failed: {e}")
+
+    preflight_enrichment_cleanup()
+
+    # ------------------------------------
+    # DAO setup + status read
+    # ------------------------------------
+    status_dao = DAOS.get("status")
+    metadata_dao = DAOS.get("r2")
+
+    d1_status = status_dao.read_status(user_id, dataset_label) or {}
+    r2_status = metadata_dao.read_status(user_id, dataset_label) or {}
+
+    def s_label(s): return (s or {}).get("status", "").lower()
+    d1_state, r2_state = s_label(d1_status), s_label(r2_status)
+    print(f"[auto_reenrich] 🧭 D1={d1_state}, R2={r2_state}")
+
+    # ------------------------------------
+    # Helper: load dataset
+    # ------------------------------------
+    def _get_df_source():
+        df_source = st.session_state.get("current_df")
+        if df_source is not None and not df_source.empty:
+            return df_source
+        try:
+            user_dao = DAOS.get("user_data")
+            mapping = dict(user_dao.list_datasets(user_id))
+            tbl = mapping.get(dataset_label)
+            if tbl:
+                return user_dao.load_user_data(tbl)
+        except Exception as e:
+            print(f"[auto_reenrich] ⚠️ DAO load failed: {e}")
+        return pd.DataFrame()
+
+    # ------------------------------------
+    # Case 1: both full_done → audit coverage
+    # ------------------------------------
+    if d1_state == "full_done" and r2_state == "full_done":
+        print(f"[auto_reenrich] full_done → running genre coverage audit for {dataset_label}")
+        try:
+            df_source = _get_df_source()
+            audit = _audit_artist_genre_coverage(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                table_name=table_name,
+                user_df=df_source,
+            )
+        except Exception as e:
+            print(f"[auto_reenrich] ❌ coverage audit failed: {e}")
+            return "error"
+
+        counts = audit["counts"]
+        unenriched = counts.get("unenriched_all", 0)
+        user_unique = audit["telemetry"]["user_unique_artists"]
+        print(f"[auto_reenrich] 📊 Audit results: unenriched={unenriched}, user_unique={user_unique}")
+
+        if user_unique == 0:
+            print(f"[auto_reenrich] 💤 No user artists — skipping.")
+            return "nothing_to_do"
+        if unenriched == 0:
+            print(f"[auto_reenrich] ✅ Coverage OK — no backfill required.")
+            return "ok"
+
+        print(f"[auto_reenrich] 🧩 Running targeted breadth-only to backfill missing genres ({unenriched} artists).")
+        preflight_enrichment_cleanup()
+
+        cancel_event = threading.Event()
+        user_lock = get_user_lock(user_id)
+        if not user_lock.acquire(blocking=False):
+            print(f"[auto_reenrich] 🚫 Lock busy, skipping backfill.")
+            return "locked"
+        mark_lock_acquired(user_id)
+
+        df_source = _get_df_source()
+        if df_source is None or df_source.empty:
+            print(f"[auto_reenrich] 💤 No data for breadth-only.")
+            return "nothing_to_do"
+
+        t = threading.Thread(
+            target=background_enrich,
+            kwargs=dict(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                cleaned_df=df_source,
+                log_dao=log_dao,
+                cancel_event=cancel_event,
+                mode="breadth_only",
+                assume_locked=True,
+            ),
+            daemon=True,
+        )
+        t.start()
+        st.session_state["_enrichment_registry"] = {
+            "thread": t,
+            "cancel_event": cancel_event,
+            "dataset_label": dataset_label,
+            "user_id": user_id,
+        }
+        print(f"[auto_reenrich] 🚀 Targeted breadth-only thread started.")
+        return "targeted_breadth_started"
+
+    # ------------------------------------
+    # Case 2: standard_done → resume breadth_only
+    # ------------------------------------
+    if d1_state == "standard_done" or r2_state == "standard_done":
+        print(f"[auto_reenrich] 🌐 Standard enrichment done — resuming breadth-only for {dataset_label}")
+        preflight_enrichment_cleanup()
+
+        df_source = _get_df_source()
+        cancel_event = threading.Event()
+        user_lock = get_user_lock(user_id)
+        if not user_lock.acquire(blocking=False):
+            print(f"[auto_reenrich] 🚫 Lock busy, skipping breadth-only.")
+            return "locked"
+        mark_lock_acquired(user_id)
+
+        t = threading.Thread(
+            target=background_enrich,
+            kwargs=dict(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                cleaned_df=df_source,
+                log_dao=log_dao,
+                cancel_event=cancel_event,
+                mode="breadth_only",
+                assume_locked=True,
+            ),
+            daemon=True,
+        )
+        t.start()
+        st.session_state["_enrichment_registry"] = {
+            "thread": t,
+            "cancel_event": cancel_event,
+            "dataset_label": dataset_label,
+            "user_id": user_id,
+        }
+        return "resumed_breadth_first"
+
+    # ------------------------------------
+    # Case 3: fallback → full enrichment
+    # ------------------------------------
+    print(f"[auto_reenrich] ⚠️ Triggering full enrichment for {dataset_label}")
+    preflight_enrichment_cleanup()
+
+    df_source = _get_df_source()
+    if df_source is None or df_source.empty:
+        print(f"[auto_reenrich] 💤 No data to start enrichment.")
+        return "nothing_to_do"
+
+    cancel_event = threading.Event()
+    user_lock = get_user_lock(user_id)
+    if not user_lock.acquire(blocking=False):
+        print(f"[auto_reenrich] 🚫 Lock busy, skipping full enrichment.")
+        return "locked"
+    mark_lock_acquired(user_id)
+
+    t = threading.Thread(
+        target=background_enrich,
+        kwargs=dict(
             user_id=user_id,
             dataset_label=dataset_label,
-            status=status,
-            phase=phase,
-            detail=detail,
-            batches_done=batches_done,
-            total_batches=total_batches,
-            percent=percent,
-        )
-        print(f"[status] {user_id}/{dataset_label}: {phase} → {status}")
-    except Exception as e:
-        print(f"[status] ⚠️ Failed to update enrichment_status: {e}")
-
-def finish_enrichment_status(user_id: str, dataset_label: str, ok: bool, detail: str = None):
-    """
-    Convenience wrapper to finalize enrichment status at completion/failure.
-    """
-    set_enrichment_status(
-        user_id=user_id,
-        dataset_label=dataset_label,
-        status="completed" if ok else "failed",
-        phase="done",
-        detail=detail,
-        percent=100 if ok else None,
+            cleaned_df=df_source,
+            log_dao=log_dao,
+            cancel_event=cancel_event,
+            mode="full",
+            assume_locked=True,
+        ),
+        daemon=True,
     )
+    t.start()
+    st.session_state["_enrichment_registry"] = {
+        "thread": t,
+        "cancel_event": cancel_event,
+        "dataset_label": dataset_label,
+        "user_id": user_id,
+    }
+    print(f"[auto_reenrich] 🚀 Full enrichment thread started.")
+    return "full_started"
 
 def process_uploaded_zip(uploaded_file, dataset_label, user_id):
     """
@@ -738,6 +1331,57 @@ def process_uploaded_zip(uploaded_file, dataset_label, user_id):
             st.error(f"❌ Failed to save cleaned data: {e}")
             return None, None
 
+def _etl_process_zip(uploaded_file, dataset_label: str, user_id: str):
+    """
+    Wrapper around process_uploaded_zip that:
+      - Runs the ETL process
+      - Persists ETL success/failure status via DAO (Cloudflare or local)
+      - Updates Streamlit session state for UI continuity
+    """
+    import streamlit as st
+    from dao_selector import get_daos
+
+    daos = get_daos()
+    status_dao = daos.get("status")
+
+    try:
+        # --- Run ETL ---
+        table_name, cleaned_df = process_uploaded_zip(uploaded_file, dataset_label, user_id)
+
+        # --- On success ---
+        if cleaned_df is not None and not cleaned_df.empty:
+            if status_dao:
+                try:
+                    status_dao.set_status(
+                        user_id,
+                        dataset_label,
+                        phase="etl",
+                        detail="✅ ETL completed successfully",
+                        total=len(cleaned_df),
+                    )
+                    log_upload_event(user_id, table_name, dataset_label, uploaded_file.name, status="completed")
+                except Exception:
+                    pass  # Logging must never interrupt flow
+            st.session_state.etl_done = True
+
+        return table_name, cleaned_df
+
+    except Exception as e:
+        # --- On failure ---
+        if status_dao:
+            try:
+                status_dao.set_status(
+                    user_id,
+                    dataset_label,
+                    phase="etl",
+                    detail=f"❌ ETL failed: {e}",
+                    total=None,
+                )
+                log_upload_event(user_id, None, dataset_label, uploaded_file.name, status="failed")
+            except Exception:
+                pass
+        raise
+
 def run_cleaning_pipeline(df, username_label):
     """Cleans a Spotify listening dataframe and adds session/user metadata."""
     st.subheader("Running Data Cleaning Pipeline...")
@@ -770,6 +1414,26 @@ def run_cleaning_pipeline(df, username_label):
             'master_metadata_album_artist_name': 'artist_name',
             'master_metadata_album_album_name': 'album_name'
         })
+
+        # Remove any rows mentioning Travis Scott in artist, album, or track fields (case-insensitive)
+        pattern = r"(?i)\btravis\s*scott\b"
+        cols_to_check = ["artist_name", "album_name", "track_name"]
+
+        # Ensure columns exist
+        for col in cols_to_check:
+            if col not in cleaned_df.columns:
+                cleaned_df[col] = ""
+
+        mask = (
+            cleaned_df["artist_name"].fillna("").str.contains(pattern, regex=True) |
+            cleaned_df["album_name"].fillna("").str.contains(pattern, regex=True) |
+            cleaned_df["track_name"].fillna("").str.contains(pattern, regex=True)
+        )
+
+        before = len(cleaned_df)
+        cleaned_df = cleaned_df[~mask]
+        removed = before - len(cleaned_df)
+        st.write(f"• Removed {removed} rows mentioning Travis Scott. What a chump.")
 
         # Parse datetime
         cleaned_df['datetime'] = pd.to_datetime(cleaned_df['datetime'])
@@ -814,115 +1478,330 @@ def background_enrich(
     user_id: str,
     dataset_label: str,
     cleaned_df: pd.DataFrame,
-    log_dao,
-    cancel_event: Optional[threading.Event] = None
+    log_dao=None,
+    cancel_event: Optional[threading.Event] = None,
+    mode: str = "full",
+    assume_locked: bool = False,
 ):
     """
-    Background enrichment runner using generic DAOs.
-    Writes status via status_dao, logs via log_dao, and stores CSVs via metadata_dao.
-    Thread-safe and responsive to cancel_event.
+    Unified background enrichment runner (thread entry point).
+    Handles both full and breadth_only enrichment in a single thread.
+    Creates a *dedicated* Discogs worker pool with its own queue
+    and guarantees poison-pill shutdown before the thread exits.
     """
-    import time
-    import traceback
+    import time, threading, traceback, queue, streamlit as st
+    from enrichment_service import (
+        get_user_lock, mark_lock_acquired, safe_user_lock_release,
+        update_heartbeat, CancelledError, MetadataEnricher, DiscogsWorkerPool
+    )
+    from dao_selector import DAOS, get_log_dao
 
     thread_name = threading.current_thread().name
-    print(f"[enrich:{thread_name}] 🧵 Starting enrichment thread for {dataset_label}")
+    print(f"[enrich:{thread_name}] ▶ Starting enrichment thread for {dataset_label} ({mode})")
+
+    # --- User lock acquisition ---
+    user_lock = get_user_lock(user_id)
+    if not assume_locked:
+        if not user_lock.acquire(blocking=False):
+            print(f"[enrich:{thread_name}] 🚫 Lock busy — skipping enrichment.")
+            return "locked"
+        mark_lock_acquired(user_id)
+        print(f"[enrich:{thread_name}] 🔒 Acquired lock internally.")
+    else:
+        print(f"[enrich:{thread_name}] 🔁 Using pre-acquired lock (auto_check owns it).")
 
     try:
-        # ✅ Ensure DAO registry is available in this thread
-        import dao_selector
-        from dao_selector import DAOS
+        # Initialize DAOs in this thread
+        ensure_daos_initialized_for_thread()
 
-        if not DAOS or "main" not in DAOS:
-            print(f"[enrich:{thread_name}] ⚙️ DAO registry missing — reloading manually.")
-            dao_selector.load_global_daos()
+        if log_dao is None or not hasattr(log_dao, "log"):
+            log_dao = get_log_dao()
+        status_dao = DAOS.get("status")
+        metadata_dao = DAOS.get("r2")
 
-        # --- Helper to check cancellation mid-phase ---
-        def _check_cancel(point: str = ""):
-            if cancel_event and cancel_event.is_set():
-                msg = f"Enrichment cancelled{' during ' + point if point else ''}."
-                log_dao.log(user_id, dataset_label, "enrichment", msg, level="warning")
-                print(f"[enrich:{thread_name}] 🛑 {msg}")
-                raise CancelledError(msg)
+        # --- Reload dataset if missing ---
+        if cleaned_df is None or cleaned_df.empty:
+            user_dao = DAOS.get("user_data")
+            mapping = dict(user_dao.list_datasets(user_id))
+            tbl = mapping.get(dataset_label)
+            if not tbl:
+                raise RuntimeError(f"❌ No dataset found in user_data DAO for {dataset_label}")
+            cleaned_df = user_dao.load_user_data(tbl)
+            print(f"[enrich:{thread_name}] ✅ Reloaded dataset ({len(cleaned_df)} rows)")
 
-        _check_cancel("initialization")
-
-        # --- Sanity checks ---
-        log_dao.log(user_id, dataset_label, "sanity", "Starting spotify_sanity_check")
-        ok, msg = spotify_sanity_check(token)
-        _check_cancel("spotify_sanity_check")
-
-        log_dao.log(user_id, dataset_label, "sanity", f"spotify_sanity_check result: ok={ok}, msg={msg}")
-        if not ok:
-            status_dao.finish_status(user_id, dataset_label, ok=False, detail=f"Spotify check failed: {msg}")
-            return
-
-        log_dao.log(user_id, dataset_label, "sanity", "Starting discogs_sanity_check")
-        ok, msg = discogs_sanity_check(DISCOGS_KEY, DISCOGS_SECRET)
-        _check_cancel("discogs_sanity_check")
-
-        log_dao.log(user_id, dataset_label, "sanity", f"discogs_sanity_check result: ok={ok}, msg={msg}")
-        if not ok:
-            status_dao.finish_status(user_id, dataset_label, ok=False, detail=f"Discogs check failed: {msg}")
-            return
-
-        # --- Initialize Enricher ---
-        _check_cancel("MetadataEnricher init")
+        # --- Build enricher (no imports from enrichment_service at top level) ---
         enricher = MetadataEnricher(
             user_id=user_id,
             label=dataset_label,
             df=cleaned_df,
             spotify_token=token,
-            discogs_key=DISCOGS_KEY,
-            discogs_secret=DISCOGS_SECRET,
+            discogs_key=None,          # keys handled internally
+            discogs_secret=None,
             status_dao=status_dao,
             storage_dao=metadata_dao,
             log_dao=log_dao,
-            info_table_dao=None,
         )
 
-        # --- Begin Enrichment Run ---
-        log_dao.log(user_id, dataset_label, "enrichment", "Starting run_all()")
-        status_dao.set_status(user_id, dataset_label, phase="running", detail="Calling run_all()")
+        # --- Heartbeat thread ---
+        def _heartbeat_loop():
+            while not (cancel_event and cancel_event.is_set()):
+                update_heartbeat(user_id, dataset_label)
+                time.sleep(60)
+        threading.Thread(target=_heartbeat_loop, daemon=True).start()
 
-        _check_cancel("before run_all")
-        enricher.run_all(cancel_event=cancel_event)
-        _check_cancel("after run_all")
+        # --- Helper: build dedicated pool + queue ---
+        def make_discogs_pool(num_workers=5) -> DiscogsWorkerPool:
+            """Create an isolated pool with a private queue and poison-pill exit."""
+            q = queue.Queue()
+            pool = DiscogsWorkerPool(num_workers=num_workers)
+            pool.result_queue = queue.Queue()  # results local to this pool
+            pool.job_queue = q                  # attach private queue
+            return pool
 
-        # --- Success ---
-        status_dao.finish_status(user_id, dataset_label, ok=True, detail="Enrichment completed successfully.")
-        log_dao.log(user_id, dataset_label, "enrichment", "✅ Enrichment completed successfully.")
+        # --- Helper: poison-pill shutdown ---
+        def shutdown_pool(pool: DiscogsWorkerPool, reason: str):
+            try:
+                if pool is None:
+                    print(f"[enrich:{thread_name}] 💤 No pool to shut down ({reason}).")
+                    return
+                # push poison pills to wake workers
+                for _ in getattr(pool, "workers", []):
+                    try:
+                        pool.job_queue.put(None)
+                    except Exception:
+                        pass
+                # wait briefly for workers to die
+                start = time.time()
+                for t in getattr(pool, "workers", []):
+                    t.join(timeout=3)
+                elapsed = round(time.time() - start, 2)
+                alive = [t.name for t in getattr(pool, "workers", []) if t.is_alive()]
+                if alive:
+                    print(f"[enrich:{thread_name}] ⚠️ Some workers still alive after poison pills: {alive}")
+                else:
+                    print(f"[enrich:{thread_name}] ✅ Discogs pool shut down cleanly ({reason}) in {elapsed}s.")
+            except Exception as e:
+                print(f"[enrich:{thread_name}] ⚠️ Shutdown error ({reason}): {e}")
+
+        # ------------------------------------------------------------------
+        # 🧭 PHASE 1 — FULL ENRICHMENT (run_all)
+        # ------------------------------------------------------------------
+        if mode == "full":
+            status_dao.set_status(user_id, dataset_label, phase="running", detail="Full enrichment pipeline running")
+
+            # create dedicated pool for full run
+            enricher.discogs_pool = make_discogs_pool(num_workers=5)
+
+            try:
+                enricher.run_all(cancel_event=cancel_event)
+                print(f"[enrich:{thread_name}] ✅ Standard enrichment completed successfully.")
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(f"[enrich:{thread_name}] ❌ Exception during run_all: {e}\n{tb}")
+                status_dao.finish_standard_error(user_id, dataset_label, detail=str(e))
+                raise
+            finally:
+                shutdown_pool(getattr(enricher, "discogs_pool", None), reason="after run_all")
+                enricher.discogs_pool = None
+
+            # ------------------------------------------------------------------
+            # 🧭 PHASE 2 — BREADTH + TASTE INDEX
+            # ------------------------------------------------------------------
+            print(f"[enrich:{thread_name}] ▶ Starting breadth-only phase for {dataset_label}…")
+            enricher.discogs_pool = make_discogs_pool(num_workers=5)
+
+            try:
+                enricher.run_breadth_only(cancel_event=cancel_event)
+                print(f"[enrich:{thread_name}] ✅ Full enrichment (Standard + Breadth + Taste Index) completed.")
+                status_dao.finish_full_status(user_id, dataset_label, detail="✅ Full enrichment completed successfully")
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(f"[enrich:{thread_name}] ❌ Exception during breadth-only: {e}\n{tb}")
+                status_dao.finish_breadth_error(user_id, dataset_label, detail=str(e))
+                raise
+            finally:
+                shutdown_pool(getattr(enricher, "discogs_pool", None), reason="after breadth_only")
+                enricher.discogs_pool = None
+
+        # ------------------------------------------------------------------
+        # 🧭 PHASE 3 — BREADTH_ONLY ENTRY
+        # ------------------------------------------------------------------
+        elif mode == "breadth_only":
+            status_dao.set_status(user_id, dataset_label, phase="breadth_running", detail="Breadth-only enrichment started")
+
+            enricher.discogs_pool = make_discogs_pool(num_workers=5)
+            try:
+                enricher.run_breadth_only(cancel_event=cancel_event)
+                print(f"[enrich:{thread_name}] ✅ Breadth-only enrichment completed.")
+                status_dao.finish_full_status(user_id, dataset_label, detail="✅ Breadth-only + Taste Index completed")
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(f"[enrich:{thread_name}] ❌ Breadth-only exception: {e}\n{tb}")
+                status_dao.finish_breadth_error(user_id, dataset_label, detail=str(e))
+                raise
+            finally:
+                shutdown_pool(getattr(enricher, "discogs_pool", None), reason="breadth_only")
+                enricher.discogs_pool = None
+
+        else:
+            raise ValueError(f"Unsupported mode: {mode}")
 
     except CancelledError:
-        print(f"[enrich:{thread_name}] 🧱 Cancelled by user or dataset switch.")
-        status_dao.finish_status(user_id, dataset_label, ok=False, detail="Cancelled by user or dataset switch.")
-        log_dao.log(user_id, dataset_label, "enrichment", "Cancelled mid-run by user.", level="warning")
+        print(f"[enrich:{thread_name}] 🛑 Cancelled mid-run.")
+        status_dao.finish_standard_error(user_id, dataset_label, detail="🛑 Cancelled mid-run")
 
     except Exception as e:
         tb = traceback.format_exc()
-        print(f"[enrich:{thread_name}] ❌ Exception: {e}\n{tb}")
-        status_dao.finish_status(user_id, dataset_label, ok=False, detail=f"Background error: {e}")
-        log_dao.log(user_id, dataset_label, "enrichment", f"Exception in background_enrich: {e}", level="error")
+        print(f"[enrich:{thread_name}] ❌ Uncaught exception: {e}\n{tb}")
+        try:
+            status_dao.finish_standard_error(user_id, dataset_label, detail=str(e))
+        except Exception:
+            pass
 
     finally:
-        try:
-            if "_enrichment_registry" in st.session_state:
-                reg = st.session_state["_enrichment_registry"]
-                if reg.get("dataset_label") == dataset_label:
-                    st.session_state["_enrichment_registry"] = {
-                        "thread": None,
-                        "cancel_event": None,
-                        "dataset_label": None,
-                    }
-                    print(f"[enrich:{thread_name}] 🧹 Cleared enrichment registry for {dataset_label}")
-        except Exception as e:
-            print(f"[enrich:{thread_name}] ⚠️ Failed to clear registry: {e}")
-
-        log_enrichment_thread_count("enrichment finished or cancelled")
-        if log_dao:
-            log_dao.log(user_id, dataset_label, "thread", f"Thread finished for {dataset_label}")
-
+        if not assume_locked:
+            safe_user_lock_release(user_id, log_prefix=f"[enrich:{thread_name}]")
+        else:
+            print(f"[enrich:{thread_name}] 🔁 Lock held by auto_check; skipping release.")
         print(f"[enrich:{thread_name}] 💤 Thread finished for {dataset_label}")
+
+def start_breadth_first_only(
+    user_id: str,
+    dataset_label: str,
+    log_dao,
+    table_name: Optional[str] = None,
+    filtered_df: Optional[pd.DataFrame] = None,
+):
+    """
+    Launch a breadth-first-only enrichment thread.
+    If filtered_df is provided, it runs against that targeted subset.
+    After successful completion, it automatically triggers the Taste Index phase.
+    """
+    import time, threading, streamlit as st
+    from dao_selector import DAOS
+    from enrichment_service import (
+        get_user_lock, mark_lock_acquired,
+        terminate_stale_enrichment_threads, update_heartbeat
+    )
+
+    # --- Choose dataset source ---
+    if filtered_df is not None and not filtered_df.empty:
+        df_source = filtered_df
+        src = "filtered_df"
+    else:
+        src = "session/dao"
+        df_source = st.session_state.get("current_df")
+        key = table_name or st.session_state.get("last_table_name")
+        if (df_source is None or df_source.empty) and key:
+            user_dao = DAOS.get("user_data")
+            df_source = user_dao.load_user_data(key)
+
+    _log_df(df_source, f"breadth_only.df_source[{src}]")
+    if df_source is None or df_source.empty:
+        print("[breadth_only] 💤 No data available to start breadth-only.")
+        return "nothing_to_do"
+
+    # --- Acquire lock ---
+    user_lock = get_user_lock(user_id)
+    acquired = False
+    for attempt in range(10):
+        if user_lock.acquire(blocking=False):
+            mark_lock_acquired(user_id)
+            acquired = True
+            print(f"[breadth_only] 🔒 Lock acquired for {user_id} on attempt {attempt+1}")
+            break
+        print(f"[breadth_only] ⏳ Lock busy — waiting ({attempt+1}/10)")
+        time.sleep(1)
+    if not acquired:
+        print("[breadth_only] 🚫 Could not acquire lock")
+        return "locked"
+
+    terminate_stale_enrichment_threads(user_id)
+    cancel_event = threading.Event()
+
+    # --- Main runner for breadth-only ---
+    def _runner():
+        thread_name = threading.current_thread().name
+        try:
+            print(f"[{thread_name}] ▶ Breadth-only starting; rows={len(df_source)}")
+            update_heartbeat(user_id, dataset_label)
+
+            background_enrich(
+                user_id=user_id,
+                dataset_label=dataset_label,
+                cleaned_df=df_source,
+                log_dao=log_dao,
+                cancel_event=cancel_event,
+                mode="breadth_only",
+                assume_locked=True,
+            )
+
+            print(f"[{thread_name}] ✅ Breadth-only completed successfully")
+
+            # --- Auto-trigger Taste Index as follow-up ---
+            def _trigger_taste_index():
+                try:
+                    print(f"[{thread_name}] 🎚️ Launching Taste Index phase for {dataset_label}")
+                    from enrichment_service import MetadataEnricher
+                    from dao_selector import DAOS
+
+                    status_dao = DAOS.get("status")
+                    metadata_dao = DAOS.get("r2")
+
+                    enricher = MetadataEnricher(
+                        user_id=user_id,
+                        label=dataset_label,
+                        df=pd.DataFrame(),  # will reload full dataset internally
+                        spotify_token=None,
+                        discogs_key=None,
+                        discogs_secret=None,
+                        status_dao=status_dao,
+                        storage_dao=metadata_dao,
+                        log_dao=log_dao,
+                    )
+                    enricher.run_phase_taste_index()
+                    print(f"[{thread_name}] ✅ Taste Index completed for {dataset_label}")
+                except Exception as e:
+                    import traceback
+                    print(f"[{thread_name}] ⚠️ Taste Index trigger failed: {e}\n{traceback.format_exc()}")
+
+            threading.Thread(target=_trigger_taste_index, name=f"taste_index:{user_id}:{dataset_label}", daemon=True).start()
+
+        except Exception as e:
+            import traceback
+            print(f"[{thread_name}] ❌ Breadth-only error: {e}\n{traceback.format_exc()}")
+        finally:
+            try:
+                from enrichment_service import safe_user_lock_release
+                safe_user_lock_release(user_id, log_prefix=f"[{thread_name}]")
+            except Exception as e:
+                print(f"[{thread_name}] ⚠️ safe_user_lock_release failed: {e}")
+            cancel_event.set()
+            try:
+                reg = st.session_state.get("_enrichment_registry", {})
+                if reg.get("dataset_label") == dataset_label and reg.get("user_id") == user_id:
+                    st.session_state["_enrichment_registry"] = {}
+                    print(f"[{thread_name}] 🧹 Cleared enrichment registry for {dataset_label}")
+            except Exception:
+                pass
+
+    t = threading.Thread(
+        target=_runner,
+        name=f"breadth_only:{user_id}:{dataset_label}",
+        daemon=True,
+    )
+    st.session_state["_enrichment_registry"] = {
+        "thread": t,
+        "cancel_event": cancel_event,
+        "dataset_label": dataset_label,
+        "user_id": user_id,
+    }
+    t._cancel_event = cancel_event
+    t._start_time = time.time()
+
+    print(f"[breadth_only] 🚀 Starting thread: {t.name}")
+    t.start()
+    return "breadth_only_started"
 
 def spawn_enrichment_thread(user_id, label, cleaned_df, log_dao=None, cancel_event=None):
     """Spawn a new background enrichment thread and track its count."""
@@ -946,8 +1825,29 @@ def spawn_enrichment_thread(user_id, label, cleaned_df, log_dao=None, cancel_eve
 
     return t
 
-def _maybe_start_enrichment(*, user_id, dataset_label, table_name, cleaned_df):
+# def _maybe_start_enrichment(*, user_id, dataset_label, table_name, cleaned_df):
     import threading, time
+
+    # --- Defensive wait if dataframe isn't ready yet ---
+    attempts = 0
+    while (cleaned_df is None or cleaned_df.empty) and attempts < 5:
+        print(f"[enrich] ⏳ Waiting for cleaned_df to be ready (attempt {attempts+1})...")
+        time.sleep(1)
+        # Try reloading directly from R2 as fallback
+        try:
+            user_dao = get_daos().get("user_data")
+            if user_dao:
+                cleaned_df = user_dao.load_user_data(table_name)
+                if not cleaned_df.empty:
+                    print(f"[enrich] ✅ Reloaded dataset from R2 for {dataset_label} ({len(cleaned_df)} rows)")
+                    break
+        except Exception as e:
+            print(f"[enrich] ⚠️ Could not reload dataset yet: {e}")
+        attempts += 1
+
+    if cleaned_df is None or cleaned_df.empty:
+        print(f"[enrich] ❌ Aborting autostart — cleaned_df still empty after {attempts} attempts.")
+        return
 
     reg = st.session_state.get("_enrichment_registry", {})
     old_thread = reg.get("thread")
@@ -1015,40 +1915,658 @@ def info_tables_update(user_id, table_name):
     except Exception as e:
         print(f"[Background task error] {e}")
 
-# --- LOGIN UI ---
-if not st.session_state.user:
-    st.markdown("<h1 style='text-align: center;'>Regifted: Login</h1>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        mode = st.toggle("Sign Up")
+# ------------------------------- MONITOR WIDGET ----------------------------- #
+def log_enrichment_thread_count(
+    context: str = "",
+    *,
+    tags: Iterable[str] = ("enrich", "resume", "force", "rerun", "background_enrich", "genre_detective"),
+    logger: logging.Logger | None = None,
+) -> Tuple[int, List[str]]:
+    """
+    Logs and returns the number of threads whose names contain any of the given tags.
+    - context: optional text appended to the log (e.g., 'before start', 'after stop').
+    - tags: thread-name substrings used to match enrichment-like threads.
+    - logger: optional custom logger; defaults to root logger.
 
-        if mode:
-            with st.form("signup_form"):
-                first_name = st.text_input("First Name")
-                last_name = st.text_input("Last Name")
-                email = st.text_input("Email")
-                password = st.text_input("Password", type="password")
-                confirm = st.text_input("Confirm Password", type="password")
-                submitted = st.form_submit_button("Create Account")
-                if submitted:
-                    success, msg = signup(email, password, confirm, first_name, last_name)
-                    if success:
-                        # ✅ Auto-login after successful signup
-                        ok, userdata = login(email, password)
-                        if ok:
-                            st.session_state.user = userdata
-                            token = make_jwt(userdata)
-                            set_auth_cookie(token)
-                            st.rerun()
-                        else:
-                            st.success(msg)
-                            st.info("Account created. Please log in.")
-                    else:
-                        # msg may be a list of errors or a single string
-                        errors = msg if isinstance(msg, list) else [msg]
-                        for e in errors:
-                            st.error(e)
+    Returns (count, names).
+    """
+    logger = logger or logging.getLogger()
+    all_threads = threading.enumerate()
+    # normalize once; make matching robust if name is None
+    enrich_threads = [
+        t for t in all_threads
+        if any(tag in (t.name or "").lower() for tag in tags)
+    ]
+    names = sorted([t.name or "unnamed" for t in enrich_threads])
+    count = len(enrich_threads)
+
+    logger.info(
+        "[thread_monitor] %d enrichment thread(s) active%s. names=%s",
+        count,
+        f" after {context}" if context else "",
+        ", ".join(names) if names else "—",
+    )
+    return count, names
+
+def log_thread_overview(context: str = "") -> Dict[str, Dict[str, object]]:
+    """
+    Quick overview by coarse category. Uses simple name heuristics, so it
+    works even if you don't store pools in session_state.
+    Returns a dict: {category: {'count': int, 'names': [...]}} and logs one line.
+    """
+    def _cat(name: str) -> str:
+        n = (name or "").lower()
+        if "genre_detective" in n or "genre-detective" in n:
+            return "genre_detective"
+        if "discogs" in n:
+            return "discogs"
+        if "enrich" in n or "background_enrich" in n or "resume" in n or "rerun" in n:
+            return "enrichment"
+        if "streamlit" in n or ("script" in n and "runner" in n):
+            return "streamlit"
+        return "other"
+
+    cats: Dict[str, Dict[str, object]] = {}
+    for th in threading.enumerate():
+        cat = _cat(th.name or "")
+        entry = cats.setdefault(cat, {"count": 0, "names": []})
+        entry["count"] += 1
+        entry["names"].append(th.name or "unnamed")
+
+    for v in cats.values():
+        v["names"].sort()
+
+    total = sum(v["count"] for v in cats.values())
+    logging.info(
+        "[thread_monitor]%s total=%d | %s",
+        f" after {context}" if context else "",
+        total,
+        " | ".join(f"{k}:{v['count']}" for k, v in cats.items())
+    )
+    return cats
+
+def _cat_for_thread_name(name: str) -> str:
+    """Heuristic categories for visible thread names."""
+    n = (name or "").lower()
+    if "genre_detective" in n or "genre-detective" in n:
+        return "genre_detective"
+    if "discogs" in n or "discogs-worker" in n:
+        return "discogs"
+    if "enrich" in n or "background_enrich" in n:
+        return "enrichment"
+    if "script" in n and "runner" in n:
+        return "streamlit"
+    if "streamlit" in n:
+        return "streamlit"
+    return "other"
+
+def snapshot_threads() -> dict:
+    """Return {category: {'count': int, 'names': [...]}} for all alive threads."""
+    cats = {}
+    for th in threading.enumerate():
+        name = th.name or f"Thread-{id(th)}"
+        cat = _cat_for_thread_name(name)
+        cats.setdefault(cat, {"count": 0, "names": []})
+        cats[cat]["count"] += 1
+        cats[cat]["names"].append(name)
+    # sort names for stable display
+    for v in cats.values():
+        v["names"].sort()
+    return cats
+
+def registry_snapshot_df() -> pd.DataFrame:
+    """Show what your task_registry() knows about user-started tasks."""
+    try:
+        reg = task_registry()
+    except Exception:
+        return pd.DataFrame(columns=["key", "status", "alive", "started_at", "thread_name", "error"])
+    rows = []
+    for key, entry in reg.items():
+        th = entry.get("thread")
+        rows.append({
+            "key": key,
+            "status": entry.get("status"),
+            "alive": bool(th and th.is_alive()),
+            "started_at": time.strftime("%H:%M:%S", time.localtime(entry.get("started_at", 0))),
+            "thread_name": getattr(th, "name", ""),
+            "error": entry.get("error"),
+        })
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.sort_values(["alive", "key"], ascending=[False, True])
+    return df
+
+def _summarize_threads_for_sidebar():
+    """
+    Group current Python threads into categories we care about for the app UI.
+    Returns a dict like:
+      {
+        "total": 12,
+        "core": {"count": 3, "names": [...]},
+        "enrichment": {"count": 2, "names": [...]},
+        "genre_detective": {"count": 1, "names": [...]},
+        "discogs": {"count": 4, "names": [...]},
+        "other": {"count": 2, "names": [...]},
+      }
+    """
+    import threading
+
+    threads = threading.enumerate()
+
+    def _lname(t):
+        try:
+            return (t.name or "").lower()
+        except Exception:
+            return ""
+
+    # Buckets by name substrings
+    core_keys = ("mainthread", "scriptrunner", "script runner", "watchdog", "asyncio", "tornado", "streamlit")
+    enrich_keys = ("enrich", "resume", "force", "rerun", "background_enrich", "chart_scorer", "breadth_only")
+    genre_keys = ("genre-detective", "genre_detective")
+    discogs_keys = ("discogs",)
+
+    core, enrichment, genre, discogs = [], [], [], []
+    used = set()
+
+    for t in threads:
+        n = _lname(t)
+        bucketed = False
+
+        if any(k in n for k in core_keys):
+            core.append(t); used.add(t); bucketed = True
+        if any(k in n for k in enrich_keys):
+            enrichment.append(t); used.add(t); bucketed = True
+        if any(k in n for k in genre_keys):
+            genre.append(t); used.add(t); bucketed = True
+        if any(k in n for k in discogs_keys):
+            discogs.append(t); used.add(t); bucketed = True
+
+    other = [t for t in threads if t not in used]
+
+    def _pack(lst):
+        return {"count": len(lst), "names": [getattr(t, "name", repr(t)) for t in lst]}
+
+    return {
+        "total": len(threads),
+        "core": _pack(core),
+        "enrichment": _pack(enrichment),
+        "genre_detective": _pack(genre),
+        "discogs": _pack(discogs),
+        "other": _pack(other),
+    }
+
+def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
+    """
+    Display live enrichment progress in the sidebar.
+    Pulls from D1 (preferred) or R2 JSON fallback.
+    Shows:
+      - current phase
+      - batches done / total
+      - % complete
+      - number of enrichment threads
+    """
+    import json, threading
+    import streamlit as st
+    from datetime import datetime
+    from dao_selector import DAOS, load_global_daos
+
+    # --- Ensure DAOs ready ---
+    if not DAOS or "main" not in DAOS:
+        load_global_daos()
+
+    d1 = DAOS.get("main")
+    r2 = DAOS.get("r2")
+    status_row = None
+
+    # --- Try D1 first ---
+    try:
+        if d1:
+            rows = d1._query(
+                """
+                SELECT status, phase, detail, batches_done, total_batches, percent
+                FROM enrichment_status
+                WHERE user_id=? AND dataset_label=?
+                ORDER BY updated_at DESC LIMIT 1
+                """,
+                [user_id, dataset_label],
+            )
+            if rows:
+                status_row = rows[0]
+    except Exception as e:
+        print(f"[sidebar_status] ⚠️ Failed to query D1: {e}")
+
+    # --- Fallback to R2 JSON ---
+    if not status_row and r2:
+        try:
+            key = f"enrichment/status/{user_id}_{dataset_label}_status.json"
+            data = json.loads(r2._get_object(key))
+            status_row = {
+                "status": data.get("status"),
+                "phase": data.get("phase"),
+                "detail": data.get("detail"),
+                "batches_done": data.get("batches_done"),
+                "total_batches": data.get("total_batches"),
+                "percent": data.get("percent"),
+            }
+        except Exception as e:
+            print(f"[sidebar_status] ⚠️ Failed to read R2 JSON: {e}")
+
+    # --- Bail out if nothing found ---
+    if not status_row:
+        with st.sidebar:
+            st.caption("⚠️ No enrichment status found for this dataset yet.")
+        return
+
+    # --- Parse + normalize ---
+    status = (status_row.get("status") or "").lower()
+    phase = (status_row.get("phase") or "init").capitalize()
+    detail = status_row.get("detail") or ""
+    done = int(status_row.get("batches_done") or 0)
+    total = int(status_row.get("total_batches") or 0)
+    percent = float(status_row.get("percent") or 0.0)
+
+    # --- Thread count check ---
+    threads = threading.enumerate()
+    enrich_threads = [
+        t for t in threads
+        if any(tag in t.name.lower() for tag in ("enrich", "resume", "force", "rerun", "background_enrich"))
+    ]
+    active_count = len(enrich_threads)
+
+    # --- Build display message ---
+    if status in {"done", "complete"}:
+        msg = f"✅ Enrichment complete for **{dataset_label}**"
+    elif status == "error":
+        msg = (
+            f"❌ Enrichment failed during {phase.lower()} — check logs."
+        )
+
+    else:
+        msg = (
+            f"{phase} phase — {done:,}/{total:,} batches ({percent:.1f}%) "
+        )
+
+    # --- Render ---
+    with st.sidebar:
+        if int(percent) != 100:
+            # st.caption(f"Threads: {active_count}")
+            # st.caption(msg)
+            # if detail:
+            #     st.caption(f"{detail}")
+            # st.progress(int(percent) / 100.0 if percent else 0)
+            st.caption(f"_Please wait while we enrich your data..._")
         else:
+            st.caption(f"This dataset has been fully enriched")
+
+    with st.sidebar.expander("Background Threads", expanded=False):
+        info = _summarize_threads_for_sidebar()
+
+        # Top-line totals
+        st.caption(f"Total threads: {info['total']}")
+
+        # Show grouped metrics
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Enrichment", info["enrichment"]["count"])
+        c2.metric("Genre Detective", info["genre_detective"]["count"])
+        c3.metric("Discogs", info["discogs"]["count"])
+
+        c4, c5, _ = st.columns(3)
+        c4.metric("Core", info["core"]["count"])
+        c5.metric("Other", info["other"]["count"])
+
+        st.divider()
+        colA, colB = st.columns(2)
+
+        if colA.button("🧹 Reap registry", key="btn_reap_registry"):
+            cleared = reap_task_registry(verbose=True)
+            if cleared:
+                st.success(f"Reaped {len(cleared)} stale entr{'y' if len(cleared)==1 else 'ies'}.")
+            else:
+                st.info("No stale entries to reap.")
+
+        if colB.button("⛔ Stop genre detective", key="btn_stop_gd"):
+            n = stop_genre_detective_workers()
+            if n:
+                st.warning(f"Signalled stop to {n} genre detective worker(s).")
+            else:
+                st.info("No active genre detective workers to stop.")
+
+        # Optional: reveal names
+        if st.checkbox("Show thread names", key="bg_threads_show_names"):
+            def _list(names):
+                if not names:
+                    st.caption("—")
+                else:
+                    st.code("\n".join(names), language="text")
+
+            with st.expander("Enrichment", expanded=False):
+                _list(info["enrichment"]["names"])
+
+            with st.expander("Genre Detective", expanded=False):
+                _list(info["genre_detective"]["names"])
+
+            with st.expander("Discogs", expanded=False):
+                _list(info["discogs"]["names"])
+
+            with st.expander("Core", expanded=False):
+                _list(info["core"]["names"])
+
+            with st.expander("Other", expanded=False):
+                _list(info["other"]["names"])
+
+# ------------------------------ GENRE DETECTIVE ----------------------------- #
+def start_missing_genre_detective_task(
+    dataset_label: str | None = None,
+    *,
+    provider_name: str = "gemini",
+    batch_size: int = 120,
+    sleep_between_batches: float = 0.8,
+    max_retries: int = 4,
+    force: bool = False,
+    limit: int | None = None,
+    io_mode: str = "r2",
+    debug_dump_merges_to_r2: bool = False,
+    run_other_fix_when_unlisted_empty: bool = True,
+    debug_dump_other_fix_to_r2: bool = False,
+) -> None:
+    """
+    Safe launcher for genre_detective worker.
+    dataset_label is optional (defaults to '__app_boot__') so that early imports
+    or preflights won't crash the app during initialization.
+    """
+    import os, logging, streamlit as st
+
+    if not dataset_label:
+        dataset_label = "__app_boot__"
+        logging.warning("[genre_detective] dataset_label missing — defaulting to '__app_boot__'")
+
+    reg = task_registry()
+    task_key = f"genre_detective::{dataset_label}"
+
+    try:
+        log_enrichment_thread_count("genre_detective pre-check")
+    except Exception:
+        logging.debug("[thread_monitor] (log_enrichment_thread_count unavailable)")
+
+    entry = reg.get(task_key)
+    alive = bool(entry and entry.get("thread") and entry["thread"].is_alive())
+    if alive:
+        logging.info("[genre_detective] already running: %s", entry["thread"].name)
+        try:
+            log_enrichment_thread_count("genre_detective already running (no start)")
+        except Exception:
+            pass
+        return
+
+    # MAIN THREAD ONLY: set GEMINI_API_KEY from st.secrets
+    try:
+        gem_key = st.secrets.get("gemini", {}).get("api_key")
+        if gem_key and os.environ.get("GEMINI_API_KEY") != str(gem_key):
+            os.environ["GEMINI_API_KEY"] = str(gem_key)
+            logging.info("[genre_detective] GEMINI_API_KEY set from st.secrets (main)")
+    except Exception as e:
+        logging.warning("[genre_detective] cannot read st.secrets: %s", e)
+
+    _start_genre_detective_thread(
+        task_key=task_key,
+        dataset_label=dataset_label,
+        provider_name=provider_name,
+        batch_size=batch_size,
+        sleep_between_batches=sleep_between_batches,
+        max_retries=max_retries,
+        force=force,
+        limit=limit,
+        io_mode=io_mode,
+        debug_dump_merges_to_r2=debug_dump_merges_to_r2,
+        run_other_fix_when_unlisted_empty=run_other_fix_when_unlisted_empty,
+        debug_dump_other_fix_to_r2=debug_dump_other_fix_to_r2,
+    )
+
+def _start_genre_detective_thread(
+    *,
+    task_key: str,
+    dataset_label: str,
+    provider_name: str = "gemini",
+    batch_size: int = 20,
+    sleep_between_batches: float = 0.8,
+    max_retries: int = 4,
+    force: bool = False,
+    limit: int | None = None,
+    io_mode: str = "r2",
+    debug_dump_merges_to_r2: bool = False,
+    run_other_fix_when_unlisted_empty: bool = True,
+    debug_dump_other_fix_to_r2: bool = False,
+) -> bool:
+    """
+    Idempotently start the genre_detective worker in its own thread.
+    - Cleans stale registry entries.
+    - Logs thread counts before/after .start().
+    - Stores a stop_event for graceful cancellation (interruptible sleeps inside the worker).
+    Returns True if started, False if an active worker already exists.
+    """
+    import threading, time, logging
+
+    reg = task_registry()
+
+    # Remove stale entry (thread died but registry left behind)
+    stale = task_key in reg and not reg[task_key].get("thread") or (
+        task_key in reg and reg[task_key].get("thread") and not reg[task_key]["thread"].is_alive()
+    )
+    if stale:
+        try:
+            reg.pop(task_key, None)
+            logging.info("[genre_detective] removed stale registry entry for %s", task_key)
+        except Exception:
+            pass
+
+    # If a live worker exists now, bail
+    if task_key in reg and reg[task_key].get("thread") and reg[task_key]["thread"].is_alive():
+        logging.info("[genre_detective] already running: %s", task_key)
+        return False
+
+    stop_event = threading.Event()
+
+    def _worker():
+        # DO NOT call st.* here
+        try:
+            from missing_genre_detective import enrich_file_in_place, ShutdownRequested
+            logging.info("[genre_detective] ▶ starting worker for %s", task_key)
+
+            n_primary = enrich_file_in_place(
+                provider_name=provider_name,
+                batch_size=batch_size,
+                sleep_between_batches=sleep_between_batches,
+                max_retries=max_retries,
+                force=force,
+                limit=limit,
+                io_mode=io_mode,
+                debug_dump_merges_to_r2=debug_dump_merges_to_r2,
+                run_other_fix_when_unlisted_empty=run_other_fix_when_unlisted_empty,
+                debug_dump_other_fix_to_r2=debug_dump_other_fix_to_r2,
+                stop_event=stop_event,  # ← interruptible waits & cooldowns
+            )
+            logging.info("[genre_detective] ✅ completed for %s (primary updated=%s)", task_key, n_primary)
+            reg[task_key]["status"] = "done"
+
+        except ShutdownRequested as e:
+            logging.warning("[genre_detective] ⏸ stopped for %s: %s", task_key, e)
+            reg[task_key]["status"] = "stopped"
+            reg[task_key]["error"] = str(e)
+
+        except Exception as e:
+            logging.exception("[genre_detective] ❌ worker failed for %s: %s", task_key, e)
+            reg[task_key]["status"] = "error"
+            reg[task_key]["error"] = str(e)
+
+        finally:
+            # Snapshot AFTER the worker ends
+            try:
+                log_enrichment_thread_count("genre_detective worker exit")
+            except Exception:
+                pass
+            # Clean registry to allow future restarts
+            try:
+                reg.pop(task_key, None)
+            except Exception:
+                pass
+
+    t = threading.Thread(
+        target=_worker,
+        name=f"genre-detective-{task_key}",
+        daemon=True,
+    )
+
+    # Attach Streamlit run context (avoids harmless ScriptRunContext warnings if libs touch st.*)
+    try:
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        if get_script_run_ctx() is not None:
+            add_script_run_ctx(t)
+    except Exception:
+        pass
+
+    # Take a BEFORE snapshot
+    try:
+        pre_count, pre_names = log_enrichment_thread_count("genre_detective before start")
+    except Exception:
+        pre_count, pre_names = (None, None)
+
+    reg[task_key] = {
+        "thread": t,
+        "status": "starting",
+        "label": dataset_label,
+        "started_at": time.time(),
+        "error": None,
+        "stop_event": stop_event,
+    }
+    t.start()
+
+    # AFTER snapshot and delta
+    try:
+        post_count, post_names = log_enrichment_thread_count("genre_detective after start")
+        if pre_count is not None and post_count is not None:
+            logging.info(
+                "[thread_monitor] Δthreads=%s (names: %s → %s)",
+                post_count - pre_count,
+                ", ".join(pre_names) if pre_names else "—",
+                ", ".join(post_names) if post_names else "—",
+            )
+    except Exception:
+        pass
+
+    # Optional UI toast (main thread only)
+    try:
+        st.toast("Started genre detection in the background.", duration="short")
+    except Exception:
+        logging.info("Started genre detection in the background.")
+
+    return True
+
+def stop_genre_detective(task_key: str):
+    """Signal a running genre_detective to stop (best-effort)."""
+    reg = task_registry()
+    info = reg.get(task_key)
+    if not info:
+        return
+    info["stop_event"].set()  # worker exits on next wait
+
+def reap_task_registry(*, verbose: bool = True) -> list[str]:
+    """
+    Remove dead/stale entries from the cached task_registry.
+    Only cleans the registry dict; it **cannot** kill live Python threads
+    (that requires the worker to cooperate via a stop_event).
+    Returns the list of task keys removed.
+    """
+    import time
+    reg = task_registry()
+    removed = []
+    for key, entry in list(reg.items()):
+        th = entry.get("thread")
+        alive = bool(th and th.is_alive())
+        status = entry.get("status", "")
+        # Reap if no thread object, or not alive, or explicitly 'done'/'error'/'stopped'
+        if (not th) or (not alive) or status in {"done", "error", "stopped"}:
+            removed.append(key)
+            reg.pop(key, None)
+    if verbose and removed:
+        print(f"[task_reaper] removed {len(removed)} stale entries: {removed}")
+    return removed
+
+def stop_genre_detective_workers() -> int:
+    """
+    Signal stop to all genre_detective workers via their stop_event.
+    Returns number of workers signalled.
+    """
+    reg = task_registry()
+    signalled = 0
+    for key, entry in reg.items():
+        if key.startswith("genre_detective::"):
+            ev = entry.get("stop_event")
+            th = entry.get("thread")
+            if ev and not ev.is_set():
+                ev.set()
+                signalled += 1
+                print(f"[task_stop] signalled {key} (alive={bool(th and th.is_alive())})")
+    return signalled
+
+# ----------------------------- INIT PAGE CONFIG ----------------------------- #
+st.set_page_config(page_title="Regifted", page_icon=ICON_BROWSER, layout="wide", initial_sidebar_state="expanded")
+clear_stale_locks(max_age_minutes=10)
+
+cm = get_cookie_manager()
+_ = cm.get_all()  # hydrate component
+
+# --- SESSION INIT ---
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+st.session_state.setdefault("_enrichment_registry", {
+    "thread": None,
+    "cancel_event": None,
+    "dataset_label": None,
+})
+
+# If we just logged out, keep skipping cookie-restore until the browser shows it's gone
+if st.session_state.get("_skip_restore"):
+    if not cm.get(JWT_COOKIE_NAME):  # cookie really gone now
+        st.session_state["_skip_restore"] = False
+else:
+    try_restore_session_from_cookie()
+
+# Only refresh/slide expiry when we actually have a user
+if st.session_state.get("user"):
+    refresh_cookie_if_needed()
+
+# Boot-once trigger for the global detective (per user session)
+if not st.session_state.get("_genre_detective_boot_started", False):
+    st.session_state["_genre_detective_boot_started"] = True
+    try:
+        # This starts the same single global worker; it will no-op if already alive
+        start_missing_genre_detective_task(dataset_label="__app_boot__")
+    except Exception as e:
+        # Non-fatal: just log in UI without breaking the page
+        st.info(f"Genre detective not started at boot: {e}")
+
+# ------------------------------- LOGIN PAGE --------------------------------- #
+if not st.session_state.user:
+
+    h1, h2, h3 = st.columns(3, vertical_alignment="center")
+    with h2:
+        st.markdown("""
+            <style>
+            div.st-emotion-cache-1dvmtd8 {
+                width: auto;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        st.image(LOGO_SPOTGREEN, width=400)
+
+    col1, col2, col3 = st.columns(3)
+    with col2:
+        tab_login, tab_signup, tab_help = st.tabs(["Login", "Sign Up", "How To"])
+
+        # --- LOGIN TAB ---
+        with tab_login:
             with st.form("login_form"):
                 email = st.text_input("Email")
                 password = st.text_input("Password", type="password")
@@ -1063,29 +2581,182 @@ if not st.session_state.user:
                     else:
                         st.error(userdata)
 
-    st.stop()
+        # --- SIGNUP TAB ---
+        with tab_signup:
+            with st.form("signup_form"):
+                first_name = st.text_input("First Name")
+                last_name = st.text_input("Last Name")
+                email = st.text_input("Email")
+                password = st.text_input("Password", type="password")
+                confirm = st.text_input("Confirm Password", type="password")
+                submitted = st.form_submit_button("Create Account")
+                if submitted:
+                    success, msg = signup(email, password, confirm, first_name, last_name)
+                    if success:
+                        ok, userdata = login(email, password)
+                        if ok:
+                            st.session_state.user = userdata
+                            token = make_jwt(userdata)
+                            set_auth_cookie(token)
+                            st.rerun()
+                        else:
+                            st.success(msg)
+                            st.info("Account created. Please log in.")
+                    else:
+                        errors = msg if isinstance(msg, list) else [msg]
+                        for e in errors:
+                            st.error(e)
 
-# --- PAGE NAVIGATION ---
-st.sidebar.title("Navigation")
-st.sidebar.write(f"Logged in as: **{st.session_state.user['first_name']}**")
-if st.sidebar.button("Log out", key="logout_btn"):
-    logout()
+        # --- HELP TAB ---
+        with tab_help:
+            st.markdown("### Welcome to Regifted!")
+            st.write(
+                """
+                *(This section is for onboarding help — you can fill it in with your FAQs,
+                instructions on exporting Spotify data, and any screenshots or links users
+                might need.)*
+                """
+            )
 
-page = st.sidebar.radio("Go to",
-                        ["Home",
-                         "Overall Review",
-                         "Per Year",
-                         "Per Artist",
-                         "Per Album",
-                         "Per Genre",
-                         "The Farm",
-                         "FUN",
-                         "FAQs"
-                         ]
-                        )
+        st.stop()
 
+# ----------------------------- PAGE NAVIGATION ------------------------------ #
+with st.sidebar:
+    st.image(LOGO_SPOTGREEN, width="stretch")
+    st.space("small")
+    st.write(f"Logged in as: **{st.session_state.user['first_name']}**")
+    st.divider()
 
-# -------------------------------- Home Page --------------------------------- #
+    # ---------- Load DAOs ----------
+    daos = get_daos()
+    user_dao = daos.get("user_data")
+    if user_dao is None:
+        st.error("UserData DAO is not configured for this server mode.")
+        st.stop()
+    # ---------- Clean threads ----------
+    try:
+        cleared = reap_task_registry(verbose=False)
+        if cleared:
+            print(f"[startup] reaped {len(cleared)} stale task(s) at boot: {cleared}")
+    except Exception as e:
+        print(f"[startup] reaper failed: {e}")
+
+    # ---------- Existing Datasets ----------
+    try:
+        dataset_options = user_dao.list_datasets(st.session_state.user["user_id"])  # [(label, table_name), ...]
+    except Exception as e:
+        st.error(f"Failed to list datasets: {e}")
+        dataset_options = []
+
+    label_to_table = dict(dataset_options)
+    labels = list(label_to_table.keys())
+
+    # ---------- Dataset Selection ----------
+    if labels:
+        previous_label = st.session_state.get("current_dataset_label")
+
+        selected_label = st.selectbox(
+            "Selected dataset:",
+            options=labels,
+            index=None,  # start unselected; returns None until user picks
+            key="dataset_select_sidebar",
+            placeholder="Choose a dataset",
+        )
+
+        # Do nothing until a dataset is actually chosen
+        if selected_label is not None:
+            # Only (re)load when the dataset changed or nothing is loaded yet
+            if selected_label != previous_label or st.session_state.get("current_df") is None:
+                selected_table = label_to_table.get(selected_label)
+                if selected_table:
+                    try:
+                        # ---- Load dataset from storage
+                        df = user_dao.load_user_data(selected_table)
+                        if df.empty:
+                            # Keep sidebar quiet if empty
+                            print("[sidebar] Loaded dataset is empty; skipping session update.")
+                        else:
+                            df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+                            df = df.dropna(subset=["datetime"])
+                            df["date"] = df["datetime"].dt.date
+                            df["year"] = df["datetime"].dt.year
+
+                            # Store in session
+                            st.session_state.current_df = df
+                            st.session_state.current_dataset_label = selected_label
+                            st.session_state.last_table_name = selected_table
+
+                            # Enrichment auto-check on (re)load
+                            from dao_selector import get_log_dao
+                            log_dao = get_log_dao()
+                            res = _auto_check_and_reenrich_if_needed(
+                                st.session_state.user["user_id"],
+                                selected_label.strip(),
+                                log_dao,
+                                table_name=selected_table,
+                            )
+                            print(f"[CALLSITE select] auto_check result = {res}")
+
+                            # ---------- Start/ensure ONE genre-detective worker (background) ----------
+                            try:
+                                task_key = f"genre_detective::{selected_label}"
+                                just_started = start_missing_genre_detective_task(
+                                    dataset_label=selected_label,
+                                    provider_name="gemini",
+                                    batch_size=20,
+                                    sleep_between_batches=0.5,
+                                    max_retries=2,
+                                    force=False,
+                                    limit=None,
+                                    io_mode="r2",
+                                    debug_dump_merges_to_r2=False,
+                                    run_other_fix_when_unlisted_empty=True,
+                                    debug_dump_other_fix_to_r2=False,
+                                )
+                                if just_started:
+                                    st.toast("Started genre detection in the background.", duration="short")
+                            except Exception as e:
+                                print(f"[genre_detective] not started: {e}")
+                    except Exception as e:
+                        st.error(f"Failed to load dataset from storage: {e}")
+                        st.stop()
+                else:
+                    print(f"[sidebar] Missing mapping for label: {selected_label}")
+    else:
+        st.info("No datasets uploaded yet. You can add one from the Home page.")
+
+    # Existing status UI
+    if st.session_state.get("current_dataset_label"):
+        show_enrichment_status_sidebar(
+            st.session_state.user["user_id"],
+            st.session_state["current_dataset_label"]
+        )
+
+    st.divider()
+
+    # ---------- Navigation ----------
+    page = st.radio(
+        "Navigation",
+        label_visibility="hidden",
+        options=[
+            "Home",
+            "Overall Review",
+            "Artists",
+            "Genres",
+            "Popularity",
+            "Taste",
+            "On This Day",
+            "FAQs",
+            "About"
+        ],
+    )
+
+    st.divider()
+
+    if st.button("Log out", key="logout_btn"):
+        logout()
+
+# ---------------------------------- Home ------------------------------------ #
 if page == "Home":
     user_id = st.session_state.user["user_id"]
 
@@ -1094,44 +2765,7 @@ if page == "Home":
     st.session_state.setdefault("current_df", None)
     st.session_state.setdefault("current_dataset_label", None)
     st.session_state.setdefault("last_table_name", None)
-    st.session_state.setdefault("_enrichment_autostart_block", False)
-    st.session_state.setdefault("_enrichment_autostart_pending", False)
-    st.session_state.setdefault("_enrichment_thread", None)
-    st.session_state.setdefault("_enrichment_running_label", None)
-    st.session_state.setdefault("_current_enrich_thread", None)
-    st.session_state.setdefault("_current_cancel_event", None)
-    st.session_state.setdefault("_current_enrich_label", None)
-
-    # ---------- Helper ----------
-    def _clear_autostart_if_new_label(label: str) -> None:
-        """Clears autostart block when new dataset label is selected."""
-        st.session_state.setdefault("_enrichment_autostart_block", False)
-        st.session_state.setdefault("_enrichment_block_label", None)
-        if st.session_state.get("_enrichment_block_label") != (label or "").strip():
-            st.session_state["_enrichment_autostart_block"] = False
-            st.session_state["_enrichment_block_label"] = None
-
-    # ---------- Autostart Enrichment on Rerun ----------
-    if st.session_state.get("_enrichment_autostart_pending"):
-        st.session_state["_enrichment_autostart_pending"] = False
-        try:
-            _maybe_start_enrichment(
-                user_id=user_id,
-                dataset_label=st.session_state["current_dataset_label"],
-                table_name=st.session_state["last_table_name"],
-                cleaned_df=st.session_state["current_df"],
-            )
-        except Exception as e:
-            st.warning(f"Could not autostart enrichment: {e}")
-
-    # ---------- Header UI ----------
-    h1, h2, h3 = st.columns([3, 3, 3], vertical_alignment="center")
-    with h2:
-        st.image(LOGO_SPOTGREEN, width=400)
-    st.markdown(
-        "<h1 style='text-align: center;'>Your life on Spotify, in review:</h1>",
-        unsafe_allow_html=True
-    )
+    st.session_state["last_page"] = "Home"
 
     # ---------- Load DAOs ----------
     daos = get_daos()
@@ -1142,65 +2776,296 @@ if page == "Home":
         st.error("UserData DAO is not configured for this server mode.")
         st.stop()
 
-    # ---------- Existing Datasets ----------
-    try:
-        dataset_options = user_dao.list_datasets(user_id)  # [(label, table_name), ...]
-    except Exception as e:
-        st.error(f"Failed to list datasets: {e}")
-        dataset_options = []
+    # ---------- Detect whether a dataset is loaded ----------
+    has_dataset = (
+        st.session_state.get("current_df") is not None
+        and st.session_state.get("current_dataset_label") is not None
+    )
 
-    label_to_table = dict(dataset_options)
-    labels = list(label_to_table.keys())
+    # ---------- Header UI (always shown) ----------
+    h1, h2, h3 = st.columns([1, 3, 1], vertical_alignment="center")
+    with h2:
+        st.markdown(
+            """
+            <style>
+            div.st-emotion-cache-p75nl5 {
+                width: auto;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    # Default to last-used dataset if available
-    default_index = labels.index(st.session_state["current_dataset_label"]) if (
-        labels and st.session_state.get("current_dataset_label") in labels
-    ) else 0
+        st.image(ICON_PAGE, width=180)
+        scorecard(
+            "",
+            "Your life on Spotify",
+            score_size=48,
+            score_bold=True,
+            score_italic=True,
+            height=60,
+            background=False,
+        )
 
-    if labels:
-        s1, s2, s3 = st.columns([1, 1, 1])
-        with s1:
-            selected_label = st.selectbox(
-                "Choose a dataset you've uploaded", labels, index=default_index
+        # If we have a dataset, show the real date range; otherwise show a friendly placeholder.
+        if has_dataset:
+            df_header = st.session_state["current_df"].copy()
+            df_header["datetime"] = pd.to_datetime(df_header["datetime"], errors="coerce")
+            df_header = df_header.dropna(subset=["datetime"])
+            start_date = pd.to_datetime(df_header["datetime"].dt.date.min()).strftime("%d %B %Y")
+            end_date = pd.to_datetime(df_header["datetime"].dt.date.max()).strftime("%d %B %Y")
+            date_label = f"{start_date} - {end_date}"
+            scorecard(
+                "",
+                score=date_label,
+                score_size=36,
+                background=False,
+                height=36,
             )
 
-        selected_table = label_to_table[selected_label]
-        try:
-            df = user_dao.load_user_data(selected_table)
-        except Exception as e:
-            st.error(f"Failed to load dataset from storage: {e}")
-            st.stop()
+    # ---------- Main analytics content (only when a dataset is present) ----------
+    if has_dataset:
+        st.divider()
+        # ---------- Retrieve dataset + metadata ----------
+        df = st.session_state["current_df"].copy()
+        selected_label = st.session_state["current_dataset_label"]
+        df_artist_genre = INFO_ARTIST_GENRE.copy()
+        df_album = INFO_ALBUM.copy()
+        df_supergenre_map = INFO_SUPERGENRE.copy()
 
-        if df.empty:
-            st.warning("Loaded dataset is empty.")
-            st.stop()
-
-        # Normalize datetime + summary
+        # --- Normalize datetime + summary ---
         df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
         df = df.dropna(subset=["datetime"])
         df["date"] = df["datetime"].dt.date
+        df["year"] = df["datetime"].dt.year
 
-        # Update session state
+        # --- Ensure session variables are synced ---
         st.session_state.current_df = df
         st.session_state.current_dataset_label = selected_label
-        st.session_state.last_table_name = selected_table
-        # --- Auto check enrichment completion & rerun if needed ---
-        _auto_check_and_reenrich_if_needed(user_id, selected_label, df)
+        st.session_state.last_table_name = st.session_state.get("last_table_name", None)
 
-        total_hours = (
-            df["minutes_played"].sum() / 60.0 if "minutes_played" in df.columns else 0.0
+        # ---------------- Recent scorecards ---------------------
+        def get_top_combined(df_in, name_col, sub_col):
+            if df_in.empty:
+                return "N/A"
+            top = (
+                df_in.groupby([name_col, sub_col])["minutes_played"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()
+            )
+            if top.empty:
+                return "N/A"
+            return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
+
+        # --- Filter dataset ---
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+        selected_category = "music"
+        df_filtered = df[df["category"] == selected_category].copy()
+        df_filtered = df_filtered.merge(
+            df_artist_genre[["artist_name", "supergenre"]],
+            on="artist_name", how="left"
         )
 
-        st.markdown(
-            f"🗓️ From **{df['datetime'].min().date()}** to **{df['datetime'].max().date()}**"
+        # --- Use dataset's latest date as reference ---
+        latest_date = df_filtered["date"].max()
+        six_months_ago = latest_date - pd.DateOffset(months=6)
+        one_year_ago = latest_date - pd.DateOffset(years=1)
+
+        # --- Define time windows relative to dataset ---
+        last_six_months_df = df_filtered[df_filtered["date"] >= six_months_ago].copy()
+        previous_six_months_df = df_filtered[
+            (df_filtered["date"] < six_months_ago) & (df_filtered["date"] >= one_year_ago)
+        ].copy()
+
+        # --- 6 month metrics ---
+        fav_track = get_top_combined(last_six_months_df, "artist_name", "track_name")
+        fav_artist = last_six_months_df["artist_name"].value_counts().idxmax() if not last_six_months_df.empty else "N/A"
+
+        try:
+            if (
+                "supergenre" in last_six_months_df.columns
+                and not last_six_months_df["supergenre"].dropna().empty
+            ):
+                valid_genres = last_six_months_df[
+                    last_six_months_df["supergenre"].str.lower() != "unlisted"
+                ]["supergenre"].dropna()
+                fav_supergenre = valid_genres.value_counts().idxmax() if not valid_genres.empty else "N/A"
+            else:
+                fav_supergenre = "N/A"
+        except Exception as e:
+            print(f"[supergenre metric] Skipping due to transient data issue: {e}")
+            fav_supergenre = "N/A"
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            scorecard("Recent Favourite Track", fav_track, score_size=30)
+        with c2:
+            scorecard("Recent Favourite Artist", fav_artist, score_size=30)
+        with c3:
+            scorecard("Recent Favourite Genre", fav_supergenre, score_size=30)
+
+        # ----------- SUNBURST -------------- #
+        user_df = df.copy()
+
+        df = pd.merge(
+            user_df,
+            df_album,
+            on=["album_name", "artist_name"],
+            how="left"
         )
-        st.markdown(f"🎧 Total listening time: **{total_hours:.2f} hours**")
 
-        st.dataframe(df.sample(min(50, len(df))), height=600)
-    else:
-        st.info("You haven’t uploaded any datasets yet.")
+        # Merge with artist genre info (by artist only)
+        df = pd.merge(
+            df,
+            df_artist_genre,
+            on="artist_name",
+            how="left"
+        )
 
-    # ---------- Upload New Dataset ----------
+        # --- Datetime handling ---
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+        df = df.dropna(subset=["datetime"]).copy()
+        df["datetime"] = df["datetime"].dt.tz_localize(None)
+        df["date"] = df["datetime"].dt.date
+        df['year'] = df['datetime'].dt.year
+
+        df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
+        df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
+
+        # --- Add minutes played column ---
+        df_exploded['mins_played'] = df_exploded['ms_played'] / 60000.0
+
+        # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
+        top_genres = (
+            df_exploded.groupby(['year', 'supergenre'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'mins_played'], ascending=[True, False])
+            .groupby('year')
+            .head(5)
+        )
+
+        df_filtered = df_exploded.merge(
+            top_genres[['year', 'supergenre']], on=['year', 'supergenre']
+        )
+
+        top_artists = (
+            df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'supergenre', 'mins_played'], ascending=[True, True, False])
+            .groupby(['year', 'supergenre'])
+            .head(5)
+        )
+
+        df_filtered_artists = df_filtered.merge(
+            top_artists[['year', 'supergenre', 'artist_name']],
+            on=['year', 'supergenre', 'artist_name']
+        )
+
+        top_tracks = (
+            df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['mins_played']
+            .sum()
+            .sort_values(['year', 'supergenre', 'artist_name', 'mins_played'], ascending=[True, True, True, False])
+            .groupby(['year', 'supergenre', 'artist_name'])
+            .head(5)
+        )
+
+        # Create a log-transformed column for color scaling
+        top_tracks["log_mins_played"] = np.log1p(top_tracks["mins_played"])
+        # Apply exponential scaling for color intensity
+        exp_factor = 1.1
+        top_tracks["exp_mins_played"] = np.power(top_tracks["mins_played"], exp_factor)
+
+        # --- BUILD SUNBURST ---
+        fig_sunburst = px.sunburst(
+            top_tracks,
+            path=["year", "supergenre", "artist_name", "track_name"],
+            values="mins_played",
+            color="mins_played",
+            color_continuous_scale=[
+                "#062719",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                "#1ed760",
+                "#90d7ad",
+            ],
+            title="",
+        )
+
+        fig_sunburst.update_traces(
+            insidetextfont=dict(color="#c8eacd"),
+            hovertemplate="<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>",
+        )
+
+        fig_sunburst.update_layout(
+            margin=dict(t=50, l=0, r=0, b=0),
+            height=800,
+            font=dict(color="white"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+
+        fig_sunburst.update_xaxes(autorange=True)
+
+        fig_sunburst.update_coloraxes(
+            colorbar=dict(
+                orientation="h",
+                y=-0.15,
+                x=0.5,
+                xanchor="center",
+                title="Minutes Played",
+                tickcolor="white",
+                tickfont=dict(color="white"),
+                titlefont=dict(color="white"),
+            ),
+            showscale=True,
+        )
+
+        st.divider()
+        h1, h2, h3 = st.columns([1, 3, 1])
+        with h2:
+            st.html("<p style='text-align: center;font-size: 30px;'><em><b>Top 5 Tracks | Top 5 Artists | Top 5 Genre | Every Year</b></em></p>")
+
+        st.plotly_chart(
+            fig_sunburst,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+            key="sunburst_moulin",
+        )
+
+        st.divider()
+
+        st.markdown(f"**A sample of your raw listening data from {selected_label}:**")
+
+        demo_df = df.copy()
+        st.dataframe(
+            demo_df.query('category == "music"')
+            .copy()
+            .drop(
+                columns=[
+                    "spotify_track_uri",
+                    "episode_show_name",
+                    "episode_name",
+                    "spotify_episode_uri",
+                    "audiobook_title",
+                    "audiobook_uri",
+                    "audiobook_chapter_uri",
+                    "audiobook_chapter_title",
+                ],
+                errors="ignore",
+            )
+            .sample(min(20, len(df))),
+            height=300,
+        )
+        st.divider()
+    # ---------- Upload New Dataset (always visible) ----------
+
     st.markdown("### Upload a new dataset")
 
     with st.form("upload_form", clear_on_submit=False):
@@ -1232,7 +3097,6 @@ if page == "Home":
                     if cleaned_df is None or cleaned_df.empty:
                         st.error("ETL produced no rows. Please check your ZIP export.")
                     else:
-                        # Persist session state
                         st.session_state["current_dataset_label"] = dataset_label.strip()
                         st.session_state["current_df"] = cleaned_df
                         st.session_state["last_table_name"] = table_name
@@ -1240,31 +3104,41 @@ if page == "Home":
 
                         # ✅ Update Cloudflare status
                         try:
-                            status_dao.set_status(
-                                user_id,
-                                dataset_label.strip(),
-                                phase="etl",
-                                detail="✅ ETL completed, starting enrichment.",
-                                total=len(cleaned_df),
+                            status_dao._upload_json(
+                                status_dao._status_key(user_id, dataset_label.strip()),
+                                {
+                                    "user_id": user_id,
+                                    "dataset_label": dataset_label.strip(),
+                                    "status": "etl_done",
+                                    "phase": "etl",
+                                    "detail": "✅ ETL completed. Awaiting enrichment start.",
+                                    "total_batches": len(cleaned_df),
+                                    "batches_done": 0,
+                                    "percent": 0,
+                                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                                },
                             )
                         except Exception as e:
                             st.warning(f"⚠️ Could not persist ETL status: {e}")
 
                         st.success("✅ Dataset uploaded & cleaned. Enrichment will now begin in the background.")
 
-                        # Trigger enrichment autostart
-                        _clear_autostart_if_new_label(dataset_label.strip())
-                        st.session_state["_enrichment_autostart_block"] = False
-                        st.session_state["_enrichment_autostart_pending"] = True
-
-                        st.rerun()
+                        from dao_selector import get_log_dao
+                        log_dao = get_log_dao()
+                        res = _auto_check_and_reenrich_if_needed(
+                            user_id,
+                            dataset_label.strip(),
+                            log_dao,
+                            table_name=table_name,
+                        )
+                        print(f"[CALLSITE upload] auto_check result = {res}")
 
                 except zipfile.BadZipFile:
                     st.error("That file isn't a valid ZIP.")
                 except Exception as e:
                     st.error(f"ETL failed: {e}")
 
-    # ---------- Refresh Datasets ----------
+    # ---------- Refresh Datasets (always visible) ----------
     if st.button("Refresh list of uploaded datasets", key="btn_refresh_datasets"):
         try:
             dataset_options = user_dao.list_datasets(user_id)
@@ -1272,756 +3146,1101 @@ if page == "Home":
         except Exception as e:
             st.error(f"Failed to refresh dataset list: {e}")
 
-# --------------------------- Overall Review Page ---------------------------- #
+# ----------------------------- Overall Review ------------------------------- #
 elif page == "Overall Review":
 
-    # ✅ Make sure dataset is loaded
+    st.session_state["last_page"] = "Overall Review"
+
+    # ✅ Ensure dataset loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
+
     df, current_label = require_current_df()
-
-    # ✅ Ensure datetime is parsed correctly
-    if "datetime" not in df.columns:
-        st.error("Dataset is missing a 'datetime' column. Please check your input file.")
-        st.stop()
-
     df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
     df = df.dropna(subset=["datetime"]).copy()
     df["date"] = df["datetime"].dt.date
+    df["year"] = df["datetime"].dt.year
 
-    # --- HEADER AND LOGO ---
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
+    # --- Metadata references ---
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
+    df_album = INFO_ALBUM.copy()
+    df_supergenre_map = INFO_SUPERGENRE.copy()
 
-    # --- DATE SUMMARY HEADER ---
-    st.header("you've been listening since:")
-    start, end = df["date"].min(), df["date"].max()
-    years = round((end - start).days / 365, 1)
-    st.title(f"{start.strftime('%d %B %Y')}, that was {years} years ago!")
-    st.markdown("")
+    def get_top_combined(df, name_col, sub_col):
+        if df.empty:
+            return "N/A"
+        top = (
+            df.groupby([name_col, sub_col])["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()
+        )
+        if top.empty:
+            return "N/A"
+        return f"{top.iloc[0][name_col]} — {top.iloc[0][sub_col]}"
 
-    # --- METRIC COLUMNS ---
-    col1, col2, col3 = st.columns(3)
+    # --- Header ---
+    h1, h2, h3 = st.columns([1,3,1])
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Overall Review</b></em></p>")
 
-    with col1:
-        st.markdown("<h4>You listened for</h4>", unsafe_allow_html=True)
-        days = round(df["minutes_played"].sum() / 60 / 24, 1)
-        st.markdown(f"<div style='font-size:38px;color:#1ed760;'>🎧 {days} days</div>", unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("<h4>and listened to a total of</h4>", unsafe_allow_html=True)
-        tracks = df["track_name"].nunique()
-        st.markdown(f"<div style='font-size:38px;color:#1ed760;'>🎵 {tracks} tracks</div>", unsafe_allow_html=True)
-
-    with col3:
-        st.markdown("<h4>by</h4>", unsafe_allow_html=True)
-        artists = df["artist_name"].nunique()
-        st.markdown(f"<div style='font-size:38px;color:#1ed760;'>👩‍🎤 {artists} artists</div>", unsafe_allow_html=True)
-
-    # --- MODE SELECTION + TABLES ---
-    col1, col2 = st.columns(2)
-
-    with col1:
+    # --- Category & Year Selectors ---
+    c1, c2 = st.columns([0.7, 1])
+    with c1:
         categories = ["music", "podcast"]
         if "audiobook" in df["category"].unique():
             categories.append("audiobook")
+        selected_category = st.segmented_control(
+            "Category", categories, selection_mode="single", default="music"
+        )
+        if not selected_category:
+            selected_category = "music"
+    with c2:
+        years = sorted(df["year"].dropna().unique())
+        year_options = ["All Time"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year", year_options, selection_mode="single", default="All Time", width="content"
+        )
+        if not year_selected:
+            year_selected = "All Time"
 
-        mode = st.segmented_control("Category", categories, selection_mode="single", default="music")
+    # --- Filter dataset ---
+    df_filtered = df[df["category"] == selected_category].copy()
+    if year_selected != "All Time":
+        df_delta = df_filtered[df_filtered["year"] == (int(year_selected)-1)]
+        df_filtered = df_filtered[df_filtered["year"] == int(year_selected)]
+
+    # ============================================================
+    # 🎵 MUSIC
+    # ============================================================
+    if selected_category == "music":
+        df_filtered = df_filtered.merge(
+            df_artist_genre[["artist_name", "supergenre"]],
+            on="artist_name", how="left"
+        )
+
+        # --- Core metrics ---
+        total_days = round(df_filtered["minutes_played"].sum() / 60 / 24, 1)
+        if year_selected != "All Time":
+            if total_days == 0:
+                total_days_delta = "∞%"
+            else: total_days_delta = f"{round((total_days - (df_delta["minutes_played"].sum() / 60 / 24)) / total_days * 100,1)}%"
+        else: total_days_delta = ""
+
+        unique_tracks = df_filtered["track_name"].nunique()
+        if year_selected != "All Time":
+            if unique_tracks == 0:
+                unique_tracks_delta = "∞%"
+            else: unique_tracks_delta = f"{round((unique_tracks - (df_delta["track_name"].nunique())) / unique_tracks * 100,1)}%"
+        else: unique_tracks_delta = ""
+
+        unique_artists = df_filtered["artist_name"].nunique()
+        if year_selected != "All Time":
+            if unique_artists == 0:
+                unique_artists_delta = "∞%"
+            else: unique_artists_delta = f"{round((unique_artists - (df_delta["artist_name"].nunique())) / unique_artists * 100,1)}%"
+        else: unique_artists_delta = ""
+
+        fav_artist = df_filtered["artist_name"].value_counts().idxmax() if not df_filtered.empty else "N/A"
+        fav_track = get_top_combined(df_filtered, "artist_name", "track_name")
+
+        try:
+            if (
+                "supergenre" in df_filtered.columns
+                and not df_filtered["supergenre"].dropna().empty
+            ):
+                # ✅ Exclude "Other" and "Unlisted" before determining favorite
+                fav_supergenre = (
+                    df_filtered.loc[
+                        ~df_filtered["supergenre"].str.lower().isin(["other", "unlisted"]),
+                        "supergenre"
+                    ]
+                    .value_counts()
+                    .idxmax()
+                )
+            else:
+                fav_supergenre = "N/A"
+        except Exception as e:
+            print(f"[supergenre metric] Skipping due to transient data issue: {e}")
+            fav_supergenre = "N/A"
+
+        skips_df = df_filtered[df_filtered["skipped"] == True]
+        skipped_artist = skips_df["artist_name"].value_counts().idxmax() if not skips_df.empty else "N/A"
+        skipped_track = get_top_combined(skips_df, "artist_name", "track_name")
+
+        # ✅ Exclude "Other" and "Unlisted" supergenres globally
+        all_supergenres = (
+            df_supergenre_map["supergenre"]
+            .dropna()
+            .loc[~df_supergenre_map["supergenre"].str.lower().isin(["other", "unlisted"])]
+            .unique()
+            .tolist()
+        )
+
+        listened_supergenres = (
+            df_filtered.loc[~df_filtered["supergenre"].str.lower().isin(["other", "unlisted"]), "supergenre"]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        unlistened = [s for s in all_supergenres if s not in listened_supergenres]
+
+        if unlistened:
+            least_genre = ", ".join(sorted(unlistened))
+        else:
+            genre_playtime = (
+                df_filtered.loc[~df_filtered["supergenre"].str.lower().isin(["other", "unlisted"])]
+                .groupby("supergenre")["minutes_played"]
+                .sum()
+                .sort_values(ascending=True)
+            )
+            min_value = genre_playtime.min()
+            least_genres = genre_playtime[genre_playtime == min_value].index.tolist()
+            least_genre = ", ".join(sorted(least_genres)) if least_genres else "N/A"
+
+        # Seasonal favourites
+        df_filtered["month_day"] = df_filtered["datetime"].dt.strftime("%m-%d")
+        df_xmas = df_filtered[(df_filtered["month_day"] >= "11-15") | (df_filtered["month_day"] <= "01-01")]
+        df_summer = df_filtered[(df_filtered["month_day"] >= "06-21") & (df_filtered["month_day"] <= "09-22")]
+        fav_xmas = get_top_combined(df_xmas, "artist_name", "track_name")
+        fav_summer = get_top_combined(df_summer, "artist_name", "track_name")
+
+        # --- Render all 11 scorecards ---
+        st.markdown("### Your Highlights")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            # Calculate metrics
+            scorecard("Total Listening Time",f"{total_days} days",total_days_delta)
+            scorecard("Favourite Genre", fav_supergenre)
+            scorecard("Least Listened Genre(s)", least_genre)
+
+            # scorecard("Song of the Summer", fav_summer)
+        with c2:
+            scorecard("Unique Tracks", f"{unique_tracks}", delta=unique_tracks_delta)
+            scorecard("Favourite Track", fav_track)
+            scorecard("Most Skipped Track", skipped_track)
+
+            # scorecard("Xmas Anthem", fav_xmas)
+        with c3:
+            scorecard("Unique Artists", f"{unique_artists}", delta=unique_artists_delta)
+            scorecard("Favourite Artist", fav_artist)
+            scorecard("Most Skipped Artist", skipped_artist)
+
+        c1, c2, c3, c4 = st.columns([1,2,2,1])
+        with c2:
+            scorecard("Song of the Summer", fav_summer)
+        with c3:
+            scorecard("Xmas Anthem", fav_xmas)
+
+        # --- Top 10 Artists ---
+        st.markdown("## Top 10 Artists")
+        c1, c2 = st.columns([3, 2])
+
+        top_artists = (
+            df_filtered.groupby("artist_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+        )
+        top_artists["hhmmss"] = top_artists["minutes_played"].apply(format_hhmmss)
+
+        n_artist = len(top_artists)
+        sampled_colors = sample_colorscale(
+            spotify_colorscale,
+            [i / max(1, n_artist - 1) for i in range(n_artist)]
+        )
+
+        top_artists = top_artists.reset_index(drop=True)
+        top_artists["color"] = sampled_colors[::-1]  # optional: reverse gradient
+
+        with c1:
+            # --- Build bar chart (assign text here, not in update_traces) ---
+            fig_artists = px.bar(
+                top_artists,
+                y="artist_name",
+                x="minutes_played",
+                orientation="h",
+                text="hhmmss",  # ✅ associate text with each bar
+                color="color",
+                color_discrete_map="identity",
+                labels={
+                    "artist_name": "Artist",
+                    "minutes_played": "Time Played",
+                    "hhmmss":"Time Played"
+                },
+            )
+
+            # --- Update trace appearance ---
+            fig_artists.update_traces(
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="end",
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+            )
+
+            # --- Layout and formatting ---
+            fig_artists.update_layout(
+                yaxis=dict(categoryorder="total ascending"),
+                height=500,
+                margin=dict(l=0, r=0, t=30, b=0),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+                showlegend=False,
+            )
+
+            # --- Display ---
+            st.plotly_chart(
+                fig_artists,
+                width="stretch",
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
+
+        with c2:
+            artist_image_list = []
+
+            # Iterate through top artists and get their artwork
+            for idx, artist in enumerate(top_artists["artist_name"], start=1):
+                # Try to find a match in df_artist_genre
+                if "df_artist_genre" in locals() and not df_artist_genre.empty:
+                    match = df_artist_genre.loc[df_artist_genre["artist_name"] == artist]
+                else:
+                    match = None
+
+                # Get image or fallback to placeholder
+                img = (
+                    match["artist_image"].iloc[0]
+                    if match is not None
+                    and not match.empty
+                    and "artist_image" in match.columns
+                    and isinstance(match["artist_image"].iloc[0], str)
+                    and match["artist_image"].iloc[0].strip()
+                    else CAROUSEL_PLACEHOLDER
+                )
+
+                # Add to carousel items
+                artist_image_list.append(dict(text=artist, title=f"#{idx}", img=img))
+
+            # --- Render carousel ---
+            if artist_image_list:
+                carousel(items=artist_image_list, wrap=False, container_height=500)
+            else:
+                st.info("No artist images available for this timeframe.")
+
+        # --- Top 10 Tracks ---
+        st.markdown("## Top 10 Tracks")
+        c1, c2 = st.columns([3, 2])
+
+        # --- Aggregate top tracks ---
+        top_tracks = (
+            df_filtered.groupby(["track_name", "artist_name"])["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+        )
+        top_tracks["label"] = top_tracks["artist_name"] + " — " + top_tracks["track_name"]
+        top_tracks["hhmmss"] = top_tracks["minutes_played"].apply(format_hhmmss)
+
+        # --- Spotify color gradient ---
+        n_tracks = len(top_tracks)
+        sampled_colors = sample_colorscale(
+            spotify_colorscale,
+            [i / max(1, n_tracks - 1) for i in range(n_tracks)]
+        )
+
+        # Assign colors (reversed if you prefer gradient high→low)
+        top_tracks = top_tracks.reset_index(drop=True)
+        top_tracks["color"] = sampled_colors[::-1]
+
+        # --- Plot ---
+        with c1:
+            fig_tracks = px.bar(
+                top_tracks,
+                y="label",
+                x="minutes_played",
+                orientation="h",
+                text="hhmmss",  # ✅ attach text here, not in update_traces
+                color="color",
+                color_discrete_map="identity",  # use exact sampled hex colors
+                labels={
+                    "minutes_played": "Time Played",
+                    "label": "Track",
+                    "hhmmss":"Time Played"
+                },
+            )
+
+            # --- Style text and layout ---
+            fig_tracks.update_traces(
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="end",
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+            )
+
+            fig_tracks.update_layout(
+                yaxis=dict(categoryorder="total ascending"),
+                height=500,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+                showlegend=False,
+                margin=dict(l=0, r=0, t=30, b=0),
+            )
+
+            # --- Display ---
+            st.plotly_chart(
+                fig_tracks,
+                width="stretch",
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
+
+        with c2:
+            track_image_list = []
+
+            # Iterate through top tracks and match their album artwork
+            for idx, row in top_tracks.iterrows():
+                track = row["track_name"]
+
+                # Try to find a matching album in df_album using the track’s album_name
+                if "df_album" in locals() and not df_album.empty:
+                    related_albums = df_filtered.loc[df_filtered["track_name"] == track, "album_name"]
+                    match = df_album.loc[df_album["album_name"].isin(related_albums)]
+                else:
+                    match = None
+
+                # Get image or fallback to placeholder
+                img = (
+                    match["album_artwork"].iloc[0]
+                    if match is not None
+                    and not match.empty
+                    and "album_artwork" in match.columns
+                    and isinstance(match["album_artwork"].iloc[0], str)
+                    and match["album_artwork"].iloc[0].strip()
+                    else CAROUSEL_PLACEHOLDER
+                )
+
+                # Add to carousel items
+                track_image_list.append(dict(text=row["label"], title=f"#{idx + 1}", img=img))
+
+            # --- Render carousel ---
+            if track_image_list:
+                carousel(items=track_image_list, container_height=500)
+            else:
+                st.info("No track images available for this timeframe.")
+
+        # --- Listening Trend ---
+        st.markdown("### Listening Trend")
+
+        # Ensure datetime and derive helper columns
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+        df["year"] = df["datetime"].dt.year
+        df["date"] = df["datetime"].dt.date
         df["hours_played"] = df["minutes_played"] / 60
 
-        if mode == "music":
-            top_music = (
-                df[df["category"] == "music"]
-                .groupby("artist_name", as_index=False)["hours_played"].sum()
-                .sort_values("hours_played", ascending=False)
-                .head(10)
+        if year_selected == "All Time":
+            # Aggregate by date
+            timeline = (
+                df.groupby("date")["hours_played"]
+                .sum()
+                .reset_index()
+                .sort_values("date")
             )
-            top_music.insert(0, "rank", range(1, len(top_music) + 1))
-            st.dataframe(top_music.rename(columns={"artist_name": "Artist", "hours_played": "Total Hours"}), hide_index=True)
+            timeline["rolling_avg"] = timeline["hours_played"].rolling(window=30, min_periods=1).mean()
 
-        elif mode == "podcast":
-            top_podcasts = (
-                df[df["category"] == "podcast"]
-                .groupby("episode_show_name", as_index=False)["hours_played"].sum()
-                .sort_values("hours_played", ascending=False)
-                .head(10)
+            import numpy as np
+            timeline["days_since_start"] = (
+                pd.to_datetime(timeline["date"]) - pd.to_datetime(timeline["date"]).min()
+            ).dt.days
+            x = np.log(timeline["days_since_start"] + 1)
+            y = timeline["hours_played"]
+            coeffs = np.polyfit(x, y, 1)
+            timeline["trendline"] = coeffs[0] * x + coeffs[1]
+
+            fig_timeline = px.line(
+                timeline,
+                x="date",
+                y="rolling_avg",
+                title="Listening Trend (All Time)",
+                labels={
+                    "rolling_avg": "Hours Played (30-Day Rolling Avg)",
+                    "date": "Date",
+                },
+                color_discrete_sequence=["#23f96e"],
             )
-            top_podcasts.insert(0, "rank", range(1, len(top_podcasts) + 1))
-            st.dataframe(top_podcasts.rename(columns={"episode_show_name": "Podcast", "hours_played": "Total Hours"}), hide_index=True)
 
-        elif mode == "audiobook":
-            top_audiobooks = (
-                df[df["category"] == "audiobook"]
-                .groupby("audiobook_title", as_index=False)["hours_played"].sum()
-                .sort_values("hours_played", ascending=False)
-                .head(10)
+            fig_timeline.add_scatter(
+                x=timeline["date"],
+                y=timeline["trendline"],
+                mode="lines",
+                name="Log Trendline",
+                line=dict(color="#137b37", width=2),
             )
-            top_audiobooks.insert(0, "rank", range(1, len(top_audiobooks) + 1))
-            st.dataframe(top_audiobooks.rename(columns={"audiobook_title": "Book", "hours_played": "Total Hours"}), hide_index=True)
 
-        # Pie chart: share of listening
-        minutes_by_type = df.groupby("category")["minutes_played"].sum().reset_index()
-        minutes_by_type["days_played"] = minutes_by_type["minutes_played"] / 60 / 24
-        fig = px.pie(minutes_by_type, values="days_played", names="category",
-                     color_discrete_sequence=['#1ed760', '#CF5C36', '#3B429F'])
-        fig.update_layout(margin=dict(t=50, l=0, r=0, b=0), height=525)
-        st.plotly_chart(fig)
-
-    with col2:
-        # Image carousels
-        IMAGE_PLACEHOLDER = 'media/assets/Image-Coming-Soon_vector.svg'
-
-        if mode == "music":
-            top = (
-                df[df["category"] == "music"]
-                .groupby("artist_name", as_index=False)["hours_played"].sum()
-                .sort_values("hours_played", ascending=False)
-                .head(10)
-            )
-            artist_image_list = []
-            for idx, artist in enumerate(top["artist_name"], start=1):
-                match = INFO_ARTIST_GENRE.loc[INFO_ARTIST_GENRE.artist_name == artist]
-                img = match["artist_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
-                artist_image_list.append(dict(text=artist, title=f"#{idx}", img=img))
-            if artist_image_list:
-                carousel(items=artist_image_list, container_height=550)
-
-        elif mode == "podcast":
-            top = (
-                df[df["category"] == "podcast"]
-                .groupby("episode_show_name", as_index=False)["hours_played"].sum()
-                .sort_values("hours_played", ascending=False)
-                .head(10)
-            )
-            podcast_image_list = []
-            for idx, show in enumerate(top["episode_show_name"], start=1):
-                match = INFO_SHOW.loc[INFO_SHOW["show_name"] == show]
-                img = match["show_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
-                podcast_image_list.append(dict(text=show, title=f"#{idx}", img=img))
-            if podcast_image_list:
-                carousel(items=podcast_image_list, container_height=550)
-
-        elif mode == "audiobook":
-            top = (
-                df[df["category"] == "audiobook"]
-                .groupby("audiobook_title", as_index=False)["hours_played"].sum()
-                .sort_values("hours_played", ascending=False)
-                .head(10)
-            )
-            audiobook_image_list = []
-            for idx, book in enumerate(top["audiobook_title"], start=1):
-                match = INFO_AUDIOBOOK.loc[INFO_AUDIOBOOK["audiobook_title"] == book]
-                img = match["audiobook_image"].iloc[0] if not match.empty else IMAGE_PLACEHOLDER
-                audiobook_image_list.append(dict(text=book, title=f"#{idx}", img=img))
-            if audiobook_image_list:
-                carousel(items=audiobook_image_list, container_height=550)
-
-    # --- Listening trend over years ---
-    grouped = df.groupby([df["datetime"].dt.year, "category"])["minutes_played"].sum().reset_index()
-    grouped = grouped.rename(columns={"datetime": "year"})
-    grouped["hours_played"] = grouped["minutes_played"] / 60
-    fig = px.line(grouped, x="year", y="hours_played", color="category", markers=True,
-                  color_discrete_sequence=['#1ed760', '#CF5C36', '#3B429F'])
-    fig.update_layout(xaxis_title="Year", yaxis_title="Hours Played", legend_title="Category")
-    st.plotly_chart(fig)
-
-    # --- World map ---
-    st.markdown("<h1 style='text-align: center;'>Where you've been with your music</h1>", unsafe_allow_html=True)
-    df_country = df.groupby("country")["minutes_played"].sum().reset_index()
-    df_country["country"] = df_country["country"].apply(lambda x: coco.convert(x, to="name_short"))
-    df_country["country_iso"] = df_country["country"].apply(lambda x: coco.convert(x, to="ISO3"))
-    df_country["hours_played"] = df_country["minutes_played"] / 60
-
-    fig = px.choropleth(df_country, locations="country_iso", color="hours_played",
-                        hover_name="country", range_color=[0, 20],
-                        color_continuous_scale=px.colors.sequential.Inferno_r)
-    fig.update_layout(geo_bgcolor="#0d100e", height=800)
-    fig.update_geos(visible=True, bgcolor="#0d100e", showcoastlines=True, landcolor="#3D413D")
-    fig.update_coloraxes(showscale=False)
-    st.plotly_chart(fig, use_container_width=True)
-
-    with st.expander("See data"):
-        st.dataframe(df_country.dropna().sort_values("hours_played", ascending=False), use_container_width=True)
-
-# ------------------------------ Per Year Page ------------------------------- #
-elif page == "Per Year":
-    # Get current user from session state (NO SELECTBOX)
-    # Select user
-        # ✅ Make sure dataset is loaded
-    if "current_df" not in st.session_state:
-        st.error("No dataset selected. Please go to the Home page and select a dataset.")
-        st.stop()
-
-    df, current_label = require_current_df()
-    user_df = df.copy()
-    user_selected = current_label
-
-    df_artist = INFO_ARTIST_GENRE
-    df_show_meta = INFO_SHOW  # columns: show_name, show_artwork
-    df_audiobook_meta = INFO_AUDIOBOOK  # columns: audiobook_title, audiobook_artwork
-
-    # Extract year from datetime
-    user_df['year'] = pd.to_datetime(user_df['datetime']).dt.year
-
-    col1,col2,col3,col4,col5 = st.columns([1, 0.5, 1.8, 0.6 ,1], vertical_alignment='center')
-    with col5:
-        st.image(LOGO_SPOTGREEN, width=200)
-
-    with col3:
-        st.title("Your Yearly Deep-Dive")
-
-    st.markdown('')
-    st.markdown('')
-
-    ## making the buttons##
-    df['year'] = pd.to_datetime(df['datetime']).dt.year
-
-    year_list = df['year'].sort_values().unique().tolist()
-
-    # make buttons for category selection
-    categories = ['music','podcast']
-    if 'audiobook' in user_df['category'].unique():
-        categories.append('audiobook')
-
-    c1,c2 = st.columns([3,1],vertical_alignment='center')
-    with c1:
-        selected_year = st.segmented_control("Select Year", year_list, selection_mode="single", default=df['year'].max())
-
-    with c2:
-        selected_category = st.segmented_control('Category', categories, selection_mode="single", default='music')
-
-    ##filtering the data##
-    df_filtered = df.loc[df['year'] == selected_year].copy()
-    df_filtered['date'] = pd.to_datetime(df_filtered['datetime']).dt.date
-
-    if selected_category == 'music':
-        df_grouped = df_filtered.groupby('artist_name', as_index=False)['minutes_played'].sum()
-    elif selected_category == 'podcast':
-        df_grouped = df_filtered.groupby('episode_show_name', as_index=False)['minutes_played'].sum()
-    elif selected_category == 'audiobook':
-        df_grouped = df_filtered.groupby(['audiobook_title','audiobook_uri'], as_index=False)['minutes_played'].sum()
-    else:
-        st.error("Unsupported category selected.")
-        st.stop()
-
-    df_grouped = df_grouped.sort_values(by='minutes_played', ascending=False)
-    df_grouped['hours_played'] = round(df_grouped['minutes_played'] / 60, 2)
-    df_grouped = df_grouped[df_grouped['hours_played'] > 1]
-
-    # make top 10 based on hours played showing image, scorecard for comparison to last year ('first year lsitened to' if first year) and duration listened to
-
-    df_top10 = df_grouped.head(10).reset_index()
-
-    def display_top_5(dataset, category):
-        st.markdown("<h2 style='text-align: center;'>Your Top Bands</h2>", unsafe_allow_html=True)
-        top5 = dataset.head(5).reset_index(drop=True)
-
-    col1, col2, col3, col4 = st.columns([1, 2.5, 7, 2.5])
-
-    with col1:
-        st.markdown("<h3 style='color: white;'>Rank</h3>", unsafe_allow_html=True)
-    with col2:
-        #st.markdown("<h3 style='color: white;'>Image</h3>", unsafe_allow_html=True)
-        pass
-    with col3:
-        st.markdown("<h3 style='color: white;'>Name</h3>", unsafe_allow_html=True)
-    with col4:
-        st.markdown("<h3 style='color: white;'>Hours Played</h3>", unsafe_allow_html=True)
-
-    if selected_category == 'audiobook':
-        df_audiobook_uri = df_grouped
-
-    for i, row in df_top10.iterrows():
-        col1, col2, col3, col4 = st.columns(([1, 2.1, 7, 1.75]), vertical_alignment='center')
-
-        # Determine display name depending on category
-        if selected_category == 'music':
-            name = row['artist_name']
-            try:
-                image_url = df_artist[df_artist['artist_name'] == name]['artist_image'].values[0]
-            except:
-                image_url = 'media/assets/Image-Coming-Soon_vector.svg'
-        elif selected_category == 'podcast':
-            name = row['episode_show_name']
-            try:
-                image_url = (
-                    df_show_meta.loc[df_show_meta['show_name'] == name, 'show_artwork']
-                    .dropna().values[0]
-                )
-            except Exception:
-                image_url = 'media/assets/Image-Coming-Soon_vector.svg'
-        elif selected_category == 'audiobook':
-            name = row['audiobook_title']
-            try:
-                image_url = (
-                    df_audiobook_meta.loc[df_audiobook_meta['audiobook_title'] == name, 'audiobook_artwork']
-                    .dropna().values[0]
-                )
-            except Exception:
-                image_url = 'mmedia/assets/Image-Coming-Soon_vector.svg'
-
-        with col1:
-            st.markdown(
-                f"<div style='display: flex; align-items: center; font-size: 52px; color: white;'>"
-                f"{i+1}.</div>",
-                unsafe_allow_html=True
-            )
-        with col2:
-            try:
-                st.image(image_url, width=150)
-            except:
-                st.image('media/assets/Image-Coming-Soon_vector.svg')
-        with col3:
-            st.markdown(
-                f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
-                f"{name}</div>",
-                unsafe_allow_html=True
-            )
-        with col4:
-            if selected_category == 'music':
-                hours_played = df_top10.loc[df_top10['artist_name'] == name, 'hours_played'].values[0]
-            elif selected_category == 'podcast':
-                hours_played = df_top10.loc[df_top10['episode_show_name'] == name, 'hours_played'].values[0]
-            elif selected_category == 'audiobook':
-
-                hours_played = df_top10.loc[df_top10['audiobook_title'] == name, 'hours_played'].values[0]
-
-            st.markdown(
-                f"<div style='display: flex; align-items: center; font-size: 48px; color: white;'>"
-                f"<h3 style='margin: 0; color: white;'>{hours_played}</h3>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-        st.markdown("---")  # separator for visual spacing
-
-    with st.expander("See data"):
-        if selected_category == 'music':
-            st.dataframe(df_grouped[['artist_name','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
-            fig_artists = px.bar(
-            df_grouped.head(10),
-            x="artist_name",
-            y="minutes_played",
-            labels={"artist_name": "Artist", "minutes_played": "Minutes Played"},
-            title=f"{user_selected}'s top 10 artists for {selected_year}:",
-            color_discrete_sequence=["#1ed760"])
-        elif selected_category == 'podcast':
-            st.dataframe(df_grouped[['episode_show_name','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
-            fig_artists = px.bar(
-            df_grouped.head(10),
-            x="episode_show_name",
-            y="minutes_played",
-            labels={"episode_show_name": "Podcast", "minutes_played": "Minutes Played"},
-            title=f"{user_selected}'s top 10 artists for {selected_year}:",
-            color_discrete_sequence=["#1ed760"])
-        elif selected_category == 'audiobook':
-            st.dataframe(df_grouped[['audiobook_title','hours_played']].head(100).reset_index(drop=True), use_container_width=True)
-            fig_artists = px.bar(
-            df_grouped.head(10),
-            x="audiobook_title",
-            y="minutes_played",
-            labels={"audiobook_name": "Book", "minutes_played": "Minutes Played"},
-            title=f"{user_selected}'s top 10 artists for {selected_year}:",
-            color_discrete_sequence=["#1ed760"])
-
-    ## top 5 per year breakdowns ##
-    ##Split the dataset by category##
-    df_music = df_filtered[df_filtered['category'] == 'music']
-    df_show_metas = df_filtered[df_filtered['category'] == 'podcast']
-    df_audiobook_meta = df_filtered[df_filtered['category'] == 'audiobook']
-
-     ## dropdown to select category ##
-    st.title('')
-    #st.title('')
-    #  categories = ['music', 'podcast', 'audiobook']
-    #  selected_category = st.segmented_control("Choose a category to explore", categories, selection_mode="single", default='music')
-    col1,col2 = st.columns([7, 1], vertical_alignment='center')
-    with col2:
-        limit = st.selectbox(options=[10,20,50,100],label='No.')
-
-    if selected_category == "music":
-    ## Top 5 artists in music category in horizontal bar graph##
-
-        top_music_tracks = df_music.groupby(['track_name', 'artist_name'])['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
-        fig_music = px.bar(top_music_tracks.head(limit) ,y="minutes_played", x ="track_name", title=f"Top {len(top_music_tracks.head(limit))} tracks of {selected_year}", color_discrete_sequence=["#1ed760"], hover_data='artist_name', labels={'track_name': 'Track Name', 'artist_name': 'Artist Name', "minutes_played": "Minutes Played"}, text_auto=True)
-        fig_music.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
-        fig_music.update_yaxes(categoryorder='total ascending')
-        st.plotly_chart(fig_music, use_container_width=True)
-
-    elif selected_category == "podcast":
-        ## Top 5 artists in podcast category in horizontal bar graph##
-        top_podcasts = df_show_metas.groupby('episode_show_name')['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
-        fig_podcast = px.bar(top_podcasts.head(limit) ,x="minutes_played", y ="episode_show_name", title=f"Top {len(top_podcasts.head(limit))} podcast episodes of {selected_year}", color_discrete_sequence=["#1ed760"], hover_data='episode_show_name', labels={'episode_name': 'Episode Name', 'episode_show_name': 'Podcast Show Name', "minutes_played": "Minutes Played"})
-        fig_podcast.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
-        fig_podcast.update_yaxes(categoryorder='total ascending')
-        st.plotly_chart(fig_podcast, use_container_width=True)
-
-    elif selected_category == "audiobook":
-        ## Top 5 artists in audiobook category in horizontal bar graph##
-        top_audiobooks = df_audiobook_meta.groupby('audiobook_title')['minutes_played'].sum().reset_index().sort_values(by='minutes_played', ascending=False)
-        fig_audiobook = px.bar(top_audiobooks.head(limit) ,x="minutes_played", y ="audiobook_title", title=f"Top {len(top_audiobooks.head(limit))} audiobooks of {selected_year}", color_discrete_sequence=["#1ed760"], labels={'audiobook_title': 'Audiobook Title', 'minutes_played': 'Minutes Played'})
-        fig_audiobook.update_layout(title = {'x': 0.5, 'xanchor': 'center', 'font': {'size': 25}})
-        fig_audiobook.update_yaxes(categoryorder='total ascending')
-        st.plotly_chart(fig_audiobook, use_container_width=True)
-
-    ##per year stats##
-    # Fix: Get the track name properly
-   # top_track_idx = df[df['year'] == selected_year]['ms_played'].idxmax()
-    #top_track_name = df.loc[top_track_idx, 'track_name']
-
-   # fig5 = go.Figure(go.Indicator(
-   #     mode="gauge+number",
-   #     value=len(top_track_name),  # Just show length as example
-  #      title={"text": f"Top Track: {top_track_name}"}
-   # ))
-   # st.plotly_chart(fig5, use_container_width=True)
-
-       # Load user-specific data
-    df = df.copy()
-
-    # Convert datetime and extract year
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df['year'] = df['datetime'].dt.year
-
-    # Map category to correct "title" field
-    if selected_category == "music":
-        title_field = "artist_name"
-    elif selected_category == "podcast":
-        title_field = "episode_show_name"
-    elif selected_category == "audiobook":
-        title_field = "audiobook_title"
-    else:
-        st.error("Unsupported category selected.")
-        st.stop()
-
-    # Filter data
-    df_filtered = df[df['category'] == selected_category][['year', title_field, 'minutes_played']].dropna()
-
-    # Get top 10 titles
-    top_titles = (
-        df_filtered.groupby(title_field)['minutes_played']
-        .sum()
-        .nlargest(10)
-        .index
-    )
-
-    # Filter again for just top titles
-    df_top10 = df_filtered[df_filtered[title_field].isin(top_titles)]
-
-    # Group for chart
-
-# ----------------------------- Per Artist Page ------------------------------ #
-elif page == "Per Artist":
-
-    import matplotlib.pyplot as plt
-    import dayplot as dp
-    from datetime import date
-
-    ## page set up
-    # ✅ Make sure dataset is loaded
-    if "current_df" not in st.session_state:
-        st.error("No dataset selected. Please go to the Home page and select a dataset.")
-        st.stop()
-
-    df, current_label = require_current_df()
-
-    # project title and header
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
-
-    ## start content
-    # Load user-specific music data
-    df_music = df[df["category"] == "music"][
-        ["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]
-    ].copy()
-
-    # Clean datetime columns
-    df_music["datetime"] = pd.to_datetime(df_music["datetime"]).dt.tz_localize(None)
-    df_music["date"] = df_music["datetime"].dt.date
-
-    # artist and year selection
-    col1, col2, col3 = st.columns([2, 1, 2])
-
-    with col1:
-        # Artist selector, sorted by total minutes
-        artist_list = (
-            df_music.groupby("artist_name")["minutes_played"]
-            .sum()
-            .sort_values(ascending=False)
-            .reset_index()["artist_name"]
-            .tolist()
-        )
-        artist_selected = st.selectbox("Artist:", options=artist_list, index=0)
-
-    with col2:
-        # Choose between all data or per-year summary
-        mode = st.segmented_control(
-            "Summary displayed:", ["All Data", "Per Year"], selection_mode="single", default="All Data"
-        )
-
-    with col3:
-        # Year selector depends on mode
-        if mode == "All Data":
-            year_selected = "All Time"
         else:
-            year_list = (
-                df_music[df_music["artist_name"] == artist_selected]
-                .datetime.dt.year.sort_values()
-                .unique()
-                .tolist()
+            df["hours_played"] = df["minutes_played"] / 60
+            df["month_day"] = df["datetime"].dt.strftime("%m-%d")
+
+            timeline_all = (
+                df.groupby(["year", "month_day"])["hours_played"]
+                .sum()
+                .reset_index()
+                .sort_values(["year", "month_day"])
             )
-            default_year = (
-                df_music[df_music["artist_name"] == artist_selected].datetime.dt.year.max()
+
+            timeline_all["rolling_avg"] = (
+                timeline_all.groupby("year")["hours_played"]
+                .transform(lambda s: s.rolling(window=30, min_periods=1).mean())
             )
-            year_selected = st.segmented_control(
-                "Year:", year_list, selection_mode="single", default=default_year
+
+            timeline_all["date_proxy"] = pd.to_datetime(
+                "2000-" + timeline_all["month_day"], errors="coerce"
             )
-            # Filter data for that year
-            df_music = df_music[df_music["datetime"].dt.year == year_selected]
 
-    # summary cards & images
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        # Artist rank
-        year_rank = (
-            df_music.groupby("artist_name")["minutes_played"]
-            .sum()
-            .sort_values(ascending=False)
-            .reset_index()["artist_name"]
-            .tolist()
-        )
-        st.markdown(f"<h4>Rank of {str(year_selected).lower()}</h4>", unsafe_allow_html=True)
-        wch_colour_box = (64, 64, 64)
-        wch_colour_font = (50, 205, 50)
-        fontsize = 50
-        i = f"#{year_rank.index(artist_selected)+1}"
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: {fontsize}px; border-radius: 7px; padding: 30px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
-
-        # Total minutes listened
-        st.markdown("<h4>Minutes enjoyed</h4>", unsafe_allow_html=True)
-        total_minutes = int(df_music[df_music.artist_name == artist_selected].minutes_played.sum())
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: 40px; border-radius: 7px; padding: 30px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{total_minutes:,}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
-
-    with col2:
-        # Artist image
-        IMAGE_PLACEHOLDER = "media/assets/Image-Coming-Soon_vector.svg"
-        try:
-            sub = INFO_ARTIST_GENRE.loc[INFO_ARTIST_GENRE["artist_name"] == artist_selected]
-            img = sub["artist_image"].iloc[0].strip() if not sub.empty and isinstance(sub["artist_image"].iloc[0], str) else None
-            st.image(img or IMAGE_PLACEHOLDER, output_format="auto")
-        except Exception:
-            st.image(IMAGE_PLACEHOLDER, output_format="auto")
-
-    with col3:
-        # Top album image
-        IMAGE_PLACEHOLDER = "media/assets/Image-Coming-Soon_vector.svg"
-        top_albums = (
-            df_music[df_music.artist_name == artist_selected]
-            .groupby("album_name")["minutes_played"]
-            .sum()
-            .sort_values(ascending=False)
-            .reset_index()
-        )
-        album_img = None
-        try:
-            if not top_albums.empty:
-                target = top_albums.loc[0, "album_name"]
-                sub = INFO_ALBUM.loc[INFO_ALBUM["album_name"] == target]
-                if not sub.empty:
-                    album_img = sub["album_artwork"].iloc[0].strip()
-                elif album_img is None:
-                    sub2 = INFO_ALBUM.loc[
-                        INFO_ALBUM["album_name"].str.contains(str(target), case=False, na=False)
-                    ]
-                    if not sub2.empty:
-                        album_img = sub2["album_artwork"].iloc[0].strip()
-        except Exception:
-            pass
-        st.image(album_img or IMAGE_PLACEHOLDER, output_format="auto")
-
-    # first/last listens + streak
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        df_first = (
-            df_music.sort_values(by="datetime", ascending=True)
-            .groupby("album_name")
-            .first()
-            .reset_index()
-        )
-        df_last = (
-            df_music.sort_values(by="datetime", ascending=False)
-            .groupby("album_name")
-            .first()
-            .reset_index()
-        )
-        st.markdown("<h4>First listen ➡️ Most recent listen</h4>", unsafe_allow_html=True)
-        first_date = df_first[df_first.artist_name == artist_selected].date.min()
-        last_date = df_last[df_last.artist_name == artist_selected].date.max()
-        if pd.notnull(first_date) and pd.notnull(last_date):
-            listen_range = f"{first_date.strftime('%d/%m/%Y')} - {last_date.strftime('%d/%m/%Y')}"
-        else:
-            listen_range = "No valid listening dates"
-        st.markdown(f"<p style='font-size:38px; color:#32cd32;'>{listen_range}</p>", unsafe_allow_html=True)
-
-    with col2:
-        try:
-            band_streak = (
-                df_music[df_music.artist_name == artist_selected]
-                .sort_values("datetime")["datetime"]
-                .dt.date.drop_duplicates()
-                .sort_values()
-                .diff()
-                .dt.days.fillna(1)
+            fig_timeline = px.line(
+                timeline_all,
+                x="date_proxy",
+                y="rolling_avg",
+                color="year",
+                title="Listening Trends by Year (30-Day Rolling Avg)",
+                labels={
+                    "rolling_avg": "Hours Played (30-Day Rolling Avg)",
+                    "date_proxy": "Month",
+                },
+                color_discrete_sequence=px.colors.qualitative.Set2,
             )
-            streak_ids = (band_streak != 1).cumsum()
-            max_streak = streak_ids.value_counts().max()
-            st.markdown("<h4>Longest streak</h4>", unsafe_allow_html=True)
-            st.markdown(f"<p style='font-size:38px; color:#32cd32;'>{max_streak} Days</p>", unsafe_allow_html=True)
-        except Exception:
-            pass
 
-    ## top songs graph
-    top_songs = (
-        df_music[df_music.artist_name == artist_selected]
-        .groupby("track_name")["minutes_played"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
-    fig_top_songs = px.bar(
-        top_songs.head(15),
-        x="minutes_played",
-        y="track_name",
-        title=f"Your favourite songs by {artist_selected} - {str(year_selected).lower()}",
-        color_discrete_sequence=["#1ed760"],
-        text_auto=True,
-    )
-    fig_top_songs.update_yaxes(categoryorder="total ascending", title=None)
-    fig_top_songs.update_xaxes(title="Minutes Played")
-    st.write(fig_top_songs)
+            fig_timeline.update_xaxes(
+                tickformat="%b",
+                title="Month (Jan → Dec)",
+                dtick="M1",
+            )
 
-    ## top albums graph
-    top_albums = (
-        df_music[df_music.artist_name == artist_selected]
-        .groupby("album_name")["minutes_played"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
-    fig_top_albums = px.bar(
-        top_albums.head(5),
-        x="minutes_played",
-        y="album_name",
-        title=f"Your favourite albums by {artist_selected} - {str(year_selected).lower()}",
-        color_discrete_sequence=["#1ed760"],
-        text_auto=True,
-    )
-    fig_top_albums.update_yaxes(categoryorder="total ascending", title=None)
-    fig_top_albums.update_xaxes(title="Minutes Played")
-    st.write(fig_top_albums)
+            fig_timeline.update_layout(
+                height=450,
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="Hours per Day (Smoothed)",
+                legend_title="Year",
+            )
 
-    ## only render the following visualizations if "Per Year" mode
-    if mode == "Per Year" and isinstance(year_selected, (int, np.integer)):
-        # --- Polar bar chart ---
-        df_polar = (
-            df_music[df_music.artist_name == artist_selected]
-            .groupby(df_music.datetime.dt.month)["minutes_played"]
-            .sum()
-            .reset_index()
-        )
-        df_polar = pd.merge(
-            pd.Series(range(1, 13), name="datetime"), df_polar, how="outer", on="datetime"
-        ).fillna(0)
-        cal = {
-            1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
-            7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"
-        }
-        df_polar["datetime"] = df_polar["datetime"].replace(cal)
-
-        fig_polar = px.bar_polar(
-            df_polar,
-            r="minutes_played",
-            theta="datetime",
-            color="minutes_played",
-            color_continuous_scale=["#1ed760", "#006400"],
-            title=f"Listening Trends {year_selected}",
+        # ✅ unified config pattern
+        st.plotly_chart(
+            fig_timeline,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
         )
 
-        # ✅ Custom background colors using rgba (no alpha hex)
-        dark_bg = "rgba(11, 17, 11, 1)"  # same as #0b110bff but valid in Plotly
+        # -------------------- Genre Diversity (100% stacked area, correctly ordered) -------------------- #
+        st.markdown("### Genre Diversity Over Time (Share of Total Listening)")
 
-        fig_polar.update_layout(
-            title_font_size=20,
-            polar=dict(
-                radialaxis=dict(showticklabels=False),
-                bgcolor=dark_bg  # inner circle background color
-            ),
-            paper_bgcolor=dark_bg,  # full figure background
-            plot_bgcolor=dark_bg,   # plotting area background
-            font=dict(color="#ffffff")  # white text for contrast
-        )
+        # --- Drop timezone (avoids 'drop timezone information' warning) ---
+        df_filtered["datetime_naive"] = df_filtered["datetime"].dt.tz_localize(None)
 
-        fig_polar.update_coloraxes(showscale=False)
-        st.plotly_chart(fig_polar, use_container_width=True)
-
-        # --- Dayplot calendar heatmap ---
+        # --- Compute monthly totals per supergenre ---
+        # Use "ME" (month-end) if available, else fallback to "M"
         try:
-            df_day = (
-                df_music[df_music.artist_name == artist_selected]
-                .groupby("date")["minutes_played"]
+            genre_trend = (
+                df_filtered.groupby([pd.Grouper(key="datetime_naive", freq="ME"), "supergenre"])["minutes_played"]
                 .sum()
                 .reset_index()
             )
-            df_day["date"] = pd.to_datetime(df_day["date"], errors="coerce").dt.date
+        except ValueError:
+            # Fallback for older pandas versions
+            genre_trend = (
+                df_filtered.groupby([pd.Grouper(key="datetime_naive", freq="M"), "supergenre"])["minutes_played"]
+                .sum()
+                .reset_index()
+            )
 
-            if df_day.empty:
-                st.info(f"No listening data for {artist_selected} in {year_selected}.")
+        # --- Convert datetime to monthly period safely ---
+        try:
+            genre_trend["month"] = genre_trend["datetime_naive"].dt.to_period("ME").astype(str)
+        except ValueError:
+            # For older pandas, fall back to "M"
+            genre_trend["month"] = genre_trend["datetime_naive"].dt.to_period("M").astype(str)
+
+        # --- Pivot and normalize to percentages ---
+        genre_pivot = genre_trend.pivot(index="month", columns="supergenre", values="minutes_played").fillna(0)
+        genre_percent = genre_pivot.divide(genre_pivot.sum(axis=1), axis=0) * 100
+
+        # --- Compute total share for ordering ---
+        total_share = genre_percent.sum(axis=0).sort_values(ascending=False)
+
+        # --- Genre Diversity Over Time (Share of Total Listening) ---
+        import plotly.graph_objects as go
+        from plotly.colors import sample_colorscale
+
+        ordered_genres = total_share.index.tolist()
+        n_genres = len(ordered_genres)
+        sampled_colors = sample_colorscale(
+            neon_colorscale, [i / (n_genres - 1) for i in range(n_genres)]
+        )
+
+        fig_genre = go.Figure()
+
+        for i, genre in enumerate(ordered_genres):
+            color = sampled_colors[i]
+            fig_genre.add_trace(go.Scatter(
+                x=genre_percent.index,
+                y=genre_percent[genre],
+                mode="lines",
+                name=genre,
+                stackgroup="one",
+                line=dict(width=0.5, color=color),
+                fillcolor=color,
+                hoverinfo="x+y+name",
+            ))
+
+        fig_genre.update_layout(
+            title="Genre Diversity Over Time (Share of Total Listening)",
+            yaxis=dict(title="Listening Share (%)", range=[0, 100]),
+            xaxis=dict(title="Month"),
+            legend_title="Supergenre",
+            height=500,
+            plot_bgcolor="rgba(0,0,0,0)",
+            hovermode="x unified",
+            legend=dict(traceorder="normal")
+        )
+
+        st.plotly_chart(
+            fig_genre,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+        )
+
+        # 3️⃣ Listening hour heatmap
+        df_filtered["hour"] = df_filtered["datetime"].dt.hour
+        df_filtered["weekday"] = df_filtered["datetime"].dt.day_name()
+        heat = df_filtered.pivot_table(
+            index="weekday", columns="hour",
+            values="minutes_played", aggfunc="sum", fill_value=0
+        )
+        weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        heat = heat.reindex(weekday_order)
+
+        fig_heat = px.imshow(
+            heat,
+            labels=dict(x="Hour of Day", y="Weekday", color="Minutes Played"),
+            title="When You Listen Most",
+            aspect="auto",
+            color_continuous_scale=spotify_colorscale,
+        )
+        fig_heat.update_layout(height=500)
+
+        st.plotly_chart(
+            fig_heat,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+        )
+
+    # ============================================================
+    # 🎙️ PODCASTS
+    # ============================================================
+    elif selected_category == "podcast":
+        st.markdown("### Podcast Highlights")
+
+        total_days = round(df_filtered["minutes_played"].sum() / 60 / 24, 1)
+        if year_selected != "All Time":
+            if total_days == 0:
+                total_days_delta = "∞%"
+            else:total_days_delta = f"{round((total_days - (df_delta["minutes_played"].sum() / 60 / 24)) / total_days * 100,1)}%"
+        else: total_days_delta = ""
+
+        unique_shows = df_filtered["episode_show_name"].nunique()
+        if year_selected != "All Time":
+            if unique_shows == 0:
+                unique_shows_delta = "∞%"
+            else: unique_shows_delta = f"{round((unique_shows - (df_delta["episode_show_name"].nunique())) / unique_shows * 100,1)}%"
+        else: unique_shows_delta = ""
+
+        unique_episodes = df_filtered["episode_name"].nunique()
+        if year_selected != "All Time":
+            if unique_episodes == 0:
+                unique_episodes_delta = "∞%"
+            else: unique_episodes_delta = f"{round((unique_episodes - (df_delta["episode_name"].nunique())) / unique_episodes * 100,1)}%"
+        else: unique_episodes_delta = ""
+
+        fav_show = (
+            df_filtered.groupby("episode_show_name")["minutes_played"].sum().idxmax()
+            if not df_filtered.empty
+            else "N/A"
+        )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            scorecard("🗓️ Total Listening Time", f"{total_days} days", total_days_delta)
+        with c2:
+            scorecard("📻 Unique Podcasts", unique_shows, unique_shows_delta)
+        with c3:
+            scorecard("🎙️ Unique Episodes", unique_episodes, unique_episodes_delta)
+
+        c1, c2, c3 = st.columns([1,2,1])
+        with c2:
+            scorecard("⭐ Most Listened Podcast", fav_show)
+
+        # -------------------- Top 5 Podcasts -------------------- #
+        st.markdown("## Top 5 Podcasts")
+        c1, c2 = st.columns([3, 2])
+
+        # --- Aggregate top podcasts ---
+        top_podcasts = (
+            df_filtered.groupby("episode_show_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(5)
+            .reset_index()
+        )
+        top_podcasts["hhmmss"] = top_podcasts["minutes_played"].apply(format_hhmmss)
+
+        # --- Spotify color gradient ---
+        n_podcasts = len(top_podcasts)
+        sampled_colors = sample_colorscale(
+            spotify_colorscale,
+            [i / max(1, n_podcasts - 1) for i in range(n_podcasts)]
+        )
+
+        # Assign colors (reversed if you prefer bottom-to-top flow)
+        top_podcasts = top_podcasts.reset_index(drop=True)
+        top_podcasts["color"] = sampled_colors[::-1]
+
+        # --- Plot ---
+        with c1:
+            fig_pod = px.bar(
+                top_podcasts,
+                y="episode_show_name",
+                x="minutes_played",
+                orientation="h",
+                text="hhmmss",  # ✅ bind label to each bar
+                color="color",
+                color_discrete_map="identity",  # exact Spotify hex colors
+                labels={
+                    "minutes_played": "Time Played",
+                    "episode_show_name": "Podcast",
+                    "hhmmss": "Time Played",
+                },
+            )
+
+            # --- Style text + layout ---
+            fig_pod.update_traces(
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="end",
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+            )
+
+            fig_pod.update_layout(
+                yaxis=dict(categoryorder="total ascending"),
+                height=500,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+                showlegend=False,
+                margin=dict(l=0, r=0, t=30, b=0),
+            )
+
+            # --- Display ---
+            st.plotly_chart(
+                fig_pod,
+                width="stretch",
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
+
+        with c2:
+            podcast_image_list = []
+
+            # Iterate through top 10 podcast shows and match artwork
+            for idx, show in enumerate(top_podcasts["episode_show_name"], start=1):
+                # Try to find a match in INFO_SHOW
+                if "INFO_SHOW" in locals() and not INFO_SHOW.empty:
+                    match = INFO_SHOW.loc[INFO_SHOW["show_name"] == show]
+                else:
+                    match = None
+
+                # Get image or fallback to placeholder
+                img = (
+                    match["show_image"].iloc[0]
+                    if match is not None
+                    and not match.empty
+                    and "show_image" in match.columns
+                    and isinstance(match["show_image"].iloc[0], str)
+                    and match["show_image"].iloc[0].strip()
+                    else CAROUSEL_PLACEHOLDER
+                )
+
+                # Add to carousel items
+                podcast_image_list.append(dict(text=show, title=f"#{idx}", img=img))
+
+            # --- Render carousel if we have items ---
+            if podcast_image_list:
+                carousel(items=podcast_image_list, container_height=500)
             else:
-                start_date = date(int(year_selected), 1, 1)
-                end_date = date(int(year_selected), 12, 31)
-                fig, ax = plt.subplots(figsize=(16, 4))
-                dp.calendar(
-                    dates=df_day["date"],
-                    values=df_day["minutes_played"],
-                    start_date=start_date,
-                    end_date=end_date,
-                    ax=ax,
-                    **dp.styles["github"],
-                )
-                fig.set_facecolor("#0b110bff")
-                ax.set_facecolor("#0b110bff")
-                ax.set_title(
-                    f"Daily Listening Activity for {artist_selected} in {year_selected}",
-                    pad=12,
-                )
-                st.pyplot(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Could not render calendar heatmap: {e}")
+                st.info("No podcast images available for this timeframe.")
 
-# ------------------------------ Per Album Page ------------------------------ #
-elif page == "Per Album":
+        # -------------------- Listening Trend -------------------- #
+        st.markdown("## Listening Trend")
 
-    import matplotlib.pyplot as plt
-    import dayplot as dp
-    from datetime import date
+        df_filtered["datetime"] = pd.to_datetime(df_filtered["datetime"], errors="coerce")
+        df_filtered["year"] = df_filtered["datetime"].dt.year
+        df_filtered["date"] = df_filtered["datetime"].dt.date
+        df_filtered["hours_played"] = df_filtered["minutes_played"] / 60
+
+        if year_selected == "All Time":
+            timeline = (
+                df_filtered.groupby("date")["hours_played"]
+                .sum()
+                .reset_index()
+                .sort_values("date")
+            )
+            timeline["rolling_avg"] = timeline["hours_played"].rolling(window=30, min_periods=1).mean()
+
+            import numpy as np
+            timeline["days_since_start"] = (pd.to_datetime(timeline["date"]) - pd.to_datetime(timeline["date"]).min()).dt.days
+            x = np.log(timeline["days_since_start"] + 1)
+            y = timeline["hours_played"]
+            coeffs = np.polyfit(x, y, 1)
+            timeline["trendline"] = coeffs[0] * x + coeffs[1]
+
+            fig_timeline = px.line(
+                timeline,
+                x="date",
+                y="rolling_avg",
+                title="Podcast Listening Trend (All Time)",
+                labels={"rolling_avg": "Hours Played (30-Day Rolling Avg)", "date": "Date"},
+                color_discrete_sequence=["#1ed760"],
+            )
+            fig_timeline.add_scatter(
+                x=timeline["date"],
+                y=timeline["trendline"],
+                mode="lines",
+                name="Log Trendline",
+                line=dict(color="#137b37", width=2),
+            )
+
+        else:
+            # Show *all years overlapped*, regardless of the single year selected
+            df_filtered["month_day"] = df_filtered["datetime"].dt.strftime("%m-%d")
+            timeline_all = (
+                df_filtered.groupby(["year", "month_day"])["hours_played"]
+                .sum()
+                .reset_index()
+                .sort_values(["year", "month_day"])
+            )
+            timeline_all["rolling_avg"] = (
+                timeline_all.groupby("year")["hours_played"]
+                .transform(lambda s: s.rolling(window=30, min_periods=1).mean())
+            )
+            timeline_all["date_proxy"] = pd.to_datetime("2000-" + timeline_all["month_day"], errors="coerce")
+
+            fig_timeline = px.line(
+                timeline_all,
+                x="date_proxy",
+                y="rolling_avg",
+                color="year",
+                title="Podcast Listening Trends by Year (30-Day Rolling Avg)",
+                labels={"rolling_avg": "Hours Played (30-Day Rolling Avg)", "date_proxy": "Month"},
+                color_discrete_sequence=px.colors.qualitative.Set2,
+            )
+            fig_timeline.update_xaxes(tickformat="%b", title="Month (Jan → Dec)", dtick="M1")
+            fig_timeline.update_layout(
+                height=450,
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="Hours per Day (Smoothed)",
+                legend_title="Year",
+            )
+
+        st.plotly_chart(fig_timeline, width='stretch')
+
+        # -------------------- Listening Hour Heatmap -------------------- #
+        st.markdown("## When You Listen Most")
+        df_filtered["hour"] = df_filtered["datetime"].dt.hour
+        df_filtered["weekday"] = df_filtered["datetime"].dt.day_name()
+        heat = df_filtered.pivot_table(
+            index="weekday", columns="hour", values="minutes_played", aggfunc="sum", fill_value=0
+        )
+        weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        heat = heat.reindex(weekday_order)
+        fig_heat = px.imshow(
+            heat,
+            labels=dict(x="Hour of Day", y="Weekday", color="Minutes Played"),
+            aspect="auto",
+            color_continuous_scale=spotify_colorscale,
+            title="When You Listen Most",
+        )
+        fig_heat.update_layout(height=500)
+        st.plotly_chart(fig_heat, width='stretch')
+
+    # ============================================================
+    # 📚 AUDIOBOOKS
+    # ============================================================
+    elif selected_category == "audiobook":
+        st.markdown("### Audiobook Highlights")
+
+        total_days = round(df_filtered["minutes_played"].sum() / 60 / 24, 1)
+        if year_selected != "All Time":
+            if total_days == 0:
+                total_days_delta = "∞%"
+            else: total_days_delta = f"{round((total_days - (df_delta["minutes_played"].sum() / 60 / 24)) / total_days * 100,1)}%"
+        else: total_days_delta = ""
+
+        unique_books = df_filtered["audiobook_title"].nunique()
+        if year_selected != "All Time":
+            if unique_books == 0:
+                unique_books_delta = "∞%"
+            else: unique_books_delta = f"{round((unique_books - (df_delta["audiobook_title"].nunique())) / unique_books * 100,1)}%"
+        else: unique_books_delta = ""
+
+        fav_book = df_filtered.groupby("audiobook_title")["minutes_played"].sum().idxmax() if not df_filtered.empty else "N/A"
+
+        c1, c2 ,c3 = st.columns(3)
+        with c1:
+            scorecard("🗓️ Total Listening Time", f"{total_days} days",total_days_delta)
+        with c2:
+            scorecard("📚 Unique Audiobooks", unique_books, unique_books_delta)
+        with c3:
+            scorecard("⭐ Most Listened Audiobook", fav_book)
+
+        st.markdown("## Top 10 Audiobooks")
+        c1, c2 = st.columns([3, 2])
+
+        # --- Aggregate listening by audiobook title ---
+        top_audiobooks = (
+            df_filtered.groupby("audiobook_title")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(5)
+            .reset_index()
+        )
+        top_audiobooks["hhmmss"] = top_audiobooks["minutes_played"].apply(format_hhmmss)
+
+        # --- Spotify color gradient ---
+        n_books = len(top_audiobooks)
+        sampled_colors = sample_colorscale(
+            spotify_colorscale,
+            [i / max(1, n_books - 1) for i in range(n_books)]
+        )
+
+        # Assign reversed gradient (light → dark)
+        top_audiobooks = top_audiobooks.reset_index(drop=True)
+        top_audiobooks["color"] = sampled_colors[::-1]
+
+        # --- Plot ---
+        with c1:
+            fig_books = px.bar(
+                top_audiobooks,
+                y="audiobook_title",
+                x="minutes_played",
+                orientation="h",
+                text="hhmmss",  # ✅ label each bar
+                color="color",
+                color_discrete_map="identity",
+                labels={
+                    "minutes_played": "Time Played (HH:MM:SS)",
+                    "audiobook_title": "Audiobook",
+                    "hhmmss": "Time Played"
+                },
+            )
+
+            # --- Style text & layout ---
+            fig_books.update_traces(
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="end",
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+            )
+
+            fig_books.update_layout(
+                yaxis=dict(categoryorder="total ascending"),
+                height=500,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+                showlegend=False,
+                margin=dict(l=0, r=0, t=30, b=0),
+            )
+
+            # --- Display ---
+            st.plotly_chart(
+                fig_books,
+                width="stretch",
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
+        with c2:
+            audiobook_image_list = []
+
+            # Iterate through top 10 audiobooks and match artwork
+            for idx, book in enumerate(top_audiobooks["audiobook_title"], start=1):
+                # Try to find a match in INFO_AUDIOBOOK
+                if "INFO_AUDIOBOOK" in locals() and not INFO_AUDIOBOOK.empty:
+                    match = INFO_AUDIOBOOK.loc[INFO_AUDIOBOOK["audiobook_title"] == book]
+                else:
+                    match = None
+
+                # Get image or fallback to placeholder
+                img = (
+                    match["audiobook_image"].iloc[0]
+                    if match is not None
+                    and not match.empty
+                    and "audiobook_image" in match.columns
+                    and isinstance(match["audiobook_image"].iloc[0], str)
+                    and match["audiobook_image"].iloc[0].strip()
+                    else CAROUSEL_PLACEHOLDER
+                )
+
+                # Add to carousel items
+                audiobook_image_list.append(dict(text=book, title=f"#{idx}", img=img))
+
+            # --- Render carousel if we have items ---
+            if audiobook_image_list:
+                carousel(items=audiobook_image_list, container_height=500)
+            else:
+                st.info("No audiobook cover images available for this timeframe.")
+
+        # --- Listening Trend ---
+        st.markdown("### Listening Trend")
+
+        df_filtered["datetime"] = pd.to_datetime(df_filtered["datetime"], errors="coerce")
+        df_filtered["year"] = df_filtered["datetime"].dt.year
+        df_filtered["date"] = df_filtered["datetime"].dt.date
+        df_filtered["hours_played"] = df_filtered["minutes_played"] / 60
+
+        if year_selected == "All Time":
+            timeline = (
+                df_filtered.groupby("date")["hours_played"]
+                .sum()
+                .reset_index()
+                .sort_values("date")
+            )
+
+            timeline["rolling_avg"] = timeline["hours_played"].rolling(window=30, min_periods=1).mean()
+
+            import numpy as np
+            timeline["days_since_start"] = (pd.to_datetime(timeline["date"]) - pd.to_datetime(timeline["date"]).min()).dt.days
+            x = np.log(timeline["days_since_start"] + 1)
+            y = timeline["hours_played"]
+            coeffs = np.polyfit(x, y, 1)
+            timeline["trendline"] = coeffs[0] * x + coeffs[1]
+
+            fig_timeline = px.line(
+                timeline,
+                x="date",
+                y="rolling_avg",
+                title="Audiobook Listening Trend (All Time)",
+                labels={"rolling_avg": "Hours Played (30-Day Rolling Avg)", "date": "Date"},
+                color_discrete_sequence=["#1ed760"],
+            )
+
+            fig_timeline.add_scatter(
+                x=timeline["date"],
+                y=timeline["trendline"],
+                mode="lines",
+                name="Log Trendline",
+                line=dict(color="#137b37", width=2),
+            )
+
+        else:
+            df_filtered["hours_played"] = df_filtered["minutes_played"] / 60
+            df_filtered["month_day"] = df_filtered["datetime"].dt.strftime("%m-%d")
+
+            timeline_all = (
+                df_filtered.groupby(["year", "month_day"])["hours_played"]
+                .sum()
+                .reset_index()
+                .sort_values(["year", "month_day"])
+            )
+
+            timeline_all["rolling_avg"] = (
+                timeline_all.groupby("year")["hours_played"]
+                .transform(lambda s: s.rolling(window=30, min_periods=1).mean())
+            )
+
+            timeline_all["date_proxy"] = pd.to_datetime("2000-" + timeline_all["month_day"], errors="coerce")
+
+            fig_timeline = px.line(
+                timeline_all,
+                x="date_proxy",
+                y="rolling_avg",
+                color="year",
+                title="Audiobook Listening Trends by Year (30-Day Rolling Avg)",
+                labels={"rolling_avg": "Hours Played (30-Day Rolling Avg)", "date_proxy": "Month"},
+                color_discrete_sequence=px.colors.qualitative.Set2,
+            )
+
+            fig_timeline.update_xaxes(
+                tickformat="%b",
+                title="Month (Jan → Dec)",
+                dtick="M1"
+            )
+
+            fig_timeline.update_layout(
+                height=450,
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="Hours per Day (Smoothed)",
+                legend_title="Year",
+            )
+
+        st.plotly_chart(fig_timeline, width='stretch')
+
+        # --- Heatmap ---
+        df_filtered["hour"] = df_filtered["datetime"].dt.hour
+        df_filtered["weekday"] = df_filtered["datetime"].dt.day_name()
+
+        heat = df_filtered.pivot_table(
+            index="weekday",
+            columns="hour",
+            values="minutes_played",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        heat = heat.reindex(weekday_order)
+
+        fig_heat = px.imshow(
+            heat,
+            labels=dict(x="Hour of Day", y="Weekday", color="Minutes Played"),
+            title="When You Listen Most",
+            aspect="auto",
+            color_continuous_scale=spotify_colorscale,
+        )
+        fig_heat.update_layout(height=500)
+
+        st.plotly_chart(
+            fig_heat,
+            width='stretch',
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+        )
+
+# -------------------------------- Artists ----------------------------------- #
+elif page == "Artists":
+
+    st.session_state["last_page"] = "Artist"
 
     # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
@@ -2029,25 +4248,28 @@ elif page == "Per Album":
         st.stop()
 
     df, current_label = require_current_df()
-
-    # project title
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment="center")
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
 
     # Load user-specific data
     df_music = df[df["category"] == "music"][
         ["datetime", "minutes_played", "country", "track_name", "artist_name", "album_name"]
     ]
-    df_music["datetime"] = pd.to_datetime(df_music.datetime).dt.tz_localize(None)
-    df_music["date"] = pd.to_datetime(df_music.datetime).dt.date
+    # --- Normalize datetime column safely ---
+    df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
+    df_music = df_music.dropna(subset=["datetime"]).copy()
+    df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
+    df_music["date"] = df_music["datetime"].dt.date
 
-    # --- Artist and Album Selection ---
+    # --- Header ---
+    h1, h2, h3 = st.columns([1,3,1])
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Artist Insights</b></em></p>")
+
     col1, col2 = st.columns([0.7, 1])
-
     with col1:
         artist_list = (
-            df_music.groupby("artist_name").minutes_played.sum().sort_values(ascending=False).reset_index()["artist_name"].tolist()
+            df_music.groupby("artist_name").minutes_played.sum()
+            .sort_values(ascending=False)
+            .reset_index()["artist_name"].tolist()
         )
         artist_selected = st.selectbox(
             "Artist:",
@@ -2055,230 +4277,881 @@ elif page == "Per Album":
             index=0
         )
 
+    with col2:
+        # --- Year + Category selectors ---
+        years = sorted(df["year"].dropna().unique())
+        year_options = ["All Time"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year", year_options, selection_mode="single", default="All Time", width='content'
+        )
+        if not year_selected:
+            year_selected = "All Time"
+
+    # --- Artist and Album Selection ---
+    col1, col2 = st.columns([0.7, 1])
+    with col1:
+        # --- Album list (with "All" option added) ---
         album_list = (
             df_music[df_music["artist_name"] == artist_selected]
             .groupby("album_name").minutes_played.sum()
-            .sort_values(ascending=False).reset_index()["album_name"].tolist()
+            .sort_values(ascending=False)
+            .reset_index()["album_name"].tolist()
         )
+        album_list = ["All Albums"] + [str(a) for a in album_list]
         album_selected = st.selectbox(
-            "Album:", options=album_list, index=0
+            "Album:",
+            options=album_list,
+            index=0
         )
 
-        # --- Metrics boxes ---
-        df_first = df_music.sort_values(by="datetime", ascending=True).groupby("album_name").first().reset_index()
-        df_last = df_music.sort_values(by="datetime", ascending=False).groupby("album_name").first().reset_index()
+        # --- FILTER by year
+        if year_selected == "All Time":
+            df_year = df_music.copy()
+        else:
+            df_year = df_music[df_music["datetime"].dt.year == int(year_selected)].copy()
 
-        st.markdown("<h4>Minutes enjoyed</h4>", unsafe_allow_html=True)
-        wch_colour_box = (64, 64, 64)
-        wch_colour_font = (50, 205, 50)
-        fontsize = 40
-        i = f"{int(df_music[df_music.album_name == album_selected].minutes_played.sum()):,}"
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: {fontsize}px; border-radius: 7px; padding: 40px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
+        # --- FILTER by year > artist
+        df_year_artist = df_year[df_year["artist_name"] == artist_selected]
 
-        st.markdown("<h4>First listen</h4>", unsafe_allow_html=True)
-        i = df_first[df_first.album_name == album_selected].date.min().strftime("%d/%m/%Y")
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: 38px; border-radius: 7px; padding: 40px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
+        # --- FILTER by year > artist > album
+        if album_selected == "All Albums":
+            df_year_artist_album = df_year_artist
+        else:
+            df_year_artist_album = df_year_artist[df_year_artist["album_name"] == album_selected].copy()
 
-        st.markdown("<h4>Most recent listen</h4>", unsafe_allow_html=True)
-        i = df_last[df_last.album_name == album_selected].date.max().strftime("%d/%m/%Y")
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: 38px; border-radius: 7px; padding: 40px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
+        # --- FILTER by artist > album
+        df_artist = df_music[df_music["artist_name"] == artist_selected].copy()
+        if album_selected == "All Albums":
+            df_artist_album = df_artist
+        else:
+            df_artist_album = df_artist[df_artist["album_name"] == album_selected].copy()
 
-        # --- Listening streak ---
-        band_streak = df_music[df_music.album_name == album_selected].sort_values("datetime")
-        band_streak = band_streak["datetime"].dt.date.drop_duplicates().sort_values().diff().dt.days.fillna(1)
-        streak_ids = (band_streak != 1).cumsum()
-        max_streak = streak_ids.value_counts().max()
-
-        st.markdown("<h4>Longest streak</h4>", unsafe_allow_html=True)
-        i = f"{max_streak} Days"
-        htmlstr = f"""
-            <p style='background-color: rgba({wch_colour_box[0]}, {wch_colour_box[1]}, {wch_colour_box[2]}, 0.75);
-            color: rgba({wch_colour_font[0]}, {wch_colour_font[1]}, {wch_colour_font[2]}, 0.75);
-            font-size: 38px; border-radius: 7px; padding: 40px 0;
-            display: flex; align-items: center; justify-content: center;'>
-            <i class='fas fa-star' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-        """
-        st.markdown(htmlstr, unsafe_allow_html=True)
-
-    with col2:
-        # --- Album image ---
-        info_album = INFO_ALBUM
-        top_albums = (
-            df_music[df_music.album_name == album_selected]
-            .groupby("album_name")
-            .minutes_played.sum()
+        # --- Ranking ---
+        # Artist ranking for the selected year (or all time)
+        artist_rank_df = (
+            df_year.groupby("artist_name")["minutes_played"]
+            .sum()
             .sort_values(ascending=False)
             .reset_index()
         )
+        artist_rank = artist_rank_df["artist_name"].tolist()
 
-        try:
-            album_image_url = info_album[
-                info_album.album_name == top_albums.album_name[0]
-            ]["album_artwork"].values[0]
-            st.image(album_image_url, output_format="auto", use_container_width=True)
-        except:
-            try:
-                album_image_url = info_album[
-                    info_album.album_name.str.contains(
-                        f"{top_albums.album_name[0]}", case=False, na=False
+        # Album ranking within the selected artist for the selected year
+        album_rank_df = (
+            df_year_artist.groupby("album_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()
+        )
+        album_rank = album_rank_df["album_name"].tolist()
+
+        # ---- Ranking delta logic ----
+        rank_delta = None
+        rank_val = "Unranked"
+        metric_label = "Artist Ranking"
+
+        if year_selected != "All Time":
+            prev_year = int(year_selected) - 1
+            df_prev_year = df_music[df_music["datetime"].dt.year == prev_year].copy()
+
+            # Previous year ranks
+            artist_rank_prev = (
+                df_prev_year.groupby("artist_name")["minutes_played"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()["artist_name"]
+                .tolist()
+            )
+            album_rank_prev = (
+                df_prev_year[df_prev_year["artist_name"] == artist_selected]
+                .groupby("album_name")["minutes_played"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()["album_name"]
+                .tolist()
+            )
+        else:
+            artist_rank_prev, album_rank_prev = [], []
+
+        # --- Determine ranking and delta ---
+        if album_selected == "All Albums":
+            rank_label = "Artist Ranking"
+
+            rank_now = artist_rank.index(artist_selected) + 1 if artist_selected in artist_rank else None
+            rank_prev = artist_rank_prev.index(artist_selected) + 1 if artist_selected in artist_rank_prev else None
+
+        else:
+            rank_label = "Album Ranking"
+
+            rank_now = album_rank.index(album_selected) + 1 if album_selected in album_rank else None
+            rank_prev = album_rank_prev.index(album_selected) + 1 if album_selected in album_rank_prev else None
+
+        # --- Compute delta ---
+        if year_selected != "All Time":
+            if rank_now and rank_prev:
+                delta_val = rank_prev - rank_now
+                if delta_val > 0:
+                    rank_delta = f"+{delta_val}"
+                elif delta_val < 0:
+                    rank_delta = f"{delta_val}"
+                else:
+                    rank_delta = "No change"
+            else:
+                rank_delta = "N/A"
+        else:
+            rank_delta = None  # hide delta for "All Time"
+
+        rank_val = f"#{rank_now}" if rank_now else "Unranked"
+
+        # --- Normalize lists for comparison ---
+        normalized_album_rank = [normalize_str(a) for a in album_rank]
+        normalized_selected_album = normalize_str(album_selected)
+
+        # --- First listen (ignores year filter) ---
+        if album_selected == "All Albums":
+            first_listen_raw = df_artist["date"].min()
+        else:
+            first_listen_raw = df_artist_album["date"].min()
+
+        if pd.notnull(first_listen_raw):
+            first_listen = pd.to_datetime(first_listen_raw, errors="coerce").strftime("%d/%m/%Y")
+        else:
+            first_listen = "N/A"
+
+        # --- Total minutes listened ---
+        if album_selected == "All Albums":
+            total_mins = int(df_year_artist["minutes_played"].sum())
+        else:
+            total_mins = int(df_year_artist_album["minutes_played"].sum())
+
+        # Convert minutes into days, hours, and minutes
+        days = total_mins // (24 * 60)
+        hours = (total_mins % (24 * 60)) // 60
+        mins = total_mins % 60
+        total_mins_str = f"{days} Days, {hours} Hours, {mins} Mins"
+
+        # --- Delta logic (year-over-year) ---
+        time_delta = None
+        if year_selected != "All Time":
+            prev_year = int(year_selected) - 1
+            df_prev_year = df_music[df_music["datetime"].dt.year == prev_year].copy()
+
+            if album_selected == "All Albums":
+                prev_total = int(
+                    df_prev_year[df_prev_year["artist_name"] == artist_selected]["minutes_played"].sum()
+                )
+            else:
+                prev_total = int(
+                    df_prev_year[
+                        (df_prev_year["artist_name"] == artist_selected)
+                        & (df_prev_year["album_name"] == album_selected)
+                    ]["minutes_played"].sum()
+                )
+
+            if prev_total > 0:
+                delta_val = ((total_mins - prev_total) / prev_total) * 100
+                time_delta = f"{delta_val:+.1f}%"
+            elif total_mins > 0:
+                time_delta = "+∞%"
+            else:
+                time_delta = "N/A"
+
+        # --- Last listen (ignores year filter) ---
+        if album_selected == "All Albums":
+            last_listen_raw = df_artist["date"].max()
+        else:
+            last_listen_raw = df_artist_album["date"].max()
+
+        # Ensure it's a proper datetime before doing date arithmetic
+        if pd.notnull(last_listen_raw):
+            last_listen_dt = pd.to_datetime(last_listen_raw, errors="coerce")
+        else:
+            last_listen_dt = None
+
+        # Compute days since last listen
+        if last_listen_dt is not None and not pd.isna(last_listen_dt):
+            today = pd.Timestamp.now().normalize()  # ensures consistent timezone and date comparison
+            days_since = (today - last_listen_dt).days
+            # Prevent negative values in case of bad timestamps (future-dated tracks)
+            days_since = max(days_since, 0)
+            last_listen = last_listen_dt.strftime("%d/%m/%Y")
+        else:
+            days_since = "N/A"
+            last_listen = "N/A"
+
+        # --- Listening streak with delta ---
+        band_streak = df_year_artist_album.sort_values("datetime")
+        band_streak["datetime"] = pd.to_datetime(band_streak["datetime"], errors="coerce")
+        band_streak = band_streak.dropna(subset=["datetime"])
+
+        if band_streak.empty:
+            max_streak = 0
+            streak_delta = None
+        else:
+            # Sort and normalize to daily granularity
+            dates = band_streak["datetime"].dt.normalize().drop_duplicates().sort_values().reset_index(drop=True)
+
+            # Compute day-to-day differences safely
+            diffs = dates.diff().dt.days.fillna(1)
+
+            # Identify streaks (consecutive days = 1)
+            streak_ids = (diffs != 1).cumsum()
+            max_streak = int(streak_ids.value_counts().max())
+
+            # --- Compute previous year's streak for delta ---
+            if year_selected != "All Time":
+                prev_year = int(year_selected) - 1
+                prev_streak_df = df_music[
+                    (df_music["artist_name"] == artist_selected)
+                    & (df_music["datetime"].dt.year == prev_year)
+                ].copy()
+
+                if album_selected != "All Albums":
+                    prev_streak_df = prev_streak_df[prev_streak_df["album_name"] == album_selected]
+
+                prev_streak_df["datetime"] = pd.to_datetime(prev_streak_df["datetime"], errors="coerce")
+                prev_streak_df = prev_streak_df.dropna(subset=["datetime"])
+
+                if not prev_streak_df.empty:
+                    prev_dates = (
+                        prev_streak_df["datetime"].dt.normalize().drop_duplicates().sort_values().reset_index(drop=True)
                     )
-                ]["album_artwork"].values[0]
-                st.image(album_image_url, output_format="auto", use_container_width=True)
-            except:
-                st.image("media/assets/Image-Coming-Soon_vector.svg")
+                    prev_diffs = prev_dates.diff().dt.days.fillna(1)
+                    prev_streak_ids = (prev_diffs != 1).cumsum()
+                    prev_streak = int(prev_streak_ids.value_counts().max())
+                else:
+                    prev_streak = 0
 
-    # --- Top songs ---
-    top_songs = (
-        df_music[df_music.album_name == album_selected]
-        .groupby("track_name").minutes_played.sum()
-        .sort_values(ascending=False).reset_index()
+                if prev_streak == 0 and max_streak == 0:
+                    streak_delta = "0%"
+                elif prev_streak == 0:
+                    streak_delta = "+∞%"
+                else:
+                    delta_val = ((max_streak - prev_streak) / prev_streak) * 100
+                    streak_delta = f"{delta_val:+.1f}%"
+            else:
+                streak_delta = None
+
+        # --- Returns per year metric ---
+        if album_selected == "All Albums":
+            df_artist_sorted = df_artist.sort_values("datetime").copy()
+        else:
+            df_artist_sorted = df_artist_album.sort_values("datetime").copy()
+
+        # Ensure datetime column is valid
+        df_artist_sorted["datetime"] = pd.to_datetime(df_artist_sorted["datetime"], errors="coerce")
+        df_artist_sorted = df_artist_sorted.dropna(subset=["datetime"])
+
+        if not df_artist_sorted.empty:
+            # Calculate time difference between consecutive listens
+            df_artist_sorted["time_diff"] = df_artist_sorted["datetime"].diff()
+
+            # Define a "return" as a gap >= 48 hours
+            df_artist_sorted["is_return"] = df_artist_sorted["time_diff"] >= pd.Timedelta(hours=48)
+
+            # Assign year of each return event
+            df_artist_sorted["year"] = df_artist_sorted["datetime"].dt.year
+
+            # Count returns per year
+            returns_per_year = (
+                df_artist_sorted[df_artist_sorted["is_return"]]
+                .groupby("year")
+                .size()
+                .reset_index(name="returns")
+            )
+
+            # Handle filter for year_selected
+            if year_selected != "All Time":
+                year_int = int(year_selected)
+                year_returns = (
+                    returns_per_year.loc[returns_per_year["year"] == year_int, "returns"].sum()
+                    if year_int in returns_per_year["year"].values
+                    else 0
+                )
+
+                # Delta vs previous year (difference in returns)
+                prev_year = year_int - 1
+                prev_returns = (
+                    returns_per_year.loc[returns_per_year["year"] == prev_year, "returns"].sum()
+                    if prev_year in returns_per_year["year"].values
+                    else 0
+                )
+
+                delta_val = year_returns - prev_returns
+                if delta_val > 0:
+                    rpa_delta = f"+{delta_val}"
+                elif delta_val < 0:
+                    rpa_delta = f"{delta_val}"
+                else:
+                    rpa_delta = "No change"
+
+                avg_returns = year_returns
+                rpa_label = f"Returns in {year_selected}"
+            else:
+                # All time average across all years
+                avg_returns = returns_per_year["returns"].mean().round(1) if not returns_per_year.empty else 0
+                rpa_delta = None
+                rpa_label = "Average Returns per Year"
+        else:
+            avg_returns = 0
+            rpa_delta = None
+            rpa_label = "Average Returns per Year"
+
+        # --- Display Scorecards ---
+        scorecard("First listen",first_listen, background=False, height=90)
+        scorecard(rank_label, rank_val, rank_delta)
+        scorecard("Total Listening Time", total_mins_str, time_delta)
+        scorecard("Longest Streak", f"{max_streak} Days", streak_delta)
+        scorecard(rpa_label, f"{avg_returns:.1f}", rpa_delta)
+        scorecard("Days since last listen", f"{days_since} Days")
+
+    with col2:
+        if album_selected == "All Albums":
+            # Keep the artist image logic but be explicit and safe
+            try:
+                sub = INFO_ARTIST_GENRE.loc[
+                    INFO_ARTIST_GENRE["artist_name"] == artist_selected
+                ]
+                img = (
+                    sub["artist_image"].iloc[0].strip()
+                    if not sub.empty and isinstance(sub["artist_image"].iloc[0], str)
+                    else None
+                )
+                st.image(img or IMAGE_PLACEHOLDER, width="stretch")
+            except Exception:
+                st.image(IMAGE_PLACEHOLDER, width="stretch")
+
+        else:
+            # Work on a copy; add normalized helper columns once
+            info_album = INFO_ALBUM.copy()
+            if "_n_artist" not in info_album.columns:
+                info_album["_n_artist"] = info_album["artist_name"].fillna("").apply(_normalize_name)
+                info_album["_n_album"]  = info_album["album_name"].fillna("").apply(_normalize_name)
+
+            n_artist = _normalize_name(artist_selected)
+            n_album  = _normalize_name(album_selected)
+
+            # STEP 1: Exact normalized match on artist + album
+            m = info_album[(info_album["_n_artist"] == n_artist) & (info_album["_n_album"] == n_album)]
+
+            # STEP 2: If not found, allow looser album contains but STILL within same artist
+            if m.empty:
+                m = info_album[
+                    (info_album["_n_artist"] == n_artist) &
+                    (info_album["_n_album"].str.contains(n_album, na=False))
+                ]
+
+            # STEP 3: As a last resort, global exact normalized album match (no artist filter)
+            if m.empty:
+                m = info_album[info_album["_n_album"] == n_album]
+
+            # Display the result or fallback to placeholder
+            if not m.empty and isinstance(m["album_artwork"].iloc[0], str) and m["album_artwork"].iloc[0].strip():
+                album_image_url = m["album_artwork"].iloc[0].strip()
+                st.image(album_image_url, output_format="auto", width="stretch")
+            else:
+                st.image(IMAGE_PLACEHOLDER, output_format="auto", width="stretch")
+
+    # --- Top songs (filtered by year and album/artist selection) ---
+    if year_selected == "All Time":
+        df_base = df_music.copy()
+    else:
+        df_base = df_music[df_music["datetime"].dt.year == int(year_selected)].copy()
+
+    if album_selected == "All Albums":
+        # All tracks by the selected artist
+        top_songs = (
+            df_base[df_base["artist_name"] == artist_selected]
+            .groupby("track_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+        )
+        chart_title = f"Top Tracks by {artist_selected} ({year_selected})"
+    else:
+        # Tracks from the selected album
+        top_songs = (
+            df_base[
+                (df_base["artist_name"] == artist_selected)
+                & (df_base["album_name"] == album_selected)
+            ]
+            .groupby("track_name")["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+        )
+        chart_title = f"Top Tracks from '{album_selected}' ({year_selected})"
+
+    st.markdown(f"<h2 style='text-align: center;'>{chart_title}</h2>", unsafe_allow_html=True)
+
+    # --- Spotify colorscale sampling (match artist chart style) ---
+    n_songs = len(top_songs)
+    sampled_colors = sample_colorscale(
+        spotify_colorscale,
+        [i / max(1, n_songs - 1) for i in range(n_songs)]
     )
-    st.title("")
-    st.markdown(f"<h2 style='text-align: center;'>{album_selected}'s tracks</h2>", unsafe_allow_html=True)
+
+    top_songs = top_songs.reset_index(drop=True)
+    top_songs["color"] = sampled_colors[::-1]  # reverse for top→bottom gradient
+    top_songs["hhmmss"] = top_songs["minutes_played"].apply(format_hhmmss)
+
+    # --- Plotly bar chart ---
     fig_top_songs = px.bar(
-        top_songs.head(15),
-        x="minutes_played",
+        top_songs,
         y="track_name",
-        color_discrete_sequence=["#1ed760"],
-        text_auto=True,
+        x="minutes_played",
+        orientation="h",
+        text="hhmmss",
+        color="color",
+        color_discrete_map="identity",  # use exact hex colors, not auto-assigned
+        labels={
+            "minutes_played": "Time Played (HH:MM:SS)",
+            "track_name": "Track",
+            "hhmmss": "Time Played"
+        },
     )
-    fig_top_songs.update_yaxes(categoryorder="total ascending")
-    fig_top_songs.update_layout(xaxis_title="Total Minutes", yaxis_title=None)
-    st.write(fig_top_songs)
+
+    # --- Wrap long track names (split into chunks of ~20 chars) ---
+    fig_top_songs.update_yaxes(
+        ticktext=[
+            "<br>".join([t[i:i+20] for i in range(0, len(t), 20)]) for t in top_songs["track_name"]
+        ],
+        tickvals=top_songs["track_name"],
+        categoryorder="total ascending",
+        title=None,
+    )
+
+    # --- Text and style formatting ---
+    fig_top_songs.update_traces(
+        texttemplate="%{text}",
+        textposition="inside",
+        insidetextanchor="end",
+        insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+    )
+
+    # --- Layout and styling ---
+    fig_top_songs.update_layout(
+        height=500,
+        margin=dict(l=0, r=0, t=30, b=0),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e1ece3", size=14),
+        showlegend=False,
+    )
+
+    # --- Display ---
+    st.plotly_chart(
+        fig_top_songs,
+        width="stretch",
+        config={
+            "displayModeBar": False,
+            "responsive": True,
+        },
+    )
 
     # --- Year selection & visuals ---
     st.title("")
-    col1, col2 = st.columns([4, 1.5], vertical_alignment="center")
+    col1, col2 = st.columns([4, 1.5])
 
-    with col1:
-        st.markdown(f"<h2 style='text-align: center;'>{album_selected}'s weighting</h2>", unsafe_allow_html=True)
-        year_range = df_music[df_music.album_name == album_selected].datetime.dt.year.sort_values().unique().tolist()
-        year_selected = st.segmented_control(
-            "Year", year_range, selection_mode="single", default=df_music.datetime.dt.year.max()
-        )
+        # --- Dayplot calendar heatmap ---
+    if album_selected == "All Albums":
+        df_day = df_artist.groupby("date")["minutes_played"].sum().reset_index()
+    else:
+        df_day = df_artist_album.groupby("date")["minutes_played"].sum().reset_index()
 
-        # --- Polar bar chart ---
-        df_polar = (
-            df_music[
-                (df_music.album_name == album_selected)
-                & (df_music.datetime.dt.year == year_selected)
-            ]
-            .groupby(df_music.datetime.dt.month)
-            .minutes_played.sum()
-            .reset_index()
-        )
-        cal = {
-            1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
-            7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"
-        }
-        df_polar["datetime"] = df_polar["datetime"].replace(cal)
-        # --- Polar bar chart (with dark background) ---
-        fig = px.bar_polar(
-            df_polar,
-            r="minutes_played",
-            theta="datetime",
-            color="minutes_played",
-            color_continuous_scale=["#1ed760", "#006400"],
-            title=" ",
-        )
+    df_day["date"] = pd.to_datetime(df_day["date"], errors="coerce")
+    df_day = df_day.dropna(subset=["date"])
 
-        # ✅ Apply dark theme background
-        dark_bg = "rgba(11, 17, 11, 1)"  # same as #0b110bff but valid in Plotly
-
-        fig.update_layout(
-            title_font_size=20,
-            polar=dict(
-                radialaxis=dict(showticklabels=False),
-                bgcolor=dark_bg  # inner polar background
-            ),
-            paper_bgcolor=dark_bg,  # full canvas background
-            plot_bgcolor=dark_bg,   # plotting area background
-            font=dict(color="#ffffff"),  # white text for contrast
-        )
-
-        # Optional: hide color scale for cleaner look
-        fig.update_coloraxes(showscale=False)
-
-        # --- Dayplot calendar heatmap (replacing calplot) ---
-        try:
-            df_day = (
-                df_music[
-                    (df_music.album_name == album_selected)
-                    & (df_music.datetime.dt.year == year_selected)
-                ]
-                .groupby("date")["minutes_played"]
+    if not df_day.empty:
+        if year_selected == "All Time":
+            # --- Collapse all years into one 365-day “virtual” year ---
+            df_day["month"] = df_day["date"].dt.month
+            df_day["day"] = df_day["date"].dt.day
+            df_day_alltime = (
+                df_day.groupby(["month", "day"])["minutes_played"]
                 .sum()
                 .reset_index()
             )
-            df_day["date"] = pd.to_datetime(df_day["date"], errors="coerce").dt.date
 
-            if not df_day.empty:
-                start_date = date(int(year_selected), 1, 1)
-                end_date = date(int(year_selected), 12, 31)
-                fig_cal, ax = plt.subplots(figsize=(16, 4))
-                dp.calendar(
-                    dates=df_day["date"],
-                    values=df_day["minutes_played"],
-                    start_date=start_date,
-                    end_date=end_date,
-                    ax=ax,
-                    **dp.styles["github"],
-                )
-                fig_cal.set_facecolor("#0b110bff")
-                ax.set_facecolor("#0b110bff")
-                ax.set_title(
-                    f"Daily Listening Activity for {album_selected} in {year_selected}",
-                    pad=12,
-                )
-                st.pyplot(fig_cal, use_container_width=True)
-            else:
-                st.info(f"No listening data for {album_selected} in {year_selected}.")
-        except Exception as e:
-            st.error(f"Could not render calendar heatmap: {e}")
+            # Map these back to a dummy year (e.g. 2000)
+            df_day_alltime["date"] = pd.to_datetime(
+                {
+                    "year": 2000,
+                    "month": df_day_alltime["month"],
+                    "day": df_day_alltime["day"],
+                },
+                errors="coerce",
+            ).dt.date
 
-    with col2:
-        st.markdown("", unsafe_allow_html=True)
-        fig.update_layout(
-            title_font_size=20, polar=dict(radialaxis=dict(showticklabels=False))
-        )
-        fig.update_coloraxes(showscale=False)
-        st.plotly_chart(fig, use_container_width=True)
+            # Build heatmap for one year (dummy 2000)
+            start_date = date(2000, 1, 1)
+            end_date = date(2000, 12, 31)
+
+            fig_cal, ax = plt.subplots(figsize=(16, 4))
+            dp.calendar(
+                dates=df_day_alltime["date"],
+                values=df_day_alltime["minutes_played"],
+                start_date=start_date,
+                end_date=end_date,
+                ax=ax,
+                **dp.styles["github"],
+            )
+            dark_bg = "#0b110bff"
+            fig_cal.set_facecolor(dark_bg)
+            ax.set_facecolor(dark_bg)
+            ax.set_title(
+                f"Daily Listening Activity for {album_selected} (All Time)",
+                pad=12,
+                color="white",
+            )
+            st.pyplot(fig_cal, width="stretch")
+
+        else:
+            # --- Year-specific heatmap (same as before) ---
+            start_date = date(int(year_selected), 1, 1)
+            end_date = date(int(year_selected), 12, 31)
+
+            fig_cal, ax = plt.subplots(figsize=(16, 4))
+            dp.calendar(
+                dates=df_day["date"],
+                values=df_day["minutes_played"],
+                start_date=start_date,
+                end_date=end_date,
+                ax=ax,
+                **dp.styles["github"],
+            )
+            dark_bg = "#0b110bff"
+            fig_cal.set_facecolor(dark_bg)
+            ax.set_facecolor(dark_bg)
+            ax.set_title(
+                f"Daily Listening Activity for {album_selected} in {year_selected}",
+                pad=12,
+                color="white",
+            )
+            st.pyplot(fig_cal, width="stretch")
+    else:
+        st.info(f"No listening data for {album_selected} in {year_selected}.")
 
     # --- Line plot (monthly trends) ---
-    df_line = df_music[(df_music.album_name == album_selected)]
-    df_line["month"] = df_line.datetime.dt.month
-    df_line["year"] = df_line.datetime.dt.year
-    df_line = df_line.groupby(["year", "month"]).minutes_played.sum().reset_index()
+    st.markdown("### Listening Trend")
 
-    fig_line = px.line(df_line, x="month", y="minutes_played", color="year")
-    fig_line.update_layout(
-        xaxis_title="Month", yaxis_title="Minutes Played", legend_title_text="Year"
+    # Ensure datetime and helper columns
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df["year"] = df["datetime"].dt.year
+    df["date"] = df["datetime"].dt.date
+    df["hours_played"] = df["minutes_played"] / 60
+
+    # Base filter for artist and album
+    df_artist = df[df["artist_name"] == artist_selected].copy()
+    if album_selected != "All Albums":
+        df_artist_album = df_artist[df_artist["album_name"] == album_selected].copy()
+    else:
+        df_artist_album = None
+
+    # === NORMALIZATION SETTINGS ===
+    NORMALIZATION_MODE = "scale_to_max"
+    # Options: "none", "scale_to_max", "relative_to_mean", "per_artist_average"
+
+    # Helper function for normalization
+    def normalize_series(series, mode="none", ref_df=None):
+        if series.empty:
+            return series
+        if mode == "none":
+            return series
+        elif mode == "scale_to_max":
+            return series / series.max() if series.max() > 0 else series
+        elif mode == "relative_to_mean":
+            return series / series.mean() if series.mean() > 0 else series
+        elif mode == "per_artist_average" and ref_df is not None:
+            num_artists = ref_df["artist_name"].nunique()
+            return series / num_artists if num_artists > 0 else series
+        return series
+
+    # ======== ALL TIME MODE ========
+    if year_selected == "All Time":
+        timeline_all = (
+            df.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+        timeline_all["rolling_avg"] = timeline_all["hours_played"].rolling(window=30, min_periods=1).mean()
+        timeline_all["normalized"] = normalize_series(timeline_all["rolling_avg"], NORMALIZATION_MODE, df)
+
+        timeline_artist = (
+            df_artist.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+        timeline_artist["rolling_avg"] = timeline_artist["hours_played"].rolling(window=30, min_periods=1).mean()
+        timeline_artist["normalized"] = normalize_series(timeline_artist["rolling_avg"], NORMALIZATION_MODE, df)
+
+        if df_artist_album is not None and not df_artist_album.empty:
+            timeline_album = (
+                df_artist_album.groupby("date")["hours_played"]
+                .sum()
+                .reset_index()
+                .sort_values("date")
+            )
+            timeline_album["rolling_avg"] = timeline_album["hours_played"].rolling(window=30, min_periods=1).mean()
+            timeline_album["normalized"] = normalize_series(timeline_album["rolling_avg"], NORMALIZATION_MODE, df)
+        else:
+            timeline_album = None
+
+        # ===============================================================
+        # AGGREGATION & NORMALIZATION — with date reindexing
+        # ===============================================================
+        # Aggregate global listening across entire dataset
+        timeline_all = (
+            df.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+
+        # Create a continuous date range across the entire dataset
+        full_date_index = pd.date_range(
+            start=timeline_all["date"].min(),
+            end=timeline_all["date"].max(),
+            freq="D"
+        )
+
+        # --- Artist timeline ---
+        timeline_artist = (
+            df_artist.groupby("date")["hours_played"]
+            .sum()
+            .reindex(full_date_index, fill_value=0)
+            .reset_index()
+            .rename(columns={"index": "date", "hours_played": "hours_played"})
+            .sort_values("date")
+        )
+
+        # --- Album timeline (if available) ---
+        if df_artist_album is not None and not df_artist_album.empty:
+            timeline_album = (
+                df_artist_album.groupby("date")["hours_played"]
+                .sum()
+                .reindex(full_date_index, fill_value=0)
+                .reset_index()
+                .rename(columns={"index": "date", "hours_played": "hours_played"})
+                .sort_values("date")
+            )
+        else:
+            timeline_album = None
+
+        # --- Apply rolling averages ---
+        for tdf in [timeline_all, timeline_artist, timeline_album]:
+            if tdf is not None:
+                tdf["rolling_avg"] = tdf["hours_played"].rolling(window=30, min_periods=1).mean()
+
+        # --- Normalize each timeline ---
+        timeline_all["normalized"] = normalize_series(timeline_all["rolling_avg"], NORMALIZATION_MODE, df)
+        timeline_artist["normalized"] = normalize_series(timeline_artist["rolling_avg"], NORMALIZATION_MODE, df)
+        if timeline_album is not None:
+            timeline_album["normalized"] = normalize_series(timeline_album["rolling_avg"], NORMALIZATION_MODE, df)
+
+        # ===============================================================
+        # PLOTTING — Unified All Time View
+        # ===============================================================
+        # --- Base global listening trend ---
+        fig_timeline = px.line(
+            timeline_all,
+            x="date",
+            y="normalized",
+            title="Listening Trend (All Time)",
+            labels={"normalized": "Normalized Hours Played", "date": "Date"},
+            color_discrete_sequence=["#137b37"],  # global blue
+        )
+        fig_timeline.update_traces(line=dict(width=1))
+
+        # Explicitly label global trace
+        fig_timeline.data[0].name = "All Artists (Global)"
+        fig_timeline.data[0].showlegend = True
+
+        # --- Add artist trace ---
+        fig_timeline.add_scatter(
+            x=timeline_artist["date"],
+            y=timeline_artist["normalized"],
+            mode="lines",
+            name=f"{artist_selected} (Artist)",
+            line=dict(color="#1ed760", width=2),
+            showlegend=True,
+        )
+
+        # --- Add album trace (if applicable) ---
+        if timeline_album is not None:
+            fig_timeline.add_scatter(
+                x=timeline_album["date"],
+                y=timeline_album["normalized"],
+                mode="lines",
+                name=f"{album_selected} (Album)",
+                line=dict(color="#e1ece3", width=3),
+                showlegend=True,
+            )
+
+        # ===============================================================
+        # LAYOUT — Dark theme + clean legend
+        # ===============================================================
+        fig_timeline.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            yaxis_title="Normalized Hours per Day (30-Day Rolling Avg)",
+            xaxis_title="Date",
+            legend_title_text="Listening Source",
+            font=dict(color="white"),
+            height=450,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+                bgcolor="rgba(0,0,0,0)",
+            ),
+        )
+
+    # ======== SPECIFIC YEAR MODE ========
+    else:
+        year_int = int(year_selected)
+
+        # --- Filter data for selected year ---
+        df_year = df[df["datetime"].dt.year == year_int].copy()
+        df_artist_year = df_artist[df_artist["datetime"].dt.year == year_int].copy()
+
+        if df_artist_album is not None:
+            df_album_year = df_artist_album[df_artist_album["datetime"].dt.year == year_int].copy()
+        else:
+            df_album_year = None
+
+        # ===============================================================
+        # AGGREGATION & NORMALIZATION — with date reindexing
+        # ===============================================================
+        # Aggregate total listening across all artists for the year
+        timeline_all = (
+            df_year.groupby("date")["hours_played"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+
+        # Establish a complete date range for the selected year
+        full_date_index = pd.date_range(
+            start=timeline_all["date"].min(),
+            end=timeline_all["date"].max(),
+            freq="D"
+        )
+
+        # --- Artist timeline ---
+        timeline_artist = (
+            df_artist_year.groupby("date")["hours_played"]
+            .sum()
+            .reindex(full_date_index, fill_value=0)
+            .reset_index()
+            .rename(columns={"index": "date", "hours_played": "hours_played"})
+            .sort_values("date")
+        )
+
+        # --- Album timeline (if available) ---
+        if df_album_year is not None and not df_album_year.empty:
+            timeline_album = (
+                df_album_year.groupby("date")["hours_played"]
+                .sum()
+                .reindex(full_date_index, fill_value=0)
+                .reset_index()
+                .rename(columns={"index": "date", "hours_played": "hours_played"})
+                .sort_values("date")
+            )
+        else:
+            timeline_album = None
+
+        # --- Apply 7-day rolling average ---
+        for tdf in [timeline_all, timeline_artist, timeline_album]:
+            if tdf is not None:
+                tdf["rolling_avg"] = tdf["hours_played"].rolling(window=7, min_periods=1).mean()
+
+        # --- Normalize each series (consistent scale) ---
+        timeline_all["normalized"] = normalize_series(timeline_all["rolling_avg"], NORMALIZATION_MODE, df_year)
+        timeline_artist["normalized"] = normalize_series(timeline_artist["rolling_avg"], NORMALIZATION_MODE, df_year)
+        if timeline_album is not None:
+            timeline_album["normalized"] = normalize_series(timeline_album["rolling_avg"], NORMALIZATION_MODE, df_year)
+
+        # ===============================================================
+        # PLOTTING — Unified Year View
+        # ===============================================================
+        import plotly.express as px
+        import plotly.graph_objects as go
+
+        # --- Base global listening trend ---
+        fig_timeline = px.line(
+            timeline_all,
+            x="date",
+            y="normalized",
+            title=f"Listening Trend ({year_selected})",
+            labels={"normalized": "Normalized Hours Played", "date": "Date"},
+            color_discrete_sequence=["#137b37"],  # blue for global
+        )
+        fig_timeline.update_traces(line=dict(width=1))
+
+        # Explicitly label the global trace
+        fig_timeline.data[0].name = "All Artists (Global)"
+        fig_timeline.data[0].showlegend = True
+
+        # --- Add selected artist trace ---
+        fig_timeline.add_scatter(
+            x=timeline_artist["date"],
+            y=timeline_artist["normalized"],
+            mode="lines",
+            name=f"{artist_selected} (Artist)",
+            line=dict(color="#1ed760", width=2),
+            showlegend=True,
+        )
+
+        # --- Add album trace if applicable ---
+        if timeline_album is not None:
+            fig_timeline.add_scatter(
+                x=timeline_album["date"],
+                y=timeline_album["normalized"],
+                mode="lines",
+                name=f"{album_selected} (Album)",
+                line=dict(color="#e1ece3", width=3),
+                showlegend=True,
+            )
+
+        # ===============================================================
+        # LAYOUT — Clean, dark theme with centered legend
+        # ===============================================================
+        fig_timeline.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            yaxis_title="Normalized Hours per Day (7-Day Rolling Avg)",
+            xaxis_title="Date",
+            legend_title_text="Listening Source",
+            height=450,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+                bgcolor="rgba(0,0,0,0)",
+            ),
+        )
+
+    # ✅ Unified rendering
+    st.plotly_chart(
+        fig_timeline,
+        width="stretch",
+        config={"displayModeBar": False, "responsive": True},
     )
-    st.plotly_chart(fig_line, use_container_width=True)
 
-# ------------------------------- Per Genre ---------------------------------- #
-elif page == "Per Genre":
+# --------------------------------- Genres ----------------------------------- #
+elif page == "Genres":
+
+    st.session_state["last_page"] = "Genres"
 
     # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
@@ -2287,11 +5160,47 @@ elif page == "Per Genre":
 
     # Get current user dataset
     df, current_label = require_current_df()
-    user_df = df.copy()
+    user_df = df[df["category"] == "music"].copy()
+    df_music = df[df["category"] == "music"].copy()
+    df_album = INFO_ALBUM.copy()
+    df_artist_genre = INFO_ARTIST_GENRE.copy()
 
-    # --- Load enrichment datasets ---
-    df_album = INFO_ALBUM.copy()            # from info_album.csv
-    df_artist_genre = INFO_ARTIST_GENRE.copy()  # from info_artist_genre.csv
+    # --- Normalize datetime column safely ---
+    df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
+    df_music = df_music.dropna(subset=["datetime"]).copy()
+    df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
+    df_music["date"] = df_music["datetime"].dt.date
+
+    # --- Header ---
+    h1, h2, h3 = st.columns([1,3,1])
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Genre Insights</b></em></p>")
+
+    # --- Genre & Year Selectors ---
+    col1, col2 = st.columns([0.7, 1])
+    with col1:
+        genre_list = (
+            INFO_SUPERGENRE.groupby("supergenre").count()
+            .sort_values(by="supergenre")
+            .reset_index()["supergenre"]
+            .tolist()
+        )
+        genre_selected = st.selectbox(
+            "Genre:",
+            options=genre_list,
+            index=0
+        )
+
+    with col2:
+        # --- Year + Category selectors ---
+        years = sorted(df["year"].dropna().unique())
+        year_options = ["All Time"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year", year_options, selection_mode="single", default="All Time", width='content'
+        )
+
+        if not year_selected:
+            year_selected = "All Time"
 
     # --- Merge datasets ---
     # First: merge listening history with album info (tracks + albums + artist)
@@ -2311,125 +5220,1023 @@ elif page == "Per Genre":
     )
 
     # --- Datetime handling ---
-    df['datetime'] = pd.to_datetime(df['datetime'])
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df = df.dropna(subset=["datetime"]).copy()
+    df["datetime"] = df["datetime"].dt.tz_localize(None)
+    df["date"] = df["datetime"].dt.date
     df['year'] = df['datetime'].dt.year
 
-    # --- Explode genres ---
-    # Some artists may have multiple genres, so split them
-    df_exploded = df.explode('supergenre').dropna(subset=['supergenre'])
-    df_exploded['supergenre'] = df_exploded['supergenre'].astype(str).str.strip()
+    # --- FILTER BY YEAR ---
+    if year_selected == "All Time":
+        df_year = df.copy()
+    else:
+        df_year = df[df["year"] == int(year_selected)].copy()
 
-    # --- FILTER: TOP GENRES, ARTISTS, TRACKS ---
-    top_genres = (
-        df_exploded.groupby(['year', 'supergenre'], as_index=False)['ms_played']
+    # --- 1️⃣ Favourite Genre ---
+    fav_genre = (
+        df_year[df_year["supergenre"].str.lower() != "unlisted"]
+        .groupby("supergenre")["minutes_played"]
         .sum()
-        .sort_values(['year', 'ms_played'], ascending=[True, False])
-        .groupby('year')
-        .head(5)
+        .sort_values(ascending=False)
+        .index[0]
+        if not df_year.empty else "N/A"
     )
-
-    df_filtered = df_exploded.merge(
-        top_genres[['year', 'supergenre']], on=['year', 'supergenre']
-    )
-
-    top_artists = (
-        df_filtered.groupby(['year', 'supergenre', 'artist_name'], as_index=False)['ms_played']
+    fav_subgenre = (
+        df_year[df_year["primary_genre"].str.lower() != "none"]
+        .groupby("primary_genre")["minutes_played"]
         .sum()
-        .sort_values(['year', 'supergenre', 'ms_played'], ascending=[True, True, False])
-        .groupby(['year', 'supergenre'])
-        .head(5)
+        .sort_values(ascending=False)
+        .index[0]
+        if not df_year.empty else "N/A"
     )
 
-    df_filtered_artists = df_filtered.merge(
-        top_artists[['year', 'supergenre', 'artist_name']],
-        on=['year', 'supergenre', 'artist_name']
-    )
-
-    top_tracks = (
-        df_filtered_artists.groupby(['year', 'supergenre', 'artist_name', 'track_name'], as_index=False)['ms_played']
+    # --- 2️⃣ Favourite Artist (filtered by selected genre) ---
+    df_genre = df_year[df_year["supergenre"] == genre_selected].copy()
+    fav_artist = (
+        df_genre.groupby("artist_name")["minutes_played"]
         .sum()
-        .sort_values(['year', 'supergenre', 'artist_name', 'ms_played'], ascending=[True, True, True, False])
-        .groupby(['year', 'supergenre', 'artist_name'])
-        .head(5)
+        .sort_values(ascending=False)
+        .index[0]
+        if not df_genre.empty else "N/A"
     )
 
-    # --- BUILD SUNBURST ---
-    fig = px.sunburst(
-        top_tracks,
-        path=['year', 'supergenre', 'artist_name', 'track_name'],
-        values='ms_played',
-        color='ms_played',
-        color_continuous_scale=['#0F521A', '#E6F5C7'],
-        title=' '
+    # --- 3️⃣ Favourite Track (filtered by selected genre) ---
+    fav_track = (
+        df_genre.groupby(["artist_name", "track_name"])["minutes_played"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
     )
 
-    fig.update_traces(
-        insidetextfont=dict(color='white'),
-        hovertemplate='<b>%{label}</b><br>Minutes Played: %{value:.0f}<extra></extra>'
+    fav_track_display = (
+        f"{fav_track.iloc[0]['artist_name']} — {fav_track.iloc[0]['track_name']}"
+        if not fav_track.empty else "N/A"
     )
-    fig.update_layout(
-        margin=dict(t=50, l=0, r=0, b=0),
-        height=800,
-        font=dict(color='black')
+
+    # --- DISPLAY SCORECARDS ---
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        scorecard(f"Favourite Genre of {year_selected}", fav_genre, height=120)
+    with c2:
+        scorecard(f"Favourite Subgenre of {year_selected}", fav_subgenre, height=120)
+    with c3:
+        scorecard(f"Favourite {genre_selected} Artist of {year_selected}", fav_artist, height=120)
+    with c4:
+        scorecard(f"Favourite {genre_selected} Track of {year_selected}", fav_track_display, height=120)
+
+    # =========================================
+    # Treemap: All Genres → Top 30 Artists → Top 20 Tracks
+    # ---------------------------
+    # 1) Build the three levels
+    # ---------------------------
+    df_work = df_year.copy()
+
+    # Keep only usable supergenres (minimal filter, per your preference)
+    df_work = df_work[
+        df_work["supergenre"].notna()
+        & (df_work["supergenre"].astype(str).str.strip() != "")
+        & (df_work["supergenre"].str.lower() != "unlisted")
+    ].copy()
+
+    # Track totals per (genre, artist, track)
+    g_track = (
+        df_work.groupby(["supergenre", "artist_name", "track_name"], as_index=False)["minutes_played"]
+        .sum()
     )
-    fig.update_coloraxes(showscale=False)
 
-    st.markdown("<h1 style='text-align: center;'>Le Moulin Des Genres (Windmill of Genre)</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align: center;'>Choose Year 👉 Top 5 Genres 👉 Top 5 Artists 👉 Top 5 Tracks 🌞</h4>", unsafe_allow_html=True)
-    st.plotly_chart(fig, use_container_width=True)
+    # Top-10 tracks per (genre, artist)
+    g_track = g_track.sort_values(
+        ["supergenre", "artist_name", "minutes_played"],
+        ascending=[True, True, False]
+    )
+    top10_tracks_each_artist = (
+        g_track.groupby(["supergenre", "artist_name"], as_index=False).head(20).copy()
+    )
 
-    # Hours of day chart logic remains the same
+    # Artist value = sum of their Top-10 tracks; then keep Top-10 artists per genre
+    artist_nodes = (
+        top10_tracks_each_artist
+        .groupby(["supergenre", "artist_name"], as_index=False)["minutes_played"]
+        .sum()
+        .rename(columns={"minutes_played": "artist_value"})
+        .sort_values(["supergenre", "artist_value"], ascending=[True, False])
+    )
+    top10_artists_each_genre = (
+        artist_nodes.groupby("supergenre", as_index=False).head(30).copy()
+    )
 
-    # MOST LISTENED TO HOURS OF THE DAY
-    # (Rest of your code remains the same)
+    # Genre value = sum of Top-10 artists
+    genre_nodes = (
+        top10_artists_each_genre
+        .groupby("supergenre", as_index=False)["artist_value"]
+        .sum()
+        .rename(columns={"artist_value": "genre_value"})
+        .sort_values("genre_value", ascending=False)
+        .reset_index(drop=True)
+    )
 
-    # Convert 'datetime' to datetime type if needed
-    df['datetime'] = pd.to_datetime(df['datetime'])
+    # Optional subtitle: the top artist per genre
+    top_artist_per_genre = (
+        top10_artists_each_genre
+        .sort_values(["supergenre", "artist_value"], ascending=[True, False])
+        .drop_duplicates("supergenre")[["supergenre", "artist_name"]]
+        .rename(columns={"artist_name": "top_artist"})
+    )
+    genres_with_top = genre_nodes.merge(top_artist_per_genre, on="supergenre", how="left")
 
-    # Extract hour and year
-    df['hour'] = df['datetime'].dt.hour
-    df['year'] = df['datetime'].dt.year
+    # ---------------------------
+    # 2) Colors by RANK, evenly across scale
+    # ---------------------------
+    def even_positions(n: int):
+        """Return n evenly spaced positions in [0,1]."""
+        if n <= 1:
+            return [0.5]
+        return [i / (n - 1) for i in range(n)]
 
-    # Get list of available years
-    years = sorted(df['year'].unique())
+    # GENRE layer — rank all genres by genre_value (desc) and spread across the scale
+    genres_ordered = genres_with_top.sort_values("genre_value", ascending=False).reset_index(drop=True)
+    g_pos = even_positions(len(genres_ordered))
+    g_colors = sample_colorscale(neon_colorscale, g_pos)[::-1]
+    genre_rank_color = dict(zip(genres_ordered["supergenre"], g_colors))
 
-# ------------------------------- The Farm ----------------------------------- #
-elif page == "The Farm":
+    # ARTIST layer — for each genre, spread that genre’s Top-10 artists evenly across the scale by rank
+    artist_rank_color = {}
+    for g in genres_ordered["supergenre"]:
+        artists = (
+            top10_artists_each_genre[top10_artists_each_genre["supergenre"] == g]
+            .sort_values("artist_value", ascending=False)
+            .reset_index(drop=True)
+        )
+        a_pos = even_positions(len(artists))
+        a_cols = sample_colorscale(neon_colorscale, a_pos)[::-1]
+        for (a, c) in zip(artists["artist_name"], a_cols):
+            artist_rank_color[(g, a)] = c
+
+    # TRACK layer — for each (genre, artist), spread their Top-10 tracks evenly across the scale by rank
+    track_rank_color = {}
+    for g in genres_ordered["supergenre"]:
+        artists = (
+            top10_artists_each_genre[top10_artists_each_genre["supergenre"] == g]
+            .sort_values("artist_value", ascending=False)
+        )
+        for a in artists["artist_name"]:
+            tracks = (
+                top10_tracks_each_artist[
+                    (top10_tracks_each_artist["supergenre"] == g) &
+                    (top10_tracks_each_artist["artist_name"] == a)
+                ]
+                .sort_values("minutes_played", ascending=False)
+                .reset_index(drop=True)
+            )
+            t_pos = even_positions(len(tracks))
+            t_cols = sample_colorscale(neon_colorscale, t_pos)[::-1]
+            for (t, c) in zip(tracks["track_name"], t_cols):
+                track_rank_color[(g, a, t)] = c
+
+    # ---------------------------
+    # 3) Build hierarchy arrays
+    # ---------------------------
+    ids, labels, parents, values, texts, colors, custom = [], [], [], [], [], [], []
+
+    def gid(g): return f"g|{g}"
+    def aid(g, a): return f"a|{g}|{a}"
+    def tid(g, a, t): return f"t|{g}|{a}|{t}"
+
+    root_id = "root"
+    total_all = float(genres_ordered["genre_value"].sum())
+
+    # Root
+    ids.append(root_id); labels.append("All Genres"); parents.append("")
+    values.append(total_all); texts.append(""); colors.append("rgba(0,0,0,0)")
+    custom.append(format_hhmmss(total_all))
+
+    # Genres (value = sum of shown artists)
+    for _, grow in genres_ordered.iterrows():
+        g = grow["supergenre"]; g_val = float(grow["genre_value"])
+        ids.append(gid(g)); labels.append(g); parents.append(root_id)
+        texts.append(f"Top artist: {genres_with_top.loc[genres_with_top['supergenre'] == g, 'top_artist'].iloc[0] or ''}")
+        values.append(g_val); colors.append(genre_rank_color[g]); custom.append(format_hhmmss(g_val))
+
+        # Artists (value = sum of shown tracks)
+        artists = (
+            top10_artists_each_genre[top10_artists_each_genre["supergenre"] == g]
+            .sort_values("artist_value", ascending=False)
+        )
+        for _, arow in artists.iterrows():
+            a = arow["artist_name"]; a_val = float(arow["artist_value"])
+            ids.append(aid(g, a)); labels.append(a); parents.append(gid(g))
+            values.append(a_val); texts.append(format_hhmmss(a_val))
+            colors.append(artist_rank_color[(g, a)]); custom.append(format_hhmmss(a_val))
+
+            # Tracks (Top-10)
+            tracks = (
+                top10_tracks_each_artist[
+                    (top10_tracks_each_artist["supergenre"] == g) &
+                    (top10_tracks_each_artist["artist_name"] == a)
+                ]
+                .sort_values("minutes_played", ascending=False)
+            )
+            for _, trow in tracks.iterrows():
+                t = trow["track_name"]; t_val = float(trow["minutes_played"])
+                ids.append(tid(g, a, t)); labels.append(t); parents.append(aid(g, a))
+                values.append(t_val); texts.append(format_hhmmss(t_val))
+                colors.append(track_rank_color[(g, a, t)]); custom.append(format_hhmmss(t_val))
+
+    # ---------------------------
+    # 4) Figure (initially show all layers, with smooth zoom)
+    # ---------------------------
+    fig_treemap = go.Figure(go.Treemap(
+        ids=ids, labels=labels, parents=parents, values=values,
+        text=texts, textinfo="label+text",
+        texttemplate="<b>%{label}</b><br>%{text}",
+        hovertemplate="<b>%{label}</b><br>Time: %{customdata}<extra></extra>",
+        customdata=custom,
+        marker=dict(colors=colors),
+        tiling=dict(pad=2, squarifyratio=1),
+        branchvalues="total",      # parents equal the sum of shown children (no empty/black space)
+        pathbar=dict(visible=True),
+        root_color="rgba(0,0,0,0)",
+        maxdepth=2,                # show Genres + Artists + Tracks initially
+    ))
+
+    fig_treemap.update_layout(
+        # uniformtext=dict(minsize=16, mode="show"),
+        height=850,
+        margin=dict(l=0, r=0, t=30, b=0),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e1ece3", size=14),
+        transition=dict(duration=550, easing="cubic-in-out"),
+        uirevision="treemap-zoom",
+    )
+    fig_treemap.update_traces(textfont=dict(color="#000B06", family="Arial"))
+
+    st.plotly_chart(
+        fig_treemap,
+        width="stretch",
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+    # ------------- Top 10 Chart ----------------------- #
+    st.markdown("### Top Tracks in Selected Genre")
+
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        # --- Filter by selected genre first ---
+        df_genre_filtered = df_year[df_year["supergenre"] == genre_selected].copy()
+
+        # --- Top tracks within selected genre ---
+        top_tracks = (
+            df_genre_filtered.groupby(["artist_name", "track_name", "album_name"])["minutes_played"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()
+            .head(10)
+        )
+
+        if not top_tracks.empty:
+            # Apply hh:mm:ss formatting
+            top_tracks["hhmmss"] = top_tracks["minutes_played"].apply(format_hhmmss)
+
+            # Combined label for display
+            top_tracks["label"] = (
+                top_tracks["artist_name"] + " — " + top_tracks["track_name"]
+            )
+
+            # --- Spotify gradient color sampling ---
+            n_tracks = len(top_tracks)
+            sampled_colors = sample_colorscale(
+                spotify_colorscale,
+                [i / max(1, n_tracks - 1) for i in range(n_tracks)]
+            )
+            top_tracks = top_tracks.reset_index(drop=True)
+            top_tracks["color"] = sampled_colors[::-1]  # reverse gradient top→bottom
+
+            # --- Bar chart ---
+            fig_top_tracks = px.bar(
+                top_tracks,
+                x="minutes_played",
+                y="label",
+                text="hhmmss",
+                orientation="h",
+                color="color",
+                color_discrete_map="identity",  # use exact color hexes
+                labels={
+                    "minutes_played": "Listening Time (HH:MM:SS)",
+                    "label": "",
+                    "hhmmss": "Time Played",
+                },
+            )
+
+            # --- Wrap labels across two lines ---
+            import textwrap
+            fig_top_tracks.update_yaxes(
+                categoryorder="total ascending",
+                tickfont=dict(size=11),
+                tickmode="array",
+                tickvals=top_tracks["label"],
+                ticktext=[
+                    "<br>".join(textwrap.wrap(label, width=35))
+                    for label in top_tracks["label"]
+                ],
+                title=None,
+            )
+
+            # --- Format x-axis as hh:mm:ss ---
+            max_minutes = top_tracks["minutes_played"].max()
+            tick_interval = max_minutes / 5 if max_minutes > 0 else 1
+            tickvals = [i for i in range(0, int(max_minutes) + 1, int(tick_interval) or 1)]
+            ticktext = [format_hhmmss(x) for x in tickvals]
+
+            fig_top_tracks.update_xaxes(
+                title="Listening Time (HH:MM:SS)",
+                tickvals=tickvals,
+                ticktext=ticktext,
+                showgrid=False,
+            )
+
+            # --- Style bars ---
+            fig_top_tracks.update_traces(
+                texttemplate="%{text}",
+                textposition="inside",
+                insidetextanchor="end",
+                insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+            )
+
+            # --- Layout ---
+            fig_top_tracks.update_layout(
+                height=500,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#e1ece3", size=14),
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+                margin=dict(l=0, r=0, t=30, b=0),
+                showlegend=False,
+            )
+
+            # --- Display ---
+            st.plotly_chart(
+                fig_top_tracks,
+                width="stretch",
+                config={"displayModeBar": False, "responsive": True},
+            )
+        else:
+            st.info("No track data found for this genre and year selection.")
+
+    # --- Album artwork carousel ---
+    with c2:
+        album_image_list = []
+
+        # Iterate through top tracks and match their album artwork
+        for idx, row in top_tracks.iterrows():
+            album_name = row.get("album_name", "")
+            artist_name = row.get("artist_name", "")
+
+            # Try to find a matching album in INFO_ALBUM
+            if "INFO_ALBUM" in locals() and not INFO_ALBUM.empty:
+                match = INFO_ALBUM.loc[
+                    INFO_ALBUM["album_name"].str.lower() == str(album_name).lower()
+                ]
+            else:
+                match = None
+
+            # Get image or fallback to placeholder
+            img = (
+                match["album_artwork"].iloc[0]
+                if match is not None
+                and not match.empty
+                and "album_artwork" in match.columns
+                and isinstance(match["album_artwork"].iloc[0], str)
+                and match["album_artwork"].iloc[0].strip().lower().startswith(("http://", "https://"))
+                else CAROUSEL_PLACEHOLDER
+            )
+
+            # Add to carousel items
+            album_image_list.append(
+                dict(
+                    text=f"{artist_name} — {album_name}",
+                    title=f"#{idx + 1}",
+                    img=img,
+                )
+            )
+
+        # --- Render carousel ---
+        if album_image_list:
+            carousel(items=album_image_list, wrap=False, container_height=500)
+        else:
+            st.info("No album images available for this timeframe.")
+
+    # ------------ Top 10 Genres ----------- #
+    # with c1:
+    #     st.markdown("### Top Genres for Selected Year")
+    #     try:
+    #         # --- 1) Aggregate total minutes by genre for the selected year ---
+    #         # We exclude null/blank genres and "unlisted"
+    #         genre_totals = (
+    #             df_year[
+    #                 df_year["supergenre"].notna()
+    #                 & (df_year["supergenre"].str.strip() != "")
+    #                 & (df_year["supergenre"].str.lower() != "unlisted")
+    #             ]
+    #             .groupby("supergenre", as_index=False)["minutes_played"]
+    #             .sum()
+    #         )
+
+    #         # If nothing to show, bail out early
+    #         if genre_totals.empty:
+    #             st.info("No genre data found for this year selection.")
+    #         else:
+    #             # Keep Top 10 genres by total time
+    #             top10_genres = (
+    #                 genre_totals.sort_values("minutes_played", ascending=False)
+    #                 .head(10)
+    #                 .copy()
+    #             )
+
+    #             # --- 2) Find the top artist per each of those Top 10 genres (this year) ---
+    #             df_candidates = df_year[df_year["supergenre"].isin(top10_genres["supergenre"])].copy()
+
+    #             # Sum per (genre, artist), then pick the artist with the highest time for each genre
+    #             top_artist_per_genre = (
+    #                 df_candidates
+    #                 .groupby(["supergenre", "artist_name"], as_index=False)["minutes_played"]
+    #                 .sum()
+    #                 .sort_values(["supergenre", "minutes_played"], ascending=[True, False])
+    #                 .drop_duplicates(subset=["supergenre"])
+    #                 .rename(columns={"artist_name": "top_artist"})
+    #             )
+
+    #             # Merge back to get a tidy table with totals + the top artist name
+    #             plot_df = top10_genres.merge(
+    #                 top_artist_per_genre[["supergenre", "top_artist"]],
+    #                 on="supergenre",
+    #                 how="left"
+    #             )
+
+    #             # --- 3) Prepare colors: sample from neon_colorscale (fallback to spotify_colorscale) ---
+    #             n = len(plot_df)
+    #             positions = [i / max(1, n - 1) for i in range(n)]  # 0..1 spaced
+
+    #             try:
+    #                 # If neon_colorscale and sample_colorscale are available, use them
+    #                 sampled = sample_colorscale(neon_colorscale, positions)
+    #             except Exception:
+    #                 # Fallback to Spotify colors if neon isn't available
+    #                 # (also keeps the code resilient if neon_colorscale isn't defined)
+    #                 sampled = sample_colorscale(spotify_colorscale, positions)
+
+    #             # Reverse so the longest bar (which will be at the bottom in h-bar ascending sort) pops
+    #             plot_df = plot_df.reset_index(drop=True)
+    #             plot_df["color"] = sampled[::-1]
+
+    #             # For pretty x-axis tick labels later
+    #             plot_df["hhmmss"] = plot_df["minutes_played"].apply(format_hhmmss)
+
+    #             # --- 4) Build the horizontal bar chart ---
+    #             # Sort ascending so Plotly places the largest at the bottom (clean ladder look)
+    #             plot_df_sorted = plot_df.sort_values("minutes_played", ascending=True)
+
+    #             fig_top_genres = px.bar(
+    #                 plot_df_sorted,
+    #                 x="minutes_played",
+    #                 y="supergenre",
+    #                 text="top_artist",            # label inside bar = top artist
+    #                 orientation="h",
+    #                 color="color",
+    #                 color_discrete_map="identity",
+    #                 labels={
+    #                     "minutes_played": "Listening Time (HH:MM:SS)",
+    #                     "supergenre": "",
+    #                     "top_artist": "Top Artist"
+    #                 },
+    #             )
+
+    #             # Format x-axis ticks as HH:MM:SS
+    #             max_minutes = plot_df_sorted["minutes_played"].max()
+    #             tick_interval = max_minutes / 5 if max_minutes > 0 else 1
+    #             # Build integer tick positions (defensive cast)
+    #             tickvals = [int(i) for i in range(0, int(max_minutes) + 1, max(1, int(tick_interval)))]
+    #             ticktext = [format_hhmmss(x) for x in tickvals]
+
+    #             fig_top_genres.update_xaxes(
+    #                 title="Listening Time (HH:MM:SS)",
+    #                 tickvals=tickvals,
+    #                 ticktext=ticktext,
+    #                 showgrid=False,
+    #             )
+
+    #             # Style the text to sit nicely inside the bars
+    #             fig_top_genres.update_traces(
+    #                 texttemplate="%{text}",
+    #                 textposition="inside",
+    #                 insidetextanchor="middle",
+    #                 insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+    #                 hovertemplate="<b>%{y}</b><br>Top Artist: %{text}<br>Total: %{x} min<br>Time: %{customdata}",
+    #                 customdata=plot_df_sorted["hhmmss"],
+    #             )
+
+    #             # Layout styling to match your theme
+    #             fig_top_genres.update_layout(
+    #                 height=500,
+    #                 plot_bgcolor="rgba(0,0,0,0)",
+    #                 paper_bgcolor="rgba(0,0,0,0)",
+    #                 font=dict(color="#e1ece3", size=14),
+    #                 xaxis=dict(showgrid=False),
+    #                 yaxis=dict(showgrid=False),
+    #                 margin=dict(l=0, r=0, t=30, b=0),
+    #                 showlegend=False,
+    #             )
+
+    #             # Render the chart
+    #             st.plotly_chart(
+    #                 fig_top_genres,
+    #                 width="stretch",
+    #                 config={"displayModeBar": False, "responsive": True},
+    #             )
+
+    #     except Exception as e:
+    #         st.error(f"Failed to build Top Genres chart: {e}")
+
+    # ===============================================================
+    # LISTENING TREND (GENRE vs OVERALL)
+    # ===============================================================
+    st.markdown("### Listening Trend (Genre vs Overall)")
+
+    # --- Ensure date consistency ---
+    df_year["date"] = pd.to_datetime(df_year["date"], errors="coerce")
+
+    # ===============================================================
+    # AGGREGATION — compute total minutes played per day
+    # ===============================================================
+    timeline_all = (
+        df_year.groupby("date")["minutes_played"]
+        .sum()
+        .reset_index()
+        .sort_values("date")
+    )
+    timeline_genre = (
+        df_genre.groupby("date")["minutes_played"]
+        .sum()
+        .reset_index()
+        .sort_values("date")
+    )
+
+    # --- Create full continuous date range for the selected year ---
+    full_date_index = pd.date_range(
+        start=timeline_all["date"].min(),
+        end=timeline_all["date"].max(),
+        freq="D"
+    )
+
+    # --- Fill missing dates with 0 to keep timelines continuous ---
+    timeline_all = (
+        timeline_all.set_index("date")
+        .reindex(full_date_index, fill_value=0)
+        .rename_axis("date")
+        .reset_index()
+    )
+    timeline_genre = (
+        timeline_genre.set_index("date")
+        .reindex(full_date_index, fill_value=0)
+        .rename_axis("date")
+        .reset_index()
+    )
+
+    # ===============================================================
+    # ROLLING AVERAGES (30-day, with early-window correction)
+    # ===============================================================
+    window_size = 30
+
+    # --- Compute rolling averages with full window requirement ---
+    timeline_all["rolling_avg"] = (
+        timeline_all["minutes_played"].rolling(window=window_size, min_periods=window_size).mean()
+    )
+    timeline_genre["rolling_avg"] = (
+        timeline_genre["minutes_played"].rolling(window=window_size, min_periods=window_size).mean()
+    )
+
+    # --- Fill early NaNs with first valid value (smooth start) ---
+    for tdf in [timeline_all, timeline_genre]:
+        first_valid = tdf["rolling_avg"].first_valid_index()
+        if first_valid is not None:
+            first_value = tdf.loc[first_valid, "rolling_avg"]
+            tdf["rolling_avg"] = tdf["rolling_avg"].fillna(first_value)
+        else:
+            tdf["rolling_avg"] = tdf["minutes_played"]  # fallback if no valid window yet
+
+    # ===============================================================
+    # NORMALIZATION MODES (same options as artist/global chart)
+    # ===============================================================
+    NORMALIZATION_MODE = "global_mean_joint_max"
+    # "none", "scale_to_max", "relative_to_mean", "per_genre_average",
+    # "global_mean_joint_max", "global_mean_joint_minmax"
+
+    def normalize_series(series, mode="none", ref_df=None):
+        if series.empty:
+            return series
+        if mode == "none":
+            return series
+        elif mode == "scale_to_max":
+            return series / series.max() if series.max() > 0 else series
+        elif mode == "relative_to_mean":
+            return series / series.mean() if series.mean() > 0 else series
+        elif mode == "per_genre_average" and ref_df is not None:
+            num_genres = ref_df["supergenre"].nunique()
+            return series / num_genres if num_genres > 0 else series
+        return series
+
+    def normalize_genre_vs_global_mean(genre_series, global_series, ref_df, joint="max"):
+        """
+        Returns (genre_norm, global_mean_norm) as a pair.
+
+        Steps:
+        1) global_mean = global_series / nunique(supergenre) in ref_df
+        2) joint scaling:
+            - joint == "max": divide both by the same joint max
+            - joint == "minmax": joint min-max scale both to [0,1]
+        """
+        num_genres = int(ref_df["supergenre"].nunique())
+        num_genres = max(num_genres, 1)
+
+        global_mean = global_series / num_genres
+
+        if joint == "max":
+            joint_max = max(float(global_mean.max() or 0), float(genre_series.max() or 0))
+            if joint_max > 0:
+                return genre_series / joint_max, global_mean / joint_max
+            return genre_series, global_mean
+
+        elif joint == "minmax":
+            joint_min = min(float(global_mean.min() or 0), float(genre_series.min() or 0))
+            joint_max = max(float(global_mean.max() or 0), float(genre_series.max() or 0))
+            denom = joint_max - joint_min
+            if denom > 0:
+                return (genre_series - joint_min) / denom, (global_mean - joint_min) / denom
+            return genre_series, global_mean
+
+        # default fallback: no change
+        return genre_series, global_mean
+
+    if NORMALIZATION_MODE in ("global_mean_joint_max", "global_mean_joint_minmax"):
+        joint = "max" if NORMALIZATION_MODE == "global_mean_joint_max" else "minmax"
+        g_norm, gm_norm = normalize_genre_vs_global_mean(
+            timeline_genre["rolling_avg"],
+            timeline_all["rolling_avg"],
+            ref_df=df_year,
+            joint=joint,
+        )
+        timeline_genre["normalized"] = g_norm
+        timeline_all["normalized"] = gm_norm
+    else:
+        timeline_genre["normalized"] = normalize_series(
+            timeline_genre["rolling_avg"], NORMALIZATION_MODE, df_year
+        )
+        timeline_all["normalized"] = normalize_series(
+            timeline_all["rolling_avg"], NORMALIZATION_MODE, df_year
+        )
+
+    # ===============================================================
+    # ✅ NEW: Genre color mapping (25 genres evenly across neon_colorscale)
+    #     - We build a consistent genre → color map.
+    #     - The main trace uses the color for the currently selected genre.
+    # ===============================================================
+    # If you already have `genre_list` from your selector, you can reuse it for ordering.
+    try:
+        base_genres = list(genre_list)  # preserve your page’s existing order if available
+    except NameError:
+        # Fallback: derive from INFO_SUPERGENRE or the current dataset
+        try:
+            base_genres = (
+                INFO_SUPERGENRE["supergenre"].dropna().astype(str).str.strip().unique().tolist()
+            )
+        except NameError:
+            base_genres = (
+                df_year["supergenre"].dropna().astype(str).str.strip().unique().tolist()
+            )
+        base_genres = sorted(base_genres)
+
+    # Ensure deterministic list (and keep at most 25 if more exist)
+    base_genres = base_genres[:25]
+
+    # Evenly spaced positions across [0,1] for however many genres we have (target: 25)
+    positions = [i / max(1, len(base_genres) - 1) for i in range(len(base_genres))]
+
+    # Sample your neon scale at those positions
+    genre_palette = sample_colorscale(neon_colorscale, positions)
+
+    # Map: supergenre → hex color
+    GENRE_COLOR_MAP = dict(zip(base_genres, genre_palette))
+
+    # Pick the color for the selected genre (fallback to first color if missing)
+    main_color = GENRE_COLOR_MAP.get(genre_selected, genre_palette[0])
+
+    # ===============================================================
+    # PLOT — Genre vs. Overall Listening Trend
+    # ===============================================================
+    import plotly.express as px
+
+    fig_trend = px.line(
+        timeline_genre,
+        x="date",
+        y="normalized",
+        title=f"{genre_selected} vs Overall Listening Trend ({year_selected})",
+        labels={"normalized": "Normalized Minutes Played (7-Day Rolling Avg)", "date": "Date"},
+        color_discrete_sequence=[main_color],  # ← use the genre-dependent color
+    )
+    fig_trend.update_traces(line=dict(width=2))
+
+    # Explicitly name genre trace
+    fig_trend.data[0].name = f"{genre_selected} (Genre)"
+    fig_trend.data[0].showlegend = True
+
+    # Add global listening trend trace (kept as-is)
+    fig_trend.add_scatter(
+        x=timeline_all["date"],
+        y=timeline_all["normalized"],
+        mode="lines",
+        name="All Genres (Global)",
+        line=dict(color="#137b37", width=1),
+        showlegend=True,
+    )
+
+    # ===============================================================
+    # LAYOUT — Unified dark style
+    # ===============================================================
+    fig_trend.update_layout(
+        height=450,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        yaxis_title="Normalized Minutes per Day (7-Day Rolling Avg)",
+        xaxis_title="Date",
+        font=dict(color="white"),
+        legend_title_text="Listening Source",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5,
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        margin=dict(t=60, l=50, r=20, b=50),
+    )
+
+    # ===============================================================
+    # DISPLAY — Streamlit
+    # ===============================================================
+    st.plotly_chart(
+        fig_trend,
+        width="stretch",
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+    # ===============================================================
+    # ⏰ GENRE BY HOUR OF DAY — Circular Bar Plot (Unique Legend + Rings)
+    # ===============================================================
+    st.markdown("### Top Genre by Hour of Day")
+
+    from plotly.colors import sample_colorscale
+    import numpy as np
+    import plotly.graph_objects as go
+
+    # --- Step 1: Prep data ---
+    df_hour = df_year.copy()
+    df_hour["hour"] = df_hour["datetime"].dt.hour.astype(float)
+
+    # Remove "unlisted"
+    df_hour = df_hour[df_hour["supergenre"].str.lower() != "unlisted"]
+
+    # Aggregate listening by hour + genre
+    hour_genre_summary = (
+        df_hour.groupby(["hour", "supergenre"], as_index=False)["minutes_played"]
+        .sum()
+    )
+
+    # Determine top genre per hour
+    top_genre_per_hour = (
+        hour_genre_summary.loc[
+            hour_genre_summary.groupby("hour")["minutes_played"].idxmax()
+        ]
+        .sort_values("hour")
+        .reset_index(drop=True)
+    )
+
+    # Fill missing hours with zeros
+    all_hours = pd.DataFrame({"hour": list(range(24))})
+    top_genre_per_hour = (
+        all_hours.merge(top_genre_per_hour, on="hour", how="left")
+        .fillna({"supergenre": "No Data", "minutes_played": 0})
+    )
+
+    # --- Step 2: Color Mapping (consistent with neon palette) ---
+    ordered_genres = sorted(top_genre_per_hour["supergenre"].unique())
+    n_genres = len(ordered_genres)
+    sampled_colors = sample_colorscale(
+        neon_colorscale, [i / max(1, n_genres - 1) for i in range(n_genres)]
+    )
+    color_map = dict(zip(ordered_genres, sampled_colors))
+
+    # --- Step 3: Convert hours to circular coordinates ---
+    # Each hour represents a 15° step (360° / 24 = 15°)
+    angles = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+    top_genre_per_hour["angle"] = angles
+    top_genre_per_hour["radius"] = top_genre_per_hour["minutes_played"]
+
+    # Normalize radius for better scaling
+    max_radius = top_genre_per_hour["radius"].max()
+    if max_radius > 0:
+        top_genre_per_hour["radius_scaled"] = top_genre_per_hour["radius"] / max_radius
+    else:
+        top_genre_per_hour["radius_scaled"] = 0
+
+    # --- Step 4: Create polar bar chart ---
+    fig_hourly = go.Figure()
+
+    # Track which genres already added to legend
+    legend_seen = set()
+
+    for _, row in top_genre_per_hour.iterrows():
+        genre_name = row["supergenre"]
+        show_legend = genre_name not in legend_seen and genre_name != "No Data"
+        if show_legend:
+            legend_seen.add(genre_name)
+
+        fig_hourly.add_trace(go.Barpolar(
+            r=[row["radius_scaled"]],
+            theta=[(row["hour"] * 15 + 7.5) % 360],
+            name=genre_name,
+            marker_color=color_map.get(genre_name, "#888"),
+            marker_line_color="rgba(255,255,255,0.2)",
+            marker_line_width=2,
+            opacity=0.95,
+            hovertemplate=(
+                f"<b>Hour:</b> {int(row['hour']):02d}:00<br>"
+                f"<b>Genre:</b> {genre_name}<br>"
+                f"<b>Minutes:</b> {int(row['minutes_played']):,}<extra></extra>"
+            ),
+            showlegend=show_legend,
+        ))
+
+    # --- Step 5: Add 25% radius rings (neon gridlines) ---
+    ring_levels = [0.25, 0.5, 0.75, 1.0]
+    for level in ring_levels:
+        fig_hourly.add_trace(go.Scatterpolar(
+            r=[level] * 361,
+            theta=np.linspace(0, 360, 361),
+            mode="lines",
+            line=dict(
+                color="rgba(255,255,255,0.08)" if level < 1.0 else "rgba(255,255,255,0.15)",
+                width=1.2 if level < 1.0 else 2.0,
+                dash="dot" if level < 1.0 else "solid",
+            ),
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+
+    # --- Step 5b: Add faint hour subdivision lines (every 15°) ---
+    for deg in range(0, 360, 15):  # every hour
+        # skip the existing bold 3-hour lines (already drawn at 0,45,90,...)
+        if deg % 45 == 0:
+            continue
+        fig_hourly.add_trace(go.Scatterpolar(
+            r=[0, 1],
+            theta=[deg, deg],
+            mode="lines",
+            line=dict(
+                color="rgba(255,255,255,0.06)",  # faint neon white
+                width=0.8,
+            ),
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+
+    # --- Step 6: Layout + Style ---
+    fig_hourly.update_layout(
+        title=dict(
+            text=f"Top Genre by Hour of Day ({year_selected})",
+            # x=0.5,
+            font=dict(size=18, color="white"),
+        ),
+        polar=dict(
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(
+                visible=False,
+                range=[0, 1],
+            ),
+            angularaxis=dict(
+                tickmode="array",
+                tickvals=np.arange(0, 360, 45),
+                ticktext=["Midnight", "3 AM", "6 AM", "9 AM", "Noon", "3 PM", "6 PM", "9 PM"],
+                direction="clockwise",
+                rotation=90,  # 0° = top
+                tickfont=dict(color="white", size=10),
+            ),
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=60, b=80, l=40, r=40),
+        height=650,
+        font=dict(color="white"),
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="center",
+            x=1,
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(size=11, color="white"),
+            traceorder="normal"
+        ),
+    )
+
+    # ===============================================================
+    # DISPLAY — Streamlit (true full width)
+    # ===============================================================
+    st.markdown(
+        """
+        <style>
+        .stPlotlyChart {
+            width: 100% !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.plotly_chart(
+        fig_hourly,
+        width="stretch",
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+# ------------------------------- Popularity --------------------------------- #
+elif page == "Popularity":
+
+    st.session_state["last_page"] = "Popularity"
 
     # -------------------- Helpers (scoped to this page) -------------------- #
-    from pathlib import Path
-    import re
-    import os
-    import numpy as np
-    import pandas as pd
-    import plotly.express as px
-    import plotly.graph_objects as go
-    from chart_scorer import parse_label_ts_from_table_name
 
     def display_gauge_chart(basic_score: float, delta_str: str = ""):
-        """Draw the Sheeple-O-Meter gauge (0–1)."""
-        gauge = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=basic_score,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            gauge={'axis': {'range': [0, 1]}, 'bar': {'color': "#1ed760"}},
-        ))
+        """Draw the Sheeple-O-Meter gauge (0–1) with modern Plotly syntax."""
+        gauge = go.Figure(
+            go.Indicator(
+                mode="gauge+number",
+                value=basic_score,
+                domain={"x": [0, 1], "y": [0, 1]},
+                gauge={
+                    "axis": {"range": [0, 1], "tickwidth": 1},
+                    "bar": {"color": "#1ed760"},
+                    "bgcolor": "rgba(0,0,0,0)",
+                    "borderwidth": 2,
+                    # "bordercolor": "#1ed760",
+                },
+                number={"font": {"size": 40, "color": "white"}},
+            )
+        )
+
         gauge.update_layout(
             title=dict(
-                text="Sheeple-O-Meter",
-                font=dict(size=30),
-                x=0.5, xanchor='center',
-                y=0.9, yanchor='top'
+                text="",
+                font=dict(size=30, color="#FFFFFF"),
+                x=0.5,
+                xanchor="center",
+                y=1,
+                yanchor="top",
             ),
-            annotations=([dict(x=0.5, y=-0.1, text=delta_str, showarrow=False, font=dict(size=20))]
-                         if delta_str else [])
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=400,
+            margin=dict(t=80, b=40, l=40, r=40),
+            annotations=(
+                [
+                    dict(
+                        x=0.5,
+                        y=-0.1,
+                        text=delta_str,
+                        showarrow=False,
+                        font=dict(size=20, color="#FFFFFF"),
+                    )
+                ]
+                if delta_str
+                else []
+            ),
         )
-        st.plotly_chart(gauge, use_container_width=True)
+
+        st.plotly_chart(
+            gauge,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            },
+            key="sheeple_gauge",
+        )
 
     def display_artist_points_chart(chart_hits: pd.DataFrame):
         """Top 10 artists by total points."""
         artist_points = (
-            chart_hits.groupby('artist_name', as_index=False)['points_awarded']
+            chart_hits.groupby('artist_name', as_index=False, observed=False)['points_awarded']
             .sum()
         )
 
@@ -2446,7 +6253,14 @@ elif page == "The Farm":
             labels={'points_awarded': 'Total Points', 'artist_name': 'Artist'},
             color_discrete_sequence=['#19ab19'] * len(artist_points),
         )
-        st.plotly_chart(fig_artists, use_container_width=True)
+        st.plotly_chart(
+            fig_artists,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            }
+        )
 
     def display_timeline_chart(chart_hits: pd.DataFrame, plot_df: pd.DataFrame, years: list[int], latest_year: int, points_method: str):
         """Recreated timeline (using first_listen_week_start Fridays as 'event dates')."""
@@ -2470,78 +6284,160 @@ elif page == "The Farm":
             hovermode="x",
             hoverlabel=dict(bgcolor="darkgreen", font=dict(color="white"))
         )
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        st.plotly_chart(
+            fig_timeline,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+            }
+        )
 
-    def display_popularity_comparison_monthly(user_name: str, user_monthly: pd.DataFrame, global_monthly: pd.DataFrame, smoothing_window: int):
-        """
-        Monthly popularity comparison (user vs others) with smoothing window
-        that depends on scope (All vs Year). Y-axis is fixed to 0..100.
-        """
+    def display_popularity_comparison_monthly(user_name, user_monthly, global_monthly, smoothing_window):
+        import plotly.graph_objects as go
+        import pandas as pd
+
         if user_monthly.empty:
             st.warning("⚠️ Not enough data to plot popularity trend for this user.")
             return
 
-        # Smooth & sort
-        um = user_monthly.copy().sort_values("month")
-        gm = global_monthly.copy().sort_values("month") if not global_monthly.empty else pd.DataFrame(columns=um.columns)
+        # --- Normalize to long format if necessary ---
+        if "type" not in user_monthly.columns:
+            # Only focus on weighted popularity columns
+            value_cols = [c for c in user_monthly.columns if "weighted_" in c]
+            if not value_cols:
+                st.warning("⚠️ Weighted popularity metrics not found in this dataset.")
+                return
 
-        for col in ["avg_track_popularity", "avg_artist_popularity"]:
-            if col in um.columns:
-                um[col + "_smooth"] = um[col].rolling(window=smoothing_window, min_periods=1, center=True).mean()
-            if not gm.empty and col in gm.columns:
-                gm[col + "_smooth"] = gm[col].rolling(window=smoothing_window, min_periods=1, center=True).mean()
+            user_long = user_monthly.melt(
+                id_vars="month", value_vars=value_cols, var_name="type", value_name="avg_popularity"
+            )
+            global_long = (
+                global_monthly.melt(
+                    id_vars="month", value_vars=value_cols, var_name="type", value_name="avg_popularity"
+                )
+                if not global_monthly.empty
+                else pd.DataFrame(columns=user_long.columns)
+            )
+        else:
+            user_long = user_monthly[user_monthly["type"].str.contains("weighted_")].copy()
+            global_long = (
+                global_monthly[global_monthly["type"].str.contains("weighted_")].copy()
+                if not global_monthly.empty
+                else pd.DataFrame(columns=user_long.columns)
+            )
 
+        # Keep only the two target types
+        valid_types = ["weighted_artist", "weighted_track"]
+        user_long = user_long[user_long["type"].isin(valid_types)]
+        global_long = global_long[global_long["type"].isin(valid_types)]
+
+        # --- Sort and smooth ---
+        um = user_long.sort_values("month")
+        gm = global_long.sort_values("month") if not global_long.empty else pd.DataFrame(columns=um.columns)
+
+        def smooth_df(df_src):
+            smoothed = []
+            for t in df_src["type"].unique():
+                sub = df_src[df_src["type"] == t].copy()
+                sub["avg_popularity_smooth"] = (
+                    sub["avg_popularity"]
+                    .rolling(window=smoothing_window, min_periods=1, center=True)
+                    .mean()
+                )
+                smoothed.append(sub)
+            return pd.concat(smoothed, ignore_index=True) if smoothed else pd.DataFrame()
+
+        um_smooth = smooth_df(um)
+        gm_smooth = smooth_df(gm) if not gm.empty else pd.DataFrame()
+
+        # --- Plot ---
         fig = go.Figure()
 
-        # User
-        fig.add_trace(go.Scatter(
-            x=um["month"], y=um["avg_track_popularity_smooth"],
-            mode="lines", name=f"{user_name} – Track Popularity", line=dict(color="#1ed760")
-        ))
-        fig.add_trace(go.Scatter(
-            x=um["month"], y=um["avg_artist_popularity_smooth"],
-            mode="lines", name=f"{user_name} – Artist Popularity", line=dict(color="#457e59")
-        ))
+        # Solid lines for user
+        color_map = {
+            "weighted_artist": "#3b82f6",  # blue
+            "weighted_track": "#22c55e",   # green
+        }
 
-        # Global
-        if not gm.empty:
-            fig.add_trace(go.Scatter(
-                x=gm["month"], y=gm["avg_track_popularity_smooth"],
-                mode="lines", name="Global Avg – Track Popularity", line=dict(color="#fd6bff", dash="dot")
-            ))
-            fig.add_trace(go.Scatter(
-                x=gm["month"], y=gm["avg_artist_popularity_smooth"],
-                mode="lines", name="Global Avg – Artist Popularity", line=dict(color="#b800bb", dash="dot")
-            ))
+        for t in um_smooth["type"].unique():
+            sub = um_smooth[um_smooth["type"] == t]
+            label = "Artist" if "artist" in t else "Track"
+            fig.add_trace(
+                go.Scatter(
+                    x=sub["month"],
+                    y=sub["avg_popularity_smooth"],
+                    mode="lines",
+                    name=f"{user_name} – {label}",
+                    line=dict(width=3, color=color_map.get(t, None)),
+                )
+            )
 
-        # ✅ lock y-axis to 0..100 regardless of filter
+        # Dotted lines for global
+        if not gm_smooth.empty:
+            for t in gm_smooth["type"].unique():
+                sub = gm_smooth[gm_smooth["type"] == t]
+                label = "Artist" if "artist" in t else "Track"
+                fig.add_trace(
+                    go.Scatter(
+                        x=sub["month"],
+                        y=sub["avg_popularity_smooth"],
+                        mode="lines",
+                        name=f"Global Avg – {label}",
+                        line=dict(width=2, dash="dot", color=color_map.get(t, None)),
+                    )
+                )
+
+        # --- Layout ---
         fig.update_yaxes(range=[0, 100])
-
         fig.update_layout(
-            title=f"{user_name} vs Global Average — Monthly Popularity (smoothed)",
+            title=f"{user_name} vs Global Average — Weighted Popularity (Smoothed)",
             xaxis_title="Month",
-            yaxis_title="Average Popularity (0–100)",
+            yaxis_title="Weighted Popularity (0–100)",
             hovermode="x unified",
-            legend_title="Metric",
+            legend=dict(
+                title="Metric",
+                bgcolor="rgba(0,0,0,0)",
+                bordercolor="rgba(0,0,0,0)"
+            ),
+            template="plotly_dark",
+            height=500,
+            margin=dict(t=60, b=40, l=60, r=40),
         )
-        st.plotly_chart(fig, use_container_width=True)
 
-    def get_monthly_popularity(info_popularity: pd.DataFrame,
-                               include_users: list[str] | None = None,
-                               exclude_users: list[str] | None = None,
-                               start_date: pd.Timestamp | None = None,
-                               end_date: pd.Timestamp | None = None) -> pd.DataFrame:
+        st.plotly_chart(
+            fig,
+            width="stretch",
+            config={
+                "displayModeBar": False,
+                "responsive": True,
+                "scrollZoom": False,
+            },
+        )
+
+    def get_monthly_popularity(
+        info_popularity: pd.DataFrame,
+        include_users: list[str] | None = None,
+        exclude_users: list[str] | None = None,
+        start_date: pd.Timestamp | None = None,
+        end_date: pd.Timestamp | None = None,
+    ) -> pd.DataFrame:
         """
-        Reuse your info_popularity CSV to compute monthly averages.
-        Returns columns: [month, avg_track_popularity, avg_artist_popularity]
+        Compute monthly average popularity per type (spotify_* / weighted_* etc.)
+        from the unified info_popularity long-format file.
+
+        Returns a wide-format DataFrame with columns:
+        [month, spotify_track, weighted_track, spotify_artist, weighted_artist, ...]
+        and maintains compatibility with old naming (avg_track_popularity / avg_artist_popularity).
         """
         required_cols = {"user_id", "month", "type", "avg_popularity"}
         if info_popularity.empty or not required_cols.issubset(info_popularity.columns):
-            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+            return pd.DataFrame(columns=["month"])
 
         df = info_popularity.copy()
         df["month"] = pd.to_datetime(df["month"], errors="coerce")
 
+        # --- Filtering (per-user / global / date range) ---
         if include_users is not None:
             df = df[df["user_id"].isin(include_users)]
         if exclude_users is not None:
@@ -2552,54 +6448,99 @@ elif page == "The Farm":
             df = df[df["month"] <= pd.to_datetime(end_date)]
 
         if df.empty:
-            return pd.DataFrame(columns=["month", "avg_track_popularity", "avg_artist_popularity"])
+            return pd.DataFrame(columns=["month"])
 
+        # --- Group by month + type to compute mean popularity ---
         monthly_type_avg = (
             df.groupby(["month", "type"])["avg_popularity"]
-            .mean(numeric_only=True).reset_index()
+            .mean(numeric_only=True)
+            .reset_index()
         )
+
+        # --- Pivot dynamically (all available types become columns) ---
         monthly = (
-            monthly_type_avg.pivot(index="month", columns="type", values="avg_popularity")
-            .reset_index().rename_axis(None, axis=1)
-            .rename(columns={"track": "avg_track_popularity", "artist": "avg_artist_popularity"})
-        ).fillna(0)
+            monthly_type_avg
+            .pivot(index="month", columns="type", values="avg_popularity")
+            .reset_index()
+            .rename_axis(None, axis=1)
+            .fillna(0)
+        )
+
+        # --- Compatibility layer for legacy chart code ---
+        # Provide "avg_track_popularity" and "avg_artist_popularity" columns if possible
+        for candidate_type, alias in [
+            ("weighted_track", "avg_track_popularity"),
+            ("spotify_track", "avg_track_popularity"),
+            ("weighted_artist", "avg_artist_popularity"),
+            ("spotify_artist", "avg_artist_popularity"),
+        ]:
+            if alias not in monthly.columns and candidate_type in monthly.columns:
+                monthly[alias] = monthly[candidate_type]
 
         return monthly
 
-    def load_chart_points_for_selected_dataset(user_id: str, table_name: str, base_dir: str = "enrichment/chart_scorer") -> pd.DataFrame | None:
+    def load_chart_points_for_selected_dataset(
+        user_id: str,
+        table_name: str,
+        base_dir: str = "enrichment/chart_scorer",
+        storage_dao=None
+    ) -> pd.DataFrame | None:
         """
-        Load the *matching* chart_scorer parquet for the currently-selected dataset,
-        e.g., {user}_{label}_{timestamp}_chart-scores.parquet.
-        If not found, fall back to the latest file for this user.
+        Load the chart_scorer parquet for the current dataset.
+        Expected filename (no timestamp): {user_id}_{label}_chart-scores.parquet
+
+        Will:
+        - Try to load directly from R2 (via storage_dao) if available
+        - Fallback to local 'datasets/enrichment/chart_scorer/' if running locally
         """
-        base = Path(base_dir)
-        if not base.exists():
+        import pandas as pd
+        from pathlib import Path
+        import re
+
+        if not user_id or not table_name:
+            print("[load_chart_points_for_selected_dataset] ❌ Missing user_id or table_name")
             return None
 
-        label, ts_str = parse_label_ts_from_table_name(table_name) if table_name else (None, None)
+        # --- Extract clean label ---
+        # e.g. table_name = "58d0bd65d3f40b92_full_local-1Dec_1_20251201-074049_history"
+        stem = Path(table_name).stem
+        stem = stem.replace("_history", "")
 
-        target = None
-        if label and ts_str:
-            candidate = base / f"{user_id}_{label}_{ts_str}_chart-scores.parquet"
-            if candidate.exists():
-                target = candidate
+        # Remove user_id prefix and timestamp suffix if present
+        label = re.sub(rf"^{user_id}_", "", stem)     # strip user_id prefix
+        label = re.sub(r"_\d{8}-\d{6}$", "", label)   # strip _YYYYMMDD-HHMMSS
 
-        if target is None:
-            # Fallback: latest file matching the user prefix
-            candidates = sorted(base.glob(f"{user_id}_*_chart-scores.parquet"), key=lambda p: p.stat().st_mtime)
-            if candidates:
-                target = candidates[-1]
+        parquet_filename = f"{user_id}_{label}_chart-scores.parquet"
+        parquet_path = f"{base_dir.rstrip('/')}/{parquet_filename}"
 
-        if target is None or not target.exists():
-            return None
+        print(f"[load_chart_points_for_selected_dataset] 🔍 Looking for: {parquet_path}")
 
-        try:
-            return pd.read_parquet(target)
-        except Exception:
-            return None
+        # --- Prefer Cloudflare R2 (storage_dao) if provided ---
+        if storage_dao is not None and hasattr(storage_dao, "safe_download_parquet"):
+            try:
+                df = storage_dao.safe_download_parquet(parquet_path)
+                if df is not None and not df.empty:
+                    print(f"[load_chart_points_for_selected_dataset] ✅ Loaded from R2 ({len(df):,} rows)")
+                    return df
+                else:
+                    print("[load_chart_points_for_selected_dataset] ⚠️ Parquet found but empty")
+            except Exception as e:
+                print(f"[load_chart_points_for_selected_dataset] ⚠️ Could not load from R2: {e}")
+
+        # --- Fallback: local file system ---
+        local_path = Path(parquet_path)
+        if local_path.exists():
+            try:
+                df = pd.read_parquet(local_path)
+                print(f"[load_chart_points_for_selected_dataset] ✅ Loaded local parquet ({len(df):,} rows)")
+                return df
+            except Exception as e:
+                print(f"[load_chart_points_for_selected_dataset] ⚠️ Could not read local parquet: {e}")
+
+        print(f"[load_chart_points_for_selected_dataset] ❌ No chart-scorer data found for {user_id}:{label}")
+        return None
 
     # -------------------- Data Prep -------------------- #
-
     # ✅ Ensure dataset loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
@@ -2645,25 +6586,68 @@ elif page == "The Farm":
     # -------------------- Popularity (uses INFO_POPULARITY) -------------------- #
     info_pop = INFO_POPULARITY.copy() if "INFO_POPULARITY" in globals() else pd.DataFrame()
 
-    # Compute user's monthly series
+    # Compute user's monthly series (from info_popularity long-format)
     user_monthly = get_monthly_popularity(info_pop, include_users=[user_id])
+
     # Align global to user's timespan for fair comparison
     if not user_monthly.empty:
         start_date = pd.to_datetime(user_monthly["month"]).min()
         end_date = pd.to_datetime(user_monthly["month"]).max()
     else:
         start_date = end_date = None
-    global_monthly = get_monthly_popularity(info_pop, exclude_users=[user_id], start_date=start_date, end_date=end_date)
 
-    # Now compute the *aggregated* popularity numbers for the top scorecards
-    # (we use the *filtered_df* above so "All" vs a year works)
-    track_pop_filtered = round((filtered_df.groupby("track_name")["track_popularity"].mean()).mean(), 2) if "track_popularity" in filtered_df.columns else 0.0
-    art_pop_filtered = round((filtered_df.groupby("artist_name")["artist_popularity"].mean()).mean(), 2) if "artist_popularity" in filtered_df.columns else 0.0
+    global_monthly = get_monthly_popularity(
+        info_pop,
+        exclude_users=[user_id],
+        start_date=start_date,
+        end_date=end_date,
+    )
 
-    # Compute deltas vs global (from monthly tables)
-    if not user_monthly.empty and not global_monthly.empty:
-        track_pop_global = round(global_monthly["avg_track_popularity"].mean(), 2)
-        art_pop_global = round(global_monthly["avg_artist_popularity"].mean(), 2)
+    # -------------------- Compute aggregated popularity metrics for scorecards -------------------- #
+    # Prefer weighted popularity values (listening-weighted), fallback to raw Spotify averages
+
+    track_pop_filtered = 0.0
+    art_pop_filtered = 0.0
+    track_pop_global = 0.0
+    art_pop_global = 0.0
+
+    # Compute user-level aggregates
+    if not user_monthly.empty:
+        # Prefer weighted metrics if available
+        if "weighted_track" in user_monthly.columns:
+            track_pop_filtered = round(user_monthly["weighted_track"].mean(), 2)
+        elif "avg_track_popularity" in user_monthly.columns:
+            track_pop_filtered = round(user_monthly["avg_track_popularity"].mean(), 2)
+
+        if "weighted_artist" in user_monthly.columns:
+            art_pop_filtered = round(user_monthly["weighted_artist"].mean(), 2)
+        elif "avg_artist_popularity" in user_monthly.columns:
+            art_pop_filtered = round(user_monthly["avg_artist_popularity"].mean(), 2)
+    else:
+        # Fallback to direct dataset stats if enrichment data missing
+        if "track_popularity" in filtered_df.columns:
+            track_pop_filtered = round(
+                (filtered_df.groupby("track_name")["track_popularity"].mean()).mean(), 2
+            )
+        if "artist_popularity" in filtered_df.columns:
+            art_pop_filtered = round(
+                (filtered_df.groupby("artist_name")["artist_popularity"].mean()).mean(), 2
+            )
+
+    # Compute global-level aggregates (for deltas)
+    if not global_monthly.empty:
+        if "weighted_track" in global_monthly.columns:
+            track_pop_global = round(global_monthly["weighted_track"].mean(), 2)
+        elif "avg_track_popularity" in global_monthly.columns:
+            track_pop_global = round(global_monthly["avg_track_popularity"].mean(), 2)
+
+        if "weighted_artist" in global_monthly.columns:
+            art_pop_global = round(global_monthly["weighted_artist"].mean(), 2)
+        elif "avg_artist_popularity" in global_monthly.columns:
+            art_pop_global = round(global_monthly["avg_artist_popularity"].mean(), 2)
+
+    # Compute deltas (difference from global)
+    if track_pop_global or art_pop_global:
         track_delta_str = f"{(track_pop_filtered - track_pop_global):+0.1f}"
         art_delta_str = f"{(art_pop_filtered - art_pop_global):+0.1f}"
     else:
@@ -2672,7 +6656,11 @@ elif page == "The Farm":
     # -------------------- Chart scorer (per-user parquet) -------------------- #
     # Resolve the currently selected dataset's table name
     table_name = st.session_state.get("last_table_name")
-    points_df = load_chart_points_for_selected_dataset(user_id, table_name)
+    points_df = load_chart_points_for_selected_dataset(
+        user_id=user_id,
+        table_name=st.session_state.get("last_table_name"),
+        storage_dao=storage_dao,
+    )
 
     # Build *filtered* points view (All vs Year) using the event = first_listen_week_start Friday
     if points_df is not None and not points_df.empty:
@@ -2713,14 +6701,10 @@ elif page == "The Farm":
         avg_points_per_listen = 0.0
         avg_points_per_year = 0.0
 
-    # -------------------- UI Header -------------------- #
-    col1, col2, col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
-
+    # --- Header ---
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Welcome To The Farm</b></em></p>")
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>The Sheeple-O-Meter</b></em></p>")
         st.html("<p style='text-align: center; font-size: 30px;'>Are you a chart-following sheep or a lone-listening wolf?</p>")
 
     # -------------------- Gauge -------------------- #
@@ -2750,28 +6734,52 @@ elif page == "The Farm":
 
     if st.session_state[deep_key]:
         # Controls appear *after* the cards, but write to session state then rerun → top picks them up
-        c1, c2, c3 = st.columns([3, 1, 1], vertical_alignment='center')
+        c1, c2, c3 = st.columns([3, 1, 1])
         with c1:
             year_options = ["All"] + [str(y) for y in year_list]
-            new_year = st.segmented_control("Year", year_options, selection_mode="single", default=st.session_state.farm_filter_year)
+            new_year = st.segmented_control(
+                "Year",
+                year_options,
+                selection_mode="single",
+                default=st.session_state.farm_filter_year,
+            )
             if new_year != st.session_state.farm_filter_year:
                 st.session_state.farm_filter_year = new_year
                 st.rerun()
 
         # ---------- Popularity comparison (smoothed) ----------
         st.subheader("How _populist_ is your music taste (popularity over time)?")
-        # Smoothing window larger for “All”, smaller for a single year
         smoothing_window = 10 if st.session_state.farm_filter_year == "All" else 4
 
-        # If a specific year is chosen, trim monthly tables
+        # Filter user/global data to selected year
         if st.session_state.farm_filter_year != "All":
             y = int(st.session_state.farm_filter_year)
-            um_f = user_monthly[pd.to_datetime(user_monthly["month"]).dt.year == y] if not user_monthly.empty else user_monthly
-            gm_f = global_monthly[pd.to_datetime(global_monthly["month"]).dt.year == y] if not global_monthly.empty else global_monthly
+            um_f = (
+                user_monthly[pd.to_datetime(user_monthly["month"]).dt.year == y]
+                if not user_monthly.empty
+                else user_monthly
+            )
+            gm_f = (
+                global_monthly[pd.to_datetime(global_monthly["month"]).dt.year == y]
+                if not global_monthly.empty
+                else global_monthly
+            )
         else:
             um_f, gm_f = user_monthly, global_monthly
 
+        # Draw the comparison chart (user vs global)
         display_popularity_comparison_monthly(user_name, um_f, gm_f, smoothing_window)
+
+        st.markdown("### 🧠 Debug: Popularity data overview")
+        st.write("**User monthly:**", user_monthly.shape)
+        st.write("**Global monthly:**", global_monthly.shape)
+
+        if not user_monthly.empty:
+            st.dataframe(user_monthly.head(), width="stretch", hide_index=True)
+        if not global_monthly.empty:
+            st.dataframe(global_monthly.head(), width="stretch", hide_index=True)
+        else:
+            st.warning("⚠️ Global monthly popularity data is empty — global lines won’t appear.")
 
         # ---------- Chart scorer drill-down ----------
         if points_df is None or points_df.empty:
@@ -2807,7 +6815,7 @@ elif page == "The Farm":
             #     "avg_weeks_after_peak": "Avg Weeks After Peak",
             # })
 
-            # st.dataframe(artist_stats, use_container_width=True, hide_index=True)
+            # st.dataframe(artist_stats, width='stretch', hide_index=True)
 
             # Top tracks table (still limited to >0 and top 10)
             if "category" in filtered_df.columns:
@@ -2821,7 +6829,7 @@ elif page == "The Farm":
             )
 
             top_songs = (
-                chart_hits.groupby(["artist_name", "track_name"])
+                chart_hits.groupby(["artist_name", "track_name"], observed=False)
                 .agg(
                     total_points=("points_awarded", "sum"),
                     avg_weeks_after_peak=("delta_weeks", "mean"),
@@ -2843,200 +6851,1154 @@ elif page == "The Farm":
                 "listen_count": "Listen Count",
             })
 
-            st.dataframe(top_songs, use_container_width=True, hide_index=True)
+            st.dataframe(top_songs, width='stretch', hide_index=True)
 
         else:
             st.info("No chart hits scored in the selected period yet.")
 
-# ------------------------------- FUN Page ----------------------------------- #
-elif page == "FUN":
-    # Show current user info
-        # ✅ Make sure dataset is loaded
+# -------------------------------- Taste ------------------------------------- #
+elif page == "Taste":
+    # ----------------------------------------------------------------------
+    # 🎧 DATASET VALIDATION & LOADING
+    # ----------------------------------------------------------------------
+    st.session_state["last_page"] = "Taste"
+    user_id = st.session_state.user["user_id"]
+
+    # --- Load current dataset ---
+    df, current_label = require_current_df()
+    df_music = df[df["category"].str.contains("music", case=False, na=False)].copy()
+
+    # --- Normalize datetime column safely ---
+    df_music["datetime"] = pd.to_datetime(df_music["datetime"], errors="coerce")
+    df_music = df_music.dropna(subset=["datetime"]).copy()
+    df_music["datetime"] = df_music["datetime"].dt.tz_localize(None)
+    df_music["date"] = df_music["datetime"].dt.date
+
+    # --- DAOs and session handles ---
+    status_dao = st.session_state.get("status_dao")
+    storage_dao = st.session_state.get("storage_dao")
+
+    # --- Expected R2 path for Taste Index parquet ---
+    parquet_key = f"enrichment/taste_index/{user_id}_{current_label}_rolling.parquet"
+
+    # --- Cached Taste Index data ---
+    if "df_rolling" not in st.session_state:
+        st.session_state["df_rolling"] = None
+    df_rolling = st.session_state["df_rolling"]
+
+    # ----------------------------------------------------------------------
+    # ☁️ LOAD TASTE INDEX RESULTS (NO COMPUTATION)
+    # ----------------------------------------------------------------------
+    st.markdown("### 🧮 28-Day Rolling Taste Index")
+    st.caption("Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.")
+
+    # if storage_dao is not None:
+    #     print("🧩 Debug: checking Taste Index file existence in R2...")
+    #     try:
+    #         r2 = storage_dao.r2
+    #         resp = r2.list_objects(Bucket=storage_dao.bucket, Prefix="enrichment/taste_index/")
+    #         keys = [obj["Key"] for obj in resp.get("Contents", [])]
+    #         print("Available keys:", keys[:10])  # first few
+    #         print("Expected key:", parquet_key)
+    #     except Exception as e:
+    #         print(f"Could not list objects: {e}")
+    # else:
+    #     print(f"[Taste DEBUG] It empty bitch")
+
+    if df_rolling is None and storage_dao is not None:
+        try:
+            with st.spinner("☁️ Loading cached Taste Index results from R2…"):
+                df_rolling = storage_dao.safe_download_parquet(parquet_key)
+            if df_rolling is not None and not df_rolling.empty:
+                st.session_state["df_rolling"] = df_rolling
+                st.success(f"✅ Loaded cached Taste Index results from R2 ({len(df_rolling):,} rows).")
+            else:
+                st.warning("⚠️ No cached Taste Index results found. Run enrichment to generate them.")
+        except Exception as e:
+            st.warning(f"⚠️ Could not load cached Taste Index results: {e}")
+
+    # ----------------------------------------------------------------------
+    # 🎚️ TASTE STABILITY ANALYSIS DASHBOARD
+    # ----------------------------------------------------------------------
+    if df_rolling is not None and not df_rolling.empty:
+        st.markdown("## 🎚️ Taste Stability Analysis")
+
+        # ===============================================================
+        # YEAR FILTER
+        # ===============================================================
+        df_rolling["year"] = pd.to_datetime(df_rolling["date_window"], errors="coerce").dt.year
+        years = sorted(df_rolling["year"].dropna().unique())
+        year_options = ["All Years"] + [str(y) for y in years]
+        year_selected = st.segmented_control(
+            "Select Year",
+            year_options,
+            selection_mode="single",
+            default=year_options[-1],
+            width="content",
+        )
+
+        if not year_selected:
+            year_selected = "All Years"
+
+        # Filter results by year
+        if year_selected != "All Years":
+            df_filtered = df_rolling[df_rolling["year"] == int(year_selected)].copy()
+        else:
+            df_filtered = df_rolling.copy()
+
+        # ===============================================================
+        # HEATMAP — Taste Stability by Genre and Date
+        # ===============================================================
+        st.markdown("### 🎨 Taste Stability Heatmap — *Normality Index by Genre Over Time*")
+
+        import plotly.graph_objects as go
+
+        df_heatmap = df_filtered.pivot_table(
+            index="genre", columns="date_window", values="NormalityIndex", aggfunc="mean"
+        )
+
+        if not df_heatmap.empty:
+            # Order genres by average stability
+            df_heatmap = df_heatmap.loc[df_heatmap.mean(axis=1).sort_values(ascending=False).index]
+
+            fig_heatmap = go.Figure(data=go.Heatmap(
+                z=df_heatmap.values,
+                x=df_heatmap.columns,
+                y=df_heatmap.index,
+                colorscale=[
+                    [0.0, "#150d20"],
+                    [0.25, "#3b1148"],
+                    [0.5, "#71207d"],
+                    [0.75, "#b74d8f"],
+                    [1.0, "#ff7ee3"],
+                ],
+                colorbar=dict(
+                    title="Normality Index",
+                    tickcolor="white",
+                    tickfont=dict(color="white"),
+                    titlefont=dict(color="white"),
+                ),
+                hovertemplate="<b>Genre:</b> %{y}<br><b>Date:</b> %{x|%Y-%m-%d}<br><b>Normality:</b> %{z:.3f}<extra></extra>",
+            ))
+
+            fig_heatmap.update_layout(
+                title=f"Taste Stability Heatmap (28-Day Rolling) — {year_selected}",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis=dict(title="Date Window", tickfont=dict(size=10, color="white")),
+                yaxis=dict(title="Genre", tickfont=dict(size=12, color="white")),
+                margin=dict(l=120, r=20, t=60, b=40),
+                height=650,
+            )
+
+            st.plotly_chart(fig_heatmap, width="stretch", config={"displayModeBar": False})
+        else:
+            st.info("No data available for heatmap rendering.")
+
+        # ===============================================================
+        # TREND — Average NormalityIndex Across All Genres
+        # ===============================================================
+        st.markdown("### 📈 Taste Focus Over Time — *Average Normality Index*")
+
+        # --- Compute daily/rolling averages ---
+        df_trend = (
+            df_filtered.groupby("date_window")["NormalityIndex"]
+            .mean()
+            .reset_index()
+            .sort_values("date_window")
+        )
+
+        # ✅ Smooth the curve with 28-day rolling average
+        df_trend["rolling_avg"] = (
+            df_trend["NormalityIndex"].rolling(window=28, min_periods=1).mean()
+        )
+
+        # Dynamic Y-axis max (10% above peak)
+        y_max = df_trend["NormalityIndex"].max() * 1.1 if not df_trend.empty else 1
+
+        # --- Build figure ---
+        fig_trend = go.Figure()
+
+        # Daily averages (raw)
+        fig_trend.add_trace(
+            go.Scatter(
+                x=df_trend["date_window"],
+                y=df_trend["NormalityIndex"],
+                mode="lines+markers",
+                name="Daily Avg",
+                line=dict(color="#90d7ad", width=1),
+                marker=dict(size=4, color="#1ed760"),
+                opacity=0.6,
+            )
+        )
+
+        # 28-day smoothed trend
+        fig_trend.add_trace(
+            go.Scatter(
+                x=df_trend["date_window"],
+                y=df_trend["rolling_avg"],
+                mode="lines",
+                name="28-Day Smoothed",
+                line=dict(color="#1ed760", width=3),
+            )
+        )
+
+        # --- Layout ---
+        fig_trend.update_layout(
+            height=400,
+            title=f"Average Normality Index (Listening Focus) — {year_selected}",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            xaxis=dict(
+                title="Date Window",
+                tickfont=dict(size=10),
+                showgrid=False
+            ),
+            yaxis=dict(
+                title="Average Normality Index",
+                range=[0, y_max],
+                showgrid=True,
+                gridcolor="rgba(255,255,255,0.1)",
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.25,
+                xanchor="center",
+                x=0.5,
+            ),
+            margin=dict(t=60, b=40, l=60, r=40),
+        )
+
+        st.plotly_chart(fig_trend, width="stretch", config={"displayModeBar": False})
+
+        # ===============================================================
+        # 🔗 GENRE CORRELATION MATRIX — "Taste Interdependence"
+        # ===============================================================
+        import plotly.graph_objects as go
+        import plotly.figure_factory as ff
+        import numpy as np
+        import pandas as pd
+        from scipy.spatial.distance import pdist, squareform
+
+        st.markdown("### 🔗 Genre Correlation Matrix — *How Genre Stability Co-varies Over Time*")
+
+        if not df_heatmap.empty and df_heatmap.shape[0] > 1:
+            # --- Compute pairwise Spearman correlation ---
+            corr_matrix = df_heatmap.transpose().corr(method="spearman")
+            corr_matrix = corr_matrix.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            np.fill_diagonal(corr_matrix.values, 1.0)
+
+            # --- Convert correlation to distance ---
+            distance_matrix = 1 - corr_matrix
+            np.fill_diagonal(distance_matrix.values, 0.0)
+
+            labels = corr_matrix.index.tolist()
+            data_array = distance_matrix.values
+
+            # --- Create side dendrogram ---
+            dendro_side = ff.create_dendrogram(
+                data_array,
+                orientation="right",
+                labels=labels,
+                color_threshold=0,
+            )
+
+            # --- Style dendrogram lines + hover info ---
+            for trace in dendro_side["data"]:
+                trace.update(
+                    line=dict(color="white", width=1),
+                    hoverinfo="text",
+                    text=[f"Link distance: {x:.2f}" for x in trace["x"]],
+                    hovertemplate="<b>%{text}</b><extra></extra>",
+                )
+
+            # --- Extract leaf order ---
+            dendro_leaves = dendro_side["layout"]["yaxis"]["ticktext"]
+            corr_reordered = corr_matrix.loc[dendro_leaves, dendro_leaves]
+
+            # --- Create heatmap ---
+            heatmap = go.Heatmap(
+                z=corr_reordered.values,
+                x=dendro_leaves,
+                y=dendro_leaves,
+                zmin=-1,
+                zmax=1,
+                colorscale=[
+                    [0.0, "#5b0d0d"],
+                    [0.5, "#1a1a1a"],
+                    [1.0, "#0fa958"],
+                ],
+                colorbar=dict(
+                    title="Correlation",
+                    tickcolor="white",
+                    tickfont=dict(color="white"),
+                    titlefont=dict(color="white"),
+                ),
+                hovertemplate="<b>%{y}</b> ↔ <b>%{x}</b><br>ρ (Spearman): %{z:.2f}<extra></extra>",
+            )
+
+            # --- Combine both ---
+            fig = go.Figure()
+
+            # Add dendrogram traces
+            for trace in dendro_side["data"]:
+                fig.add_trace(trace)
+
+            # Add heatmap
+            fig.add_trace(heatmap)
+
+            # --- Layout and axis domains ---
+            fig.update_layout(
+                width=900,
+                height=900,
+                showlegend=False,
+                hovermode="closest",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                title=f"Genre Interdependence Matrix — {year_selected}",
+                margin=dict(l=0, r=0, t=80, b=80),
+            )
+
+            # Dendrogram domain = left side
+            fig.update_layout(
+                xaxis=dict(
+                    domain=[0.0, 0.20],   # keep within 0–1 range
+                    showticklabels=False,
+                    showgrid=False,
+                    zeroline=False,
+                ),
+                yaxis=dict(
+                    domain=[0, 1],
+                    showticklabels=False,
+                    showgrid=False,
+                    zeroline=False,
+                ),
+                # Heatmap shifted right
+                xaxis2=dict(
+                    domain=[0.30, 1.0],
+                    showgrid=False,
+                    zeroline=False,
+                    ticks="",
+                    title=None,
+                ),
+                yaxis2=dict(
+                    anchor="x2",
+                    domain=[0.03, 0.97],          # must match to align exactly
+                    showgrid=False,
+                    zeroline=False,
+                    ticks="",
+                    title=None,
+                    tickmode="array",
+                    tickvals=list(range(len(dendro_leaves))),
+                    ticktext=dendro_leaves,
+                    automargin=True,
+                ),
+                dragmode=False,  # disables zoom and pan
+                xaxis_fixedrange=True,
+                yaxis_fixedrange=True,
+                xaxis2_fixedrange=True,
+                yaxis2_fixedrange=True,
+            )
+
+            # Assign axes correctly
+            for i in range(len(dendro_side["data"])):
+                fig["data"][i]["xaxis"] = "x"
+                fig["data"][i]["yaxis"] = "y"
+            fig["data"][-1]["xaxis"] = "x2"
+            fig["data"][-1]["yaxis"] = "y2"
+
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False,"staticPlot": False})
+
+            st.caption(
+                """
+                *Left: hierarchical clustering of genres (white dendrogram).*
+                *Right: Spearman ρ heatmap (green = positive, red = negative).*
+                Shorter branches indicate more similar listening behaviour.
+                Hover over branches to see linkage distances between clusters.
+                """
+            )
+
+        else:
+            st.warning("⚠️ No valid data available for taste stability analysis.")
+
+        # ===============================================================
+        # 🧭 GENRE EMBEDDING MAP — *t-SNE/UMAP Projection of Genre Stability*
+        # ===============================================================
+        import os
+        import logging
+        import plotly.express as px
+        import streamlit as st
+        import pandas as pd
+        import numpy as np
+        from sklearn.manifold import TSNE
+        from sklearn.preprocessing import StandardScaler
+        from scipy.cluster.hierarchy import linkage, leaves_list
+
+        # 🧩 Ensure Numba never tries to load TBB/OpenMP before UMAP import
+        # os.environ["NUMBA_THREADING_LAYER"] = "workqueue"
+        # os.environ["NUMBA_NUM_THREADS"] = "1"
+
+        # Import after setting threading layer
+        from umap import UMAP
+        import numba
+
+        try:
+            numba.set_num_threads(1)
+            logging.info("[UMAP] Numba configured for workqueue (single-thread mode).")
+        except Exception as e:
+            logging.warning(f"[UMAP] Could not enforce single-thread mode: {e}")
+
+        st.markdown("### 🌌 Combined 3D Genre Embedding — *t-SNE × UMAP Taste Landscape*")
+
+        if df_filtered["genre"].nunique() >= 3:
+            # --- Prepare pivot: rows = genres, columns = date windows ---
+            df_embed = (
+                df_filtered.pivot_table(
+                    index="genre",
+                    columns="date_window",
+                    values="NormalityIndex",
+                    aggfunc="mean",
+                )
+                .ffill(axis=1)
+                .bfill(axis=1)
+                .fillna(0)
+            )
+
+            # --- Genre stats for hover info ---
+            genre_stats = (
+                df_filtered.groupby("genre")["NormalityIndex"]
+                .agg(["mean", "std", "count"])
+                .reset_index()
+            )
+
+            # --- Standardize features ---
+            X_scaled = StandardScaler().fit_transform(df_embed)
+
+            # --- Compute embeddings ---
+            tsne = TSNE(
+                n_components=2,
+                perplexity=min(5, len(df_embed) - 1),
+                learning_rate="auto",
+                random_state=42,
+                init="pca",
+            ).fit_transform(X_scaled)
+
+            # --- Safe UMAP run (never parallelizes) ---
+            try:
+                umap_embed = UMAP(
+                    n_neighbors=5,
+                    min_dist=0.2,
+                    n_components=2,
+                    random_state=42,
+                    metric="euclidean",
+                    n_jobs=1,
+                    low_memory=True,
+                    verbose=False,
+                ).fit_transform(X_scaled)
+            except Exception as e:
+                st.warning(f"⚠️ UMAP disabled (running fallback): {e}")
+                logging.warning(f"[UMAP] Disabled due to threading init error: {e}")
+                umap_embed = np.zeros((len(df_embed), 2))
+
+            # --- Combine embeddings ---
+            df_embedding = pd.DataFrame({
+                "genre": df_embed.index,
+                "tsne_x": tsne[:, 0],
+                "tsne_y": tsne[:, 1],
+                "umap_1": umap_embed[:, 0],
+                "umap_2": umap_embed[:, 1],
+            }).merge(genre_stats, on="genre", how="left")
+
+            # --- Choose which UMAP axis to use for 3D depth ---
+            z_axis_choice = st.radio(
+                "Select UMAP axis for 3D depth (Z-axis)",
+                ["umap_1", "umap_2"],
+                horizontal=True,
+                index=0,
+            )
+
+            # --- Dendrogram ordering (based on t-SNE positions) ---
+            try:
+                Z = linkage(df_embedding[["tsne_x", "tsne_y"]].values, method="ward")
+                order_idx = leaves_list(Z)
+                ordered_genres = df_embedding.iloc[order_idx]["genre"].tolist()
+                st.session_state["ordered_genres_from_embedding"] = ordered_genres
+                st.caption("*Dendrogram ordering derived — used to cluster the correlation heatmap below.*")
+            except Exception as e:
+                st.warning(f"Could not compute dendrogram ordering: {e}")
+                ordered_genres = list(df_embedding["genre"])
+
+            # --- 3D Visualization ---
+            fig_3d = px.scatter_3d(
+                df_embedding,
+                x="tsne_x",
+                y="tsne_y",
+                z=z_axis_choice,
+                color="mean",
+                color_continuous_scale=[
+                    [0.0, "#150d20"],
+                    [0.25, "#3b1148"],
+                    [0.5, "#71207d"],
+                    [0.75, "#b74d8f"],
+                    [1.0, "#ff7ee3"],
+                ],
+                size="count",
+                hover_name="genre",
+                hover_data={
+                    "mean": ":.3f",
+                    "std": ":.3f",
+                    "count": True,
+                    "tsne_x": False,
+                    "tsne_y": False,
+                    z_axis_choice: False,
+                },
+                title=f"Combined t-SNE + UMAP 3D Embedding — {year_selected}",
+            )
+
+            fig_3d.update_traces(marker=dict(opacity=0.9, line=dict(width=0.5, color="white")))
+            fig_3d.update_layout(
+                height=750,
+                scene=dict(
+                    xaxis=dict(title="t-SNE X", backgroundcolor="rgba(0,0,0,0)"),
+                    yaxis=dict(title="t-SNE Y", backgroundcolor="rgba(0,0,0,0)"),
+                    zaxis=dict(title=z_axis_choice.upper(), backgroundcolor="rgba(0,0,0,0)"),
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                margin=dict(l=0, r=0, t=60, b=0),
+                coloraxis_colorbar=dict(
+                    title="Mean Stability",
+                    tickcolor="white",
+                    tickfont=dict(color="white"),
+                    titlefont=dict(color="white"),
+                ),
+            )
+
+            st.plotly_chart(fig_3d, width="stretch", config={"displayModeBar": False})
+
+            st.caption(
+                f"""
+                *Each point = a genre.*
+                X–Y from **t-SNE** (local relationships),
+                Z from **{z_axis_choice.upper()}** (UMAP global topology).
+                Bubble size = number of rolling windows.
+                Color = average NormalityIndex (listening focus).
+                The dendrogram order is stored in `st.session_state['ordered_genres_from_embedding']`
+                for use by the correlation heatmap below.
+                """
+            )
+
+        else:
+            st.info("Not enough genres to compute an embedding map.")
+
+        # ===============================================================
+        # Genre Taste Stability — Distribution & Median Focus"
+        # ===============================================================
+
+        st.markdown("### 🎻 Genre Taste Stability — *Distribution & Median Focus*")
+
+        df_vio = df_rolling.copy()
+        if year_selected not in ["All Years", "All Time", None, ""]:
+            try:
+                df_vio = df_vio[df_vio["year"] == int(year_selected)]
+            except Exception:
+                pass
+
+        df_vio = df_vio.dropna(subset=["genre", "NormalityIndex"])
+
+        if df_vio.empty:
+            st.info("No valid data for this year selection.")
+        else:
+            import numpy as np
+            from matplotlib.colors import to_rgba
+
+            # --- Compute genre stats ---
+            genre_stats = (
+                df_vio.groupby("genre")["NormalityIndex"]
+                .agg(["mean", "std", lambda x: np.percentile(x, 75) - np.percentile(x, 25), "median"])
+                .rename(columns={"<lambda_0>": "iqr"})
+                .reset_index()
+                .sort_values("iqr", ascending=False)  # widest distributions first
+            )
+            genre_order = genre_stats["genre"].tolist()
+
+            # --- Colour blending (original green palette) ---
+            bright_rgb = np.array(to_rgba("#15dc5b"))  # mint green
+            dark_rgb = np.array(to_rgba("#003215"))    # deep green
+
+            normed_means = (
+                (genre_stats["mean"] - genre_stats["mean"].min()) /
+                (genre_stats["mean"].max() - genre_stats["mean"].min() + 1e-9)
+            )
+
+            fig_violin = go.Figure()
+
+            # --- Add violin traces ---
+            for i, row in genre_stats.iterrows():
+                genre = row["genre"]
+                mean_val = row["mean"]
+
+                # Interpolate colour between dark and bright
+                color_rgba = bright_rgb * normed_means[i] + dark_rgb * (1 - normed_means[i])
+                r, g, b, _ = (color_rgba * 255).astype(int)
+                fill_color = f"rgba({r},{g},{b},0.9)"
+
+                fig_violin.add_trace(
+                    go.Violin(
+                        y=df_vio.loc[df_vio["genre"] == genre, "NormalityIndex"],
+                        name=genre,
+                        box_visible=True,
+                        meanline_visible=True,
+                        line_color=fill_color,
+                        fillcolor=fill_color,
+                        opacity=1.0,
+                        width=0.75,
+                        points=False,  # remove cluttering raw data dots
+                        meanline_color="white",
+                    )
+                )
+
+            # --- Add soft "firefly" dots at medians ---
+            fig_violin.add_trace(
+                go.Scatter(
+                    x=genre_stats["genre"],
+                    y=genre_stats["median"],
+                    mode="markers",
+                    marker=dict(
+                        size=10,
+                        color="rgba(128,242,175,0.6)",  # mint glow
+                        line=dict(width=0),
+                        symbol="circle",
+                    ),
+                    hovertemplate="<b>%{x}</b><br>Median: %{y:.3f}<extra></extra>",
+                    name="Median Glow",
+                )
+            )
+
+            # --- Add colorbar legend ---
+            colorbar_trace = go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                marker=dict(
+                    colorscale=[
+                        [0, "rgba(1,60,36,0.9)"],
+                        [1, "rgba(128,242,175,0.9)"]
+                    ],
+                    cmin=genre_stats["mean"].min(),
+                    cmax=genre_stats["mean"].max(),
+                    colorbar=dict(
+                        title="Mean Normality Index",
+                        tickcolor="white",
+                        tickfont=dict(color="white"),
+                        titlefont=dict(color="white"),
+                    ),
+                ),
+                hoverinfo="none",
+                showlegend=False,
+            )
+            fig_violin.add_trace(colorbar_trace)
+
+            # --- Layout ---
+            fig_violin.update_layout(
+                height=700,
+                title=f"Taste Stability Distribution ({year_selected})",
+                xaxis_title="Genre (sorted by stability range width)",
+                yaxis_title="Normality Index (0–1)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis=dict(
+                    categoryorder="array",
+                    categoryarray=genre_order,
+                    tickangle=-45,
+                    showgrid=False,
+                ),
+                yaxis=dict(showgrid=False),
+                showlegend=False,
+                margin=dict(t=60, b=60, l=60, r=60),
+            )
+
+            st.plotly_chart(fig_violin, width="stretch", config={"displayModeBar": False})
+
+        # ===============================================================
+        # 🌋 3D TASTE FOCUS RIDGELINES — Dual-Sided Neon Ribbons (Sorted by Volume)
+        # ===============================================================
+        import numpy as np
+        import pandas as pd
+        import plotly.graph_objects as go
+        from plotly.colors import sample_colorscale
+        from scipy.ndimage import gaussian_filter1d
+        import streamlit as st
+
+        st.markdown("### 🌋 3D Taste Focus Ridgelines — *Solid Entropy-Driven Neon Forms (Sorted by Volume)*")
+
+        # --- Safety check ---
+        if "df_rolling" not in locals() or df_rolling.empty:
+            st.info("No rolling normality data available yet. Run the analysis first.")
+            st.stop()
+
+        df_focus = df_rolling.copy()
+
+        # --- Year filter ---
+        if year_selected not in ["All Years", "All Time", None, ""]:
+            try:
+                df_focus = df_focus[df_focus["year"] == int(year_selected)]
+            except Exception:
+                pass
+
+        # --- Ensure date_window exists ---
+        if "date_window" not in df_focus.columns:
+            if "datetime" in df_focus.columns:
+                df_focus["date_window"] = df_focus["datetime"].dt.to_period("28D").astype(str)
+            else:
+                st.warning("Missing both 'date_window' and 'datetime'; cannot build ridgelines.")
+                st.stop()
+
+        # --- Fill missing metrics ---
+        for col in ["NormalityIndex", "entropy", "kurtosis", "minutes_played"]:
+            if col not in df_focus.columns:
+                df_focus[col] = 0
+        df_focus = df_focus.fillna(0)
+
+        # --- Compute TasteFocusIndex if missing ---
+        if "TasteFocusIndex" not in df_focus.columns:
+            for col in ["NormalityIndex", "entropy", "kurtosis", "minutes_played"]:
+                col_min, col_max = df_focus[col].min(), df_focus[col].max()
+                df_focus[f"{col}_norm"] = (
+                    (df_focus[col] - col_min) / (col_max - col_min)
+                    if col_max > col_min
+                    else 0.5
+                )
+            df_focus["TasteFocusIndex"] = (
+                df_focus["NormalityIndex_norm"]
+                * (1 - df_focus["entropy_norm"])
+                * (1 - df_focus["kurtosis_norm"])
+                * df_focus["minutes_played_norm"]
+            )
+
+        # --- Pivot TasteFocusIndex + Entropy ---
+        df_surface = (
+            df_focus.pivot_table(
+                index="genre", columns="date_window", values="TasteFocusIndex", aggfunc="mean"
+            )
+            .fillna(0)
+        )
+        df_entropy = (
+            df_focus.pivot_table(
+                index="genre", columns="date_window", values="entropy", aggfunc="mean"
+            )
+            .reindex(df_surface.index)
+            .fillna(0)
+        )
+
+        # ===============================================================
+        # 🎯 SORT GENRES BY TOTAL "VOLUME" BELOW TRACE
+        # ===============================================================
+        # Compute approximate "volume" under each genre’s Taste Focus curve
+        genre_volume = df_surface.sum(axis=1).sort_values(ascending=False)
+
+        # Sort both DataFrames by this metric
+        df_surface = df_surface.reindex(genre_volume.index)
+        df_entropy = df_entropy.reindex(genre_volume.index)
+
+        # --- Smoothing values (hard-coded) ---
+        smoothing_window = 10
+        smoothing_sigma = 5
+        entropy_gamma = 1
+        ridge_thickness = 0.9
+
+        # --- Apply smoothing ---
+        df_surface = df_surface.T.rolling(window=smoothing_window, min_periods=1).mean().T
+        df_entropy = df_entropy.T.rolling(window=smoothing_window, min_periods=1).mean().T
+
+        # --- Per-genre entropy normalization ---
+        entropy_norm_per_genre = df_entropy.apply(
+            lambda row: (row - np.nanmin(row)) / (np.nanmax(row) - np.nanmin(row) + 1e-9),
+            axis=1
+        )
+
+        # --- Axes prep ---
+        time_vals = df_surface.columns
+        X = np.arange(len(time_vals))
+        Z = df_surface.values
+
+        # --- Neon palette sampling ---
+        genre_colors = sample_colorscale(
+            neon_colorscale,
+            [i / max(1, len(df_surface.index) - 1) for i in range(len(df_surface.index))],
+        )
+
+        # --- Figure setup ---
+        fig = go.Figure()
+
+        # ===============================================================
+        # 🧱 BUILD TRUE 3D RIBBONS
+        # ===============================================================
+        for i, genre in enumerate(df_surface.index):
+            z_vals = df_surface.iloc[i].values
+            e_vals = entropy_norm_per_genre.iloc[i].values
+
+            if smoothing_sigma > 0:
+                z_vals = gaussian_filter1d(z_vals, sigma=smoothing_sigma)
+                e_vals = gaussian_filter1d(e_vals, sigma=smoothing_sigma / 2)
+
+            e_vals_scaled = np.clip(e_vals ** entropy_gamma, 0, 1)
+
+            base_color = genre_colors[i][1] if isinstance(genre_colors[i], (list, tuple)) else genre_colors[i]
+            genre_entropy_colorscale = [[0, "#0b110b"], [1, base_color]]
+
+            # Define ridge geometry
+            y_center = i
+            y_left = y_center - ridge_thickness / 2
+            y_right = y_center + ridge_thickness / 2
+
+            # --- Side surfaces ---
+            color_surface = [e_vals_scaled, e_vals_scaled]
+
+            # Left wall
+            fig.add_trace(
+                go.Surface(
+                    x=[X, X],
+                    y=[[y_left] * len(X), [y_left] * len(X)],
+                    z=[z_vals, np.zeros(len(X))],
+                    surfacecolor=color_surface,
+                    colorscale=genre_entropy_colorscale,
+                    showscale=False,
+                    opacity=1,
+                    hoverinfo="skip",
+                    lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
+                )
+            )
+
+            # Right wall
+            fig.add_trace(
+                go.Surface(
+                    x=[X, X],
+                    y=[[y_right] * len(X), [y_right] * len(X)],
+                    z=[z_vals, np.zeros(len(X))],
+                    surfacecolor=color_surface,
+                    colorscale=genre_entropy_colorscale,
+                    showscale=False,
+                    opacity=1,
+                    hoverinfo="skip",
+                    lighting=dict(ambient=0.6, diffuse=0.5, specular=0.1),
+                )
+            )
+
+            # --- Top ribbon surface ---
+            x_grid, y_grid = np.meshgrid(X, [y_left, y_right])
+            z_grid = np.tile(z_vals, (2, 1))
+
+            fig.add_trace(
+                go.Surface(
+                    x=x_grid,
+                    y=y_grid,
+                    z=z_grid,
+                    surfacecolor=np.tile(e_vals_scaled, (2, 1)),
+                    colorscale=genre_entropy_colorscale,
+                    showscale=False,
+                    opacity=1,
+                    hoverinfo="x+y+z",
+                    lighting=dict(ambient=0.7, diffuse=0.5, specular=0.1),
+                    name=f"{genre} ribbon",
+                )
+            )
+
+            fig.add_trace(
+                go.Surface(
+                    x=[[0, 0], [0, 0]],  # invisible tiny surface
+                    y=[[0, 0], [0, 0]],
+                    z=[[0, 0], [0, 0]],
+                    surfacecolor=[[0, 1], [0, 1]],  # triggers the colorbar
+                    colorscale=[[0, "#0b0b0b"], [1, "#bbbbbb"]],  # neutral dark → grey
+                    showscale=True,
+                    opacity=0,  # invisible
+                    hoverinfo="none",
+                    colorbar=dict(
+                        title="Entropy (dark = low, light = high)",
+                        tickcolor="white",
+                        tickfont=dict(color="white"),
+                        titlefont=dict(color="white"),
+                        titleside="right",
+                        bgcolor="rgba(0,0,0,0)",
+                        outlinewidth=0,
+                        thickness=18,
+                        len=0.75,
+                    ),
+                )
+            )
+
+        # ===============================================================
+        # 🎨 LAYOUT
+        # ===============================================================
+        fig.update_layout(
+            title=f"3D Taste Focus Ridgelines — Sorted by Total Taste Focus Volume ({year_selected})",
+            scene=dict(
+                xaxis=dict(
+                    title="Rolling Window",
+                    tickvals=list(range(0, len(time_vals), max(1, len(time_vals)//10))),
+                    ticktext=[str(c) for c in time_vals[::max(1, len(time_vals)//10)]],
+                    gridcolor="rgba(255,255,255,0.05)",
+                    backgroundcolor="rgba(0,0,0,0)",
+                ),
+                yaxis=dict(
+                    title="Genre",
+                    tickvals=list(range(len(df_surface.index))),
+                    ticktext=list(df_surface.index),
+                    gridcolor="rgba(255,255,255,0.05)",
+                    backgroundcolor="rgba(0,0,0,0)",
+                ),
+                zaxis=dict(
+                    title="Taste Focus Index",
+                    range=[0, np.nanmax(Z) * 1.1],
+                    gridcolor="rgba(255,255,255,0.05)",
+                    backgroundcolor="rgba(0,0,0,0)",
+                ),
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            height=750,
+            margin=dict(l=0, r=0, t=60, b=0),
+            showlegend=False,
+        )
+
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    else:
+        st.info("No Taste Index data available yet — please rerun enrichment to generate results.")
+
+# ------------------------------ On This Day --------------------------------- #
+elif page == "On This Day":
+
+    # ✅ Make sure dataset is loaded
     if "current_df" not in st.session_state:
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
     df, current_label = require_current_df()
 
+    import uuid
+    import streamlit.components.v1 as components
+
+    # --- Safe Spotify URL helper ---
     def safe_spotify_url(uri_value, item_type):
-        """
-        Safely generate a Spotify URL from a Spotify URI.
-        item_type can be 'track', 'episode', or 'audiobook'.
-        """
         if isinstance(uri_value, str) and ":" in uri_value:
             return f"https://open.spotify.com/{item_type}/{uri_value.split(':')[-1]}"
         else:
             return None
 
-    # project title
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
+    # --- Header ---
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>On This Day</b></em></p>")
 
-        ## random event generator ##
-    st.markdown("## Random News & Listening Day")
-
-    # Load and normalize headlines dataset
+    # --- Headlines dataset setup ---
     headlines_df = INFO_HEADLINE.copy()
+    headlines_df.columns = (
+        headlines_df.columns
+        .str.strip()
+        .str.replace("\ufeff", "", regex=True)
+        .str.lower()
+    )
 
-    # Clean and rename columns
-    headlines_df.columns = headlines_df.columns.str.strip()
     rename_map = {
-        'date (dd-mm-yyyy)': 'date',
-        'webTitle': 'web_title',
-        'short_description': 'short_description',
-        'webUrl': 'web_url',
-        'imageUrl': 'image_url',
-        'section': 'section'
+        "date (dd-mm-yyyy)": "date",
+        "webtitle": "web_title",
+        "short_description": "short_description",
+        "weburl": "web_url",
+        "imageurl": "image_url",
+        "section": "section",
     }
     headlines_df.rename(columns=rename_map, inplace=True)
+    headlines_df["date"] = pd.to_datetime(headlines_df["date"], format="%d-%m-%Y").dt.date
 
-    # Convert date strings to datetime.date
-    headlines_df['date'] = pd.to_datetime(headlines_df['date'], format='%d-%m-%Y').dt.date
+    # --- Normalize listening dataframe ---
+    df["date"] = pd.to_datetime(df["datetime"]).dt.date
 
-    # Normalize listening dataframe to daily level
-    df['date'] = pd.to_datetime(df['datetime']).dt.date
+    # --- Custom CSS targeting the real button class ---
+    st.markdown("""
+        <style>
+        button.st-emotion-cache-9dgoxq {
+            background-color: #0d5637 !important;
+            color: #e1ece3 !important;
+            font-weight: 600 !important;
+            font-size: 40px !important;
+            height: 80px !important;
+            border: none !important;
+            border-radius: 3px !important;
+            width: 100% !important;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3) !important;
+            transition: all 0.2s ease-in-out !important;
+        }
 
-    if st.button("Pick a Random Day"):
-        valid_date = None
+        button.st-emotion-cache-9dgoxq:hover {
+            background-color: #4f9668 !important;
+            color: #002918 !important;
+            transform: translateY(-2px) !important;
+        }
+        div.st-emotion-cache-1jfgbg4 {
+            font-size: 40px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- Session setup ---
+    if "random_date_display" not in st.session_state:
+        st.session_state["random_date_display"] = "Pick a Random Day"
+    if "valid_date" not in st.session_state:
+        st.session_state["valid_date"] = None
+    if "trigger_random" not in st.session_state:
+        st.session_state["trigger_random"] = True
+    if st.session_state["last_page"] != "On This Day":
+        st.session_state["trigger_random"] = True
+        st.session_state["last_page"] = "On This Day"
+
+    # --- Generate a random valid date ---
+    def generate_valid_date():
         attempts = 0
-
-        while valid_date is None and attempts < 1000:
+        while attempts < 1000:
             attempts += 1
-            random_date = df['date'].sample(n=1).iloc[0]
-
-            has_news = not headlines_df[headlines_df['date'] == random_date].empty
-            has_listening = not df[df['date'] == random_date].empty
-
+            random_date = df["date"].sample(n=1).iloc[0]
+            has_news = not headlines_df[headlines_df["date"] == random_date].empty
+            has_listening = not df[df["date"] == random_date].empty
             if has_news and has_listening:
-                valid_date = random_date
+                return random_date
+        return None
 
-        if valid_date is None:
-            st.error("Couldn't find a valid day with both news and listening history.")
-            st.stop()
+    # --- Handle trigger ---
+    if st.session_state["trigger_random"]:
+        valid_date = generate_valid_date()
+        if valid_date:
+            st.session_state["valid_date"] = valid_date
+            st.session_state["random_date_display"] = valid_date.strftime("%d %B %Y")
+        st.session_state["trigger_random"] = False
 
-        st.subheader(f"**{valid_date.strftime('%d %B %Y')}**")
+    # --- Render the styled button ---
+    trigger_button = st.button(
+        f"{st.session_state['random_date_display']}",
+        key="random_day",
+        width="stretch"
+    )
 
-        col1, col2, = st.columns([1,1])
+    # --- Manual trigger ---
+    if trigger_button:
+        st.session_state["trigger_random"] = True
+        st.rerun()
+
+    # --- Display current date and content ---
+    if st.session_state.get("valid_date"):
+        valid_date = st.session_state["valid_date"]
+
+        # --- News Section ---
+        news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
+
+        # --- Listening Section ---
+        daily_df = df[df['date'] == valid_date]
+        top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
+        category = top_item['category']
+
+        track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
+        podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
+        audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
+
+        col1, col2 = st.columns([1, 1])
         with col1:
-            # --- News Section ---
-            news = headlines_df[headlines_df['date'] == valid_date].iloc[0]
             st.subheader(f"**{news['web_title']}**")
-            if isinstance(news['image_url'], str) and news['image_url'].startswith("http"):
-                st.image(news['image_url'], width=400)
-            st.write(news['short_description'])
-            st.markdown(f"[Read more]({news['web_url']})")
 
         with col2:
-            # --- Listening Section ---
-            daily_df = df[df['date'] == valid_date]
-            top_item = daily_df.sort_values(by='minutes_played', ascending=False).iloc[0]
-            category = top_item['category']
-
-            track_url = safe_spotify_url(top_item.get('spotify_track_uri'), 'track')
-            podcast_url = safe_spotify_url(top_item.get('spotify_episode_uri'), 'episode')
-            audiobook_url = safe_spotify_url(top_item.get('audiobook_uri'), 'audiobook')
-
             if category == "music":
                 st.subheader(f"{top_item['artist_name']}")
                 st.write(f"**Album:** {top_item['album_name']}")
                 st.write(f"**Track:** {top_item['track_name']}")
-                album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
-                artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                st.markdown(f"[Listen again]({track_url})")
-
             elif category == "podcast":
                 st.subheader(f"**Show:** {top_item['episode_show_name']}")
                 st.write(f"**Episode:** {top_item['episode_name']}")
-                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
-                artwork_url = show_info['show_artwork'].iloc[0] if not show_info.empty else None
-                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
-                st.markdown(f"[Listen again]({podcast_url})")
-
             elif category == "audiobook":
                 st.subheader(f"**Book:** {top_item['audiobook_title']}")
                 st.write(f"**Chapter:** {top_item['audiobook_chapter_title']}")
-                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
-                artwork_url = book_info['audiobook_artwork'].iloc[0] if not book_info.empty else None
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if isinstance(news['image_url'], str) and news['image_url'].startswith("http"):
+                st.image(news['image_url'], width='stretch')
+            st.write(news['short_description'])
+
+        with col2:
+            if category == "music":
+                album_info = INFO_ALBUM[INFO_ALBUM['album_name'] == top_item['album_name']]
+                artwork_url = album_info['album_artwork'].iloc[0] if not album_info.empty else None
                 if isinstance(artwork_url, str) and artwork_url.startswith("http"):
-                    st.image(artwork_url, width=300)
+                    st.image(artwork_url, width='stretch')
+
+            elif category == "podcast":
+                show_info = INFO_SHOW[INFO_SHOW['show_name'] == top_item['episode_show_name']]
+                artwork_url = show_info['show_image'].iloc[0] if not show_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width="stretch")
+
+            elif category == "audiobook":
+                book_info = INFO_AUDIOBOOK[INFO_AUDIOBOOK['audiobook_title'] == top_item['audiobook_title']]
+                artwork_url = book_info['audiobook_image'].iloc[0] if not book_info.empty else None
+                if isinstance(artwork_url, str) and artwork_url.startswith("http"):
+                    st.image(artwork_url, width="stretch")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+
+            st.markdown(f"[Read more]({news['web_url']})")
+
+        with col2:
+            if category == "music":
+                st.markdown(f"[Listen again]({track_url})")
+
+            elif category == "podcast":
+                st.markdown(f"[Listen again]({podcast_url})")
+
+            elif category == "audiobook":
                 st.markdown(f"[Listen again]({audiobook_url})")
-
-    # ##most skipped song Scorecard##
-    # st.markdown("<h4>Most skipped track this year:</h4>", unsafe_allow_html=True)
-    # ## df grouped by year
-    # df['date'] = pd.to_datetime(df['datetime']).dt.date
-    # df['year'] = pd.to_datetime(df['datetime']).dt.year
-    # year_list = df['year'].sort_values().unique().tolist()
-    # selected_year = st.segmented_control("Year", year_list, selection_mode="single", default=df['year'].max())
-    # df_filtered = df[df['year'] == selected_year]
-    # df_music = df_filtered[df_filtered['category'] == 'music']
-    # most_skipped = (df_music[df_music['skipped'] > 0].groupby(['track_name', 'artist_name'])['skipped'].sum().reset_index().sort_values(by='skipped', ascending=False).head(1))
-
-    # ## box stolen from the internet
-    # wch_colour_box = (64, 64, 64)
-    # wch_colour_font = (255, 255, 255)
-    # #wch_colour_font = (50, 205, 50)
-    # fontsize = 38
-    # valign = "left"
-    # iconname = "fas fa-star"
-    # i = (most_skipped['track_name'].values[0] + ' by ' + most_skipped['artist_name'].values[0] if not most_skipped.empty else "No skipped tracks")
-
-    # htmlstr = f"""
-    #       <p style='background-color: rgb(
-    #           {wch_colour_box[0]},
-    #           {wch_colour_box[1]},
-    #           {wch_colour_box[2]}, 0.75
-    #       );
-    #       color: rgb(
-    #           {wch_colour_font[0]},
-    #           {wch_colour_font[1]},
-    #           {wch_colour_font[2]}, 0.75
-    #       );
-    #       font-size: {fontsize}px;
-    #       border-radius: 7px;
-    #       padding-top: 40px;
-    #       padding-bottom: 40px;
-    #       line-height:25px;
-    #       display: flex;
-    #       align-items: center;
-    #       justify-content: center;'>
-    #       <i class='{iconname}' style='font-size: 40px; color: #ed203f;'></i>&nbsp;{i}</p>
-    #   """
-    # st.markdown(htmlstr, unsafe_allow_html=True)
 
 # --------------------------------- FAQs ------------------------------------- #
 elif page == "FAQs":
-    # project title
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment='center')
-    with col3:
-        st.image(LOGO_SPOTGREEN, width=200)
 
-    st.title("About Us")
-    st.markdown("This project is created by Jana Only to analyze Spotify data in a fun way.")
-    st.write("Feel free to reach out for any questions or collaborations.")
+    st.session_state["last_page"] = "FAQs"
 
-    st.markdown("<h1 style='text-align: center;'>How to request your Spotify data</h1>", unsafe_allow_html=True)
-    st.markdown("<h3>In order to request the extended streaming history files, simply press the correct buttons on the Spotify website.</h3>", unsafe_allow_html=True)
-    st.markdown('1. To get started, open the <a href="https://www.spotify.com/account/privacy/" target="_blank">Spotify Privacy Page</a> on the Spotify website.', unsafe_allow_html=True)
-    st.markdown('2. Scroll down to the "Download your data" section and Configure the page so it looks like the screenshot below (Unticked the "Account data" and ticked the "Extended streaming history" boxes).', unsafe_allow_html=True)
-    col1,col2,col3 = st.columns([1, 3, 1], vertical_alignment='center')
-    with col2:
-        st.image('media/faqs/download_settings.png', width=600)
+    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment="center")
 
-    st.markdown('3. Press the "Request data" button.')
-    st.markdown('')
-    st.markdown('4. You will receive an email from Spotify with a link to download your data. Click on the link in the email to access your data.')
-    st.image('media/faqs/confirm_request.png', width=1200)
-    st.markdown('')
-    st.markdown("<h3>5. Wait until you receive your data. (This may take up to 30 days)</h3>", unsafe_allow_html=True)
-    st.markdown('6. Once you receive the email, download the ZIP file containing your data.')
-    st.markdown('This file will contain personal information, so please be careful with it.')
-    st.image('media/faqs/Download_json.png', width=1200)
-    st.markdown('')
-    st.markdown('')
+    # st.markdown("<h1 style='text-align: center;'>How to request your Spotify data</h1>", unsafe_allow_html=True)
+    # st.markdown("<h3>In order to request the extended streaming history files, simply press the correct buttons on the Spotify website.</h3>", unsafe_allow_html=True)
+    # st.markdown('1. To get started, open the <a href="https://www.spotify.com/account/privacy/" target="_blank">Spotify Privacy Page</a> on the Spotify website.', unsafe_allow_html=True)
+    # st.markdown('2. Scroll down to the "Download your data" section and Configure the page so it looks like the screenshot below (Unticked the "Account data" and ticked the "Extended streaming history" boxes).', unsafe_allow_html=True)
+    # col1,col2,col3 = st.columns([1, 3, 1], vertical_alignment='center')
+    # with col2:
+    #     st.image('media/faqs/download_settings.png', width=600)
 
-    st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
+    # st.markdown('3. Press the "Request data" button.')
+    # st.markdown('')
+    # st.markdown('4. You will receive an email from Spotify with a link to download your data. Click on the link in the email to access your data.')
+    # st.image('media/faqs/confirm_request.png', width=1200)
+    # st.markdown('')
+    # st.markdown("<h3>5. Wait until you receive your data. (This may take up to 30 days)</h3>", unsafe_allow_html=True)
+    # st.markdown('6. Once you receive the email, download the ZIP file containing your data.')
+    # st.markdown('This file will contain personal information, so please be careful with it.')
+    # st.image('media/faqs/Download_json.png', width=1200)
+    # st.markdown('')
+    # st.markdown('')
+
+    # st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
+
+    st.image("media/faqs/image1.svg")
+    st.image("media/faqs/image2.svg")
+    st.image("media/faqs/image3.svg")
+    st.image("media/faqs/image4.svg")
+    st.image("media/faqs/image5.svg")
+
+# -------------------------------- About ------------------------------------- #
+elif page == "About":
+    st.markdown("This project began as a small, locally run dashboard built by a four-person team for a data analytics course. The first version handled a simple upload/ETL flow and a handful of visualizations—top artists, albums, genres, a yearly timeline—and some light enrichment to pull artwork and Spotify popularity via APIs. We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control, conflict resolution, and shipping something that worked—even if only for a demo. Since then I’ve rebuilt the app from the ground up. It now includes authentication and cookies; automated ETL and enrichment using Spotify and Discogs; a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts); and expanded popularity scoring with richer visuals. A new “normality” section explores taste and mood clustering with early-stage ML. Behind the scenes, robust logging lets long jobs pause and resume, while scheduled scrapers keep UK Singles Chart data and Guardian headlines fresh for features like “On this day.” After testing BigQuery, Supabase, and a Google VM, the app now runs on Streamlit Cloud with storage on Cloudflare, with DAO layers abstracting the back ends. User and enrichment data live in CSVs for now (parquet is next), and auth/logs sit in a database. Next up: optional, recurring Spotify ingestion so users don’t have to request exports each time. It’s not trying to be a flashy product—just a careful, end-to-end build that turns raw listening history into something insightful and fun. If you’re hiring, this is the kind of scrappy-to-scalable work I love.")

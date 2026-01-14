@@ -651,44 +651,6 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         self._maybe_write_d1_status(payload)
         print(f"[CloudflareDAO] 🧭 Recorded standard enrichment completion for {dataset_label}")
 
-    def set_breadth_running(self, user_id: str, dataset_label: str, detail: str = ""):
-        """
-        Marks the beginning of the breadth-first phase (phase 8).
-        """
-        payload = {
-            "user_id": user_id,
-            "dataset_label": dataset_label,
-            "status": "breadth_running",
-            "phase": "breadth_first",
-            "detail": detail or "🌐 Breadth-first enrichment in progress",
-            "batches_done": 0,
-            "total_batches": None,
-            "percent": None,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        self._upload_json(self._status_key(user_id, dataset_label), payload)
-        self._maybe_write_d1_status(payload)
-        print(f"[CloudflareDAO] 🧭 Recorded breadth-first start for {dataset_label}")
-
-    def finish_full_status(self, user_id: str, dataset_label: str, detail: str = ""):
-        """
-        Marks full enrichment (phases 1–8) as completed successfully.
-        """
-        payload = {
-            "user_id": user_id,
-            "dataset_label": dataset_label,
-            "status": "full_done",
-            "phase": "breadth_first",
-            "detail": detail or "✅ Full enrichment completed (phases 1–8)",
-            "batches_done": 1,
-            "total_batches": 1,
-            "percent": 100,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        self._upload_json(self._status_key(user_id, dataset_label), payload)
-        self._maybe_write_d1_status(payload)
-        print(f"[CloudflareDAO] 🧭 Recorded full enrichment completion for {dataset_label}")
-
     def finish_standard_error(self, user_id: str, dataset_label: str, detail: str = ""):
         """
         Marks a failure during standard enrichment (phases 1–7).
@@ -709,6 +671,25 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         self._maybe_write_d1_status(payload)
         print(f"[CloudflareDAO] ⚠️ Recorded standard enrichment error for {dataset_label}")
 
+    def set_breadth_running(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks the beginning of the breadth-first phase (phase 8).
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "breadth_running",
+            "phase": "breadth_first",
+            "detail": detail or "🌐 Breadth-first enrichment in progress",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded breadth-first start for {dataset_label}")
+
     def finish_breadth_error(self, user_id: str, dataset_label: str, detail: str = ""):
         """
         Marks a failure during breadth-first enrichment (phase 8).
@@ -728,6 +709,88 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
         self._upload_json(self._status_key(user_id, dataset_label), payload)
         self._maybe_write_d1_status(payload)
         print(f"[CloudflareDAO] ⚠️ Recorded breadth-first enrichment error for {dataset_label}")
+
+    def finish_breadth_done(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks breadth-first enrichment as completed successfully.
+        Precedes the Taste Index phase.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "breadth_done",
+            "phase": "breadth_first",
+            "detail": detail or "✅ Breadth-first enrichment completed — proceeding to Taste Index",
+            "batches_done": 1,
+            "total_batches": 1,
+            "percent": 100,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded breadth-first completion for {dataset_label}")
+
+    def set_taste_index_running(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks the beginning of the Taste Index (28-day rolling analysis) phase.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "taste_index_running",
+            "phase": "taste_index",
+            "detail": detail or "🎧 Taste Index analysis in progress (28-day rolling metrics)",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🎧 Recorded Taste Index start for {dataset_label}")
+
+    def finish_taste_index_error(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks a failure during the Taste Index phase.
+        Recorded as breadth_error so auto_check restarts from breadth_only.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "taste_index_error",
+            "phase": "taste_index",
+            "detail": detail or "❌ Error during Taste Index analysis (phase 9)",
+            "batches_done": 0,
+            "total_batches": None,
+            "percent": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] ⚠️ Recorded Taste Index error for {dataset_label}")
+
+    def finish_full_status(self, user_id: str, dataset_label: str, detail: str = ""):
+        """
+        Marks full enrichment (standard + breadth + taste_index) as completed successfully.
+        """
+        payload = {
+            "user_id": user_id,
+            "dataset_label": dataset_label,
+            "status": "full_done",
+            "phase": "full_done",
+            "detail": detail or "✅ Full enrichment completed (Standard + Breadth + Taste Index)",
+            "batches_done": 1,
+            "total_batches": 1,
+            "percent": 100,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        self._upload_json(self._status_key(user_id, dataset_label), payload)
+        self._maybe_write_d1_status(payload)
+        print(f"[CloudflareDAO] 🧭 Recorded full enrichment completion for {dataset_label}")
 
     # ------------------------------------------------------------
     # METADATA + MASTERS + CHECKPOINTS
@@ -916,7 +979,8 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
             df_combined.drop_duplicates(subset=keys, keep="last", inplace=True)
 
         after = len(df_combined)
-        print(f"[merge_into_master] Merged {len(df_new)} new → total {after} (before={before})")
+        effective = after - before
+        print(f"[merge_into_master] Applied {len(df_new)} rows → Δ{effective} → total {after} (before={before})")
 
         # --- Sanity checks
         if after < before:

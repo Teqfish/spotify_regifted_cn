@@ -7,6 +7,22 @@ Please contact us to give feedback and feature requests.
 
 Built by Charlie Nash, Ben Gee, Jana Hueppe, & Tom Witt (06.2025)
 '''
+# --------------------------------- UMAP ------------------------------------- #
+import os
+
+# 🧩 Force Numba to use a safe, single-threaded backend for UMAP
+if "NUMBA_THREADING_LAYER" not in os.environ:
+    os.environ["NUMBA_THREADING_LAYER"] = "workqueue"
+if "NUMBA_NUM_THREADS" not in os.environ:
+    os.environ["NUMBA_NUM_THREADS"] = "1"
+
+# 👇 Small trick: pre-import numba BEFORE umap to lock in the backend
+import numba
+try:
+    numba.set_num_threads(1)
+except Exception as e:
+    print(f"[init] Warning: could not enforce single-thread mode ({e})")
+
 # ------------------------------- IMPORTS ------------------------------------ #
 from encodings import cp037
 from stringprep import c22_specials
@@ -20,7 +36,6 @@ import jwt
 from matplotlib.font_manager import X11FontDirectories
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pandas as pd
 from pandas.api.types import DatetimeTZDtype
 from pathlib import Path
@@ -52,7 +67,8 @@ import enrichment_service as es
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release, lock_is_locked
 from chart_scorer import parse_label_ts_from_table_name
 
-os.environ["NUMBA_THREADING_LAYER"] = "tbb"
+# os.environ["NUMBA_THREADING_LAYER"] = "workqueue"
+# os.environ["NUMBA_NUM_THREADS"] = "1"
 
 # -------------------------------- DEBUGGER ---------------------------------- #
 _DEBUG_SEQ = 0
@@ -2684,14 +2700,14 @@ with st.sidebar:
                             # ---------- Start/ensure ONE genre-detective worker (background) ----------
                             try:
                                 task_key = f"genre_detective::{selected_label}"
-                                just_started = _start_genre_detective_thread(
-                                    task_key=task_key,
+                                just_started = start_missing_genre_detective_task(
+                                    dataset_label=selected_label,
                                     provider_name="gemini",
                                     batch_size=20,
                                     sleep_between_batches=0.5,
                                     max_retries=2,
                                     force=False,
-                                    limit=None,          # or small int for testing
+                                    limit=None,
                                     io_mode="r2",
                                     debug_dump_merges_to_r2=False,
                                     run_other_fix_when_unlisted_empty=True,
@@ -6220,7 +6236,7 @@ elif page == "Popularity":
     def display_artist_points_chart(chart_hits: pd.DataFrame):
         """Top 10 artists by total points."""
         artist_points = (
-            chart_hits.groupby('artist_name', as_index=False)['points_awarded']
+            chart_hits.groupby('artist_name', as_index=False, observed=False)['points_awarded']
             .sum()
         )
 
@@ -6759,9 +6775,9 @@ elif page == "Popularity":
         st.write("**Global monthly:**", global_monthly.shape)
 
         if not user_monthly.empty:
-            st.dataframe(user_monthly.head(10), use_container_width=True, hide_index=True)
+            st.dataframe(user_monthly.head(), width="stretch", hide_index=True)
         if not global_monthly.empty:
-            st.dataframe(global_monthly.head(10), use_container_width=True, hide_index=True)
+            st.dataframe(global_monthly.head(), width="stretch", hide_index=True)
         else:
             st.warning("⚠️ Global monthly popularity data is empty — global lines won’t appear.")
 
@@ -6813,7 +6829,7 @@ elif page == "Popularity":
             )
 
             top_songs = (
-                chart_hits.groupby(["artist_name", "track_name"])
+                chart_hits.groupby(["artist_name", "track_name"], observed=False)
                 .agg(
                     total_points=("points_awarded", "sum"),
                     avg_weeks_after_peak=("delta_weeks", "mean"),
@@ -7212,14 +7228,29 @@ elif page == "Taste":
         # ===============================================================
         # 🧭 GENRE EMBEDDING MAP — *t-SNE/UMAP Projection of Genre Stability*
         # ===============================================================
+        import os
+        import logging
         import plotly.express as px
         import streamlit as st
         import pandas as pd
         import numpy as np
         from sklearn.manifold import TSNE
         from sklearn.preprocessing import StandardScaler
-        from umap import UMAP
         from scipy.cluster.hierarchy import linkage, leaves_list
+
+        # 🧩 Ensure Numba never tries to load TBB/OpenMP before UMAP import
+        # os.environ["NUMBA_THREADING_LAYER"] = "workqueue"
+        # os.environ["NUMBA_NUM_THREADS"] = "1"
+
+        # Import after setting threading layer
+        from umap import UMAP
+        import numba
+
+        try:
+            numba.set_num_threads(1)
+            logging.info("[UMAP] Numba configured for workqueue (single-thread mode).")
+        except Exception as e:
+            logging.warning(f"[UMAP] Could not enforce single-thread mode: {e}")
 
         st.markdown("### 🌌 Combined 3D Genre Embedding — *t-SNE × UMAP Taste Landscape*")
 
@@ -7256,14 +7287,24 @@ elif page == "Taste":
                 init="pca",
             ).fit_transform(X_scaled)
 
-            umap_embed = UMAP(
-                n_neighbors=5,
-                min_dist=0.2,
-                n_components=2,
-                random_state=42,
-                metric="euclidean",
-            ).fit_transform(X_scaled)
+            # --- Safe UMAP run (never parallelizes) ---
+            try:
+                umap_embed = UMAP(
+                    n_neighbors=5,
+                    min_dist=0.2,
+                    n_components=2,
+                    random_state=42,
+                    metric="euclidean",
+                    n_jobs=1,
+                    low_memory=True,
+                    verbose=False,
+                ).fit_transform(X_scaled)
+            except Exception as e:
+                st.warning(f"⚠️ UMAP disabled (running fallback): {e}")
+                logging.warning(f"[UMAP] Disabled due to threading init error: {e}")
+                umap_embed = np.zeros((len(df_embed), 2))
 
+            # --- Combine embeddings ---
             df_embedding = pd.DataFrame({
                 "genre": df_embed.index,
                 "tsne_x": tsne[:, 0],
@@ -7280,20 +7321,18 @@ elif page == "Taste":
                 index=0,
             )
 
-            # --- Dendrogram ordering (based on t-SNE positions for temporal stability) ---
+            # --- Dendrogram ordering (based on t-SNE positions) ---
             try:
                 Z = linkage(df_embedding[["tsne_x", "tsne_y"]].values, method="ward")
                 order_idx = leaves_list(Z)
                 ordered_genres = df_embedding.iloc[order_idx]["genre"].tolist()
                 st.session_state["ordered_genres_from_embedding"] = ordered_genres
-                st.caption(
-                    "*Dendrogram ordering derived — used to cluster the correlation heatmap below.*"
-                )
+                st.caption("*Dendrogram ordering derived — used to cluster the correlation heatmap below.*")
             except Exception as e:
                 st.warning(f"Could not compute dendrogram ordering: {e}")
                 ordered_genres = list(df_embedding["genre"])
 
-            # --- Visualisation: 3D t-SNE × UMAP hybrid ---
+            # --- 3D Visualization ---
             fig_3d = px.scatter_3d(
                 df_embedding,
                 x="tsne_x",

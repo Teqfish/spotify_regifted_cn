@@ -2198,61 +2198,61 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
         else:
             st.caption(f"This dataset has been fully enriched")
 
-    with st.sidebar.expander("Background Threads", expanded=False):
-        info = _summarize_threads_for_sidebar()
+    # with st.sidebar.expander("Background Threads", expanded=False):
+    #     info = _summarize_threads_for_sidebar()
 
-        # Top-line totals
-        st.caption(f"Total threads: {info['total']}")
+    #     # Top-line totals
+    #     st.caption(f"Total threads: {info['total']}")
 
-        # Show grouped metrics
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Enrichment", info["enrichment"]["count"])
-        c2.metric("Genre Detective", info["genre_detective"]["count"])
-        c3.metric("Discogs", info["discogs"]["count"])
+    #     # Show grouped metrics
+    #     c1, c2, c3 = st.columns(3)
+    #     c1.metric("Enrichment", info["enrichment"]["count"])
+    #     c2.metric("Genre Detective", info["genre_detective"]["count"])
+    #     c3.metric("Discogs", info["discogs"]["count"])
 
-        c4, c5, _ = st.columns(3)
-        c4.metric("Core", info["core"]["count"])
-        c5.metric("Other", info["other"]["count"])
+    #     c4, c5, _ = st.columns(3)
+    #     c4.metric("Core", info["core"]["count"])
+    #     c5.metric("Other", info["other"]["count"])
 
-        st.divider()
-        colA, colB = st.columns(2)
+    #     st.divider()
+    #     colA, colB = st.columns(2)
 
-        if colA.button("🧹 Reap registry", key="btn_reap_registry"):
-            cleared = reap_task_registry(verbose=True)
-            if cleared:
-                st.success(f"Reaped {len(cleared)} stale entr{'y' if len(cleared)==1 else 'ies'}.")
-            else:
-                st.info("No stale entries to reap.")
+    #     if colA.button("🧹 Reap registry", key="btn_reap_registry"):
+    #         cleared = reap_task_registry(verbose=True)
+    #         if cleared:
+    #             st.success(f"Reaped {len(cleared)} stale entr{'y' if len(cleared)==1 else 'ies'}.")
+    #         else:
+    #             st.info("No stale entries to reap.")
 
-        if colB.button("⛔ Stop genre detective", key="btn_stop_gd"):
-            n = stop_genre_detective_workers()
-            if n:
-                st.warning(f"Signalled stop to {n} genre detective worker(s).")
-            else:
-                st.info("No active genre detective workers to stop.")
+    #     if colB.button("⛔ Stop genre detective", key="btn_stop_gd"):
+    #         n = stop_genre_detective_workers()
+    #         if n:
+    #             st.warning(f"Signalled stop to {n} genre detective worker(s).")
+    #         else:
+    #             st.info("No active genre detective workers to stop.")
 
-        # Optional: reveal names
-        if st.checkbox("Show thread names", key="bg_threads_show_names"):
-            def _list(names):
-                if not names:
-                    st.caption("—")
-                else:
-                    st.code("\n".join(names), language="text")
+    #     # Optional: reveal names
+    #     if st.checkbox("Show thread names", key="bg_threads_show_names"):
+    #         def _list(names):
+    #             if not names:
+    #                 st.caption("—")
+    #             else:
+    #                 st.code("\n".join(names), language="text")
 
-            with st.expander("Enrichment", expanded=False):
-                _list(info["enrichment"]["names"])
+    #         with st.expander("Enrichment", expanded=False):
+    #             _list(info["enrichment"]["names"])
 
-            with st.expander("Genre Detective", expanded=False):
-                _list(info["genre_detective"]["names"])
+    #         with st.expander("Genre Detective", expanded=False):
+    #             _list(info["genre_detective"]["names"])
 
-            with st.expander("Discogs", expanded=False):
-                _list(info["discogs"]["names"])
+    #         with st.expander("Discogs", expanded=False):
+    #             _list(info["discogs"]["names"])
 
-            with st.expander("Core", expanded=False):
-                _list(info["core"]["names"])
+    #         with st.expander("Core", expanded=False):
+    #             _list(info["core"]["names"])
 
-            with st.expander("Other", expanded=False):
-                _list(info["other"]["names"])
+    #         with st.expander("Other", expanded=False):
+    #             _list(info["other"]["names"])
 
 # ------------------------------ GENRE DETECTIVE ----------------------------- #
 def start_missing_genre_detective_task(
@@ -3146,86 +3146,6 @@ if page == "Home":
         except Exception as e:
             st.error(f"Failed to refresh dataset list: {e}")
 
-
-    # --- Version Inspector (add near the top of app.py) ---
-    import os
-    import logging
-    import importlib.metadata as im  # part of the stdlib; reads installed packages
-    import streamlit as st
-
-    def snapshot_installed_packages() -> str:
-        """
-        Return a sorted 'pip freeze'-style string of all installed packages,
-        suitable for pinning or a constraints file.
-        """
-        # Collect (name, version) safely; some dists have metadata Name, some only .name
-        pairs = []
-        for dist in im.distributions():
-            name = (dist.metadata.get("Name") if dist.metadata else None) or dist.name
-            pairs.append((name, dist.version))
-        lines = [f"{name}=={version}" for name, version in sorted(pairs, key=lambda x: x[0].lower())]
-        return "\n".join(lines)
-
-    def compare_against_requirements(installed_text: str, req_path: str = "requirements.txt") -> list[tuple[str, str, str]]:
-        """
-        Compare installed versions to your requirements.txt.
-        Returns a list of mismatches: (package, required_spec, installed_version).
-        Only checks exact '==' pins; ignores ranges intentionally.
-        """
-        mismatches = []
-        if not os.path.exists(req_path):
-            return mismatches
-        required = {}
-        with open(req_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or line.startswith(("-", "--")):
-                    continue
-                # Only handle exact pins to keep this simple
-                if "==" in line:
-                    pkg, ver = line.split("==", 1)
-                    required[pkg.strip().lower()] = ver.strip()
-        installed = {}
-        for line in installed_text.splitlines():
-            if "==" in line:
-                pkg, ver = line.split("==", 1)
-                installed[pkg.strip().lower()] = ver.strip()
-        for pkg_lc, req_ver in required.items():
-            inst_ver = installed.get(pkg_lc)
-            if inst_ver and inst_ver != req_ver:
-                mismatches.append((pkg_lc, req_ver, inst_ver))
-        return mismatches
-
-    with st.expander("🔎 Environment • Package versions (for locking)"):
-        # 1) Show the current environment snapshot
-        freeze_text = snapshot_installed_packages()
-        st.text_area("Installed packages (pip-freeze style)", value=freeze_text, height=240)
-
-        # 2) Save & download a lock snapshot you can commit to the repo
-        lock_filename = "requirements.lock.txt"
-        st.download_button(
-            "Download current environment as requirements.lock.txt",
-            data=freeze_text,
-            file_name=lock_filename,
-            mime="text/plain",
-            help="Use this as a constraints file or as a starting point to pin exact versions.",
-        )
-
-        # 3) Compare to your current requirements.txt (exact pins only)
-        diffs = compare_against_requirements(freeze_text, "requirements.txt")
-        if diffs:
-            st.warning("Differences between installed packages and your requirements.txt (only exact '==' pins are checked):")
-            for pkg, want, got in diffs:
-                st.write(f"- **{pkg}** → required `{want}`, installed `{got}`")
-        else:
-            st.success("No differences found for exact '==' pins (or requirements.txt not present).")
-
-    # Also put a copy of the snapshot into the logs for later retrieval in Streamlit Cloud
-    try:
-        logging.info("Installed package snapshot (first 100 lines):\n%s", "\n".join(freeze_text.splitlines()[:100]))
-    except Exception:
-        pass
-    # --- End Version Inspector ---
 # ----------------------------- Overall Review ------------------------------- #
 elif page == "Overall Review":
 

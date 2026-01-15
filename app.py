@@ -3146,6 +3146,86 @@ if page == "Home":
         except Exception as e:
             st.error(f"Failed to refresh dataset list: {e}")
 
+
+    # --- Version Inspector (add near the top of app.py) ---
+    import os
+    import logging
+    import importlib.metadata as im  # part of the stdlib; reads installed packages
+    import streamlit as st
+
+    def snapshot_installed_packages() -> str:
+        """
+        Return a sorted 'pip freeze'-style string of all installed packages,
+        suitable for pinning or a constraints file.
+        """
+        # Collect (name, version) safely; some dists have metadata Name, some only .name
+        pairs = []
+        for dist in im.distributions():
+            name = (dist.metadata.get("Name") if dist.metadata else None) or dist.name
+            pairs.append((name, dist.version))
+        lines = [f"{name}=={version}" for name, version in sorted(pairs, key=lambda x: x[0].lower())]
+        return "\n".join(lines)
+
+    def compare_against_requirements(installed_text: str, req_path: str = "requirements.txt") -> list[tuple[str, str, str]]:
+        """
+        Compare installed versions to your requirements.txt.
+        Returns a list of mismatches: (package, required_spec, installed_version).
+        Only checks exact '==' pins; ignores ranges intentionally.
+        """
+        mismatches = []
+        if not os.path.exists(req_path):
+            return mismatches
+        required = {}
+        with open(req_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or line.startswith(("-", "--")):
+                    continue
+                # Only handle exact pins to keep this simple
+                if "==" in line:
+                    pkg, ver = line.split("==", 1)
+                    required[pkg.strip().lower()] = ver.strip()
+        installed = {}
+        for line in installed_text.splitlines():
+            if "==" in line:
+                pkg, ver = line.split("==", 1)
+                installed[pkg.strip().lower()] = ver.strip()
+        for pkg_lc, req_ver in required.items():
+            inst_ver = installed.get(pkg_lc)
+            if inst_ver and inst_ver != req_ver:
+                mismatches.append((pkg_lc, req_ver, inst_ver))
+        return mismatches
+
+    with st.expander("🔎 Environment • Package versions (for locking)"):
+        # 1) Show the current environment snapshot
+        freeze_text = snapshot_installed_packages()
+        st.text_area("Installed packages (pip-freeze style)", value=freeze_text, height=240)
+
+        # 2) Save & download a lock snapshot you can commit to the repo
+        lock_filename = "requirements.lock.txt"
+        st.download_button(
+            "Download current environment as requirements.lock.txt",
+            data=freeze_text,
+            file_name=lock_filename,
+            mime="text/plain",
+            help="Use this as a constraints file or as a starting point to pin exact versions.",
+        )
+
+        # 3) Compare to your current requirements.txt (exact pins only)
+        diffs = compare_against_requirements(freeze_text, "requirements.txt")
+        if diffs:
+            st.warning("Differences between installed packages and your requirements.txt (only exact '==' pins are checked):")
+            for pkg, want, got in diffs:
+                st.write(f"- **{pkg}** → required `{want}`, installed `{got}`")
+        else:
+            st.success("No differences found for exact '==' pins (or requirements.txt not present).")
+
+    # Also put a copy of the snapshot into the logs for later retrieval in Streamlit Cloud
+    try:
+        logging.info("Installed package snapshot (first 100 lines):\n%s", "\n".join(freeze_text.splitlines()[:100]))
+    except Exception:
+        pass
+    # --- End Version Inspector ---
 # ----------------------------- Overall Review ------------------------------- #
 elif page == "Overall Review":
 

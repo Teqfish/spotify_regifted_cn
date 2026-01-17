@@ -2745,7 +2745,7 @@ with st.sidebar:
             "Artists",
             "Genres",
             "Popularity",
-            "Taste",
+            "Taste Index",
             "On This Day",
             "FAQs",
             "About"
@@ -6858,7 +6858,7 @@ elif page == "Popularity":
             st.info("No chart hits scored in the selected period yet.")
 
 # -------------------------------- Taste ------------------------------------- #
-elif page == "Taste":
+elif page == "Taste Index":
     # ----------------------------------------------------------------------
     # 🎧 DATASET VALIDATION & LOADING
     # ----------------------------------------------------------------------
@@ -6890,21 +6890,11 @@ elif page == "Taste":
     # ----------------------------------------------------------------------
     # ☁️ LOAD TASTE INDEX RESULTS (NO COMPUTATION)
     # ----------------------------------------------------------------------
-    st.markdown("### 🧮 28-Day Rolling Taste Index")
-    st.caption("Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.")
-
-    # if storage_dao is not None:
-    #     print("🧩 Debug: checking Taste Index file existence in R2...")
-    #     try:
-    #         r2 = storage_dao.r2
-    #         resp = r2.list_objects(Bucket=storage_dao.bucket, Prefix="enrichment/taste_index/")
-    #         keys = [obj["Key"] for obj in resp.get("Contents", [])]
-    #         print("Available keys:", keys[:10])  # first few
-    #         print("Expected key:", parquet_key)
-    #     except Exception as e:
-    #         print(f"Could not list objects: {e}")
-    # else:
-    #     print(f"[Taste DEBUG] It empty bitch")
+    # --- Header ---
+    h1, h2, h3 = st.columns([1,3,1])
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>28-Day Rolling Taste Index</b></em></p>")
+        st.caption("Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.")
 
     if df_rolling is None and storage_dao is not None:
         try:

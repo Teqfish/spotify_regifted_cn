@@ -1556,6 +1556,7 @@ def background_enrich(
             pool = DiscogsWorkerPool(num_workers=num_workers)
             pool.result_queue = queue.Queue()  # results local to this pool
             pool.job_queue = q                  # attach private queue
+            pool.ensure_worker_pool()   # make sure workers are actually running
             return pool
 
         # --- Helper: poison-pill shutdown ---

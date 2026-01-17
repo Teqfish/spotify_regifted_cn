@@ -1042,7 +1042,7 @@ class MetadataEnricher:
         discogs_secret: str,
         status_dao,
         storage_dao,
-        log_dao,   # keep this new addition
+        log_dao,
         info_table_dao=None,
         verbose: bool = True,
     ):
@@ -1070,7 +1070,7 @@ class MetadataEnricher:
         self.info_tables = info_table_dao
         self.verbose = verbose
 
-        # ✅ Backward compatibility alias for old references
+        # Back-compat alias
         self.storage_dao = storage_dao
 
         # --- Seen & ID caches ---
@@ -1084,14 +1084,14 @@ class MetadataEnricher:
         self.show_ids_by_name: dict[str, str] = {}
         self.audiobook_ids_by_title: dict[str, str] = {}
 
-        # --- Output buffers (flushed once per enrichment) ---
+        # --- Output buffers ---
         self.buf_artists: list[dict] = []
         self.buf_albums: list[dict] = []
         self.buf_tracks: list[dict] = []
         self.buf_shows: list[dict] = []
         self.buf_audiobooks: list[dict] = []
 
-        # --- Autosave / checkpointing ---
+        # --- Autosave / checkpoints ---
         self.autosave_every_batches = 50
         self._batches_since_save = 0
         self.save_snapshots = False
@@ -1099,12 +1099,12 @@ class MetadataEnricher:
         self._total_batches = 0
         self.current_phase = "planning"
 
-        # --- Master tables for enrichment reuse ---
+        # --- Master tables ---
         self.master_artists = pd.DataFrame()
         self.master_albums = pd.DataFrame()
         self.master_tracks = pd.DataFrame()
 
-        # --- Safe logging setup ---
+        # --- Safe logging ---
         if hasattr(log_dao, "log") and callable(getattr(log_dao, "log")):
             def _log(msg, level="info"):
                 try:
@@ -1122,7 +1122,7 @@ class MetadataEnricher:
             print("[init] ⚠️ log_dao invalid or missing .log(); defaulting to print()")
             self.log = lambda msg, level="info": print(msg)
 
-        # --- Load master tables (artist/album/track metadata) ---
+        # --- Load master tables ---
         try:
             if hasattr(self, "_load_master_tables"):
                 self._load_master_tables()
@@ -1135,16 +1135,9 @@ class MetadataEnricher:
         except Exception as e:
             self.log(f"[init] ⚠️ Failed to load master tables: {e}")
 
-        # --- Initialize local Discogs worker pool (non-global) ---
-        try:
-            from enrichment_service import DiscogsWorkerPool
-            self.discogs_pool = DiscogsWorkerPool(num_workers=5)
-            self.discogs_pool.ensure_alive()
-            MetadataEnricher._discogs_pool = self.discogs_pool
-            self.log("[init] ✅ Local DiscogsWorkerPool initialized (non-global, isolated).")
-        except Exception as e:
-            self.log(f"[init] ⚠️ Could not initialize DiscogsWorkerPool: {e}")
-            self.discogs_pool = None
+        # --- Discogs pool lifecycle owned by background_enrich() ---
+        self.discogs_pool = None
+        self.log("[init] ℹ️ DiscogsWorkerPool not created in __init__; background_enrich() owns lifecycle.")
 
         # --- Optional info tables ---
         if self.info_tables is not None:
@@ -1758,6 +1751,7 @@ class MetadataEnricher:
         self._check_cancel(ce)
         self.log(f"[fetch_and_save_artists] Starting batch with {len(names)} names")
 
+        # Resolve Spotify IDs
         self.resolve_artist_ids(names)
         self.log(f"[fetch_and_save_artists] Resolved IDs for {len(self.artist_ids_by_name)} / {len(names)}")
 
@@ -1766,6 +1760,7 @@ class MetadataEnricher:
             self.log("[fetch_and_save_artists] No IDs resolved, skipping batch")
             return
 
+        # Fetch Spotify artist info
         self._check_cancel(ce)
         info = get_artists(
             ids,
@@ -1781,20 +1776,26 @@ class MetadataEnricher:
         df_art["genres"] = df_art.get("genres", pd.Series([[]] * len(df_art))).apply(lambda x: x or [])
         missing = df_art[df_art["genres"].apply(len) == 0]["name"].tolist()
 
+        # If genre missing, submit to Discogs via attached pool
         if missing:
             self._check_cancel(ce)
-            if not hasattr(self, "discogs_pool") or self.discogs_pool is None:
-                try:
-                    self.ensure_worker_pool()
-                except Exception:
-                    from enrichment_service import DiscogsWorkerPool
-                    self.discogs_pool = DiscogsWorkerPool(num_workers=5)
+
+            pool = getattr(self, "discogs_pool", None)
+            if pool is None:
+                raise RuntimeError(
+                    "Discogs worker pool is not attached to this MetadataEnricher. "
+                    "background_enrich() must create and assign the pool per thread."
+                )
+
+            # Use *your* pool's keep-alive
             try:
-                self.discogs_pool.ensure_alive()
-            except Exception:
-                pass
+                pool.ensure_worker_pool()  # alias -> ensure_alive()
+            except Exception as e:
+                raise RuntimeError("Discogs worker pool is not healthy.") from e
+
             self.log(f"[fetch_and_save_artists] {len(missing)} artists missing genres → submitting Discogs jobs")
-            self.discogs_pool.submit(missing, meta={"user_id": self.user_id, "label": self.label})
+            pool.submit(missing, meta={"user_id": self.user_id, "label": self.label})
+
             if not hasattr(self, "_pending_discogs_artists"):
                 self._pending_discogs_artists = set()
             self._pending_discogs_artists.update(missing)
@@ -1812,6 +1813,7 @@ class MetadataEnricher:
             ),
         })
 
+        # Lazy-load supergenre map (unchanged)
         if not hasattr(self, "supergenre_map_dict"):
             try:
                 supergenre_map = self.storage.safe_download_csv("reference/info_supergenre_map.csv")
@@ -1840,6 +1842,7 @@ class MetadataEnricher:
 
         self.buf_artists.extend(out.replace({pd.NA: None}).to_dict(orient="records"))
         self.seen_artists.update({_normalize_artist_key(n) for n in names})
+
         update_heartbeat(self.user_id, self.label)
 
     def fetch_and_save_albums_by_pairs(
@@ -2726,14 +2729,17 @@ class MetadataEnricher:
             raise
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
-        """Full enrichment pipeline with detailed debug logging, flushing after each phase."""
-
+        """Full enrichment pipeline with detailed debug logging, passing the right
+        arguments to each phase. Preserves current pool management behaviour.
+        """
+        # Keep the same entry behaviour as your latest version
         import traceback
 
         self.cancel_event = cancel_event
         self._load_master_tables()
 
         try:
+            # --- Planning / batch estimation (unchanged) ---
             total = int(self.estimate_total_batches())
             self._total_batches = total
             self._done_batches = 0
@@ -2742,19 +2748,20 @@ class MetadataEnricher:
 
             self.log(f"[run_all] Planning complete. Estimated total batches = {total}")
             self.status.set_status(
-                self.user_id, self.label,
+                self.user_id,
+                self.label,
                 phase="planning",
                 detail=f"Estimating batches… (~{total})",
-                total=total
+                total=total,
             )
 
-            # 🟡 No new data to enrich — mark as already complete
+            # 🟡 No new data to enrich — exit early (unchanged)
             if total == 0:
                 self.log("[run_all] Nothing new to enrich (all entities already in masters)")
                 self.status.finish_standard_status(
                     self.user_id,
                     self.label,
-                    detail="✅ All enrichment already up to date (no new entities)"
+                    detail="✅ All enrichment already up to date (no new entities)",
                 )
                 try:
                     self.flush_all()
@@ -2765,15 +2772,16 @@ class MetadataEnricher:
                 update_heartbeat(self.user_id, self.label)
                 return
 
-            # Helper for ending each phase
+            # --- Phase tracking helper (unchanged) ---
             def _end_phase(name: str, before: int):
                 added = self._done_batches - before
                 self.log(f"[run_all] Completed phase: {name} (batches +{added})")
                 self.status.set_status(
-                    self.user_id, self.label,
+                    self.user_id,
+                    self.label,
                     phase=name,
                     detail=f"Phase '{name}' finished • {added} new batches",
-                    total=total
+                    total=total,
                 )
                 try:
                     self.flush_partial()
@@ -2781,10 +2789,36 @@ class MetadataEnricher:
                 except Exception as e:
                     self.log(f"[run_all] ⚠️ flush_partial failed after {name}: {e}")
 
-            # Enrichment phases
+            # ========= NEW: build priority sets exactly like the explicit version =========
+            self._check_cancel(self.cancel_event)
+            self.log("[run_all] Building priority sets…")
+
+            # Totals (for logging only; mirrors your explicit version)
+            all_art, all_show, all_book = self.all_listens()
+            self.log(
+                f"[run_all] Total counts: artists={len(all_art)}, "
+                f"shows={len(all_show)}, books={len(all_book)}"
+            )
+
+            # Overall top slices → used by the 'overall' phase
+            top_art, top_shows, top_books = self.top_overall()
+            self.log(
+                f"[run_all] Top overall counts: artists={len(top_art)}, "
+                f"shows={len(top_shows)}, books={len(top_books)}"
+            )
+
+            # Per-year priority sets → used by the 'per_year' phase
+            # (keep the same call signature you already had)
+            per_art, per_show, per_book = self.top_per_year(set(), set(), set())
+            self.log(
+                f"[run_all] Per-year counts: artists={len(per_art)}, "
+                f"shows={len(per_show)}, books={len(per_book)}"
+            )
+
+            # -------- Enrichment phases with CORRECT arguments --------
             phases = [
-                ("overall", self.run_phase_overall_first50, ()),
-                ("per_year", self.run_phase_per_year, ()),
+                ("overall", self.run_phase_overall_first50, (top_art, top_shows, top_books)),
+                ("per_year", self.run_phase_per_year, (per_art, per_show, per_book)),
                 ("albums_of_year", self.run_phase_per_artist_albums_of_year, ()),
                 ("top_tracks_per_month", self.run_phase_top_tracks_per_month, ()),
                 ("popularity_timeseries", self.run_phase_popularity_timeseries, ()),
@@ -2792,17 +2826,33 @@ class MetadataEnricher:
                 ("per_album", self.run_phase_per_album_all_albums_for_top_artists, ()),
             ]
 
-            # Phase execution loop
+            # -------- Phase execution loop (preserved) --------
             for name, fn, args in phases:
                 self._check_cancel(self.cancel_event)
                 self.current_phase = name
                 self.log(f"[run_all] Starting phase: {name}")
                 before = self._done_batches
+
+                # Run the phase with its explicit args
                 fn(*args)
+
+                # Optional: after 'overall', mirror your previous graceful sync of Discogs results
+                if name == "overall" and hasattr(self, "_flush_discogs_results"):
+                    try:
+                        self.log("[overall] Checking for pending Discogs results before phase end…")
+                        self._flush_discogs_results(timeout=15)
+                        pending = getattr(self, "_pending_discogs_artists", None)
+                        if pending:
+                            self.log(f"[overall] ⚠️ {len(pending)} Discogs jobs still pending at phase end.")
+                        else:
+                            self.log("[overall] ✅ No pending Discogs jobs.")
+                    except Exception as e:
+                        self.log(f"[overall] ⚠️ Discogs flush check failed: {e}")
+
                 _end_phase(name, before)
                 update_heartbeat(self.user_id, self.label)
 
-            # ✅ Finalize enrichment
+            # ✅ Finalize standard enrichment (unchanged)
             self.log("[run_all] All standard enrichment phases completed — starting final flush.")
             self.current_phase = "flush_standard"
             try:
@@ -2812,8 +2862,9 @@ class MetadataEnricher:
                 self.log(f"[run_all] ⚠️ Final flush after standard enrichment failed: {e}")
 
             self.status.finish_standard_status(
-                self.user_id, self.label,
-                detail="✅ Standard enrichment completed successfully (phases 1–7)"
+                self.user_id,
+                self.label,
+                detail="✅ Standard enrichment completed successfully (phases 1–7)",
             )
             self.log("[run_all] 🧭 Recorded standard enrichment completion in status.")
             update_heartbeat(self.user_id, self.label)
@@ -2823,6 +2874,7 @@ class MetadataEnricher:
             return
 
         except CancelledError:
+            # (unchanged)
             self.log("[run_all] 🛑 CancelledError caught — flushing partial results.")
             try:
                 self.flush_partial()
@@ -2830,13 +2882,12 @@ class MetadataEnricher:
             except Exception as e:
                 self.log(f"[run_all] ⚠️ flush_partial failed during cancel: {e}")
             self.status.finish_standard_error(
-                self.user_id,
-                self.label,
-                detail="🛑 Enrichment cancelled by user (partial results saved)."
+                self.user_id, self.label, detail="🛑 Enrichment cancelled by user (partial results saved)."
             )
             raise
 
         except Exception as e:
+            # (unchanged)
             tb = traceback.format_exc()
             self.log(f"[run_all] ❌ Exception during standard enrichment: {e}\n{tb}")
             try:
@@ -2845,13 +2896,12 @@ class MetadataEnricher:
             except Exception as e2:
                 self.log(f"[run_all] ⚠️ flush_partial failed during exception handling: {e2}")
             self.status.finish_standard_error(
-                self.user_id,
-                self.label,
-                detail=f"❌ Error during standard enrichment (phases 1–7): {e}"
+                self.user_id, self.label, detail=f"❌ Error during standard enrichment (phases 1–7): {e}"
             )
             raise
 
         finally:
+            # Keep the lightweight finally to avoid changing your pool management
             self.log("[run_all] 💤 Standard enrichment pipeline fully terminated.")
 
     def run_phase_breadth_first_years_remaining(self, all_art: pd.DataFrame, all_show: pd.DataFrame, all_book: pd.DataFrame):
@@ -2871,6 +2921,18 @@ class MetadataEnricher:
 
         self.log(f"[breadth_first] ✅ Using filtered dataset (shape={df.shape})")
         self._check_cancel(self.cancel_event)
+
+        # 🔒 Discogs pool must be attached by background_enrich(); verify and keep alive
+        pool = getattr(self, "discogs_pool", None)
+        if pool is None:
+            raise RuntimeError(
+                "[breadth_first] ❌ Discogs worker pool is not attached to this MetadataEnricher. "
+                "background_enrich() must create and assign the pool per thread."
+            )
+        try:
+            pool.ensure_worker_pool()  # alias to ensure_alive()
+        except Exception as e:
+            raise RuntimeError(f"[breadth_first] ❌ Discogs worker pool not healthy: {e}")
 
         try:
             # Ensure masters loaded
@@ -3133,6 +3195,18 @@ class MetadataEnricher:
         except Exception:
             pass
         update_heartbeat(user_id, label)
+
+        # 🔒 Require a pool (runner owns lifecycle) and keep it alive
+        pool = getattr(self, "discogs_pool", None)
+        if pool is None:
+            raise RuntimeError(
+                "[breadth_only] ❌ Discogs worker pool is not attached to this MetadataEnricher. "
+                "background_enrich() must create and assign the pool per thread."
+            )
+        try:
+            pool.ensure_worker_pool()  # alias to ensure_alive()
+        except Exception as e:
+            raise RuntimeError(f"[breadth_only] ❌ Discogs worker pool not healthy: {e}")
 
         # --- Ensure master tables ---
         for master in ("artists", "albums", "tracks"):

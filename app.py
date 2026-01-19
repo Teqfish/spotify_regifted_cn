@@ -7045,9 +7045,26 @@ elif page == "Taste Index":
 
             st.plotly_chart(fig_heatmap, width="stretch", config={"displayModeBar": False})
 
-            st.caption("_Each row is a genre; color shows how “typical” your listening was for that genre in each time window._<br>**How to read:** Bright/strong color = you stuck to the genre’s core sound, darker = you ventured into less typical tracks or didn’t listen much.<br>Vertical bands show phases; long bright rows reveal enduring favorites.", unsafe_allow_html=True)
+            with st.expander("Learn what this shows"):
+                st.caption(
+                '''
+                _A grid of genres (rows) vs. time (columns), colorized by Normality Index._
+
+                Interpretation:<br>
+                    •	Bright or intense streaks = periods of focused listening (low entropy, high concentration).<br>
+                    •	Muted zones = eclectic or unfocused periods.<br>
+                    •	Genre rows with frequent “bright bursts” show recurring passion cycles.<br>
+                    •	If one genre line is bright for long stretches → that’s your musical core identity.
+
+                How to use it:<br>
+                    •	As a timeline of obsessions — e.g., “this was my punk phase” or “ambient streak during winter.”<br>
+                    •	Cross-check with the genre correlation heatmap to see if these bursts coincide with dips in other genres (mutual exclusivity).<br>
+                    •	Compare to the Taste Focus 3D chart for confirming the same spikes.
+                ''',unsafe_allow_html=True)
         else:
             st.info("No data available for heatmap rendering.")
+
+        st.divider()
 
         # ===============================================================
         # TREND — Average NormalityIndex Across All Genres
@@ -7127,7 +7144,19 @@ elif page == "Taste Index":
 
         st.plotly_chart(fig_trend, width="stretch", config={"displayModeBar": False})
 
-        st.caption("_A time-series of your overall “focus” level averaged across genres._<br>**How to read:** Rising lines = more consistent, core-style listening; falling lines = more eclectic periods.",unsafe_allow_html=True, width="stretch")
+        with st.expander("Learn what this shows"):
+            st.caption(
+            '''
+            _A time-series of your overall “focus” level averaged across genres._
+
+            Interpretation:<br>
+                •	Peaks = periods of consistency or deep focus.<br>
+                •	Valleys = periods of eclectic exploration or listening chaos.<br>
+                •	Long-term slope = are you getting more diverse or more focused with age?
+
+            ''',unsafe_allow_html=True)
+
+        st.divider()
 
         # ===============================================================
         # 🔗 GENRE CORRELATION MATRIX — "Taste Interdependence"
@@ -7268,16 +7297,28 @@ elif page == "Taste Index":
 
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False,"staticPlot": False})
 
-            st.caption(
-                """
-                _A correlation heatmap showing how focus in one genre moves with another._<br>
-                **How to read:** Warm blocks (high correlation) = genres you tend to focus on together; cool/negative = trade-offs (when one rises, the other falls). Look for clusters to spot genre families.
-                """
-                , unsafe_allow_html=True
-            )
+            with st.expander("Learn what this shows"):
+                st.caption(
+                '''
+                _Pairwise correlation between genres’ time series of normality or focus scores._
+
+                Interpretation:<br>
+                    •	Bright Green (high correlation) = you treat both genres the same way (rise and fall together).<br>
+                    •	Grey = no relationship.<br>
+                    •	Deep Red (low correlation)= they’re opposites — when one’s up, the other’s down.<br>
+                → e.g., “punk” vs “classical” or “metal” vs “ambient”.
+
+                What else it tells you:<br>
+                    •	Clusters of high positive correlation = genres that form “taste families”.<br>
+                    •	Strong negative edges = substitution effects (you swap between them).<br>
+                    •	The overall density of positive vs negative = how modular your taste ecosystem is.
+
+                ''',unsafe_allow_html=True)
 
         else:
             st.warning("⚠️ No valid data available for taste stability analysis.")
+
+        st.divider()
 
         # ===============================================================
         # 🧭 GENRE EMBEDDING MAP — *t-SNE/UMAP Projection of Genre Stability*
@@ -7434,29 +7475,41 @@ elif page == "Taste Index":
 
             st.plotly_chart(fig_3d, width="stretch", config={"displayModeBar": False})
 
-            st.caption(
-                f"""
-                _A 3D map where nearby genres behave similarly in your listening history._
-                <br>
-                **How to read:**
-                 Clusters/islands = genres you treat similarly;
-                Distance = difference;
-                Bubble size = number of rolling windows;
-                Color = average NormalityIndex (listening focus).
-                <br>
-                Moving between islands over time suggests shifts in taste.
-                """
-                , unsafe_allow_html=True
-            )
+            with st.expander("Learn what this shows"):
+                st.caption(
+                '''
+                _Each genre as a point, positioned based on the similarity of its stability pattern over time._<br>
+
+                How to read:<br>
+                •	Clusters/islands = genres you treat similarly.<br>
+                •	Distance = difference.<br>
+                •	Bubble size = number of rolling windows (popularity).<br>
+                •	Colour = average NormalityIndex (listening focus).
+
+                Interpretation:<br>
+                •	Nearby genres fluctuate in similar ways (they’re “emotionally co-activated”).<br>
+                •	Distant genres behave differently (different listening moods).<br>
+                •	Bright colour bubbles = genres you immerse in deeply.
+
+                Why “All Years” might look diffuse:<br>
+                Because across years, your patterns change — so the algorithm tries to average incompatible temporal trajectories into one 2D manifold.
+
+                Why t-SNE and UMAP differ:<br>
+                •	t-SNE exaggerates small local differences and clusters small groups strongly.<br>
+                •	UMAP preserves continuous transitions and shows gradient-like arrangements.<br>
+                •	They’re showing different aspects of the same manifold — t-SNE = clusters, UMAP = topology.
+                ''',unsafe_allow_html=True)
 
         else:
             st.info("Not enough genres to compute an embedding map.")
+
+        st.divider()
 
         # ===============================================================
         # Genre Taste Stability — Distribution & Median Focus"
         # ===============================================================
 
-        st.markdown("### 🎻 Genre Taste Stability — *Distribution & Median Focus*")
+        st.markdown("### Genre Taste Stability — *Distribution & Median Focus*")
 
         df_vio = df_rolling.copy()
         if year_selected not in ["All Years", "All Time", None, ""]:
@@ -7582,7 +7635,19 @@ elif page == "Taste Index":
 
             st.plotly_chart(fig_violin, width="stretch", config={"displayModeBar": False})
 
-            st.caption("_Per-genre distributions of focus (e.g., box/violin + median)._<br>**How to read:** Higher medians = steadier, core listening for that genre; wider spreads = more volatility (sometimes deep focus, sometimes not).", unsafe_allow_html=True, width="stretch")
+            with st.expander("Learn what this shows"):
+                st.caption(
+                '''
+                _Per-genre distributions of focus_
+
+                Interpretation:<br>
+                    •	Wide violins = volatile genre behaviour.<br>
+                    •	Narrow violins = consistent listening.<br>
+                    •	Bimodal distributions (two peaks) = two behavioural modes: maybe one for “background listening” periods (low focus) and one for “deep dive” periods (high focus).<br>
+                    •	Median line = your central tendency — how focused you usually are when you engage with that genre.
+                ''',unsafe_allow_html=True)
+
+        st.divider()
 
         # ===============================================================
         # 🌋 3D TASTE FOCUS RIDGELINES — Dual-Sided Neon Ribbons (Sorted by Volume)
@@ -7594,7 +7659,7 @@ elif page == "Taste Index":
         from scipy.ndimage import gaussian_filter1d
         import streamlit as st
 
-        st.markdown("### 🌋 3D Taste Focus Ridgelines — *Solid Entropy-Driven Neon Forms (Sorted by Volume)*")
+        st.markdown("### 3D Taste Focus Ridgelines — *Solid Entropy-Driven Neon Forms (Sorted by Volume)*")
 
         # --- Safety check ---
         if "df_rolling" not in locals() or df_rolling.empty:
@@ -7830,7 +7895,25 @@ elif page == "Taste Index":
 
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-        st.caption("_Each ribbon is a genre; height = Taste Focus Index; brightness reflects entropy (variability). Genres are sorted by total “volume” under the curve._<br>**How to read:** Tall, broad ridges mark dominant periods for a genre. Sudden peaks show bursts of attention; dimmer sections indicate more unpredictable listening within that genre.", unsafe_allow_html=True, width="stretch")
+        with st.expander("Learn what this shows"):
+            st.caption(
+            '''
+            _A time-varying view of your Taste Focus Index (Z) per genre across time with entropy as the colour saturation dimension._
+
+            Interpretation:<br>
+                •	High Focus + High Entropy (bright) = intense, diverse immersion (you’re exploring within a genre).<br>
+                •	High Focus + Low Entropy (dark) = single-artist binges or narrow phases.<br>
+                •	Low Focus (flat) = either silence or scattered listening.<br>
+                •	Sloped transitions show entry/exit from obsession phases.<br>
+                •	Sudden peaks show bursts of attention<br>
+                •	Dimmer sections indicate more unpredictable listening within that genre.
+
+            How it differs from Normality Index:<br>
+                •	Normality Index measures how statistically “typical” your listening distribution is within a period.<br>
+                •	Taste Focus Index measures concentration of listening effort (weighted toward dominant genres or artists).<br>
+            Often derived as 1 – normalized_entropy or a scaled form of it.
+            '''
+            ,unsafe_allow_html=True)
 
     else:
         st.info("No Taste Index data available yet — please rerun enrichment to generate results.")

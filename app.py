@@ -6235,32 +6235,81 @@ elif page == "Popularity":
         )
 
     def display_artist_points_chart(chart_hits: pd.DataFrame):
-        """Top 10 artists by total points."""
+        """Top 10 artists by total points (Spotify gradient colorway, matching Top 10 Tracks)."""
+        import pandas as pd
+        import plotly.express as px
+        from plotly.express.colors import sample_colorscale
+
+        # --- Aggregate total points per artist ---
         artist_points = (
-            chart_hits.groupby('artist_name', as_index=False, observed=False)['points_awarded']
+            chart_hits.groupby("artist_name", as_index=False, observed=False)["points_awarded"]
             .sum()
         )
 
-        # Filter > 0 and sort descending
-        artist_points = artist_points[artist_points['points_awarded'] > 0]
-        artist_points = artist_points.sort_values('points_awarded', ascending=True).head(10)
+        # Filter > 0 and keep Top 10 (sorted high → low)
+        artist_points = artist_points[artist_points["points_awarded"] > 0]
+        artist_points = (
+            artist_points.sort_values("points_awarded", ascending=False)
+            .head(10)
+            .reset_index(drop=True)
+        )
 
+        if artist_points.empty:
+            st.info("No chart points to display.")
+            return
+
+        # --- Spotify color gradient (mirror the Top 10 Tracks logic) ---
+        # Assumes `spotify_colorscale` exists in the page scope (same as tracks chart).
+        # Example: a list or named colorscale compatible with plotly.express.colors.sample_colorscale
+        n_artists = len(artist_points)
+        positions = [i / max(1, n_artists - 1) for i in range(n_artists)]
+        sampled_colors = sample_colorscale(spotify_colorscale, positions)
+
+        # Reverse for high→low gradient (consistent with your tracks chart)
+        artist_points["color"] = sampled_colors[::-1]
+
+        # Optional: human-friendly text labels
+        artist_points["points_label"] = artist_points["points_awarded"].round(0).astype(int).astype(str)
+
+        # --- Plot ---
         fig_artists = px.bar(
             artist_points,
-            x='points_awarded',
-            y='artist_name',
-            orientation='h',
-            title='Top 10 Artists by Chart Points',
-            labels={'points_awarded': 'Total Points', 'artist_name': 'Artist'},
-            color_discrete_sequence=['#19ab19'] * len(artist_points),
+            x="points_awarded",
+            y="artist_name",
+            orientation="h",
+            text="points_label",        # attach text to bars
+            color="color",              # use our precomputed hex per row
+            color_discrete_map="identity",
+            title="Top 10 Artists by Chart Points",
+            labels={"points_awarded": "Total Points", "artist_name": "Artist"},
         )
+
+        # --- Style text & layout (match tracks chart look) ---
+        fig_artists.update_traces(
+            texttemplate="%{text}",
+            textposition="inside",
+            insidetextanchor="end",
+            insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+        )
+
+        fig_artists.update_layout(
+            yaxis=dict(categoryorder="total ascending"),  # keep same ordering behavior as tracks chart
+            height=500,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e1ece3", size=14),
+            showlegend=False,
+            margin=dict(l=0, r=0, t=30, b=0),
+        )
+
+        # --- Display ---
         st.plotly_chart(
             fig_artists,
             width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
-            }
+            },
         )
 
     def display_timeline_chart(chart_hits: pd.DataFrame, plot_df: pd.DataFrame, years: list[int], latest_year: int, points_method: str):
@@ -6297,6 +6346,7 @@ elif page == "Popularity":
     def display_popularity_comparison_monthly(user_name, user_monthly, global_monthly, smoothing_window):
         import plotly.graph_objects as go
         import pandas as pd
+        import math
 
         if user_monthly.empty:
             st.warning("⚠️ Not enough data to plot popularity trend for this user.")
@@ -6389,8 +6439,19 @@ elif page == "Popularity":
                     )
                 )
 
+        # --- Dynamic Y-axis: 0 to (max observed * 1.10), clamped at 100 ---
+        max_user = um_smooth["avg_popularity_smooth"].max() if not um_smooth.empty else 0.0
+        max_glob = gm_smooth["avg_popularity_smooth"].max() if not gm_smooth.empty else 0.0
+        max_obs = max(float(max_user or 0.0), float(max_glob or 0.0))
+
+        if max_obs and not math.isnan(max_obs):
+            y_max = min(100.0, max_obs * 1.10)  # add 10% headroom, cap at 100
+        else:
+            y_max = 100.0  # sensible default if everything is zero/NaN
+
+        fig.update_yaxes(range=[0, y_max])
+
         # --- Layout ---
-        fig.update_yaxes(range=[0, 100])
         fig.update_layout(
             title=f"{user_name} vs Global Average — Weighted Popularity (Smoothed)",
             xaxis_title="Month",
@@ -6771,16 +6832,16 @@ elif page == "Popularity":
         # Draw the comparison chart (user vs global)
         display_popularity_comparison_monthly(user_name, um_f, gm_f, smoothing_window)
 
-        st.markdown("### 🧠 Debug: Popularity data overview")
-        st.write("**User monthly:**", user_monthly.shape)
-        st.write("**Global monthly:**", global_monthly.shape)
+        # st.markdown("### 🧠 Debug: Popularity data overview")
+        # st.write("**User monthly:**", user_monthly.shape)
+        # st.write("**Global monthly:**", global_monthly.shape)
 
-        if not user_monthly.empty:
-            st.dataframe(user_monthly.head(), width="stretch", hide_index=True)
-        if not global_monthly.empty:
-            st.dataframe(global_monthly.head(), width="stretch", hide_index=True)
-        else:
-            st.warning("⚠️ Global monthly popularity data is empty — global lines won’t appear.")
+        # if not user_monthly.empty:
+        #     st.dataframe(user_monthly.head(), width="stretch", hide_index=True)
+        # if not global_monthly.empty:
+        #     st.dataframe(global_monthly.head(), width="stretch", hide_index=True)
+        # else:
+        #     st.warning("⚠️ Global monthly popularity data is empty — global lines won’t appear.")
 
         # ---------- Chart scorer drill-down ----------
         if points_df is None or points_df.empty:
@@ -6893,8 +6954,8 @@ elif page == "Taste Index":
     # --- Header ---
     h1, h2, h3 = st.columns([1,3,1])
     with h2:
-        st.html("<p style='text-align: center; font-size: 48px;'><em><b>28-Day Rolling Taste Index</b></em></p>")
-        st.caption("Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.")
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Taste Index</b></em></p>")
+        st.html("<p style='text-align: center; font-size: 20px;'>Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.</p>")
 
     if df_rolling is None and storage_dao is not None:
         try:
@@ -6912,7 +6973,6 @@ elif page == "Taste Index":
     # 🎚️ TASTE STABILITY ANALYSIS DASHBOARD
     # ----------------------------------------------------------------------
     if df_rolling is not None and not df_rolling.empty:
-        st.markdown("## 🎚️ Taste Stability Analysis")
 
         # ===============================================================
         # YEAR FILTER
@@ -6940,7 +7000,7 @@ elif page == "Taste Index":
         # ===============================================================
         # HEATMAP — Taste Stability by Genre and Date
         # ===============================================================
-        st.markdown("### 🎨 Taste Stability Heatmap — *Normality Index by Genre Over Time*")
+        # st.markdown("### Taste Stability Heatmap — *Normality Index by Genre Over Time*")
 
         import plotly.graph_objects as go
 
@@ -6973,7 +7033,7 @@ elif page == "Taste Index":
             ))
 
             fig_heatmap.update_layout(
-                title=f"Taste Stability Heatmap (28-Day Rolling) — {year_selected}",
+                title=f"Taste Stability Heatmap: Normality Index by Genre Over Time — {year_selected}",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="white"),
@@ -6984,6 +7044,8 @@ elif page == "Taste Index":
             )
 
             st.plotly_chart(fig_heatmap, width="stretch", config={"displayModeBar": False})
+
+            st.caption("_Each row is a genre; color shows how “typical” your listening was for that genre in each time window._<br>**How to read:** Bright/strong color = you stuck to the genre’s core sound, darker = you ventured into less typical tracks or didn’t listen much.<br>Vertical bands show phases; long bright rows reveal enduring favorites.", unsafe_allow_html=True)
         else:
             st.info("No data available for heatmap rendering.")
 
@@ -7064,6 +7126,8 @@ elif page == "Taste Index":
         )
 
         st.plotly_chart(fig_trend, width="stretch", config={"displayModeBar": False})
+
+        st.caption("_A time-series of your overall “focus” level averaged across genres._<br>**How to read:** Rising lines = more consistent, core-style listening; falling lines = more eclectic periods.",unsafe_allow_html=True, width="stretch")
 
         # ===============================================================
         # 🔗 GENRE CORRELATION MATRIX — "Taste Interdependence"
@@ -7206,11 +7270,10 @@ elif page == "Taste Index":
 
             st.caption(
                 """
-                *Left: hierarchical clustering of genres (white dendrogram).*
-                *Right: Spearman ρ heatmap (green = positive, red = negative).*
-                Shorter branches indicate more similar listening behaviour.
-                Hover over branches to see linkage distances between clusters.
+                _A correlation heatmap showing how focus in one genre moves with another._<br>
+                **How to read:** Warm blocks (high correlation) = genres you tend to focus on together; cool/negative = trade-offs (when one rises, the other falls). Look for clusters to spot genre families.
                 """
+                , unsafe_allow_html=True
             )
 
         else:
@@ -7318,7 +7381,6 @@ elif page == "Taste Index":
                 order_idx = leaves_list(Z)
                 ordered_genres = df_embedding.iloc[order_idx]["genre"].tolist()
                 st.session_state["ordered_genres_from_embedding"] = ordered_genres
-                st.caption("*Dendrogram ordering derived — used to cluster the correlation heatmap below.*")
             except Exception as e:
                 st.warning(f"Could not compute dendrogram ordering: {e}")
                 ordered_genres = list(df_embedding["genre"])
@@ -7374,14 +7436,17 @@ elif page == "Taste Index":
 
             st.caption(
                 f"""
-                *Each point = a genre.*
-                X–Y from **t-SNE** (local relationships),
-                Z from **{z_axis_choice.upper()}** (UMAP global topology).
-                Bubble size = number of rolling windows.
+                _A 3D map where nearby genres behave similarly in your listening history._
+                <br>
+                **How to read:**
+                 Clusters/islands = genres you treat similarly;
+                Distance = difference;
+                Bubble size = number of rolling windows;
                 Color = average NormalityIndex (listening focus).
-                The dendrogram order is stored in `st.session_state['ordered_genres_from_embedding']`
-                for use by the correlation heatmap below.
+                <br>
+                Moving between islands over time suggests shifts in taste.
                 """
+                , unsafe_allow_html=True
             )
 
         else:
@@ -7516,6 +7581,8 @@ elif page == "Taste Index":
             )
 
             st.plotly_chart(fig_violin, width="stretch", config={"displayModeBar": False})
+
+            st.caption("_Per-genre distributions of focus (e.g., box/violin + median)._<br>**How to read:** Higher medians = steadier, core listening for that genre; wider spreads = more volatility (sometimes deep focus, sometimes not).", unsafe_allow_html=True, width="stretch")
 
         # ===============================================================
         # 🌋 3D TASTE FOCUS RIDGELINES — Dual-Sided Neon Ribbons (Sorted by Volume)
@@ -7737,6 +7804,7 @@ elif page == "Taste Index":
                     ticktext=[str(c) for c in time_vals[::max(1, len(time_vals)//10)]],
                     gridcolor="rgba(255,255,255,0.05)",
                     backgroundcolor="rgba(0,0,0,0)",
+                    autorange="reversed",
                 ),
                 yaxis=dict(
                     title="Genre",
@@ -7761,6 +7829,8 @@ elif page == "Taste Index":
         )
 
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+        st.caption("_Each ribbon is a genre; height = Taste Focus Index; brightness reflects entropy (variability). Genres are sorted by total “volume” under the curve._<br>**How to read:** Tall, broad ridges mark dominant periods for a genre. Sudden peaks show bursts of attention; dimmer sections indicate more unpredictable listening within that genre.", unsafe_allow_html=True, width="stretch")
 
     else:
         st.info("No Taste Index data available yet — please rerun enrichment to generate results.")

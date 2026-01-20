@@ -9,6 +9,7 @@ import traceback
 import sys
 
 from dao import StatusDAO, StorageDAO, InfoTableDAO
+from chart_scraper import get_chart_scrape_manager
 
 # ----------- Master Table Inits ------------ #
 try:
@@ -2652,81 +2653,78 @@ class MetadataEnricher:
         """
         from chart_scorer import compute_chart_scorer_if_missing
 
-        self._check_cancel(self.cancel_event)
+        # Acquire the same manager using the same storage object the scorer uses.
+        # This will BLOCK while the scraper is running, then proceed safely.
+        manager = get_chart_scrape_manager(self.storage)
 
-        charts_path = "reference/info_charts.csv"
-        output_dir = "enrichment/chart_scorer"
+        # ↓↓↓ anything inside this with-block is mutually exclusive with scraping
+        with manager.scoring_barrier():
+            self._check_cancel(self.cancel_event)
 
-        # --- Determine label deterministically (no timestamp) ---
-        label = getattr(self, "label", "unknown")
+            charts_path = "reference/info_charts.csv"
+            output_dir = "enrichment/chart_scorer"
+            label = getattr(self, "label", "unknown")
 
-        # --- Minimal listening view ---
-        cols = [c for c in ["datetime", "artist_name", "track_name"] if c in self.df.columns]
-        listening_view = self.df.loc[:, cols].copy()
+            cols = [c for c in ["datetime", "artist_name", "track_name"] if c in self.df.columns]
+            listening_view = self.df.loc[:, cols].copy()
 
-        # --- Update enrichment status ---
-        self.status.set_status(
-            self.user_id,
-            self.label,
-            phase="chart_scorer",
-            detail=f"Scoring UK Top 50 (Fri→Fri, decay=10) [{label}]",
-            total=self._total_batches,
-        )
-
-        try:
-            # --- Load reference chart data ---
-            charts_df = self.storage.download_csv(path=charts_path)
-            print(f"[ChartScorer] ✅ Loaded charts from R2: {charts_path}")
-
-            # --- Compute results entirely in-memory (no local writes) ---
-            points_df, global_df = compute_chart_scorer_if_missing(
-                user_id=self.user_id,
-                label=label,
-                ts_str=None,  # ignored internally, kept for backward compat
-                listening=listening_view,
-                charts=charts_df,
-                output_dir=None,
-                anchor_weekday=4,
-                max_weeks=5,
-                weekly_decay=10,
-                use_weighting_if_present=True,
-                overwrite=False,
-                cancel_event=self.cancel_event,
-                return_dataframes=True,
-            )
-
-            # --- Upload results deterministically (no timestamps) ---
-            user_parquet_key = f"enrichment/chart_scorer/{self.user_id}_{label}_chart-scores.parquet"
-            global_parquet_key = "enrichment/chart_scorer/global_chart-summaries.parquet"
-
-            if hasattr(self.storage, "upload_parquet"):
-                self.storage.upload_parquet(points_df, path=user_parquet_key, overwrite=True)
-                self.storage.upload_parquet(global_df, path=global_parquet_key, overwrite=True)
-            else:
-                self.storage.upload_csv(points_df, path=user_parquet_key.replace(".parquet", ".csv"))
-                self.storage.upload_csv(global_df, path=global_parquet_key.replace(".parquet", ".csv"))
-
-            # --- Update progress/status ---
-            self._done_batches += 1
-            self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
-            update_heartbeat(self.user_id, self.label)
-
-            # ✅ Mark enrichment complete
-            self.status.finish_standard_status(
+            self.status.set_status(
                 self.user_id,
                 self.label,
-                detail=f"✅ Chart scoring complete ({label}) — standard enrichment fully done",
+                phase="chart_scorer",
+                detail=f"Scoring UK Top 50 (Fri→Fri, decay=10) [{label}]",
+                total=self._total_batches,
             )
-            print(f"[ChartScorer] 🧭 Marked standard enrichment as complete for {self.label}")
 
-        except Exception as e:
-            print(f"[ChartScorer] ❌ Error in chart scorer: {e}")
-            self.status.finish_standard_error(
-                self.user_id,
-                self.label,
-                detail=f"❌ Chart scorer failed: {e}",
-            )
-            raise
+            try:
+                charts_df = self.storage.download_csv(path=charts_path)
+                print(f"[ChartScorer] ✅ Loaded charts from R2: {charts_path}")
+
+                points_df, global_df = compute_chart_scorer_if_missing(
+                    user_id=self.user_id,
+                    label=label,
+                    ts_str=None,
+                    listening=listening_view,
+                    charts=charts_df,
+                    output_dir=None,
+                    anchor_weekday=4,
+                    max_weeks=5,
+                    weekly_decay=10,
+                    use_weighting_if_present=True,
+                    overwrite=False,
+                    cancel_event=self.cancel_event,
+                    return_dataframes=True,
+                )
+
+                user_parquet_key = f"enrichment/chart_scorer/{self.user_id}_{label}_chart-scores.parquet"
+                global_parquet_key = "enrichment/chart_scorer/global_chart-summaries.parquet"
+
+                if hasattr(self.storage, "upload_parquet"):
+                    self.storage.upload_parquet(points_df, path=user_parquet_key, overwrite=True)
+                    self.storage.upload_parquet(global_df, path=global_parquet_key, overwrite=True)
+                else:
+                    self.storage.upload_csv(points_df, path=user_parquet_key.replace('.parquet', '.csv'))
+                    self.storage.upload_csv(global_df, path=global_parquet_key.replace('.parquet', '.csv'))
+
+                self._done_batches += 1
+                self.status.inc_status(self.user_id, self.label, add_batches=1, detail="chart_scorer done")
+                update_heartbeat(self.user_id, self.label)
+
+                self.status.finish_standard_status(
+                    self.user_id,
+                    self.label,
+                    detail=f"✅ Chart scoring complete ({label}) — standard enrichment fully done",
+                )
+                print(f"[ChartScorer] 🧭 Marked standard enrichment as complete for {self.label}")
+
+            except Exception as e:
+                print(f"[ChartScorer] ❌ Error in chart scorer: {e}")
+                self.status.finish_standard_error(
+                    self.user_id,
+                    self.label,
+                    detail=f"❌ Chart scorer failed: {e}",
+                )
+                raise
 
     def run_all(self, cancel_event: Optional[threading.Event] = None):
         """Full enrichment pipeline with detailed debug logging, passing the right
@@ -2734,9 +2732,14 @@ class MetadataEnricher:
         """
         # Keep the same entry behaviour as your latest version
         import traceback
+        from chart_scraper import ensure_info_charts_up_to_date_async
 
         self.cancel_event = cancel_event
         self._load_master_tables()
+
+        # Ensure charts are fresh (spawn background scrape if needed).
+        # Using the same storage DAO the scorer will later use ensures we're auditing the right bucket.
+        ensure_info_charts_up_to_date_async(self.storage, trigger="enrichment_init")
 
         try:
             # --- Planning / batch estimation (unchanged) ---

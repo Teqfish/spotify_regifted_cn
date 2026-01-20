@@ -65,10 +65,8 @@ from dao import CloudflareDAOs
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
 import enrichment_service as es
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release, lock_is_locked
+from chart_scraper import ensure_info_charts_up_to_date_async, get_chart_scrape_manager, run_scrape_now
 from chart_scorer import parse_label_ts_from_table_name
-
-# os.environ["NUMBA_THREADING_LAYER"] = "workqueue"
-# os.environ["NUMBA_NUM_THREADS"] = "1"
 
 # -------------------------------- DEBUGGER ---------------------------------- #
 _DEBUG_SEQ = 0
@@ -403,12 +401,22 @@ def format_hhmmss(minutes):
     seconds = total_seconds % 60
     return f"{hours:02}:{minutes:02}:{seconds:02}"
 
+# --------------------------- Task Registry ---------------------------------- #
 @st.cache_resource(show_spinner=False)
 def task_registry():
     """Persistent global registry of active enrichment threads."""
     if "_enrichment_tasks" not in st.session_state:
         st.session_state["_enrichment_tasks"] = {}
     return st.session_state["_enrichment_tasks"]
+
+@st.cache_resource(show_spinner=False)
+def get_chart_manager(_storage_dao, backend_key: str = SERVER_MODE):
+    """
+    Cache the chart-scrape manager for this process/session.
+    `_storage_dao` is ignored by Streamlit's hasher (leading underscore),
+    while `backend_key` keeps the cache distinct across backends.
+    """
+    return get_chart_scrape_manager(_storage_dao)
 
 # ------------------------------ AUTH FUNCTIONS ------------------------------ #
 def hash_password(password: str) -> str:
@@ -2526,6 +2534,14 @@ st.session_state.setdefault("_enrichment_registry", {
     "dataset_label": None,
 })
 
+# Ensure the singleton manager is created for this process (optional, but explicit)
+_ = get_chart_manager(storage_dao)
+
+# Kick off an audit+background scrape if charts are missing (boot-time, once per session)
+if not st.session_state.get("_charts_boot_started", False):
+    st.session_state["_charts_boot_started"] = True
+    ensure_info_charts_up_to_date_async(storage_dao, trigger="boot")
+
 # If we just logged out, keep skipping cookie-restore until the browser shows it's gone
 if st.session_state.get("_skip_restore"):
     if not cm.get(JWT_COOKIE_NAME):  # cookie really gone now
@@ -2824,6 +2840,9 @@ if page == "Home":
                 height=36,
             )
 
+    # scraped = run_scrape_now(storage_dao)
+    # st.write(f"Scraped {scraped} weeks synchronously.")
+
     # ---------- Main analytics content (only when a dataset is present) ----------
     if has_dataset:
         st.divider()
@@ -3065,8 +3084,8 @@ if page == "Home":
             height=300,
         )
         st.divider()
-    # ---------- Upload New Dataset (always visible) ----------
 
+    # ---------- Upload New Dataset (always visible) ----------
     st.markdown("### Upload a new dataset")
 
     with st.form("upload_form", clear_on_submit=False):
@@ -3123,6 +3142,9 @@ if page == "Home":
                             st.warning(f"⚠️ Could not persist ETL status: {e}")
 
                         st.success("✅ Dataset uploaded & cleaned. Enrichment will now begin in the background.")
+
+                        # After a dataset is successfully uploaded/registered:
+                        ensure_info_charts_up_to_date_async(storage_dao, trigger="dataset_upload")
 
                         from dao_selector import get_log_dao
                         log_dao = get_log_dao()

@@ -513,7 +513,7 @@ class CloudflareDAOs(StatusDAO, StorageDAO):
 
         # --- Add shared public test dataset (visible to all users) ---
         test_user_id = "58d0bd65d3f40b92"
-        test_table_name = "58d0bd65d3f40b92_full-local-18nov_1_20251118-174227_history"
+        test_table_name = "58d0bd65d3f40b92_Charlie's Demo Dataset_20260120-101753_history"
         test_label = "Charlie's Demo Dataset"
 
         # Avoid duplication if this is already the user’s own dataset

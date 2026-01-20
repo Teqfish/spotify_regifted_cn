@@ -1,11 +1,13 @@
 # ----------------------------- INTRO/CREDITS -------------------------------- #
 '''
 An ETL and EDA app for listening habits based on user Spotify listening history.
-Enriched with Discogs API, chart-scraping, and more.
+Enriched with Spotify, Discogs, and Guardian APIs, Official Singles Chart
+web-scraping, and some tasty statistical analyses.
 
 Please contact us to give feedback and feature requests.
 
-Built by Charlie Nash, Ben Gee, Jana Hueppe, & Tom Witt (06.2025)
+v1.1 - Rebuilt by Charlie Nash (01.2026)
+v0.1 - Built by Charlie Nash, Ben Gee, Jana Hueppe, & Tom Witt (06.2025)
 '''
 # --------------------------------- UMAP ------------------------------------- #
 import os
@@ -2576,11 +2578,23 @@ if not st.session_state.user:
             </style>
         """, unsafe_allow_html=True)
 
-        st.image(LOGO_SPOTGREEN, width=400)
+        with st.container(horizontal_alignment="center"):
+            st.image(LOGO_SPOTGREEN, width=400)
+            st.html(
+                """
+                <center>
+                <h2><em>An interactive dashboard for your Spotify activity</h2></em>
+                You will need to request your listening history data from Spotify.<br>
+                To find out how, sign up and read our FAQs.<br>
+                You can explore Charlie's demo data while you wait for your data.
+                </center>
+                """
+            )
+            st.divider()
 
     col1, col2, col3 = st.columns(3)
     with col2:
-        tab_login, tab_signup, tab_help = st.tabs(["Login", "Sign Up", "How To"])
+        tab_login, tab_signup= st.tabs(["Login", "Sign Up"])
 
         # --- LOGIN TAB ---
         with tab_login:
@@ -2623,17 +2637,6 @@ if not st.session_state.user:
                         errors = msg if isinstance(msg, list) else [msg]
                         for e in errors:
                             st.error(e)
-
-        # --- HELP TAB ---
-        with tab_help:
-            st.markdown("### Welcome to Regifted!")
-            st.write(
-                """
-                *(This section is for onboarding help — you can fill it in with your FAQs,
-                instructions on exporting Spotify data, and any screenshots or links users
-                might need.)*
-                """
-            )
 
         st.stop()
 
@@ -2764,7 +2767,6 @@ with st.sidebar:
             "Taste Index",
             "On This Day",
             "FAQs",
-            "About"
         ],
     )
 
@@ -2839,9 +2841,6 @@ if page == "Home":
                 background=False,
                 height=36,
             )
-
-    # scraped = run_scrape_now(storage_dao)
-    # st.write(f"Scraped {scraped} weeks synchronously.")
 
     # ---------- Main analytics content (only when a dataset is present) ----------
     if has_dataset:
@@ -8134,37 +8133,84 @@ elif page == "On This Day":
 elif page == "FAQs":
 
     st.session_state["last_page"] = "FAQs"
+        # --- Header ---
+    h1, h2, h3 = st.columns([1,3,1])
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>FAQs</b></em></p>")
 
-    col1,col2,col3 = st.columns([3, 3, 1], vertical_alignment="center")
-
-    # st.markdown("<h1 style='text-align: center;'>How to request your Spotify data</h1>", unsafe_allow_html=True)
-    # st.markdown("<h3>In order to request the extended streaming history files, simply press the correct buttons on the Spotify website.</h3>", unsafe_allow_html=True)
-    # st.markdown('1. To get started, open the <a href="https://www.spotify.com/account/privacy/" target="_blank">Spotify Privacy Page</a> on the Spotify website.', unsafe_allow_html=True)
-    # st.markdown('2. Scroll down to the "Download your data" section and Configure the page so it looks like the screenshot below (Unticked the "Account data" and ticked the "Extended streaming history" boxes).', unsafe_allow_html=True)
-    # col1,col2,col3 = st.columns([1, 3, 1], vertical_alignment='center')
-    # with col2:
-    #     st.image('media/faqs/download_settings.png', width=600)
-
-    # st.markdown('3. Press the "Request data" button.')
-    # st.markdown('')
-    # st.markdown('4. You will receive an email from Spotify with a link to download your data. Click on the link in the email to access your data.')
-    # st.image('media/faqs/confirm_request.png', width=1200)
-    # st.markdown('')
-    # st.markdown("<h3>5. Wait until you receive your data. (This may take up to 30 days)</h3>", unsafe_allow_html=True)
-    # st.markdown('6. Once you receive the email, download the ZIP file containing your data.')
-    # st.markdown('This file will contain personal information, so please be careful with it.')
-    # st.image('media/faqs/Download_json.png', width=1200)
-    # st.markdown('')
-    # st.markdown('')
-
-    # st.markdown("<h1>7. Drag and drop your zipped folder into the Home page.</h1>", unsafe_allow_html=True)
-
-    st.image("media/faqs/image1.svg")
-    st.image("media/faqs/image2.svg")
-    st.image("media/faqs/image3.svg")
-    st.image("media/faqs/image4.svg")
-    st.image("media/faqs/image5.svg")
-
-# -------------------------------- About ------------------------------------- #
-elif page == "About":
-    st.markdown("This project began as a small, locally run dashboard built by a four-person team for a data analytics course. The first version handled a simple upload/ETL flow and a handful of visualizations—top artists, albums, genres, a yearly timeline—and some light enrichment to pull artwork and Spotify popularity via APIs. We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control, conflict resolution, and shipping something that worked—even if only for a demo. Since then I’ve rebuilt the app from the ground up. It now includes authentication and cookies; automated ETL and enrichment using Spotify and Discogs; a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts); and expanded popularity scoring with richer visuals. A new “normality” section explores taste and mood clustering with early-stage ML. Behind the scenes, robust logging lets long jobs pause and resume, while scheduled scrapers keep UK Singles Chart data and Guardian headlines fresh for features like “On this day.” After testing BigQuery, Supabase, and a Google VM, the app now runs on Streamlit Cloud with storage on Cloudflare, with DAO layers abstracting the back ends. User and enrichment data live in CSVs for now (parquet is next), and auth/logs sit in a database. Next up: optional, recurring Spotify ingestion so users don’t have to request exports each time. It’s not trying to be a flashy product—just a careful, end-to-end build that turns raw listening history into something insightful and fun. If you’re hiring, this is the kind of scrappy-to-scalable work I love.")
+    with st.expander("1\. How do I request my Spotify listening data?"):
+        st.image("media/faqs/image1.svg")
+        st.divider()
+        st.image("media/faqs/image2-3.svg")
+        st.divider()
+        st.image("media/faqs/image4-5.svg")
+    with st.expander("2\. Who made this?"):
+        st.markdown('''
+            <ul>
+                <li>This app began as a small, locally run dashboard built by a four-person team as a final project for a data analytics course.</li>
+                <li>That team comprised of Charlie Nash (me), Ben Garalnick, Jana Hueppe, and Tom Witt.</li>
+                <li>That first version used a simple upload/ETL flow and a handful of visualizations — top artists, albums, genres, a yearly timeline — and some light enrichment to pull artwork and Spotify popularity via APIs.</li>
+                <li>We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control, conflict resolution, and shipping something that worked — even if only for a demo.</li>
+                <li>For this deployed version, I rewrote the whole thing and added a ton of new features. It now includes authentication and cookies, automated ETL and data enrichment using Spotify and Discogs, a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts), expanded popularity and chart scoring with richer visuals, and a statistical deep-dive into the relationships between normality, genres, and time.</li>
+            </ul>''',unsafe_allow_html=True)
+    with st.expander("3\. What's all that stuff about taste?"):
+        st.markdown('''
+            The new “Taste Index” tries to bundle various statistical qualities of a user's listening behaviour into a single number to describe how mood and focus changes over time.  From this we can infer whether periods were focussed and critical vs background listening, high energy vs contemplative, or when the kids were making song requests.
+            ''',unsafe_allow_html=True)
+        st.latex(r'''
+            \mathrm{TasteIndex} = (1 - p)\,(1 - H)\,\frac{1}{1 + |k|}
+            ''')
+        st.markdown('''
+            Where:
+            <ul>
+                <li>p = normality p-value</li>
+                <li>H = normalized entropy (0–1)</li>
+                <li>k = kurtosis</li>
+            </ul>
+            p-value in statistics:
+            <ul>
+                <li>It’s the probability that the observed distribution could occur by chance if the null hypothesis (normal distribution) were true.</li>
+                <li>High p → data fits expected (random/normal) distribution.</li>
+                <li>Low p → data significantly deviates (non-random, structured behaviour).</li>
+            </ul>
+            In listening behaviour terms:
+            <ul>
+                <li>High p = your listening that period is balanced across artists (like a Gaussian curve).</li>
+                <li>Low p = your listening is skewed — maybe one artist dominates.</li>
+            </ul>
+            Entropy is a measure of <em>disorder</em> or <em>diversity</em>.
+            <ul>
+                <li>High entropy (≈1) → very diverse listening (many artists, roughly equal shares).</li>
+                <li>Low entropy (≈0) → focused on few artists.</li>
+            </ul>
+            This means:
+            <ul>
+                <li>Low p (non-normal behaviour) increases focus score</li>
+                <li>Low entropy (narrow listening) increases focus</li>
+                <li>Moderate kurtosis (no heavy tails) stabilizes the score</li>
+            </ul>
+            ''',unsafe_allow_html=True)
+    with st.expander("4\. What's the stack, bro?"):
+        st.markdown('''
+            <ol>
+                <li>Streamlit (UI + hosting)
+                <li>Cloudflare R2 & D1 (data warehouse)
+                <li>Pandas (data wrangling)
+                <li>Matlibplot/Plotly (visualisations)
+                <li>Spotify, Discogs, Guardian APIs (data enrichment)
+                <li>BeautifulSoup4 + Official Singles Charts (scraping)
+                <li>Scipy/Sklearn (ML statistics processing)
+            </ol>
+                The main design constraint was that this app needed to be deployed and stored for free somewhere in the ether.<br>
+                Behind the scenes, robust logging lets long jobs pause and resume, extensive thread management allows a multitude of background tasks to run concurrently, scheduled scrapers keep UK Singles Chart data and Guardian headlines fresh for features like “On this day, and DAO layers abstract the IO for easy server switching.”
+            ''',unsafe_allow_html=True)
+    with st.expander("5\. What's next on the horizon for the app?"):
+        st.markdown('''
+            <ul>
+                <li>Try to integrate recurring Spotify ingestion so users don’t have to request exports each time.</li>
+                <li>Find a more generous alternative to Gemini's free tier for the genre_detective.</li>
+                <li>Allow up to three supergenres per artist when enriching.  Using just one supergenre creates too much inaccuracy IMHO.</li>
+            </ul>
+            ''',unsafe_allow_html=True)
+    with st.expander("6\. I need a data analyst/engineer like Charlie in my life.  How can I hire him?"):
+        st.markdown("How presumptious of you.  Please contact Charlie at teqfish.uk@gmail.com for his availability and to say 'hi'.")

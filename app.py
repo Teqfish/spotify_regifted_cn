@@ -65,10 +65,8 @@ from dao import CloudflareDAOs
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
 import enrichment_service as es
 from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release, lock_is_locked
+from chart_scraper import ensure_info_charts_up_to_date_async, get_chart_scrape_manager, run_scrape_now
 from chart_scorer import parse_label_ts_from_table_name
-
-# os.environ["NUMBA_THREADING_LAYER"] = "workqueue"
-# os.environ["NUMBA_NUM_THREADS"] = "1"
 
 # -------------------------------- DEBUGGER ---------------------------------- #
 _DEBUG_SEQ = 0
@@ -403,12 +401,22 @@ def format_hhmmss(minutes):
     seconds = total_seconds % 60
     return f"{hours:02}:{minutes:02}:{seconds:02}"
 
+# --------------------------- Task Registry ---------------------------------- #
 @st.cache_resource(show_spinner=False)
 def task_registry():
     """Persistent global registry of active enrichment threads."""
     if "_enrichment_tasks" not in st.session_state:
         st.session_state["_enrichment_tasks"] = {}
     return st.session_state["_enrichment_tasks"]
+
+@st.cache_resource(show_spinner=False)
+def get_chart_manager(_storage_dao, backend_key: str = SERVER_MODE):
+    """
+    Cache the chart-scrape manager for this process/session.
+    `_storage_dao` is ignored by Streamlit's hasher (leading underscore),
+    while `backend_key` keeps the cache distinct across backends.
+    """
+    return get_chart_scrape_manager(_storage_dao)
 
 # ------------------------------ AUTH FUNCTIONS ------------------------------ #
 def hash_password(password: str) -> str:
@@ -1556,6 +1564,7 @@ def background_enrich(
             pool = DiscogsWorkerPool(num_workers=num_workers)
             pool.result_queue = queue.Queue()  # results local to this pool
             pool.job_queue = q                  # attach private queue
+            pool.ensure_worker_pool()   # make sure workers are actually running
             return pool
 
         # --- Helper: poison-pill shutdown ---
@@ -2198,61 +2207,61 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
         else:
             st.caption(f"This dataset has been fully enriched")
 
-    with st.sidebar.expander("Background Threads", expanded=False):
-        info = _summarize_threads_for_sidebar()
+    # with st.sidebar.expander("Background Threads", expanded=False):
+    #     info = _summarize_threads_for_sidebar()
 
-        # Top-line totals
-        st.caption(f"Total threads: {info['total']}")
+    #     # Top-line totals
+    #     st.caption(f"Total threads: {info['total']}")
 
-        # Show grouped metrics
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Enrichment", info["enrichment"]["count"])
-        c2.metric("Genre Detective", info["genre_detective"]["count"])
-        c3.metric("Discogs", info["discogs"]["count"])
+    #     # Show grouped metrics
+    #     c1, c2, c3 = st.columns(3)
+    #     c1.metric("Enrichment", info["enrichment"]["count"])
+    #     c2.metric("Genre Detective", info["genre_detective"]["count"])
+    #     c3.metric("Discogs", info["discogs"]["count"])
 
-        c4, c5, _ = st.columns(3)
-        c4.metric("Core", info["core"]["count"])
-        c5.metric("Other", info["other"]["count"])
+    #     c4, c5, _ = st.columns(3)
+    #     c4.metric("Core", info["core"]["count"])
+    #     c5.metric("Other", info["other"]["count"])
 
-        st.divider()
-        colA, colB = st.columns(2)
+    #     st.divider()
+    #     colA, colB = st.columns(2)
 
-        if colA.button("🧹 Reap registry", key="btn_reap_registry"):
-            cleared = reap_task_registry(verbose=True)
-            if cleared:
-                st.success(f"Reaped {len(cleared)} stale entr{'y' if len(cleared)==1 else 'ies'}.")
-            else:
-                st.info("No stale entries to reap.")
+    #     if colA.button("🧹 Reap registry", key="btn_reap_registry"):
+    #         cleared = reap_task_registry(verbose=True)
+    #         if cleared:
+    #             st.success(f"Reaped {len(cleared)} stale entr{'y' if len(cleared)==1 else 'ies'}.")
+    #         else:
+    #             st.info("No stale entries to reap.")
 
-        if colB.button("⛔ Stop genre detective", key="btn_stop_gd"):
-            n = stop_genre_detective_workers()
-            if n:
-                st.warning(f"Signalled stop to {n} genre detective worker(s).")
-            else:
-                st.info("No active genre detective workers to stop.")
+    #     if colB.button("⛔ Stop genre detective", key="btn_stop_gd"):
+    #         n = stop_genre_detective_workers()
+    #         if n:
+    #             st.warning(f"Signalled stop to {n} genre detective worker(s).")
+    #         else:
+    #             st.info("No active genre detective workers to stop.")
 
-        # Optional: reveal names
-        if st.checkbox("Show thread names", key="bg_threads_show_names"):
-            def _list(names):
-                if not names:
-                    st.caption("—")
-                else:
-                    st.code("\n".join(names), language="text")
+    #     # Optional: reveal names
+    #     if st.checkbox("Show thread names", key="bg_threads_show_names"):
+    #         def _list(names):
+    #             if not names:
+    #                 st.caption("—")
+    #             else:
+    #                 st.code("\n".join(names), language="text")
 
-            with st.expander("Enrichment", expanded=False):
-                _list(info["enrichment"]["names"])
+    #         with st.expander("Enrichment", expanded=False):
+    #             _list(info["enrichment"]["names"])
 
-            with st.expander("Genre Detective", expanded=False):
-                _list(info["genre_detective"]["names"])
+    #         with st.expander("Genre Detective", expanded=False):
+    #             _list(info["genre_detective"]["names"])
 
-            with st.expander("Discogs", expanded=False):
-                _list(info["discogs"]["names"])
+    #         with st.expander("Discogs", expanded=False):
+    #             _list(info["discogs"]["names"])
 
-            with st.expander("Core", expanded=False):
-                _list(info["core"]["names"])
+    #         with st.expander("Core", expanded=False):
+    #             _list(info["core"]["names"])
 
-            with st.expander("Other", expanded=False):
-                _list(info["other"]["names"])
+    #         with st.expander("Other", expanded=False):
+    #             _list(info["other"]["names"])
 
 # ------------------------------ GENRE DETECTIVE ----------------------------- #
 def start_missing_genre_detective_task(
@@ -2525,6 +2534,14 @@ st.session_state.setdefault("_enrichment_registry", {
     "dataset_label": None,
 })
 
+# Ensure the singleton manager is created for this process (optional, but explicit)
+_ = get_chart_manager(storage_dao)
+
+# Kick off an audit+background scrape if charts are missing (boot-time, once per session)
+if not st.session_state.get("_charts_boot_started", False):
+    st.session_state["_charts_boot_started"] = True
+    ensure_info_charts_up_to_date_async(storage_dao, trigger="boot")
+
 # If we just logged out, keep skipping cookie-restore until the browser shows it's gone
 if st.session_state.get("_skip_restore"):
     if not cm.get(JWT_COOKIE_NAME):  # cookie really gone now
@@ -2744,7 +2761,7 @@ with st.sidebar:
             "Artists",
             "Genres",
             "Popularity",
-            "Taste",
+            "Taste Index",
             "On This Day",
             "FAQs",
             "About"
@@ -2822,6 +2839,9 @@ if page == "Home":
                 background=False,
                 height=36,
             )
+
+    # scraped = run_scrape_now(storage_dao)
+    # st.write(f"Scraped {scraped} weeks synchronously.")
 
     # ---------- Main analytics content (only when a dataset is present) ----------
     if has_dataset:
@@ -3064,8 +3084,8 @@ if page == "Home":
             height=300,
         )
         st.divider()
-    # ---------- Upload New Dataset (always visible) ----------
 
+    # ---------- Upload New Dataset (always visible) ----------
     st.markdown("### Upload a new dataset")
 
     with st.form("upload_form", clear_on_submit=False):
@@ -3122,6 +3142,9 @@ if page == "Home":
                             st.warning(f"⚠️ Could not persist ETL status: {e}")
 
                         st.success("✅ Dataset uploaded & cleaned. Enrichment will now begin in the background.")
+
+                        # After a dataset is successfully uploaded/registered:
+                        ensure_info_charts_up_to_date_async(storage_dao, trigger="dataset_upload")
 
                         from dao_selector import get_log_dao
                         log_dao = get_log_dao()
@@ -6234,32 +6257,81 @@ elif page == "Popularity":
         )
 
     def display_artist_points_chart(chart_hits: pd.DataFrame):
-        """Top 10 artists by total points."""
+        """Top 10 artists by total points (Spotify gradient colorway, matching Top 10 Tracks)."""
+        import pandas as pd
+        import plotly.express as px
+        from plotly.express.colors import sample_colorscale
+
+        # --- Aggregate total points per artist ---
         artist_points = (
-            chart_hits.groupby('artist_name', as_index=False, observed=False)['points_awarded']
+            chart_hits.groupby("artist_name", as_index=False, observed=False)["points_awarded"]
             .sum()
         )
 
-        # Filter > 0 and sort descending
-        artist_points = artist_points[artist_points['points_awarded'] > 0]
-        artist_points = artist_points.sort_values('points_awarded', ascending=True).head(10)
+        # Filter > 0 and keep Top 10 (sorted high → low)
+        artist_points = artist_points[artist_points["points_awarded"] > 0]
+        artist_points = (
+            artist_points.sort_values("points_awarded", ascending=False)
+            .head(10)
+            .reset_index(drop=True)
+        )
 
+        if artist_points.empty:
+            st.info("No chart points to display.")
+            return
+
+        # --- Spotify color gradient (mirror the Top 10 Tracks logic) ---
+        # Assumes `spotify_colorscale` exists in the page scope (same as tracks chart).
+        # Example: a list or named colorscale compatible with plotly.express.colors.sample_colorscale
+        n_artists = len(artist_points)
+        positions = [i / max(1, n_artists - 1) for i in range(n_artists)]
+        sampled_colors = sample_colorscale(spotify_colorscale, positions)
+
+        # Reverse for high→low gradient (consistent with your tracks chart)
+        artist_points["color"] = sampled_colors[::-1]
+
+        # Optional: human-friendly text labels
+        artist_points["points_label"] = artist_points["points_awarded"].round(0).astype(int).astype(str)
+
+        # --- Plot ---
         fig_artists = px.bar(
             artist_points,
-            x='points_awarded',
-            y='artist_name',
-            orientation='h',
-            title='Top 10 Artists by Chart Points',
-            labels={'points_awarded': 'Total Points', 'artist_name': 'Artist'},
-            color_discrete_sequence=['#19ab19'] * len(artist_points),
+            x="points_awarded",
+            y="artist_name",
+            orientation="h",
+            text="points_label",        # attach text to bars
+            color="color",              # use our precomputed hex per row
+            color_discrete_map="identity",
+            title="Top 10 Artists by Chart Points",
+            labels={"points_awarded": "Total Points", "artist_name": "Artist"},
         )
+
+        # --- Style text & layout (match tracks chart look) ---
+        fig_artists.update_traces(
+            texttemplate="%{text}",
+            textposition="inside",
+            insidetextanchor="end",
+            insidetextfont=dict(color="#000B06", size=12, family="Arial"),
+        )
+
+        fig_artists.update_layout(
+            yaxis=dict(categoryorder="total ascending"),  # keep same ordering behavior as tracks chart
+            height=500,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e1ece3", size=14),
+            showlegend=False,
+            margin=dict(l=0, r=0, t=30, b=0),
+        )
+
+        # --- Display ---
         st.plotly_chart(
             fig_artists,
             width="stretch",
             config={
                 "displayModeBar": False,
                 "responsive": True,
-            }
+            },
         )
 
     def display_timeline_chart(chart_hits: pd.DataFrame, plot_df: pd.DataFrame, years: list[int], latest_year: int, points_method: str):
@@ -6296,6 +6368,7 @@ elif page == "Popularity":
     def display_popularity_comparison_monthly(user_name, user_monthly, global_monthly, smoothing_window):
         import plotly.graph_objects as go
         import pandas as pd
+        import math
 
         if user_monthly.empty:
             st.warning("⚠️ Not enough data to plot popularity trend for this user.")
@@ -6388,8 +6461,19 @@ elif page == "Popularity":
                     )
                 )
 
+        # --- Dynamic Y-axis: 0 to (max observed * 1.10), clamped at 100 ---
+        max_user = um_smooth["avg_popularity_smooth"].max() if not um_smooth.empty else 0.0
+        max_glob = gm_smooth["avg_popularity_smooth"].max() if not gm_smooth.empty else 0.0
+        max_obs = max(float(max_user or 0.0), float(max_glob or 0.0))
+
+        if max_obs and not math.isnan(max_obs):
+            y_max = min(100.0, max_obs * 1.10)  # add 10% headroom, cap at 100
+        else:
+            y_max = 100.0  # sensible default if everything is zero/NaN
+
+        fig.update_yaxes(range=[0, y_max])
+
         # --- Layout ---
-        fig.update_yaxes(range=[0, 100])
         fig.update_layout(
             title=f"{user_name} vs Global Average — Weighted Popularity (Smoothed)",
             xaxis_title="Month",
@@ -6770,16 +6854,16 @@ elif page == "Popularity":
         # Draw the comparison chart (user vs global)
         display_popularity_comparison_monthly(user_name, um_f, gm_f, smoothing_window)
 
-        st.markdown("### 🧠 Debug: Popularity data overview")
-        st.write("**User monthly:**", user_monthly.shape)
-        st.write("**Global monthly:**", global_monthly.shape)
+        # st.markdown("### 🧠 Debug: Popularity data overview")
+        # st.write("**User monthly:**", user_monthly.shape)
+        # st.write("**Global monthly:**", global_monthly.shape)
 
-        if not user_monthly.empty:
-            st.dataframe(user_monthly.head(), width="stretch", hide_index=True)
-        if not global_monthly.empty:
-            st.dataframe(global_monthly.head(), width="stretch", hide_index=True)
-        else:
-            st.warning("⚠️ Global monthly popularity data is empty — global lines won’t appear.")
+        # if not user_monthly.empty:
+        #     st.dataframe(user_monthly.head(), width="stretch", hide_index=True)
+        # if not global_monthly.empty:
+        #     st.dataframe(global_monthly.head(), width="stretch", hide_index=True)
+        # else:
+        #     st.warning("⚠️ Global monthly popularity data is empty — global lines won’t appear.")
 
         # ---------- Chart scorer drill-down ----------
         if points_df is None or points_df.empty:
@@ -6857,7 +6941,7 @@ elif page == "Popularity":
             st.info("No chart hits scored in the selected period yet.")
 
 # -------------------------------- Taste ------------------------------------- #
-elif page == "Taste":
+elif page == "Taste Index":
     # ----------------------------------------------------------------------
     # 🎧 DATASET VALIDATION & LOADING
     # ----------------------------------------------------------------------
@@ -6889,21 +6973,11 @@ elif page == "Taste":
     # ----------------------------------------------------------------------
     # ☁️ LOAD TASTE INDEX RESULTS (NO COMPUTATION)
     # ----------------------------------------------------------------------
-    st.markdown("### 🧮 28-Day Rolling Taste Index")
-    st.caption("Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.")
-
-    # if storage_dao is not None:
-    #     print("🧩 Debug: checking Taste Index file existence in R2...")
-    #     try:
-    #         r2 = storage_dao.r2
-    #         resp = r2.list_objects(Bucket=storage_dao.bucket, Prefix="enrichment/taste_index/")
-    #         keys = [obj["Key"] for obj in resp.get("Contents", [])]
-    #         print("Available keys:", keys[:10])  # first few
-    #         print("Expected key:", parquet_key)
-    #     except Exception as e:
-    #         print(f"Could not list objects: {e}")
-    # else:
-    #     print(f"[Taste DEBUG] It empty bitch")
+    # --- Header ---
+    h1, h2, h3 = st.columns([1,3,1])
+    with h2:
+        st.html("<p style='text-align: center; font-size: 48px;'><em><b>Taste Index</b></em></p>")
+        st.html("<p style='text-align: center; font-size: 20px;'>Your personalized 28-day rolling Taste Index tracks musical diversity and normality over time.</p>")
 
     if df_rolling is None and storage_dao is not None:
         try:
@@ -6921,7 +6995,6 @@ elif page == "Taste":
     # 🎚️ TASTE STABILITY ANALYSIS DASHBOARD
     # ----------------------------------------------------------------------
     if df_rolling is not None and not df_rolling.empty:
-        st.markdown("## 🎚️ Taste Stability Analysis")
 
         # ===============================================================
         # YEAR FILTER
@@ -6949,7 +7022,7 @@ elif page == "Taste":
         # ===============================================================
         # HEATMAP — Taste Stability by Genre and Date
         # ===============================================================
-        st.markdown("### 🎨 Taste Stability Heatmap — *Normality Index by Genre Over Time*")
+        # st.markdown("### Taste Stability Heatmap — *Normality Index by Genre Over Time*")
 
         import plotly.graph_objects as go
 
@@ -6982,7 +7055,7 @@ elif page == "Taste":
             ))
 
             fig_heatmap.update_layout(
-                title=f"Taste Stability Heatmap (28-Day Rolling) — {year_selected}",
+                title=f"Taste Stability Heatmap: Normality Index by Genre Over Time — {year_selected}",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="white"),
@@ -6993,8 +7066,27 @@ elif page == "Taste":
             )
 
             st.plotly_chart(fig_heatmap, width="stretch", config={"displayModeBar": False})
+
+            with st.expander("Learn what this shows"):
+                st.caption(
+                '''
+                _A grid of genres (rows) vs. time (columns), colorized by Normality Index._
+
+                Interpretation:<br>
+                    •	Bright or intense streaks = periods of focused listening (low entropy, high concentration).<br>
+                    •	Muted zones = eclectic or unfocused periods.<br>
+                    •	Genre rows with frequent “bright bursts” show recurring passion cycles.<br>
+                    •	If one genre line is bright for long stretches → that’s your musical core identity.
+
+                How to use it:<br>
+                    •	As a timeline of obsessions — e.g., “this was my punk phase” or “ambient streak during winter.”<br>
+                    •	Cross-check with the genre correlation heatmap to see if these bursts coincide with dips in other genres (mutual exclusivity).<br>
+                    •	Compare to the Taste Focus 3D chart for confirming the same spikes.
+                ''',unsafe_allow_html=True)
         else:
             st.info("No data available for heatmap rendering.")
+
+        st.divider()
 
         # ===============================================================
         # TREND — Average NormalityIndex Across All Genres
@@ -7073,6 +7165,20 @@ elif page == "Taste":
         )
 
         st.plotly_chart(fig_trend, width="stretch", config={"displayModeBar": False})
+
+        with st.expander("Learn what this shows"):
+            st.caption(
+            '''
+            _A time-series of your overall “focus” level averaged across genres._
+
+            Interpretation:<br>
+                •	Peaks = periods of consistency or deep focus.<br>
+                •	Valleys = periods of eclectic exploration or listening chaos.<br>
+                •	Long-term slope = are you getting more diverse or more focused with age?
+
+            ''',unsafe_allow_html=True)
+
+        st.divider()
 
         # ===============================================================
         # 🔗 GENRE CORRELATION MATRIX — "Taste Interdependence"
@@ -7213,17 +7319,28 @@ elif page == "Taste":
 
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False,"staticPlot": False})
 
-            st.caption(
-                """
-                *Left: hierarchical clustering of genres (white dendrogram).*
-                *Right: Spearman ρ heatmap (green = positive, red = negative).*
-                Shorter branches indicate more similar listening behaviour.
-                Hover over branches to see linkage distances between clusters.
-                """
-            )
+            with st.expander("Learn what this shows"):
+                st.caption(
+                '''
+                _Pairwise correlation between genres’ time series of normality or focus scores._
+
+                Interpretation:<br>
+                    •	Bright Green (high correlation) = you treat both genres the same way (rise and fall together).<br>
+                    •	Grey = no relationship.<br>
+                    •	Deep Red (low correlation)= they’re opposites — when one’s up, the other’s down.<br>
+                → e.g., “punk” vs “classical” or “metal” vs “ambient”.
+
+                What else it tells you:<br>
+                    •	Clusters of high positive correlation = genres that form “taste families”.<br>
+                    •	Strong negative edges = substitution effects (you swap between them).<br>
+                    •	The overall density of positive vs negative = how modular your taste ecosystem is.
+
+                ''',unsafe_allow_html=True)
 
         else:
             st.warning("⚠️ No valid data available for taste stability analysis.")
+
+        st.divider()
 
         # ===============================================================
         # 🧭 GENRE EMBEDDING MAP — *t-SNE/UMAP Projection of Genre Stability*
@@ -7327,7 +7444,6 @@ elif page == "Taste":
                 order_idx = leaves_list(Z)
                 ordered_genres = df_embedding.iloc[order_idx]["genre"].tolist()
                 st.session_state["ordered_genres_from_embedding"] = ordered_genres
-                st.caption("*Dendrogram ordering derived — used to cluster the correlation heatmap below.*")
             except Exception as e:
                 st.warning(f"Could not compute dendrogram ordering: {e}")
                 ordered_genres = list(df_embedding["genre"])
@@ -7381,26 +7497,41 @@ elif page == "Taste":
 
             st.plotly_chart(fig_3d, width="stretch", config={"displayModeBar": False})
 
-            st.caption(
-                f"""
-                *Each point = a genre.*
-                X–Y from **t-SNE** (local relationships),
-                Z from **{z_axis_choice.upper()}** (UMAP global topology).
-                Bubble size = number of rolling windows.
-                Color = average NormalityIndex (listening focus).
-                The dendrogram order is stored in `st.session_state['ordered_genres_from_embedding']`
-                for use by the correlation heatmap below.
-                """
-            )
+            with st.expander("Learn what this shows"):
+                st.caption(
+                '''
+                _Each genre as a point, positioned based on the similarity of its stability pattern over time._<br>
+
+                How to read:<br>
+                •	Clusters/islands = genres you treat similarly.<br>
+                •	Distance = difference.<br>
+                •	Bubble size = number of rolling windows (popularity).<br>
+                •	Colour = average NormalityIndex (listening focus).
+
+                Interpretation:<br>
+                •	Nearby genres fluctuate in similar ways (they’re “emotionally co-activated”).<br>
+                •	Distant genres behave differently (different listening moods).<br>
+                •	Bright colour bubbles = genres you immerse in deeply.
+
+                Why “All Years” might look diffuse:<br>
+                Because across years, your patterns change — so the algorithm tries to average incompatible temporal trajectories into one 2D manifold.
+
+                Why t-SNE and UMAP differ:<br>
+                •	t-SNE exaggerates small local differences and clusters small groups strongly.<br>
+                •	UMAP preserves continuous transitions and shows gradient-like arrangements.<br>
+                •	They’re showing different aspects of the same manifold — t-SNE = clusters, UMAP = topology.
+                ''',unsafe_allow_html=True)
 
         else:
             st.info("Not enough genres to compute an embedding map.")
+
+        st.divider()
 
         # ===============================================================
         # Genre Taste Stability — Distribution & Median Focus"
         # ===============================================================
 
-        st.markdown("### 🎻 Genre Taste Stability — *Distribution & Median Focus*")
+        st.markdown("### Genre Taste Stability — *Distribution & Median Focus*")
 
         df_vio = df_rolling.copy()
         if year_selected not in ["All Years", "All Time", None, ""]:
@@ -7526,6 +7657,20 @@ elif page == "Taste":
 
             st.plotly_chart(fig_violin, width="stretch", config={"displayModeBar": False})
 
+            with st.expander("Learn what this shows"):
+                st.caption(
+                '''
+                _Per-genre distributions of focus_
+
+                Interpretation:<br>
+                    •	Wide violins = volatile genre behaviour.<br>
+                    •	Narrow violins = consistent listening.<br>
+                    •	Bimodal distributions (two peaks) = two behavioural modes: maybe one for “background listening” periods (low focus) and one for “deep dive” periods (high focus).<br>
+                    •	Median line = your central tendency — how focused you usually are when you engage with that genre.
+                ''',unsafe_allow_html=True)
+
+        st.divider()
+
         # ===============================================================
         # 🌋 3D TASTE FOCUS RIDGELINES — Dual-Sided Neon Ribbons (Sorted by Volume)
         # ===============================================================
@@ -7536,7 +7681,7 @@ elif page == "Taste":
         from scipy.ndimage import gaussian_filter1d
         import streamlit as st
 
-        st.markdown("### 🌋 3D Taste Focus Ridgelines — *Solid Entropy-Driven Neon Forms (Sorted by Volume)*")
+        st.markdown("### 3D Taste Focus Ridgelines — *Solid Entropy-Driven Neon Forms (Sorted by Volume)*")
 
         # --- Safety check ---
         if "df_rolling" not in locals() or df_rolling.empty:
@@ -7746,6 +7891,7 @@ elif page == "Taste":
                     ticktext=[str(c) for c in time_vals[::max(1, len(time_vals)//10)]],
                     gridcolor="rgba(255,255,255,0.05)",
                     backgroundcolor="rgba(0,0,0,0)",
+                    autorange="reversed",
                 ),
                 yaxis=dict(
                     title="Genre",
@@ -7770,6 +7916,26 @@ elif page == "Taste":
         )
 
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+        with st.expander("Learn what this shows"):
+            st.caption(
+            '''
+            _A time-varying view of your Taste Focus Index (Z) per genre across time with entropy as the colour saturation dimension._
+
+            Interpretation:<br>
+                •	High Focus + High Entropy (bright) = intense, diverse immersion (you’re exploring within a genre).<br>
+                •	High Focus + Low Entropy (dark) = single-artist binges or narrow phases.<br>
+                •	Low Focus (flat) = either silence or scattered listening.<br>
+                •	Sloped transitions show entry/exit from obsession phases.<br>
+                •	Sudden peaks show bursts of attention<br>
+                •	Dimmer sections indicate more unpredictable listening within that genre.
+
+            How it differs from Normality Index:<br>
+                •	Normality Index measures how statistically “typical” your listening distribution is within a period.<br>
+                •	Taste Focus Index measures concentration of listening effort (weighted toward dominant genres or artists).<br>
+            Often derived as 1 – normalized_entropy or a scaled form of it.
+            '''
+            ,unsafe_allow_html=True)
 
     else:
         st.info("No Taste Index data available yet — please rerun enrichment to generate results.")

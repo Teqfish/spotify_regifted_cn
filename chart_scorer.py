@@ -235,17 +235,54 @@ def calculate_listener_summary(points_df: pd.DataFrame) -> Dict[str, float]:
 # ===========================
 # Storage (single dir, no subfolders; no JSON)
 # ===========================
-def output_paths(output_dir: str, user_id: str, label: str, ts_str: str | None = None) -> Tuple[str, str]:
+def output_paths(
+    output_dir: Optional[str],
+    user_id: str,
+    label: str,
+    ts_str: Optional[str] = None
+) -> Tuple[Optional[str], Optional[str]]:
     """
-    Returns (points_path, global_summary_path)
-    NOTE: ts_str ignored (kept for backward compatibility with orchestrator signature).
+    Returns (points_path, global_summary_path) for **local** mode only.
+    In non-local modes (e.g., 'cloudflare'), returns (None, None) to
+    indicate that no local files should be written.
+
+    NOTE:
+      - We deliberately ignore ts_str (kept for backward compatibility).
+      - Local writes only happen when server_mode == 'local'.
+
+    Behavior:
+      - server_mode == 'local':
+          base = output_dir or DEFAULT_OUTPUT_DIR  (ensures local dir exists)
+          returns (<base>/<user_id>_<label>_chart-scores.parquet,
+                   <base>/global_chart-summaries.parquet)
+      - server_mode != 'local':
+          returns (None, None)
     """
+
+    # --- Determine server_mode safely with minimal coupling ---
+    def _get_server_mode() -> str:
+        try:
+            # Prefer dao_selector.get_server_mode (respects secrets.toml)
+            from dao_selector import get_server_mode  # type: ignore
+            mode = get_server_mode(default="cloudflare")
+        except Exception:
+            # Fallback to environment; default to 'cloudflare'
+            mode = os.environ.get("SERVER_MODE", "cloudflare")
+        return (mode or "local").lower().strip()
+
+    mode = _get_server_mode()
+
+    # In any non-local mode (e.g., cloudflare), suppress local path creation
+    if mode != "local":
+        return (None, None)
+
+    # ---- LOCAL MODE ONLY beyond this line ----
     base = output_dir or DEFAULT_OUTPUT_DIR
     ensure_dir(base)
-    return (
-        os.path.join(base, build_points_filename(user_id, label)),
-        os.path.join(base, global_summary_filename()),
-    )
+
+    points_path = os.path.join(base, build_points_filename(user_id, label))
+    global_path = os.path.join(base, global_summary_filename())
+    return points_path, global_path
 
 def _write_parquet(df: pd.DataFrame, path: str | None):
     """Writes parquet locally only if path is defined (skipped for cloud mode)."""
@@ -316,26 +353,46 @@ def compute_chart_scorer_if_missing(
     return_dataframes: bool = False
 ) -> Tuple[str, str] | Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    - Writes per-user detailed Parquet named: {user}_{label}_{ts}_chart-scores.parquet
-    - Upserts one row into global_chart-summaries.parquet
-    - Early-exits if per-user file already exists and overwrite=False
-    - When return_dataframes=True, returns (points_df_small, global_df) instead of writing to disk.
+    - LOCAL mode:
+        * Writes per-user detailed Parquet named: {user}_{label}_chart-scores.parquet
+        * Upserts one row into global_chart-summaries.parquet
+        * Early-exits if per-user file already exists and overwrite=False
+        * When return_dataframes=True, returns (points_df_small, global_df) instead of file paths.
+    - NON-LOCAL modes (e.g., 'cloudflare'):
+        * Performs all computation in-memory
+        * Does NOT write any local files
+        * Returns (points_df_small, global_df) if return_dataframes=True
+        * Returns (None, None) paths are suppressed by output_paths()
     """
+    # --- Determine server_mode safely with minimal coupling ---
+    def _get_server_mode() -> str:
+        try:
+            from dao_selector import get_server_mode  # type: ignore
+            mode = get_server_mode(default="cloudflare")
+        except Exception:
+            mode = os.environ.get("SERVER_MODE", "cloudflare")
+        return (mode or "local").lower().strip()
+
+    mode = _get_server_mode()
 
     _check_cancel(cancel_event)
 
-    points_path, global_path = output_paths(output_dir, user_id, label, ts_str)
+    # Decide effective local paths (None, None in non-local modes)
+    # Note: even if a caller passed a non-empty output_dir, we still suppress
+    # local writes when server_mode != 'local' to honor deployment policy.
+    effective_output_dir = output_dir if mode == "local" else None
+    points_path, global_path = output_paths(effective_output_dir, user_id, label, ts_str)
 
-    # --- Early exit if already exists and not overwriting ---
-    if (not overwrite) and os.path.exists(points_path):
+    # --- Early exit only applies when we actually have a local file to check ---
+    if (mode == "local") and (not overwrite) and points_path and os.path.exists(points_path):
         if return_dataframes:
-            # Read and return for convenience
+            # Return in-memory for convenience while keeping local behavior
             points_df = pd.read_parquet(points_path)
-            global_df = pd.read_parquet(global_path) if os.path.exists(global_path) else pd.DataFrame()
+            global_df = pd.read_parquet(global_path) if (global_path and os.path.exists(global_path)) else pd.DataFrame()
             return points_df, global_df
-        return points_path, global_path
+        return points_path, (global_path or "")
 
-    # --- Load chart reference data ---
+    # --- Load chart reference data (CSV path or already-loaded DataFrame) ---
     charts_df = pd.read_csv(charts) if isinstance(charts, str) else charts.copy()
     _check_cancel(cancel_event)
 
@@ -370,22 +427,42 @@ def compute_chart_scorer_if_missing(
 
     # --- Optimize for storage ---
     points_df_small = optimize_points_for_storage(points_df)
-    _write_parquet(points_df_small, points_path)
 
-    # --- Global summary update ---
+    # --- Local-only write (suppressed in cloud/server modes) ---
+    if (mode == "local") and points_path:
+        _write_parquet(points_df_small, points_path)
+
+    # --- Global summary ---
     summary = calculate_listener_summary(points_df)
-    global_path = upsert_global_summary(output_dir, user_id, summary)
 
-    # Try loading the updated global summary into a dataframe (if exists)
-    try:
-        global_df = pd.read_parquet(global_path)
-    except Exception:
-        global_df = pd.DataFrame()
+    if mode == "local":
+        # Local upsert file + load the aggregated global_df from disk
+        global_path = upsert_global_summary(effective_output_dir, user_id, summary)
+        try:
+            global_df = pd.read_parquet(global_path)
+        except Exception:
+            global_df = pd.DataFrame()
+    else:
+        # Non-local (e.g., cloudflare): return a one-row DF in-memory.
+        # NOTE: Your orchestrator phase should merge this with the R2 global file
+        # before uploading, to avoid overwriting multi-user history.
+        row = {"user_id": user_id}
+        try:
+            # If summary is already a mapping/dict-like, merge it
+            row.update(dict(summary))
+        except Exception:
+            # If calculate_listener_summary returns a Series or custom object,
+            # do a best-effort conversion to plain dict
+            try:
+                row.update(summary.to_dict())  # type: ignore
+            except Exception:
+                pass
+        global_df = pd.DataFrame([row])
 
     # --- Final return ---
     if return_dataframes:
-        # return in-memory dataframes
         return points_df_small, global_df
     else:
-        # return file paths (legacy/local mode)
-        return points_path, global_path
+        # In non-local modes these may be (None, None). Keep return contract stable.
+        # Callers that rely on file paths should only do so in local mode.
+        return (points_path or ""), (global_path or "")

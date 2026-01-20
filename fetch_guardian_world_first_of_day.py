@@ -122,6 +122,8 @@ def fetch_first_for_day(
     """
     params = {
         "section": "section",                 # sectionId filter
+        "type": "article",
+        "use-date": "published",
         "from-date": iso_date(day_dt),
         "to-date": iso_date(day_dt),
         "order-by": "oldest",              # "first" item that day
@@ -210,7 +212,7 @@ def main():
     parser.add_argument("--years", type=int, default=10, help="If --start not provided, go back this many years (default 10)")
     parser.add_argument("--section", default="world", help="Guardian sectionId to query (e.g. world, sport, business)")
     parser.add_argument("--edition", default=None, help="Optional edition filter (e.g. uk, us)")
-    parser.add_argument("--api-key", default=None, help="Guardian API key (or set env GUARDIAN_API_KEY)")
+    parser.add_argument("--api-key", default="8e3f058a-6731-4cb4-94b4-6d1b296b308a", help="Guardian API key (or set env GUARDIAN_API_KEY)")
     parser.add_argument("--verbose", action="store_true", help="Print progress logs")
     parser.add_argument("--sleep", type=float, default=1, help="Sleep between days to be polite (seconds)")
     parser.add_argument("--resume", action="store_true", help="Resume: skip dates already present in --out and, if --start not given, continue after the latest saved date")

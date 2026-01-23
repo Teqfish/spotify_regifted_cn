@@ -2204,9 +2204,15 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
 
     # --- Bail out if nothing found ---
     if not status_row:
-        with st.sidebar:
-            st.caption("⚠️ No enrichment status found for this dataset yet.")
-        return
+        is_demo = st.session_state.get("current_is_demo")
+        if not is_demo:
+            with st.sidebar:
+                st.caption("⚠️ No enrichment status found for this dataset yet.")
+            return
+        else:
+            with st.sidebar:
+                st.caption("This dataset is fully enriched.")
+            return
 
     # --- Parse + normalize ---
     status = (status_row.get("status") or "").lower()
@@ -7065,7 +7071,7 @@ elif page == "Taste Index":
     if not is_demo:
         parquet_key = f"enrichment/taste_index/{user_id}_{current_label}_rolling.parquet"
     else:
-        parquet_key = st.session_state["general"]["demo_parquet"]
+        parquet_key = st.secrets["general"]["demo_parquet"]
 
     # --- Cached Taste Index data ---
     if "df_rolling" not in st.session_state:

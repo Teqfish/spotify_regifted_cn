@@ -8258,16 +8258,12 @@ elif page == "FAQs":
             <ul>
                 <li>This app began as a small, locally run dashboard built by a
                 four-person team as a final project for a data analytics course.</li>
-
                 <li>That team comprised of Charlie Nash (me), Ben Garalnick, Jana Hueppe, and Tom Witt.</li>
-
                 <li>That first version used a simple upload/ETL flow and a handful of visualizations
                 — top artists, albums, genres, a yearly timeline — and some light enrichment to pull artwork
                 and Spotify popularity via APIs.</li>
-
                 <li>We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control,
                 conflict resolution, and shipping something that worked — even if only for a demo.</li>
-
                 <li>For this deployed version, I rewrote the whole thing and added a ton of new features.
                 It now includes authentication and cookies, automated ETL and data enrichment using Spotify and Discogs,
                 a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts),

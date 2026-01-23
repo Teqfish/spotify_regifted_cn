@@ -8,7 +8,7 @@ import itertools
 import traceback
 import sys
 
-from dao import StatusDAO, StorageDAO, InfoTableDAO
+# from dao import StatusDAO, StorageDAO, InfoTableDAO
 from chart_scraper import get_chart_scrape_manager
 
 # ----------- Master Table Inits ------------ #
@@ -17,7 +17,7 @@ try:
 
     # --- Use consistent mode as app.py (default: cloudflare) ---
     SERVER_MODE = get_server_mode(default="cloudflare")
-    # print(f"[enrichment_service:init] 🌐 Using SERVER_MODE='{SERVER_MODE}' for DAO initialization")
+    print(f"[enrichment_service:init] 🌐 Using SERVER_MODE='{SERVER_MODE}' for DAO initialization")
 
     # --- Initialize DAOs and storage handle ---
     DAOS = get_daos(SERVER_MODE)

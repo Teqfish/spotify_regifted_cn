@@ -96,7 +96,7 @@ def get_daos(server_mode: Optional[str] = None) -> Dict[str, object]:
 
         return {
             "main": cf_d1,      # D1 for structured data
-            "r2": cf_r2,        # ✅ R2 explicitly included (fix)
+            "r2": cf_r2,        # R2 explicitly included (fix)
             "status": cf_r2,    # R2 for JSON-based enrichment status files
             "metadata": cf_r2,  # R2 for metadata CSVs
             "logs": cf_r2,      # R2 for logs

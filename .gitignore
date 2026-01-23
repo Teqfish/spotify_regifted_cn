@@ -1,5 +1,6 @@
 # Ignore secret credentials and keys
 .streamlit/secrets.toml
+.streamlit/secrets_og.toml
 *.json
 *.pkl
 __pycache__/

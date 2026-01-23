@@ -62,13 +62,9 @@ import unicodedata
 import uuid
 import zipfile
 
-
-from dao import CloudflareDAOs
 from dao_selector import DAOS, get_daos, get_server_mode, get_log_dao
-import enrichment_service as es
-from enrichment_service import SpotifyToken, spotify_sanity_check, discogs_sanity_check, MetadataEnricher, CancelledError, clear_stale_locks, _normalize_artist_key, _normalize_genre_key, safe_user_lock_release, lock_is_locked
-from chart_scraper import ensure_info_charts_up_to_date_async, get_chart_scrape_manager, run_scrape_now
-from chart_scorer import parse_label_ts_from_table_name
+from enrichment_service import SpotifyToken, clear_stale_locks, lock_is_locked
+from chart_scraper import ensure_info_charts_up_to_date_async, get_chart_scrape_manager
 
 # -------------------------------- DEBUGGER ---------------------------------- #
 _DEBUG_SEQ = 0
@@ -132,11 +128,26 @@ SUPABASE_KEY = st.secrets["supabase"]["key"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ---------- Backend selection for ETL/enrichment I/O ----------
-# Determine active backend (from secrets.toml or environment)
 SERVER_MODE = get_server_mode(default="cloudflare")
 
-# Initialize DAOs for this mode
-DAOS = get_daos(SERVER_MODE)
+# ---------- Cache & build DAOs (single instance per process) ----------
+@st.cache_resource(show_spinner=False)
+def _init_daos_cached(mode: str) -> dict:
+    """
+    Build the DAOs once per process. Cached across Streamlit reruns so we don't
+    re-pay slow first calls (e.g., D1 ping/boot).
+    """
+    from dao_selector import get_daos
+    daos = get_daos(mode)
+    if not isinstance(daos, dict) or not daos:
+        # Keep it obvious if something goes wrong at boot
+        print(f"[dao_boot] ⚠️ get_daos('{mode}') returned empty or non-dict: {type(daos)}")
+        return {}
+    print(f"[dao_boot] ✅ cached DAOs ready for mode='{mode}' → keys={list(daos.keys())}")
+    return daos
+
+# Initialize DAOs for this mode (uses cache)
+DAOS = _init_daos_cached(SERVER_MODE)
 
 # Canonical DAO handles (used throughout the app)
 status_dao     = DAOS.get("status")
@@ -145,8 +156,7 @@ log_dao        = DAOS.get("logs")
 user_data_dao  = DAOS.get("user_data") or DAOS.get("storage")
 main_dao       = DAOS.get("main")  # Optional (used for Supabase, may be None)
 
-# ✅ Alias for convenience — unified "storage" handle
-#    so you can reference storage_dao instead of guessing between metadata/user_data
+# ✅ Unified storage handle
 storage_dao = metadata_dao or user_data_dao
 
 # --- Persist DAOs in session state so all pages can access them ---
@@ -183,9 +193,9 @@ else:
     )
 
     INFO_POPULARITY = storage_dao.safe_download_csv("enrichment/metadata/info_popularity.csv")
-    INFO_HEADLINE = storage_dao.safe_download_csv("reference/info_headline.csv")
-    INFO_SHOW = storage_dao.safe_download_csv("enrichment/metadata/info_show.csv")
-    INFO_AUDIOBOOK = storage_dao.safe_download_csv("enrichment/metadata/info_audiobook.csv")
+    INFO_HEADLINE   = storage_dao.safe_download_csv("reference/info_headline.csv")
+    INFO_SHOW       = storage_dao.safe_download_csv("enrichment/metadata/info_show.csv")
+    INFO_AUDIOBOOK  = storage_dao.safe_download_csv("enrichment/metadata/info_audiobook.csv")
     INFO_SUPERGENRE = storage_dao.safe_download_csv("reference/info_supergenre_map.csv")
 
 ICON_BROWSER = "media/assets/icon_spotgreen.svg"
@@ -402,6 +412,36 @@ def format_hhmmss(minutes):
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
     return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+# ---------------- Demo dataset helpers ----------------
+def _is_demo_dataset(table_name: str | None, label: str | None) -> bool:
+    demo_id = st.secrets["general"].get("demo_id", "")
+    label = (label or "").strip().lower()
+    table_name = (table_name or "").strip()
+    if not demo_id:
+        return False
+    if label == "demo":
+        return True
+    if table_name.startswith(f"{demo_id}_"):
+        return True
+    return False
+
+def active_user_id() -> str:
+    logged_in_id = st.session_state.user["user_id"]
+    demo_id = st.secrets["general"].get("demo_id", "")
+
+    label = st.session_state.get("current_dataset_label")
+    table = st.session_state.get("last_table_name")
+
+    if st.session_state.get("current_is_demo") is True:
+        return demo_id or logged_in_id
+
+    if _is_demo_dataset(table, label):
+        st.session_state["current_is_demo"] = True
+        return demo_id or logged_in_id
+
+    st.session_state["current_is_demo"] = False
+    return logged_in_id
 
 # --------------------------- Task Registry ---------------------------------- #
 @st.cache_resource(show_spinner=False)
@@ -2164,9 +2204,15 @@ def show_enrichment_status_sidebar(user_id: str, dataset_label: str):
 
     # --- Bail out if nothing found ---
     if not status_row:
-        with st.sidebar:
-            st.caption("⚠️ No enrichment status found for this dataset yet.")
-        return
+        is_demo = st.session_state.get("current_is_demo")
+        if not is_demo:
+            with st.sidebar:
+                st.caption("⚠️ No enrichment status found for this dataset yet.")
+            return
+        else:
+            with st.sidebar:
+                st.caption("This dataset is fully enriched.")
+            return
 
     # --- Parse + normalize ---
     status = (status_row.get("status") or "").lower()
@@ -2536,14 +2582,6 @@ st.session_state.setdefault("_enrichment_registry", {
     "dataset_label": None,
 })
 
-# Ensure the singleton manager is created for this process (optional, but explicit)
-_ = get_chart_manager(storage_dao)
-
-# Kick off an audit+background scrape if charts are missing (boot-time, once per session)
-if not st.session_state.get("_charts_boot_started", False):
-    st.session_state["_charts_boot_started"] = True
-    ensure_info_charts_up_to_date_async(storage_dao, trigger="boot")
-
 # If we just logged out, keep skipping cookie-restore until the browser shows it's gone
 if st.session_state.get("_skip_restore"):
     if not cm.get(JWT_COOKIE_NAME):  # cookie really gone now
@@ -2555,15 +2593,28 @@ else:
 if st.session_state.get("user"):
     refresh_cookie_if_needed()
 
-# Boot-once trigger for the global detective (per user session)
-if not st.session_state.get("_genre_detective_boot_started", False):
-    st.session_state["_genre_detective_boot_started"] = True
-    try:
-        # This starts the same single global worker; it will no-op if already alive
-        start_missing_genre_detective_task(dataset_label="__app_boot__")
-    except Exception as e:
-        # Non-fatal: just log in UI without breaking the page
-        st.info(f"Genre detective not started at boot: {e}")
+# ------------------------------ Boot Workers ---------------------------------#
+DISABLE_BOOT_WORKERS = st.secrets["general"]["DISABLE_BOOT_WORKERS"]
+if not DISABLE_BOOT_WORKERS:
+    # Ensure the singleton manager is created for this process (optional, but explicit)
+    _ = get_chart_manager(storage_dao)
+
+    # Kick off an audit+background scrape if charts are missing (boot-time, once per session)
+    if not st.session_state.get("_charts_boot_started", False):
+        st.session_state["_charts_boot_started"] = True
+        ensure_info_charts_up_to_date_async(storage_dao, trigger="boot")
+
+    # Boot-once trigger for the global detective (per user session)
+    if not st.session_state.get("_genre_detective_boot_started", False):
+        st.session_state["_genre_detective_boot_started"] = True
+        try:
+            # This starts the same single global worker; it will no-op if already alive
+            start_missing_genre_detective_task(dataset_label="__app_boot__")
+        except Exception as e:
+            # Non-fatal: just log in UI without breaking the page
+            st.info(f"Genre detective not started at boot: {e}")
+else:
+    print("[boot] Skipping boot workers")
 
 # ------------------------------- LOGIN PAGE --------------------------------- #
 if not st.session_state.user:
@@ -2663,12 +2714,43 @@ with st.sidebar:
 
     # ---------- Existing Datasets ----------
     try:
-        dataset_options = user_dao.list_datasets(st.session_state.user["user_id"])  # [(label, table_name), ...]
+        uid = st.session_state.user["user_id"]
+        dataset_options = user_dao.list_datasets(uid)  # [(label, table_name), ...]
     except Exception as e:
         st.error(f"Failed to list datasets: {e}")
         dataset_options = []
 
-    label_to_table = dict(dataset_options)
+    # Also include the demo dataset (most recent), if configured
+    demo_id = st.secrets["general"].get("demo_id", "")
+    if demo_id and demo_id != uid:
+        try:
+            demo_opts = user_dao.list_datasets(demo_id)  # may be many; pick most recent by table_name (has timestamp)
+            if demo_opts:
+                # Sort descending by table_name (your pattern includes timestamp so lexicographic works in practice)
+                demo_opts_sorted = sorted(demo_opts, key=lambda lt: lt[1], reverse=True)
+                label, table = demo_opts_sorted[0]
+                # Force the label to "demo" for clarity
+                dataset_options.append(("Charlie's Demo Dataset", table))
+        except Exception as e:
+            print(f"[sidebar] Could not list demo datasets: {e}")
+
+    # Build label->table mapping with uniqueness
+    label_to_table = {}
+    for lbl, tbl in dataset_options:
+        key = lbl
+        # If this entry is the demo dataset, we prefer the label "demo"
+        if _is_demo_dataset(tbl, lbl):
+            key = "Charlie's Demo Dataset"
+
+        if key in label_to_table and label_to_table[key] != tbl:
+            # ensure unique label if a collision occurs
+            i = 2
+            base = key
+            while f"{base} ({i})" in label_to_table:
+                i += 1
+            key = f"{base} ({i})"
+        label_to_table[key] = tbl
+
     labels = list(label_to_table.keys())
 
     # ---------- Dataset Selection ----------
@@ -2685,7 +2767,7 @@ with st.sidebar:
 
         # Do nothing until a dataset is actually chosen
         if selected_label is not None:
-            # Only (re)load when the dataset changed or nothing is loaded yet
+            # Only (re)load when changed or nothing is loaded yet
             if selected_label != previous_label or st.session_state.get("current_df") is None:
                 selected_table = label_to_table.get(selected_label)
                 if selected_table:
@@ -2693,7 +2775,6 @@ with st.sidebar:
                         # ---- Load dataset from storage
                         df = user_dao.load_user_data(selected_table)
                         if df.empty:
-                            # Keep sidebar quiet if empty
                             print("[sidebar] Loaded dataset is empty; skipping session update.")
                         else:
                             df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
@@ -2706,16 +2787,22 @@ with st.sidebar:
                             st.session_state.current_dataset_label = selected_label
                             st.session_state.last_table_name = selected_table
 
-                            # Enrichment auto-check on (re)load
-                            from dao_selector import get_log_dao
-                            log_dao = get_log_dao()
-                            res = _auto_check_and_reenrich_if_needed(
-                                st.session_state.user["user_id"],
-                                selected_label.strip(),
-                                log_dao,
-                                table_name=selected_table,
-                            )
-                            print(f"[CALLSITE select] auto_check result = {res}")
+                            # Flag demo vs real
+                            st.session_state["current_is_demo"] = _is_demo_dataset(selected_table, selected_label)
+
+                            # Enrichment auto-check on (re)load — SKIP for demo dataset
+                            if not st.session_state["current_is_demo"]:
+                                from dao_selector import get_log_dao
+                                log_dao = get_log_dao()
+                                res = _auto_check_and_reenrich_if_needed(
+                                    active_user_id(),                # effective id
+                                    selected_label.strip(),
+                                    log_dao,
+                                    table_name=selected_table,
+                                )
+                                print(f"[CALLSITE select] auto_check result = {res}")
+                            else:
+                                print("[CALLSITE select] demo dataset selected — auto_check bypassed.")
 
                             # ---------- Start/ensure ONE genre-detective worker (background) ----------
                             try:
@@ -2777,7 +2864,7 @@ with st.sidebar:
 
 # ---------------------------------- Home ------------------------------------ #
 if page == "Home":
-    user_id = st.session_state.user["user_id"]
+    user_id = active_user_id()
 
     # ---------- Session Defaults ----------
     st.session_state.setdefault("etl_done", False)
@@ -6629,13 +6716,31 @@ elif page == "Popularity":
         st.error("No dataset selected. Please go to the Home page and select a dataset.")
         st.stop()
 
+    # --- Dataset ---
     df, current_label = require_current_df()
     user_df = df.copy()
 
-    # User context
-    user = st.session_state.get("user") or {}
-    user_id = user.get("user_id")
-    user_name = user.get("user_name", current_label)
+    # --- Demo flag (prefer the value set by the selector; otherwise infer) ---
+    is_demo = st.session_state.get("current_is_demo")
+    if is_demo is None:
+        demo_id = st.secrets["general"].get("demo_id", "")
+        table = st.session_state.get("last_table_name")
+        is_demo = bool(demo_id and isinstance(table, str) and table.startswith(f"{demo_id}_"))
+        st.session_state["current_is_demo"] = is_demo
+
+    # --- Effective user_id (respects demo mode) ---
+    user_id = active_user_id()  # uses helpers you added earlier
+
+    if is_demo:
+        user_name = st.secrets["general"].get("demo_name")
+    else:
+        user = st.session_state.get("user") or {}
+        user_name = (
+            user.get("user_name")            # if you store a friendly name
+            or user.get("first_name")        # or first name
+            or user.get("email")             # or email fallback
+            or current_label                 # final fallback
+        )
 
     # Fallback user_id (if missing)
     if not user_id and not INFO_POPULARITY.empty:
@@ -6945,7 +7050,7 @@ elif page == "Taste Index":
     # 🎧 DATASET VALIDATION & LOADING
     # ----------------------------------------------------------------------
     st.session_state["last_page"] = "Taste"
-    user_id = st.session_state.user["user_id"]
+    user_id = active_user_id()
 
     # --- Load current dataset ---
     df, current_label = require_current_df()
@@ -6962,7 +7067,11 @@ elif page == "Taste Index":
     storage_dao = st.session_state.get("storage_dao")
 
     # --- Expected R2 path for Taste Index parquet ---
-    parquet_key = f"enrichment/taste_index/{user_id}_{current_label}_rolling.parquet"
+    is_demo = st.session_state.get("current_is_demo")
+    if not is_demo:
+        parquet_key = f"enrichment/taste_index/{user_id}_{current_label}_rolling.parquet"
+    else:
+        parquet_key = st.secrets["general"]["demo_parquet"]
 
     # --- Cached Taste Index data ---
     if "df_rolling" not in st.session_state:
@@ -6984,7 +7093,7 @@ elif page == "Taste Index":
                 df_rolling = storage_dao.safe_download_parquet(parquet_key)
             if df_rolling is not None and not df_rolling.empty:
                 st.session_state["df_rolling"] = df_rolling
-                st.success(f"✅ Loaded cached Taste Index results from R2 ({len(df_rolling):,} rows).")
+                # st.success(f"✅ Loaded cached Taste Index results from R2 ({len(df_rolling):,} rows).")
             else:
                 st.warning("⚠️ No cached Taste Index results found. Run enrichment to generate them.")
         except Exception as e:
@@ -8138,22 +8247,45 @@ elif page == "FAQs":
     with h2:
         st.html("<p style='text-align: center; font-size: 48px;'><em><b>FAQs</b></em></p>")
 
-    with st.expander("1\. How do I request my Spotify listening data?"):
+    with st.expander("1. How do I request my Spotify listening data?"):
         st.image("media/faqs/image1.svg")
         st.divider()
         st.image("media/faqs/image2-3.svg")
         st.divider()
         st.image("media/faqs/image4-5.svg")
-    with st.expander("2\. Who made this?"):
+    with st.expander("2. Who made this?"):
         st.markdown('''
             <ul>
-                <li>This app began as a small, locally run dashboard built by a four-person team as a final project for a data analytics course.</li>
+                <li>This app began as a small, locally run dashboard built by a
+                four-person team as a final project for a data analytics course.</li>
                 <li>That team comprised of Charlie Nash (me), Ben Garalnick, Jana Hueppe, and Tom Witt.</li>
-                <li>That first version used a simple upload/ETL flow and a handful of visualizations — top artists, albums, genres, a yearly timeline — and some light enrichment to pull artwork and Spotify popularity via APIs.</li>
-                <li>We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control, conflict resolution, and shipping something that worked — even if only for a demo.</li>
-                <li>For this deployed version, I rewrote the whole thing and added a ton of new features. It now includes authentication and cookies, automated ETL and data enrichment using Spotify and Discogs, a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts), expanded popularity and chart scoring with richer visuals, and a statistical deep-dive into the relationships between normality, genres, and time.</li>
+                <li>That first version used a simple upload/ETL flow and a handful of visualizations
+                — top artists, albums, genres, a yearly timeline — and some light enrichment to pull artwork
+                and Spotify popularity via APIs.</li>
+                <li>We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control,
+                conflict resolution, and shipping something that worked — even if only for a demo.</li>
+                <li>For this deployed version, I rewrote the whole thing and added a ton of new features.
+                It now includes authentication and cookies, automated ETL and data enrichment using Spotify and Discogs,
+                a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts),
+                expanded popularity and chart scoring with richer visuals, and a statistical deep-dive into the
+                relationships between normality, genres, and time.</li>
             </ul>''',unsafe_allow_html=True)
-    with st.expander("3\. What's all that stuff about taste?"):
+    with st.expander('3. How did you calculate "Sheepleness"?'):
+        st.markdown('''
+            Sheepleness is a metric derived from averaging the average popularity of artists
+            and average chart points scored for the selected time period.<br>
+
+            Popularity is a Spotify index based on number of listens within a recent time period.<br>
+
+            Listening events are awarded points if the track listened to was in the UK Top 50 Singles charts.
+            A listening event is awarded a maximum of 50 points if the track peaked at number 1 decreasing
+            steadily to just 1 point for a track that peaked at number 50.  The maximum points are only awarded
+            if the track was first listened to within the first week it appeared in the charts.
+            For every week after the track first charted that the first listen occured,
+            the maximum possible points decrease by 10.  So at best, a listening event can only score points
+            if the track was first listened to within 5 weeks of it first appearing in the charts.
+            ''',unsafe_allow_html=True)
+    with st.expander("4. What's all that stuff about taste?"):
         st.markdown('''
             The new “Taste Index” tries to bundle various statistical qualities of a user's listening behaviour into a single number to describe how mood and focus changes over time.  From this we can infer whether periods were focussed and critical vs background listening, high energy vs contemplative, or when the kids were making song requests.
             ''',unsafe_allow_html=True)
@@ -8190,7 +8322,7 @@ elif page == "FAQs":
                 <li>Moderate kurtosis (no heavy tails) stabilizes the score</li>
             </ul>
             ''',unsafe_allow_html=True)
-    with st.expander("4\. What's the stack, bro?"):
+    with st.expander("5. What's the stack, bro?"):
         st.markdown('''
             <ol>
                 <li>Streamlit (UI + hosting)
@@ -8204,7 +8336,7 @@ elif page == "FAQs":
                 The main design constraint was that this app needed to be deployed and stored for free somewhere in the ether.<br>
                 Behind the scenes, robust logging lets long jobs pause and resume, extensive thread management allows a multitude of background tasks to run concurrently, scheduled scrapers keep UK Singles Chart data and Guardian headlines fresh for features like “On this day, and DAO layers abstract the IO for easy server switching.”
             ''',unsafe_allow_html=True)
-    with st.expander("5\. What's next on the horizon for the app?"):
+    with st.expander("6. What's next on the horizon for the app?"):
         st.markdown('''
             <ul>
                 <li>Try to integrate recurring Spotify ingestion so users don’t have to request exports each time.</li>
@@ -8212,5 +8344,5 @@ elif page == "FAQs":
                 <li>Allow up to three supergenres per artist when enriching.  Using just one supergenre creates too much inaccuracy IMHO.</li>
             </ul>
             ''',unsafe_allow_html=True)
-    with st.expander("6\. I need a data analyst/engineer like Charlie in my life.  How can I hire him?"):
+    with st.expander("7. I need a data analyst/engineer like Charlie in my life.  How can I hire him?"):
         st.markdown("How presumptious of you.  Please contact Charlie at teqfish.uk@gmail.com for his availability and to say 'hi'.")

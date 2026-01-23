@@ -2724,7 +2724,7 @@ with st.sidebar:
                 demo_opts_sorted = sorted(demo_opts, key=lambda lt: lt[1], reverse=True)
                 label, table = demo_opts_sorted[0]
                 # Force the label to "demo" for clarity
-                dataset_options.append(("demo", table))
+                dataset_options.append(("Charlie's Demo Dataset", table))
         except Exception as e:
             print(f"[sidebar] Could not list demo datasets: {e}")
 
@@ -7061,7 +7061,11 @@ elif page == "Taste Index":
     storage_dao = st.session_state.get("storage_dao")
 
     # --- Expected R2 path for Taste Index parquet ---
-    parquet_key = f"enrichment/taste_index/{user_id}_{current_label}_rolling.parquet"
+    is_demo = st.session_state.get("current_is_demo")
+    if not is_demo:
+        parquet_key = f"enrichment/taste_index/{user_id}_{current_label}_rolling.parquet"
+    else:
+        parquet_key = st.session_state["general"]["demo_parquet"]
 
     # --- Cached Taste Index data ---
     if "df_rolling" not in st.session_state:
@@ -8252,7 +8256,12 @@ elif page == "FAQs":
                 <li>We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control, conflict resolution, and shipping something that worked — even if only for a demo.</li>
                 <li>For this deployed version, I rewrote the whole thing and added a ton of new features. It now includes authentication and cookies, automated ETL and data enrichment using Spotify and Discogs, a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts), expanded popularity and chart scoring with richer visuals, and a statistical deep-dive into the relationships between normality, genres, and time.</li>
             </ul>''',unsafe_allow_html=True)
-    with st.expander("3. What's all that stuff about taste?"):
+    with st.expander('3. How did you calculate "Sheepleness"?'):
+        st.markdown('''
+            Sheepleness is a metric derived from averaging the average popularity of artists and average chart points scored for the selected time period.
+            Popularity is a Spotify index based on number of listens within a recent time period.  Listening events are awarded points if the track listened to was in the UK Top 50 Singles charts.  A listening event is awarded a maximum of 50 points if the track peaked at number 1 decreasing steadily to just 1 point for a track that peaked at number 50.  The maximum points are only awarded if the track was first listened to within the first week it appeared in the charts.  For every week after the track first charted that the first listen occured, the maximum possible points decrease by 10.  So at best, a listening event can only score points if the track was first listened to within 5 weeks of it first appearing in the charts.
+            ''',unsafe_allow_html=True)
+    with st.expander("4. What's all that stuff about taste?"):
         st.markdown('''
             The new “Taste Index” tries to bundle various statistical qualities of a user's listening behaviour into a single number to describe how mood and focus changes over time.  From this we can infer whether periods were focussed and critical vs background listening, high energy vs contemplative, or when the kids were making song requests.
             ''',unsafe_allow_html=True)
@@ -8289,7 +8298,7 @@ elif page == "FAQs":
                 <li>Moderate kurtosis (no heavy tails) stabilizes the score</li>
             </ul>
             ''',unsafe_allow_html=True)
-    with st.expander("4. What's the stack, bro?"):
+    with st.expander("5. What's the stack, bro?"):
         st.markdown('''
             <ol>
                 <li>Streamlit (UI + hosting)
@@ -8303,7 +8312,7 @@ elif page == "FAQs":
                 The main design constraint was that this app needed to be deployed and stored for free somewhere in the ether.<br>
                 Behind the scenes, robust logging lets long jobs pause and resume, extensive thread management allows a multitude of background tasks to run concurrently, scheduled scrapers keep UK Singles Chart data and Guardian headlines fresh for features like “On this day, and DAO layers abstract the IO for easy server switching.”
             ''',unsafe_allow_html=True)
-    with st.expander("5. What's next on the horizon for the app?"):
+    with st.expander("6. What's next on the horizon for the app?"):
         st.markdown('''
             <ul>
                 <li>Try to integrate recurring Spotify ingestion so users don’t have to request exports each time.</li>
@@ -8311,5 +8320,5 @@ elif page == "FAQs":
                 <li>Allow up to three supergenres per artist when enriching.  Using just one supergenre creates too much inaccuracy IMHO.</li>
             </ul>
             ''',unsafe_allow_html=True)
-    with st.expander("6. I need a data analyst/engineer like Charlie in my life.  How can I hire him?"):
+    with st.expander("7. I need a data analyst/engineer like Charlie in my life.  How can I hire him?"):
         st.markdown("How presumptious of you.  Please contact Charlie at teqfish.uk@gmail.com for his availability and to say 'hi'.")

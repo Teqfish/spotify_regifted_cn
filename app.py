@@ -8256,16 +8256,38 @@ elif page == "FAQs":
     with st.expander("2. Who made this?"):
         st.markdown('''
             <ul>
-                <li>This app began as a small, locally run dashboard built by a four-person team as a final project for a data analytics course.</li>
+                <li>This app began as a small, locally run dashboard built by a
+                    four-person team as a final project for a data analytics course.</li>
+
                 <li>That team comprised of Charlie Nash (me), Ben Garalnick, Jana Hueppe, and Tom Witt.</li>
-                <li>That first version used a simple upload/ETL flow and a handful of visualizations — top artists, albums, genres, a yearly timeline — and some light enrichment to pull artwork and Spotify popularity via APIs.</li>
-                <li>We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control, conflict resolution, and shipping something that worked — even if only for a demo.</li>
-                <li>For this deployed version, I rewrote the whole thing and added a ton of new features. It now includes authentication and cookies, automated ETL and data enrichment using Spotify and Discogs, a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts), expanded popularity and chart scoring with richer visuals, and a statistical deep-dive into the relationships between normality, genres, and time.</li>
+
+                <li>That first version used a simple upload/ETL flow and a handful of visualizations
+                    — top artists, albums, genres, a yearly timeline — and some light enrichment to pull artwork
+                    and Spotify popularity via APIs.</li>
+
+                <li>We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control,
+                    conflict resolution, and shipping something that worked — even if only for a demo.</li>
+
+                <li>For this deployed version, I rewrote the whole thing and added a ton of new features.
+                    It now includes authentication and cookies, automated ETL and data enrichment using Spotify and Discogs,
+                    a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts),
+                    expanded popularity and chart scoring with richer visuals, and a statistical deep-dive into the
+                    relationships between normality, genres, and time.</li>
             </ul>''',unsafe_allow_html=True)
     with st.expander('3. How did you calculate "Sheepleness"?'):
         st.markdown('''
-            Sheepleness is a metric derived from averaging the average popularity of artists and average chart points scored for the selected time period.
-            Popularity is a Spotify index based on number of listens within a recent time period.  Listening events are awarded points if the track listened to was in the UK Top 50 Singles charts.  A listening event is awarded a maximum of 50 points if the track peaked at number 1 decreasing steadily to just 1 point for a track that peaked at number 50.  The maximum points are only awarded if the track was first listened to within the first week it appeared in the charts.  For every week after the track first charted that the first listen occured, the maximum possible points decrease by 10.  So at best, a listening event can only score points if the track was first listened to within 5 weeks of it first appearing in the charts.
+            Sheepleness is a metric derived from averaging the average popularity of artists
+            and average chart points scored for the selected time period.<br>
+
+            Popularity is a Spotify index based on number of listens within a recent time period.<br>
+
+            Listening events are awarded points if the track listened to was in the UK Top 50 Singles charts.
+            A listening event is awarded a maximum of 50 points if the track peaked at number 1 decreasing
+            steadily to just 1 point for a track that peaked at number 50.  The maximum points are only awarded
+            if the track was first listened to within the first week it appeared in the charts.
+            For every week after the track first charted that the first listen occured,
+            the maximum possible points decrease by 10.  So at best, a listening event can only score points
+            if the track was first listened to within 5 weeks of it first appearing in the charts.
             ''',unsafe_allow_html=True)
     with st.expander("4. What's all that stuff about taste?"):
         st.markdown('''

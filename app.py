@@ -2740,7 +2740,7 @@ with st.sidebar:
         key = lbl
         # If this entry is the demo dataset, we prefer the label "demo"
         if _is_demo_dataset(tbl, lbl):
-            key = "demo"
+            key = "Charlie's Demo Dataset"
 
         if key in label_to_table and label_to_table[key] != tbl:
             # ensure unique label if a collision occurs
@@ -7093,7 +7093,7 @@ elif page == "Taste Index":
                 df_rolling = storage_dao.safe_download_parquet(parquet_key)
             if df_rolling is not None and not df_rolling.empty:
                 st.session_state["df_rolling"] = df_rolling
-                st.success(f"✅ Loaded cached Taste Index results from R2 ({len(df_rolling):,} rows).")
+                # st.success(f"✅ Loaded cached Taste Index results from R2 ({len(df_rolling):,} rows).")
             else:
                 st.warning("⚠️ No cached Taste Index results found. Run enrichment to generate them.")
         except Exception as e:

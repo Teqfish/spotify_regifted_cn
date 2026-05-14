@@ -2634,9 +2634,11 @@ if not st.session_state.user:
             st.html(
                 """
                 <center>
-                <h2><em>An interactive dashboard for your Spotify activity</h2></em>
+                <h2><em>An interactive dashboard for your Spotify activity</em></h2>
                 You will need to request your listening history data from Spotify.<br>
-                To find out how, sign up and read our FAQs.<br>
+                To find out how, check out the
+                <a href="https://github.com/Teqfish/spotify_regifted_cn/blob/main/README.md" target="_blank">README</a>
+                in the repo.<br>
                 You can explore Charlie's demo data while you wait for your data.
                 </center>
                 """
@@ -2853,7 +2855,6 @@ with st.sidebar:
             "Popularity",
             "Taste Index",
             "On This Day",
-            "FAQs",
         ],
     )
 
@@ -8237,112 +8238,3 @@ elif page == "On This Day":
 
             elif category == "audiobook":
                 st.markdown(f"[Listen again]({audiobook_url})")
-
-# --------------------------------- FAQs ------------------------------------- #
-elif page == "FAQs":
-
-    st.session_state["last_page"] = "FAQs"
-        # --- Header ---
-    h1, h2, h3 = st.columns([1,3,1])
-    with h2:
-        st.html("<p style='text-align: center; font-size: 48px;'><em><b>FAQs</b></em></p>")
-
-    with st.expander("1. How do I request my Spotify listening data?"):
-        st.image("media/faqs/image1.svg")
-        st.divider()
-        st.image("media/faqs/image2-3.svg")
-        st.divider()
-        st.image("media/faqs/image4-5.svg")
-    with st.expander("2. Who made this?"):
-        st.markdown('''
-            <ul>
-                <li>This app began as a small, locally run dashboard built by a
-                four-person team as a final project for a data analytics course.</li>
-                <li>That team comprised of Charlie Nash (me), Ben Garalnick, Jana Hueppe, and Tom Witt.</li>
-                <li>That first version used a simple upload/ETL flow and a handful of visualizations
-                — top artists, albums, genres, a yearly timeline — and some light enrichment to pull artwork
-                and Spotify popularity via APIs.</li>
-                <li>We ran it on a teammate’s laptop, stored data in local CSVs, and learned a lot about version control,
-                conflict resolution, and shipping something that worked — even if only for a demo.</li>
-                <li>For this deployed version, I rewrote the whole thing and added a ton of new features.
-                It now includes authentication and cookies, automated ETL and data enrichment using Spotify and Discogs,
-                a genre-mapping system that collapses 6,000+ labels into 25 “supergenres” (and auto-fills gaps via LLM prompts),
-                expanded popularity and chart scoring with richer visuals, and a statistical deep-dive into the
-                relationships between normality, genres, and time.</li>
-            </ul>''',unsafe_allow_html=True)
-    with st.expander('3. How did you calculate "Sheepleness"?'):
-        st.markdown('''
-            Sheepleness is a metric derived from averaging the average popularity of artists
-            and average chart points scored for the selected time period.<br>
-
-            Popularity is a Spotify index based on number of listens within a recent time period.<br>
-
-            Listening events are awarded points if the track listened to was in the UK Top 50 Singles charts.
-            A listening event is awarded a maximum of 50 points if the track peaked at number 1 decreasing
-            steadily to just 1 point for a track that peaked at number 50.  The maximum points are only awarded
-            if the track was first listened to within the first week it appeared in the charts.
-            For every week after the track first charted that the first listen occured,
-            the maximum possible points decrease by 10.  So at best, a listening event can only score points
-            if the track was first listened to within 5 weeks of it first appearing in the charts.
-            ''',unsafe_allow_html=True)
-    with st.expander("4. What's all that stuff about taste?"):
-        st.markdown('''
-            The new “Taste Index” tries to bundle various statistical qualities of a user's listening behaviour into a single number to describe how mood and focus changes over time.  From this we can infer whether periods were focussed and critical vs background listening, high energy vs contemplative, or when the kids were making song requests.
-            ''',unsafe_allow_html=True)
-        st.latex(r'''
-            \mathrm{TasteIndex} = (1 - p)\,(1 - H)\,\frac{1}{1 + |k|}
-            ''')
-        st.markdown('''
-            Where:
-            <ul>
-                <li>p = normality p-value</li>
-                <li>H = normalized entropy (0–1)</li>
-                <li>k = kurtosis</li>
-            </ul>
-            p-value in statistics:
-            <ul>
-                <li>It’s the probability that the observed distribution could occur by chance if the null hypothesis (normal distribution) were true.</li>
-                <li>High p → data fits expected (random/normal) distribution.</li>
-                <li>Low p → data significantly deviates (non-random, structured behaviour).</li>
-            </ul>
-            In listening behaviour terms:
-            <ul>
-                <li>High p = your listening that period is balanced across artists (like a Gaussian curve).</li>
-                <li>Low p = your listening is skewed — maybe one artist dominates.</li>
-            </ul>
-            Entropy is a measure of <em>disorder</em> or <em>diversity</em>.
-            <ul>
-                <li>High entropy (≈1) → very diverse listening (many artists, roughly equal shares).</li>
-                <li>Low entropy (≈0) → focused on few artists.</li>
-            </ul>
-            This means:
-            <ul>
-                <li>Low p (non-normal behaviour) increases focus score</li>
-                <li>Low entropy (narrow listening) increases focus</li>
-                <li>Moderate kurtosis (no heavy tails) stabilizes the score</li>
-            </ul>
-            ''',unsafe_allow_html=True)
-    with st.expander("5. What's the stack, bro?"):
-        st.markdown('''
-            <ol>
-                <li>Streamlit (UI + hosting)
-                <li>Cloudflare R2 & D1 (data warehouse)
-                <li>Pandas (data wrangling)
-                <li>Matlibplot/Plotly (visualisations)
-                <li>Spotify, Discogs, Guardian APIs (data enrichment)
-                <li>BeautifulSoup4 + Official Singles Charts (scraping)
-                <li>Scipy/Sklearn (ML statistics processing)
-            </ol>
-                The main design constraint was that this app needed to be deployed and stored for free somewhere in the ether.<br>
-                Behind the scenes, robust logging lets long jobs pause and resume, extensive thread management allows a multitude of background tasks to run concurrently, scheduled scrapers keep UK Singles Chart data and Guardian headlines fresh for features like “On this day, and DAO layers abstract the IO for easy server switching.”
-            ''',unsafe_allow_html=True)
-    with st.expander("6. What's next on the horizon for the app?"):
-        st.markdown('''
-            <ul>
-                <li>Try to integrate recurring Spotify ingestion so users don’t have to request exports each time.</li>
-                <li>Find a more generous alternative to Gemini's free tier for the genre_detective.</li>
-                <li>Allow up to three supergenres per artist when enriching.  Using just one supergenre creates too much inaccuracy IMHO.</li>
-            </ul>
-            ''',unsafe_allow_html=True)
-    with st.expander("7. I need a data analyst/engineer like Charlie in my life.  How can I hire him?"):
-        st.markdown("How presumptious of you.  Please contact Charlie at teqfish.uk@gmail.com for his availability and to say 'hi'.")

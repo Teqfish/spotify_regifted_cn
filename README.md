@@ -1,4 +1,4 @@
-# [Spotify Regifted](https://spotify-regifted.streamlit.app/)
+# Spotify Regifted
 
 A cloud-hosted Streamlit app for exploring, enriching, and visualising personal Spotify listening history.
 

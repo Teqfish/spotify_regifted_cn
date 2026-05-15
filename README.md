@@ -1,8 +1,10 @@
-# Spotify Regifted
+# [Spotify Regifted](https://spotify-regifted.streamlit.app/)
 
 A cloud-hosted Streamlit app for exploring, enriching, and visualising personal Spotify listening history.
 
 Spotify Regifted turns a user's Spotify Extended Streaming History into a detailed personal analytics dashboard: part music diary, part data exploration tool, part playful alternative to Spotify Wrapped.
+
+Try it [here](https://spotify-regifted.streamlit.app/).
 
 ![Spotify Regifted screenshot](media/screenshots/splash.png)
 

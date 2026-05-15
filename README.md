@@ -88,7 +88,7 @@ You do not need to manually edit the files inside the ZIP. Spotify Regifted is d
 
 ### 3. Create an account or log in
 
-Open Spotify Regifted and create an account, or log in if you already have one.
+Open [Spotify Regifted](https://spotify-regifted.streamlit.app/) and create an account, or log in if you already have one.
 
 The account system lets the app keep your uploaded datasets separate from other users’ datasets.
 
